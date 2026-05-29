@@ -5,6 +5,7 @@ import {
   createAiUserContentPresignedUrls,
   type AiUserContentPresignedUrlsResult,
 } from '../Utils/GDevelopServices/Generation';
+import { type AiGenerationServiceConfig } from './AiService';
 import jsSHA from '../Utils/Sha256';
 
 type UploadInfo = {
@@ -20,30 +21,61 @@ const makeUploadCache = ({
   const uploadCacheByHash: {
     [string]: UploadInfo,
   } = {};
+  const getCacheKey = ({
+    hash,
+    cacheNamespace,
+  }: {|
+    hash: string | null,
+    cacheNamespace: string,
+  |}): string | null => {
+    if (!hash) return null;
+
+    return `${cacheNamespace}:${hash}`;
+  };
 
   return {
-    getUserRelativeKey: (hash: string | null) => {
-      if (!hash) {
+    getUserRelativeKey: ({
+      hash,
+      cacheNamespace,
+    }: {|
+      hash: string | null,
+      cacheNamespace: string,
+    |}) => {
+      const cacheKey = getCacheKey({ hash, cacheNamespace });
+      if (!cacheKey) {
         return null;
       }
 
       return (
-        (uploadCacheByHash[hash] && uploadCacheByHash[hash].userRelativeKey) ||
+        (uploadCacheByHash[cacheKey] &&
+          uploadCacheByHash[cacheKey].userRelativeKey) ||
         null
       );
     },
-    storeUpload: (hash: string | null, uploadInfo: UploadInfo) => {
-      if (!hash) return;
-      uploadCacheByHash[hash] = uploadInfo;
+    storeUpload: ({
+      hash,
+      cacheNamespace,
+      uploadInfo,
+    }: {|
+      hash: string | null,
+      cacheNamespace: string,
+      uploadInfo: UploadInfo,
+    |}) => {
+      const cacheKey = getCacheKey({ hash, cacheNamespace });
+      if (!cacheKey) return;
+      uploadCacheByHash[cacheKey] = uploadInfo;
     },
     shouldUpload: ({
       hash,
       contentLength,
+      cacheNamespace,
     }: {|
       hash: string | null,
       contentLength: number,
+      cacheNamespace: string,
     |}) => {
-      if (!hash) {
+      const cacheKey = getCacheKey({ hash, cacheNamespace });
+      if (!cacheKey) {
         // No hash, so no content to upload.
         return false;
       }
@@ -54,8 +86,8 @@ const makeUploadCache = ({
       }
 
       if (
-        uploadCacheByHash[hash] &&
-        uploadCacheByHash[hash].uploadedAt > Date.now() - 1000 * 60 * 30
+        uploadCacheByHash[cacheKey] &&
+        uploadCacheByHash[cacheKey].uploadedAt > Date.now() - 1000 * 60 * 30
       ) {
         // The content was already uploaded recently (and recently enough so that it has not expired in such a short time).
         // We don't need to upload it again.
@@ -92,12 +124,14 @@ const computeSha256 = (payload: string): string => {
  */
 export const prepareAiUserContent = async ({
   getAuthorizationHeader,
+  aiServiceConfig,
   userId,
   simplifiedProjectJson,
   projectSpecificExtensionsSummaryJson,
   eventsJson,
 }: {|
-  getAuthorizationHeader: () => Promise<string>,
+  getAuthorizationHeader: () => Promise<?string>,
+  aiServiceConfig?: AiGenerationServiceConfig,
   userId: string,
   simplifiedProjectJson: string | null,
   projectSpecificExtensionsSummaryJson: string | null,
@@ -122,6 +156,9 @@ export const prepareAiUserContent = async ({
     : null;
   const eventsJsonHash = eventsJson ? computeSha256(eventsJson) : null;
   const endTime = Date.now();
+  const uploadCacheNamespace = aiServiceConfig
+    ? `${aiServiceConfig.id}:${aiServiceConfig.baseUrl}:${userId}`
+    : `default:${userId}`;
   console.info(
     `Hash of simplified project json and project specific extensions summary json took ${(
       endTime - startTime
@@ -134,17 +171,20 @@ export const prepareAiUserContent = async ({
       contentLength: projectSpecificExtensionsSummaryJson
         ? projectSpecificExtensionsSummaryJson.length
         : 0,
+      cacheNamespace: uploadCacheNamespace,
     }
   );
 
   const shouldUploadGameProjectJson = gameProjectJsonUploadCache.shouldUpload({
     hash: gameProjectJsonHash,
     contentLength: simplifiedProjectJson ? simplifiedProjectJson.length : 0,
+    cacheNamespace: uploadCacheNamespace,
   });
 
   const shouldUploadEventsJson = eventsJsonUploadCache.shouldUpload({
     hash: eventsJsonHash,
     contentLength: eventsJson ? eventsJson.length : 0,
+    cacheNamespace: uploadCacheNamespace,
   });
 
   if (
@@ -163,16 +203,22 @@ export const prepareAiUserContent = async ({
     }: AiUserContentPresignedUrlsResult = await retryIfFailed(
       { times: 3 },
       () =>
-        createAiUserContentPresignedUrls(getAuthorizationHeader, {
-          userId,
-          gameProjectJsonHash: shouldUploadGameProjectJson
-            ? gameProjectJsonHash
-            : null,
-          projectSpecificExtensionsSummaryJsonHash: shouldUploadProjectSpecificExtensionsSummary
-            ? projectSpecificExtensionsSummaryJsonHash
-            : null,
-          eventsJsonHash: shouldUploadEventsJson ? eventsJsonHash : null,
-        })
+        createAiUserContentPresignedUrls(
+          getAuthorizationHeader,
+          {
+            userId,
+            gameProjectJsonHash: shouldUploadGameProjectJson
+              ? gameProjectJsonHash
+              : null,
+            projectSpecificExtensionsSummaryJsonHash: shouldUploadProjectSpecificExtensionsSummary
+              ? projectSpecificExtensionsSummaryJsonHash
+              : null,
+            eventsJsonHash: shouldUploadEventsJson ? eventsJsonHash : null,
+          },
+          {
+            aiServiceConfig,
+          }
+        )
     );
 
     const uploadedAt = Date.now();
@@ -189,9 +235,13 @@ export const prepareAiUserContent = async ({
               maxContentLength: Infinity,
             })
           ).then(() => {
-            gameProjectJsonUploadCache.storeUpload(gameProjectJsonHash, {
-              uploadedAt,
-              userRelativeKey: gameProjectJsonUserRelativeKey || null,
+            gameProjectJsonUploadCache.storeUpload({
+              hash: gameProjectJsonHash,
+              cacheNamespace: uploadCacheNamespace,
+              uploadInfo: {
+                uploadedAt,
+                userRelativeKey: gameProjectJsonUserRelativeKey || null,
+              },
             });
           })
         : null,
@@ -210,14 +260,15 @@ export const prepareAiUserContent = async ({
               }
             )
           ).then(() => {
-            projectSpecificExtensionsSummaryUploadCache.storeUpload(
-              projectSpecificExtensionsSummaryJsonHash,
-              {
+            projectSpecificExtensionsSummaryUploadCache.storeUpload({
+              hash: projectSpecificExtensionsSummaryJsonHash,
+              cacheNamespace: uploadCacheNamespace,
+              uploadInfo: {
                 uploadedAt,
                 userRelativeKey:
                   projectSpecificExtensionsSummaryJsonUserRelativeKey || null,
-              }
-            );
+              },
+            });
           })
         : null,
       eventsJsonSignedUrl
@@ -229,9 +280,13 @@ export const prepareAiUserContent = async ({
               },
             })
           ).then(() => {
-            eventsJsonUploadCache.storeUpload(eventsJsonHash, {
-              uploadedAt,
-              userRelativeKey: eventsJsonUserRelativeKey || null,
+            eventsJsonUploadCache.storeUpload({
+              hash: eventsJsonHash,
+              cacheNamespace: uploadCacheNamespace,
+              uploadInfo: {
+                uploadedAt,
+                userRelativeKey: eventsJsonUserRelativeKey || null,
+              },
             });
           })
         : null,
@@ -254,14 +309,21 @@ export const prepareAiUserContent = async ({
   // Get the key at which the content was uploaded, if it was uploaded.
   // If not, the content will be sent as part of the request instead of the upload key.
   const gameProjectJsonUserRelativeKey = gameProjectJsonUploadCache.getUserRelativeKey(
-    gameProjectJsonHash
+    {
+      hash: gameProjectJsonHash,
+      cacheNamespace: uploadCacheNamespace,
+    }
   );
   const projectSpecificExtensionsSummaryJsonUserRelativeKey = projectSpecificExtensionsSummaryUploadCache.getUserRelativeKey(
-    projectSpecificExtensionsSummaryJsonHash
+    {
+      hash: projectSpecificExtensionsSummaryJsonHash,
+      cacheNamespace: uploadCacheNamespace,
+    }
   );
-  const eventsJsonUserRelativeKey = eventsJsonUploadCache.getUserRelativeKey(
-    eventsJsonHash
-  );
+  const eventsJsonUserRelativeKey = eventsJsonUploadCache.getUserRelativeKey({
+    hash: eventsJsonHash,
+    cacheNamespace: uploadCacheNamespace,
+  });
   return {
     gameProjectJsonUserRelativeKey,
     gameProjectJson: gameProjectJsonUserRelativeKey

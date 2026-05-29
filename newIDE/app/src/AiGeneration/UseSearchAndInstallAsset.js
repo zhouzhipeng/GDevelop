@@ -4,7 +4,6 @@ import {
   type AssetSearchAndInstallOptions,
   type AssetSearchAndInstallResult,
 } from '../EditorFunctions';
-import AuthenticatedUserContext from '../Profile/AuthenticatedUserContext';
 import {
   createAssetSearch,
   type AssetSearch,
@@ -13,6 +12,7 @@ import { retryIfFailed } from '../Utils/RetryIfFailed';
 import { useInstallAsset } from '../AssetStore/NewObjectDialog';
 import { type ResourceManagementProps } from '../ResourcesList/ResourceSource';
 import { AssetStoreContext } from '../AssetStore/AssetStoreContext';
+import { useAiGenerationService } from './AiService';
 
 type _FuncReturnType = {
   searchAndInstallAsset: AssetSearchAndInstallOptions => Promise<AssetSearchAndInstallResult>,
@@ -29,9 +29,11 @@ export const useSearchAndInstallAsset = ({
   onWillInstallExtension: (extensionNames: Array<string>) => void,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
 |}): _FuncReturnType => {
-  const { profile, getAuthorizationHeader } = React.useContext(
-    AuthenticatedUserContext
-  );
+  const {
+    service: aiServiceConfig,
+    userId,
+    getAuthorizationHeader,
+  } = useAiGenerationService();
   const { getAssetShortHeaderFromId } = React.useContext(AssetStoreContext);
   const installAsset = useInstallAsset({
     project,
@@ -49,7 +51,7 @@ export const useSearchAndInstallAsset = ({
         exactOrPartialAssetId,
         ...assetSearchOptions
       }: AssetSearchAndInstallOptions): Promise<AssetSearchAndInstallResult> => {
-        if (!profile) throw new Error('User should be authenticated.');
+        if (!userId) throw new Error('AI service should be configured.');
 
         let assetShortHeader;
         if (exactOrPartialAssetId) {
@@ -89,12 +91,18 @@ export const useSearchAndInstallAsset = ({
           const assetSearch: AssetSearch = await retryIfFailed(
             { times: 3, backoff: { initialDelay: 300, factor: 2 } },
             () =>
-              createAssetSearch(getAuthorizationHeader, {
-                userId: profile.id,
-                objectType,
-                exactOrPartialAssetId,
-                ...assetSearchOptions,
-              })
+              createAssetSearch(
+                getAuthorizationHeader,
+                {
+                  userId,
+                  objectType,
+                  exactOrPartialAssetId,
+                  ...assetSearchOptions,
+                },
+                {
+                  aiServiceConfig,
+                }
+              )
           );
           if (!assetSearch.results || assetSearch.results.length === 0) {
             return {
@@ -142,7 +150,13 @@ export const useSearchAndInstallAsset = ({
             installOutput.isTheFirstOfItsTypeInProject,
         };
       },
-      [installAsset, profile, getAuthorizationHeader, getAssetShortHeaderFromId]
+      [
+        installAsset,
+        userId,
+        getAuthorizationHeader,
+        aiServiceConfig,
+        getAssetShortHeaderFromId,
+      ]
     ),
   };
 };

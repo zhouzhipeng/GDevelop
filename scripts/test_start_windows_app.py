@@ -1,0 +1,83 @@
+import subprocess
+import sys
+import unittest
+from importlib import util
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT_DIR / "scripts" / "start-windows-app.py"
+
+
+def load_script_module():
+    spec = util.spec_from_file_location("start_windows_app", SCRIPT)
+    module = util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+class StartWindowsAppScriptTest(unittest.TestCase):
+    def test_dry_run_lists_full_startup_flow(self):
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--dry-run", "--no-launch"],
+            cwd=ROOT_DIR,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("DRY RUN", result.stdout)
+        self.assertIn("Stop existing GDevelop Electron processes", result.stdout)
+        self.assertIn("Stop stale dev servers on ports 3000 and 5002", result.stdout)
+        self.assertIn("Ensure Electron dependencies", result.stdout)
+        self.assertIn("Build React app", result.stdout)
+        self.assertIn("Sync Electron app/www", result.stdout)
+        self.assertIn("Skipping launch because --no-launch was set", result.stdout)
+        self.assertIn("Verify startup inputs", result.stdout)
+
+    def test_powershell_runner_handles_empty_captured_output(self):
+        module = load_script_module()
+
+        completed = SimpleNamespace(stdout=None, stderr=None, returncode=0)
+        with mock.patch.object(module.shutil, "which", return_value="powershell"):
+            with mock.patch.object(module.subprocess, "run", return_value=completed) as run:
+                output = module.run_powershell(
+                    "Write-Output 'hello'",
+                    cwd=ROOT_DIR,
+                    dry_run=False,
+                )
+
+        self.assertEqual(output, "")
+        self.assertEqual(run.call_args.kwargs["encoding"], "utf-8")
+        self.assertEqual(run.call_args.kwargs["errors"], "replace")
+
+    def test_stop_process_scripts_are_best_effort(self):
+        module = load_script_module()
+        electron_exe = (
+            ROOT_DIR
+            / "newIDE"
+            / "electron-app"
+            / "node_modules"
+            / "electron"
+            / "dist"
+            / "electron.exe"
+        )
+
+        with mock.patch.object(module, "run_powershell") as run_powershell:
+            module.stop_existing_processes(ROOT_DIR, electron_exe, dry_run=False)
+
+        electron_stop_script = run_powershell.call_args_list[0].args[0]
+        port_stop_script = run_powershell.call_args_list[1].args[0]
+        self.assertIn("try {", electron_stop_script)
+        self.assertIn("Write-Warning", electron_stop_script)
+        self.assertIn("exit 0", electron_stop_script)
+        self.assertIn("try {", port_stop_script)
+        self.assertIn("Write-Warning", port_stop_script)
+        self.assertIn("exit 0", port_stop_script)
+
+
+if __name__ == "__main__":
+    unittest.main()

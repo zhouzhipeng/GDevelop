@@ -65,6 +65,8 @@ import { renderHomePageContainer } from './EditorContainers/HomePage';
 import { type OpenAskAiOptions } from '../AiGeneration/Utils';
 import { exceptionallyGuardAgainstDeadObject } from '../Utils/IsNullPtr';
 import { renderAskAiEditorContainer } from '../AiGeneration/AskAiEditorContainer';
+import { createMcpEditorBridge } from '../Mcp/McpEditorBridge';
+import { type EditorCallbacks } from '../EditorFunctions';
 import { renderResourcesEditorContainer } from './EditorContainers/ResourcesEditorContainer';
 import { renderGlobalEventsSearchEditorContainer } from './EditorContainers/GlobalEventsSearchEditorContainer';
 import {
@@ -193,6 +195,8 @@ import useCreateProject, {
 import newNameGenerator from '../Utils/NewNameGenerator';
 import { addDefaultLightToAllLayers } from '../ProjectCreation/CreateProject';
 import { type NewProjectSetup } from '../ProjectCreation/NewProjectSetupDialog';
+import { listAllExamples } from '../Utils/GDevelopServices/Example';
+import UrlStorageProvider from '../ProjectsStorage/UrlStorageProvider';
 import useEditorTabsStateSaving from './EditorTabs/UseEditorTabsStateSaving';
 import PixiResourcesLoader from '../ObjectsRendering/PixiResourcesLoader';
 import useResourcesWatcher from './ResourcesWatcher';
@@ -227,6 +231,12 @@ import PublicProfileContext from '../Profile/PublicProfileContext';
 import { useGamesPlatformFrame } from './EditorContainers/HomePage/PlaySection/UseGamesPlatformFrame';
 import { useExtensionLoadErrorDialog } from '../Utils/UseExtensionLoadErrorDialog';
 import { PanesContainer } from './PanesContainer';
+import { tryAutoOpenMostRecentProjectAtStartup } from './StartupAutoOpen';
+import { useEnsureExtensionInstalled } from '../AiGeneration/UseEnsureExtensionInstalled';
+import { useGenerateEvents } from '../AiGeneration/UseGenerateEvents';
+import { useSearchAndInstallAsset } from '../AiGeneration/UseSearchAndInstallAsset';
+import { useSearchAndInstallResource } from '../AiGeneration/UseSearchAndInstallResource';
+import { ObjectStoreContext } from '../AssetStore/ObjectStoreContext';
 import {
   registerOnResourceExternallyChangedCallback,
   unregisterOnResourceExternallyChangedCallback,
@@ -241,7 +251,8 @@ import { useInGameEditorSettings } from '../EmbeddedGame/InGameEditorSettings';
 import { ProjectScopedContainersAccessor } from '../InstructionOrExpression/EventsScope';
 import { useAutomatedRegularInGameEditorRestart } from '../EmbeddedGame/UseAutomatedRegularInGameEditorRestart';
 const electron = optionalRequire('electron');
-const ipcRendererForUpdates = electron ? electron.ipcRenderer : null;
+const ipcRenderer = electron ? electron.ipcRenderer : null;
+const ipcRendererForUpdates = ipcRenderer;
 
 const GD_STARTUP_TIMES = global.GD_STARTUP_TIMES || [];
 
@@ -1312,6 +1323,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       options?: {|
         openingMessage?: ?MessageDescriptor,
         ignoreAutoSave?: boolean,
+        suppressOpenErrorAlert?: boolean,
       |}
     ): Promise<?State> => {
       const storageProviderOperations = getStorageProviderOperations();
@@ -1449,14 +1461,16 @@ const MainFrame = (props: Props): React.MixedElement => {
           setCloudProjectFileMetadataToRecover(fileMetadata);
         } else {
           console.error('Failed to open the project:', error);
-          const errorMessage = getOpenErrorMessage
-            ? getOpenErrorMessage(error)
-            : t`Ensure that you are connected to internet and that the URL used is correct, then try again.`;
+          if (!(options && options.suppressOpenErrorAlert)) {
+            const errorMessage = getOpenErrorMessage
+              ? getOpenErrorMessage(error)
+              : t`Ensure that you are connected to internet and that the URL used is correct, then try again.`;
 
-          await showAlert({
-            title: t`Unable to open the project`,
-            message: errorMessage,
-          });
+            await showAlert({
+              title: t`Unable to open the project`,
+              message: errorMessage,
+            });
+          }
           throw error;
         }
       }
@@ -3775,6 +3789,8 @@ const MainFrame = (props: Props): React.MixedElement => {
         ignoreUnsavedChanges?: boolean,
         ignoreAutoSave?: boolean,
         openingMessage?: ?MessageDescriptor,
+        suppressOpenErrorAlert?: boolean,
+        rethrowOpenError?: boolean,
       |}
     ): Promise<void> => {
       if (hasUnsavedChanges && !(options && options.ignoreUnsavedChanges)) {
@@ -3799,6 +3815,8 @@ const MainFrame = (props: Props): React.MixedElement => {
       await openFromFileMetadata(fileMetadata, {
         openingMessage: (options && options.openingMessage) || null,
         ignoreAutoSave: (options && options.ignoreAutoSave) || false,
+        suppressOpenErrorAlert:
+          (options && options.suppressOpenErrorAlert) || false,
       })
         .then(state => {
           if (state) {
@@ -3848,7 +3866,8 @@ const MainFrame = (props: Props): React.MixedElement => {
           }
         })
         .catch(error => {
-          /* Ignore error, it was already surfaced to the user. */
+          if (options && options.rethrowOpenError) throw error;
+          /* Ignore error, it was already surfaced to the user unless explicitly suppressed. */
         });
     },
     [
@@ -4871,30 +4890,19 @@ const MainFrame = (props: Props): React.MixedElement => {
             await fetchAndOpenNewProjectSetupDialogForExample(
               initialExampleSlugToOpen
             );
-          } else if (
-            getAutoOpenMostRecentProject() &&
-            hadProjectOpenedDuringLastSession() &&
-            getRecentProjectFiles()[0]
-          ) {
-            // Re-open the last opened project, if any and if asked to.
-            const fileMetadataAndStorageProviderName = getRecentProjectFiles()[0];
-            const storageProvider = findStorageProviderFor(
-              i18n,
-              props.storageProviders,
-              fileMetadataAndStorageProviderName
-            );
-            if (!storageProvider) return;
-
-            const storageProviderOperations = getStorageProviderOperations(
-              storageProvider
-            );
-            const proceed = await ensureInteractionHappened(
-              storageProviderOperations
-            );
-            if (proceed)
-              openFromFileMetadataWithStorageProvider(
-                fileMetadataAndStorageProviderName
-              );
+          } else {
+            await tryAutoOpenMostRecentProjectAtStartup({
+              preferences: {
+                getAutoOpenMostRecentProject,
+                getRecentProjectFiles,
+                hadProjectOpenedDuringLastSession,
+                setHasProjectOpened: preferences.setHasProjectOpened,
+              },
+              storageProviders: props.storageProviders,
+              getStorageProviderOperations,
+              ensureInteractionHappened,
+              openFromFileMetadataWithStorageProvider,
+            });
           }
 
           configureNewProjectActionsForProfile({
@@ -5006,6 +5014,173 @@ const MainFrame = (props: Props): React.MixedElement => {
       onNewResourcesAdded,
       onResourceUsageChanged,
     ]
+  );
+
+  const { ensureExtensionInstalled } = useEnsureExtensionInstalled({
+    project: currentProject,
+    i18n,
+  });
+  const { generateEvents } = useGenerateEvents({ project: currentProject });
+  const { searchAndInstallAsset } = useSearchAndInstallAsset({
+    project: currentProject,
+    resourceManagementProps,
+    onWillInstallExtension,
+    onExtensionInstalled,
+  });
+  const { searchAndInstallResources } = useSearchAndInstallResource({
+    project: currentProject,
+    resourceManagementProps,
+  });
+  const { translatedObjectShortHeadersByType, fetchObjects } = React.useContext(
+    ObjectStoreContext
+  );
+  React.useEffect(
+    () => {
+      fetchObjects();
+    },
+    [fetchObjects]
+  );
+  const getAssetStoreTagForNewObject = React.useCallback(
+    (objectType: string): string | null => {
+      const header = translatedObjectShortHeadersByType[objectType];
+      return (header && header.assetStoreTag) || null;
+    },
+    [translatedObjectShortHeadersByType]
+  );
+
+  const onCreateProjectFromMcp = React.useCallback(
+    async ({
+      name,
+      exampleSlug,
+    }: {|
+      name: string,
+      exampleSlug: string | null,
+    |}) => {
+      const newProjectSetup: NewProjectSetup = {
+        projectName: name,
+        storageProvider: UrlStorageProvider,
+        saveAsLocation: null,
+        creationSource: 'ai-agent-request',
+      };
+
+      if (exampleSlug) {
+        const { exampleShortHeaders } = await listAllExamples();
+        const exampleShortHeader = exampleShortHeaders.find(
+          header => header.slug === exampleSlug
+        );
+        if (exampleShortHeader) {
+          const { createdProject } = await createProjectFromExample({
+            exampleShortHeader,
+            newProjectSetup,
+            i18n,
+          });
+          return { exampleSlug, createdProject };
+        }
+      }
+
+      const { createdProject } = await createEmptyProject(newProjectSetup);
+      return { exampleSlug: null, createdProject };
+    },
+    [createProjectFromExample, createEmptyProject, i18n]
+  );
+
+  const mcpEditorCallbacks: EditorCallbacks = React.useMemo(
+    () => ({
+      onOpenLayout: (sceneName, options) => openLayout(sceneName, options),
+      onCreateProject: onCreateProjectFromMcp,
+    }),
+    [openLayout, onCreateProjectFromMcp]
+  );
+
+  const mcpEditorBridge = React.useMemo(
+    () =>
+      createMcpEditorBridge({
+        getProject: () => currentProjectRef.current,
+        getPermissions: () => ({
+          allowWriteTools: preferences.values.mcpAllowWriteTools,
+          allowCommandTools: preferences.values.mcpAllowCommandTools,
+        }),
+        i18n,
+        editorCallbacks: mcpEditorCallbacks,
+        triggerUnsavedChanges,
+        runCommand: commandName => {
+          if (!commandPaletteRef.current) return false;
+          commandPaletteRef.current.launchCommand((commandName: any));
+          return true;
+        },
+        generateEvents,
+        onSceneEventsModifiedOutsideEditor,
+        onInstancesModifiedOutsideEditor,
+        onObjectsModifiedOutsideEditor,
+        onObjectGroupsModifiedOutsideEditor,
+        ensureExtensionInstalled,
+        onWillInstallExtension,
+        onExtensionInstalled,
+        searchAndInstallAsset,
+        searchAndInstallResources,
+        getAssetStoreTagForNewObject,
+      }),
+    [
+      currentProjectRef,
+      preferences.values.mcpAllowWriteTools,
+      preferences.values.mcpAllowCommandTools,
+      i18n,
+      mcpEditorCallbacks,
+      triggerUnsavedChanges,
+      generateEvents,
+      onSceneEventsModifiedOutsideEditor,
+      onInstancesModifiedOutsideEditor,
+      onObjectsModifiedOutsideEditor,
+      onObjectGroupsModifiedOutsideEditor,
+      ensureExtensionInstalled,
+      onWillInstallExtension,
+      onExtensionInstalled,
+      searchAndInstallAsset,
+      searchAndInstallResources,
+      getAssetStoreTagForNewObject,
+    ]
+  );
+  const mcpEditorBridgeRef = useStableUpToDateRef(mcpEditorBridge);
+
+  React.useEffect(
+    () => {
+      if (!ipcRenderer) return;
+
+      const handleMcpRendererRequest = (event: any, request: any) => {
+        const requestId = request && request.id;
+        mcpEditorBridgeRef.current
+          .handleRendererMcpRequest({
+            method: request && request.method,
+            params: request && request.params,
+          })
+          .then(result => {
+            ipcRenderer.send('mcp-renderer-response', {
+              id: requestId,
+              result,
+            });
+          })
+          .catch(error => {
+            ipcRenderer.send('mcp-renderer-response', {
+              id: requestId,
+              error: {
+                message:
+                  error && error.message
+                    ? error.message
+                    : 'Unable to process MCP request.',
+              },
+            });
+          });
+      };
+
+      ipcRenderer.on('mcp-renderer-request', handleMcpRendererRequest);
+      return () => {
+        ipcRenderer.removeListener(
+          'mcp-renderer-request',
+          handleMcpRendererRequest
+        );
+      };
+    },
+    [mcpEditorBridgeRef]
   );
 
   const projectScopedContainersAccessor: ProjectScopedContainersAccessor | null = React.useMemo(

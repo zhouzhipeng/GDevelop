@@ -1243,6 +1243,52 @@ describe('editorFunctions', () => {
         newOrChangedAiGeneratedEventIds: new Set(['test-ai-event-id']),
       });
     });
+
+    it('adds direct events JSON without calling the event generation service', async () => {
+      // $FlowFixMe[underconstrained-implicit-instantiation]
+      const generateEvents = jest.fn();
+      // $FlowFixMe[underconstrained-implicit-instantiation]
+      const onSceneEventsModifiedOutsideEditor = jest.fn();
+
+      const result = await editorFunctions.add_scene_events.launchFunction({
+        ...makeFakeLaunchFunctionOptionsWithProject(project),
+        args: {
+          scene_name: 'TestScene',
+          events_json: JSON.stringify([
+            {
+              type: 'BuiltinCommonInstructions::Standard',
+              conditions: [],
+              actions: [],
+            },
+          ]),
+          generated_event_id: 'mcp-direct-event',
+        },
+        relatedAiRequestId: null,
+        generateEvents,
+        onSceneEventsModifiedOutsideEditor,
+      });
+
+      expect(result).toMatchInlineSnapshot(`
+        Object {
+          "aiGeneratedEventId": "mcp-direct-event",
+          "message": "Added 1 event operation(s).",
+          "newlyAddedResources": Array [
+            Object {
+              "resourceKind": "fake-resource-kind",
+              "resourceName": "fake-resource-name",
+              "status": "resource-installed",
+            },
+          ],
+          "success": true,
+        }
+      `);
+      expect(testScene.getEvents().getEventsCount()).toBe(1);
+      expect(generateEvents).not.toHaveBeenCalled();
+      expect(onSceneEventsModifiedOutsideEditor).toHaveBeenCalledWith({
+        scene: testScene,
+        newOrChangedAiGeneratedEventIds: new Set(['mcp-direct-event']),
+      });
+    });
   });
 
   describe('add_or_edit_variable', () => {

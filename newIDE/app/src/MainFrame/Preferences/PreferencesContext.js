@@ -11,6 +11,7 @@ import { type ShortcutMap } from '../../KeyboardShortcuts/DefaultShortcuts';
 import { type CommandName } from '../../CommandPalette/CommandsList';
 import { type EditorTabsPersistedState } from '../EditorTabs/EditorTabsHandler';
 import { type GamesDashboardOrderBy } from '../../GameDashboard/GamesList';
+import { type AiGenerationServiceConfig } from '../../AiGeneration/AiService';
 import optionalRequire from '../../Utils/OptionalRequire';
 import { findDefaultFolder } from '../../ProjectsStorage/LocalFileStorageProvider/LocalPathFinder';
 import { isWebGLSupported } from '../../Utils/WebGL';
@@ -241,6 +242,13 @@ export type PreferencesValues = {|
   takeScreenshotOnPreview: boolean,
   showAiAskButtonInTitleBar: boolean,
   automaticallyUseCreditsForAiRequests: boolean,
+  aiGenerationServices: Array<AiGenerationServiceConfig>,
+  selectedAiGenerationServiceId: string,
+  enableMcpServer: boolean,
+  mcpServerPort: number,
+  mcpServerAuthorizationToken: string,
+  mcpAllowWriteTools: boolean,
+  mcpAllowCommandTools: boolean,
   useBackgroundSerializerForSaving: boolean,
   disableNpmScriptConfirmation: boolean,
   showJsTypeError: boolean,
@@ -366,6 +374,18 @@ export type Preferences = {|
   setTakeScreenshotOnPreview: (enabled: boolean) => void,
   setShowAiAskButtonInTitleBar: (enabled: boolean) => void,
   setAutomaticallyUseCreditsForAiRequests: (enabled: boolean) => void,
+  setAiGenerationServices: (
+    aiGenerationServices: Array<AiGenerationServiceConfig>
+  ) => void,
+  setSelectedAiGenerationServiceId: (
+    selectedAiGenerationServiceId: string
+  ) => void,
+  setEnableMcpServer: (enabled: boolean) => void,
+  setMcpServerPort: (port: number) => void,
+  setMcpServerAuthorizationToken: (token: string) => void,
+  regenerateMcpServerAuthorizationToken: () => void,
+  setMcpAllowWriteTools: (enabled: boolean) => void,
+  setMcpAllowCommandTools: (enabled: boolean) => void,
   setUseBackgroundSerializerForSaving: (enabled: boolean) => void,
   setShowJsTypeError: (enabled: boolean) => void,
   setCanonicalEventSerialization: (enabled: boolean) => void,
@@ -431,6 +451,13 @@ export const initialPreferences = {
     takeScreenshotOnPreview: true,
     showAiAskButtonInTitleBar: true,
     automaticallyUseCreditsForAiRequests: false,
+    aiGenerationServices: ([]: Array<AiGenerationServiceConfig>),
+    selectedAiGenerationServiceId: 'gdevelop-cloud',
+    enableMcpServer: false,
+    mcpServerPort: 32110,
+    mcpServerAuthorizationToken: '',
+    mcpAllowWriteTools: false,
+    mcpAllowCommandTools: false,
     useBackgroundSerializerForSaving: false,
     disableNpmScriptConfirmation: false,
     showJsTypeError: false,
@@ -519,6 +546,14 @@ export const initialPreferences = {
   setTakeScreenshotOnPreview: (enabled: boolean) => {},
   setShowAiAskButtonInTitleBar: (enabled: boolean) => {},
   setAutomaticallyUseCreditsForAiRequests: (enabled: boolean) => {},
+  setAiGenerationServices: () => {},
+  setSelectedAiGenerationServiceId: () => {},
+  setEnableMcpServer: (enabled: boolean) => {},
+  setMcpServerPort: (port: number) => {},
+  setMcpServerAuthorizationToken: (token: string) => {},
+  regenerateMcpServerAuthorizationToken: () => {},
+  setMcpAllowWriteTools: (enabled: boolean) => {},
+  setMcpAllowCommandTools: (enabled: boolean) => {},
   setUseBackgroundSerializerForSaving: (enabled: boolean) => {},
   setShowJsTypeError: (enabled: boolean) => {},
   setCanonicalEventSerialization: (enabled: boolean) => {},

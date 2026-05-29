@@ -26,6 +26,12 @@ const {
 } = require('./MainMenu');
 const { loadExternalEditorWindow } = require('./LocalExternalEditorWindow');
 const { load, registerGdideProtocol } = require('./Utils/UrlLoader');
+const { getElectronAppCommandLineArguments } = require('./Utils/AppArguments');
+const {
+  startMcpServer,
+  stopMcpServer,
+  getMcpServerState,
+} = require('./Mcp/McpServer');
 const throttle = require('lodash.throttle');
 const { findLocalIp } = require('./Utils/LocalNetworkIpFinder');
 const setUpDiscordRichPresence = require('./DiscordRichPresence');
@@ -64,6 +70,54 @@ autoUpdater.autoDownload = false;
 let mainWindows = new Set();
 let mainWindow = null; // Primary window reference for backwards compatibility
 let windowCounter = 0; // Counter for creating unique session partitions
+let mcpRendererWebContents = null;
+let mcpRendererRequestId = 0;
+const pendingMcpRendererRequests = new Map();
+const MCP_RENDERER_REQUEST_TIMEOUT_MS = 30000;
+
+const serializeMcpServerState = (state, error) => ({
+  isRunning: !!state,
+  port: state ? state.port : null,
+  url: state ? state.url : null,
+  error: error || null,
+});
+
+const sendMcpRendererRequest = ({ method, params }) =>
+  new Promise((resolve, reject) => {
+    const webContents = mcpRendererWebContents;
+    if (!webContents || webContents.isDestroyed()) {
+      reject(new Error('No active GDevelop editor window is available.'));
+      return;
+    }
+
+    const id = ++mcpRendererRequestId;
+    const timeoutId = setTimeout(() => {
+      pendingMcpRendererRequests.delete(id);
+      reject(new Error('Timed out waiting for the GDevelop editor.'));
+    }, MCP_RENDERER_REQUEST_TIMEOUT_MS);
+
+    pendingMcpRendererRequests.set(id, {
+      resolve,
+      reject,
+      timeoutId,
+      webContents,
+    });
+
+    webContents.send('mcp-renderer-request', {
+      id,
+      method,
+      params,
+    });
+  });
+
+const clearPendingMcpRendererRequestsFor = webContents => {
+  for (const [id, pendingRequest] of pendingMcpRendererRequests) {
+    if (pendingRequest.webContents !== webContents) continue;
+    clearTimeout(pendingRequest.timeoutId);
+    pendingRequest.reject(new Error('The GDevelop editor window was closed.'));
+    pendingMcpRendererRequests.delete(id);
+  }
+};
 
 // Parse arguments (knowing that in dev, we run electron with an argument,
 // so have to ignore one more).
@@ -71,7 +125,15 @@ const argsParserOptions = {
   boolean: ['dev-tools', 'disable-update-check', 'keep-open'],
   string: ['_', 'run-command'],
 };
-const args = parseArgs(process.argv.slice(isDev ? 2 : 1), argsParserOptions);
+const getCommandLineArguments = commandLine =>
+  getElectronAppCommandLineArguments(commandLine, {
+    isDev,
+    isDefaultApp: !!process.defaultApp,
+  });
+const args = parseArgs(
+  getCommandLineArguments(process.argv),
+  argsParserOptions
+);
 
 const devTools = !!args['dev-tools'];
 
@@ -102,7 +164,7 @@ if (!gotTheLock) {
   // First instance - handle second-instance events by creating new windows
   app.on('second-instance', (event, commandLine, workingDirectory) => {
     const secondInstanceArgs = parseArgs(
-      commandLine.slice(isDev ? 2 : 1),
+      getCommandLineArguments(commandLine),
       argsParserOptions
     );
 
@@ -125,6 +187,11 @@ app.on('window-all-closed', function() {
   }
   try {
     stopAllDebuggerServers();
+  } catch (e) {
+    // Ignore errors during shutdown
+  }
+  try {
+    stopMcpServer();
   } catch (e) {
     // Ignore errors during shutdown
   }
@@ -270,6 +337,13 @@ function createNewWindow(windowArgs = args) {
   newWindow.on('closed', function() {
     // Remove from tracked windows
     mainWindows.delete(newWindow);
+    clearPendingMcpRendererRequestsFor(newWindow.webContents);
+    if (mcpRendererWebContents === newWindow.webContents) {
+      mcpRendererWebContents = null;
+      stopMcpServer().catch(error => {
+        log.error('Failed to stop MCP server after window close:', error);
+      });
+    }
 
     // If this was the primary window, set a new primary
     if (isPrimaryWindow) {
@@ -429,6 +503,94 @@ app.on('ready', function() {
         mainMenuTemplate
       )
     );
+  });
+
+  ipcMain.on('mcp-renderer-response', (event, response) => {
+    const pendingRequest =
+      response && typeof response.id === 'number'
+        ? pendingMcpRendererRequests.get(response.id)
+        : null;
+    if (!pendingRequest || pendingRequest.webContents !== event.sender) return;
+
+    pendingMcpRendererRequests.delete(response.id);
+    clearTimeout(pendingRequest.timeoutId);
+
+    if (response.error) {
+      pendingRequest.reject(
+        new Error(
+          response.error && response.error.message
+            ? response.error.message
+            : String(response.error)
+        )
+      );
+      return;
+    }
+
+    pendingRequest.resolve(response.result);
+  });
+
+  ipcMain.handle('mcp-server-get-state', async () =>
+    serializeMcpServerState(getMcpServerState())
+  );
+
+  ipcMain.handle('mcp-server-update-config', async (event, config) => {
+    mcpRendererWebContents = event.sender;
+
+    const enabled = !!(config && config.enabled);
+    if (!enabled) {
+      await stopMcpServer();
+      return serializeMcpServerState(null);
+    }
+
+    const token =
+      config && typeof config.token === 'string' ? config.token.trim() : '';
+    if (!token) {
+      await stopMcpServer();
+      return serializeMcpServerState(
+        null,
+        'MCP server requires an authorization token.'
+      );
+    }
+
+    const configuredPort =
+      config && typeof config.port === 'number'
+        ? config.port
+        : parseInt(config && config.port, 10);
+    const port =
+      Number.isInteger(configuredPort) &&
+      configuredPort >= 0 &&
+      configuredPort <= 65535
+        ? configuredPort
+        : 32110;
+    const currentServerState = getMcpServerState();
+
+    if (
+      currentServerState &&
+      currentServerState.port === port &&
+      currentServerState.token === token
+    ) {
+      return serializeMcpServerState(currentServerState);
+    }
+
+    if (currentServerState) {
+      await stopMcpServer(currentServerState);
+    }
+
+    try {
+      const serverState = await startMcpServer({
+        port,
+        token,
+        sendRendererRequest: sendMcpRendererRequest,
+      });
+      log.info(`MCP server listening on ${serverState.url}`);
+      return serializeMcpServerState(serverState);
+    } catch (error) {
+      log.error('Failed to start MCP server:', error);
+      return serializeMcpServerState(
+        null,
+        error && error.message ? error.message : String(error)
+      );
+    }
   });
 
   ipcMain.handle('preview-open', async (event, options) => {

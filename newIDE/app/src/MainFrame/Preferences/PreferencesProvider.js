@@ -87,6 +87,7 @@ export const loadPreferencesFromLocalStorage = (): ?PreferencesValues => {
 export const getInitialPreferences = (): {
   autoDisplayChangelog: boolean,
   autoDownloadUpdates: boolean,
+  aiGenerationServices: Array<any>,
   autoOpenMostRecentProject: boolean,
   automaticallyUseCreditsForAiRequests: boolean,
   autosaveOnPreview: boolean,
@@ -114,6 +115,11 @@ export const getInitialPreferences = (): {
   isMenuBarHiddenInPreview: boolean,
   language: string,
   lastLaunchedVersion: void,
+  enableMcpServer: boolean,
+  mcpAllowCommandTools: boolean,
+  mcpAllowWriteTools: boolean,
+  mcpServerAuthorizationToken: string,
+  mcpServerPort: number,
   newFeaturesAcknowledgements: {},
   newObjectDialogDefaultTab: any,
   newProjectsDefaultFolder: any,
@@ -131,6 +137,7 @@ export const getInitialPreferences = (): {
   showEffectParameterNames: boolean,
   showExperimentalExtensions: boolean,
   showInAppTutorialDeveloperMode: boolean,
+  selectedAiGenerationServiceId: string,
   takeScreenshotOnPreview: boolean,
   themeName: any,
   use3DEditor: any,
@@ -152,6 +159,30 @@ export const getInitialPreferences = (): {
 
   return { ...initialPreferences.values, language: languageOrLocale };
 };
+
+const generateMcpServerAuthorizationToken = (): string => {
+  const prefix = 'gdevelop-mcp';
+  if (typeof window !== 'undefined' && window.crypto) {
+    const bytes = new Uint8Array(24);
+    window.crypto.getRandomValues(bytes);
+    return `${prefix}-${Array.from(bytes)
+      .map(byte => byte.toString(16).padStart(2, '0'))
+      .join('')}`;
+  }
+
+  return `${prefix}-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+};
+
+const hasMcpServerConfigurationChanged = (
+  oldValues: PreferencesValues,
+  newValues: PreferencesValues
+): boolean =>
+  oldValues.enableMcpServer !== newValues.enableMcpServer ||
+  oldValues.mcpServerPort !== newValues.mcpServerPort ||
+  oldValues.mcpServerAuthorizationToken !==
+    newValues.mcpServerAuthorizationToken;
 
 const getPreferences = (): PreferencesValues => {
   const preferences =
@@ -402,6 +433,28 @@ export default class PreferencesProvider extends React.Component<Props, State> {
       this
     ): any),
     // $FlowFixMe[method-unbinding]
+    setAiGenerationServices: (this._setAiGenerationServices.bind(this): any),
+    // $FlowFixMe[method-unbinding]
+    setSelectedAiGenerationServiceId: (this._setSelectedAiGenerationServiceId.bind(
+      this
+    ): any),
+    // $FlowFixMe[method-unbinding]
+    setEnableMcpServer: (this._setEnableMcpServer.bind(this): any),
+    // $FlowFixMe[method-unbinding]
+    setMcpServerPort: (this._setMcpServerPort.bind(this): any),
+    // $FlowFixMe[method-unbinding]
+    setMcpServerAuthorizationToken: (this._setMcpServerAuthorizationToken.bind(
+      this
+    ): any),
+    // $FlowFixMe[method-unbinding]
+    regenerateMcpServerAuthorizationToken: (this._regenerateMcpServerAuthorizationToken.bind(
+      this
+    ): any),
+    // $FlowFixMe[method-unbinding]
+    setMcpAllowWriteTools: (this._setMcpAllowWriteTools.bind(this): any),
+    // $FlowFixMe[method-unbinding]
+    setMcpAllowCommandTools: (this._setMcpAllowCommandTools.bind(this): any),
+    // $FlowFixMe[method-unbinding]
     setUseBackgroundSerializerForSaving: (this._setUseBackgroundSerializerForSaving.bind(
       this
     ): any),
@@ -422,11 +475,39 @@ export default class PreferencesProvider extends React.Component<Props, State> {
       () => this._checkUpdates(),
       PERIODIC_APP_UPDATES_TIMEOUT
     );
+    this._notifyMcpServerConfiguration();
+  }
+
+  componentDidUpdate(prevProps: Props, prevState: State) {
+    if (
+      hasMcpServerConfigurationChanged(prevState.values, this.state.values)
+    ) {
+      this._notifyMcpServerConfiguration();
+    }
   }
 
   componentWillUnmount() {
     clearTimeout(this._periodicUpdateCheckTimeout);
     clearInterval(this._periodicUpdateCheckInterval);
+  }
+
+  _notifyMcpServerConfiguration() {
+    if (!ipcRenderer || !ipcRenderer.invoke) return;
+
+    const {
+      enableMcpServer,
+      mcpServerPort,
+      mcpServerAuthorizationToken,
+    } = this.state.values;
+    ipcRenderer
+      .invoke('mcp-server-update-config', {
+        enabled: enableMcpServer,
+        port: mcpServerPort,
+        token: mcpServerAuthorizationToken,
+      })
+      .catch(error => {
+        console.error('Unable to update MCP server configuration:', error);
+      });
   }
 
   _setMultipleValues(updates: ProjectSpecificPreferencesValues) {
@@ -1406,6 +1487,98 @@ export default class PreferencesProvider extends React.Component<Props, State> {
         values: {
           ...state.values,
           automaticallyUseCreditsForAiRequests: newValue,
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _setAiGenerationServices(newValue: any) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          aiGenerationServices: newValue,
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _setSelectedAiGenerationServiceId(newValue: string) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          selectedAiGenerationServiceId: newValue,
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _setEnableMcpServer(newValue: boolean) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          enableMcpServer: newValue,
+          mcpServerAuthorizationToken:
+            newValue && !state.values.mcpServerAuthorizationToken
+              ? generateMcpServerAuthorizationToken()
+              : state.values.mcpServerAuthorizationToken,
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _setMcpServerPort(newValue: number) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          mcpServerPort: newValue,
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _setMcpServerAuthorizationToken(newValue: string) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          mcpServerAuthorizationToken: newValue,
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _regenerateMcpServerAuthorizationToken() {
+    this._setMcpServerAuthorizationToken(generateMcpServerAuthorizationToken());
+  }
+
+  _setMcpAllowWriteTools(newValue: boolean) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          mcpAllowWriteTools: newValue,
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _setMcpAllowCommandTools(newValue: boolean) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          mcpAllowCommandTools: newValue,
         },
       }),
       () => this._persistValuesToLocalStorage(this.state)

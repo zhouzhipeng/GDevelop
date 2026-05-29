@@ -8,7 +8,11 @@ import {
   serializeToJSON,
   unserializeFromJSObject,
 } from '../Utils/Serializer';
-import { type AiGeneratedEvent } from '../Utils/GDevelopServices/Generation';
+import {
+  type AiGeneratedEvent,
+  type AiGeneratedEventChange,
+  type AiGeneratedEventMissingResource,
+} from '../Utils/GDevelopServices/Generation';
 import { renderNonTranslatedEventsAsText } from '../EventsSheet/EventsTree/TextRenderer';
 import {
   addMissingObjectBehaviors,
@@ -3746,6 +3750,199 @@ const readSceneEvents: EditorFunction = {
   modifiesProject: false,
 };
 
+const getStringPropertyWithAliases = (
+  value: any,
+  propertyNames: Array<string>
+): string | null => {
+  for (const propertyName of propertyNames) {
+    const extractedValue = SafeExtractor.extractStringProperty(
+      value,
+      propertyName
+    );
+    if (extractedValue !== null) return extractedValue;
+  }
+
+  return null;
+};
+
+const getJsonStringPropertyWithAliases = (
+  value: any,
+  propertyNames: Array<string>
+): string | null => {
+  const object = SafeExtractor.extractObject(value);
+  if (!object) return null;
+
+  for (const propertyName of propertyNames) {
+    const propertyValue = object[propertyName];
+    if (typeof propertyValue === 'string') return propertyValue;
+    if (propertyValue !== null && propertyValue !== undefined) {
+      return JSON.stringify(propertyValue);
+    }
+  }
+
+  return null;
+};
+
+const getArrayPropertyWithAliases = (
+  value: any,
+  propertyNames: Array<string>
+): Array<any> | null => {
+  for (const propertyName of propertyNames) {
+    const extractedValue = SafeExtractor.extractArrayProperty(
+      value,
+      propertyName
+    );
+    if (extractedValue !== null) return extractedValue;
+  }
+
+  return null;
+};
+
+const getObjectPropertyWithAliases = (
+  value: any,
+  propertyNames: Array<string>
+): Object | null => {
+  for (const propertyName of propertyNames) {
+    const extractedValue = SafeExtractor.extractObjectProperty(
+      value,
+      propertyName
+    );
+    if (extractedValue !== null) return extractedValue;
+  }
+
+  return null;
+};
+
+const getStringArrayPropertyWithAliases = (
+  value: any,
+  propertyNames: Array<string>
+): Array<string> => {
+  const array = getArrayPropertyWithAliases(value, propertyNames);
+  if (!array) return [];
+
+  return array.filter(item => typeof item === 'string');
+};
+
+const getMissingResourcesPropertyWithAliases = (
+  value: any,
+  propertyNames: Array<string>
+): Array<AiGeneratedEventMissingResource> => {
+  const array = getArrayPropertyWithAliases(value, propertyNames);
+  if (!array) return [];
+
+  return array
+    .map(resource => {
+      const resourceName = getStringPropertyWithAliases(resource, [
+        'resource_name',
+        'resourceName',
+      ]);
+      const resourceKind = getStringPropertyWithAliases(resource, [
+        'resource_kind',
+        'resourceKind',
+      ]);
+      if (!resourceName || !resourceKind) return null;
+
+      return {
+        resourceName,
+        resourceKind,
+      };
+    })
+    .filter(Boolean);
+};
+
+const makeDirectEventChange = (
+  input: any,
+  fallbackOperationName: string
+): AiGeneratedEventChange | null => {
+  const generatedEvents = getJsonStringPropertyWithAliases(input, [
+    'generated_events',
+    'generatedEvents',
+    'events_json',
+    'eventsJson',
+  ]);
+
+  const operationName =
+    getStringPropertyWithAliases(input, ['operation_name', 'operationName']) ||
+    fallbackOperationName;
+
+  return {
+    operationName,
+    operationTargetEvent: getStringPropertyWithAliases(input, [
+      'operation_target_event',
+      'operationTargetEvent',
+    ]),
+    isEventsJsonValid: true,
+    generatedEvents,
+    areEventsValid: true,
+    extensionNames: getStringArrayPropertyWithAliases(input, [
+      'extension_names',
+      'extensionNames',
+    ]),
+    diagnosticLines: [],
+    undeclaredVariables:
+      getArrayPropertyWithAliases(input, [
+        'undeclared_variables',
+        'undeclaredVariables',
+      ]) || [],
+    undeclaredObjectVariables:
+      getObjectPropertyWithAliases(input, [
+        'undeclared_object_variables',
+        'undeclaredObjectVariables',
+      ]) || {},
+    missingObjectBehaviors:
+      getObjectPropertyWithAliases(input, [
+        'missing_object_behaviors',
+        'missingObjectBehaviors',
+      ]) || {},
+    missingResources: getMissingResourcesPropertyWithAliases(input, [
+      'missing_resources',
+      'missingResources',
+    ]),
+  };
+};
+
+const makeDirectEventChanges = (
+  args: any
+): Array<AiGeneratedEventChange> | null => {
+  const eventsJson = SafeExtractor.extractStringProperty(args, 'events_json');
+  if (eventsJson) {
+    return [
+      {
+        operationName:
+          SafeExtractor.extractStringProperty(args, 'operation_name') ||
+          'insert_at_end',
+        operationTargetEvent: SafeExtractor.extractStringProperty(
+          args,
+          'operation_target_event'
+        ),
+        isEventsJsonValid: true,
+        generatedEvents: eventsJson,
+        areEventsValid: true,
+        extensionNames:
+          getStringArrayPropertyWithAliases(args, [
+            'extension_names',
+            'extensionNames',
+          ]) || [],
+        diagnosticLines: [],
+        undeclaredVariables: [],
+        undeclaredObjectVariables: {},
+        missingObjectBehaviors: {},
+        missingResources: getMissingResourcesPropertyWithAliases(args, [
+          'missing_resources',
+          'missingResources',
+        ]),
+      },
+    ];
+  }
+
+  const eventChanges = SafeExtractor.extractArrayProperty(args, 'event_changes');
+  if (!eventChanges) return null;
+
+  return eventChanges
+    .map(change => makeDirectEventChange(change, 'insert_at_end'))
+    .filter(Boolean);
+};
+
 /**
  * Adds a new event to a scene's event sheet
  */
@@ -4008,10 +4205,6 @@ const addSceneEvents: EditorFunction = {
       args,
       'event_batches'
     );
-    const extensionNamesList = extractRequiredString(
-      args,
-      'extension_names_list'
-    );
     const objectsListArgument = SafeExtractor.extractStringProperty(
       args,
       'objects_list'
@@ -4027,13 +4220,145 @@ const addSceneEvents: EditorFunction = {
     if (!project.hasLayoutNamed(sceneName)) {
       return makeGenericFailure(`Scene not found: "${sceneName}".`);
     }
+    const scene = project.getLayout(sceneName);
+    const currentSceneEvents = scene.getEvents();
+
+    const directEventChanges = makeDirectEventChanges(args);
+    if (directEventChanges) {
+      if (directEventChanges.length === 0) {
+        return makeGenericFailure(
+          'No event changes provided. Provide events_json or one or more event_changes.'
+        );
+      }
+
+      const invalidDirectEventChange = directEventChanges.find(
+        change => change.operationName !== 'delete_event' && !change.generatedEvents
+      );
+      if (invalidDirectEventChange) {
+        return makeGenericFailure(
+          `Missing generated events for operation "${
+            invalidDirectEventChange.operationName
+          }".`
+        );
+      }
+
+      const directGeneratedEventId =
+        SafeExtractor.extractStringProperty(args, 'generated_event_id') ||
+        'mcp-direct-event';
+
+      try {
+        const extensionNames = new Set<string>();
+        for (const change of directEventChanges) {
+          for (const extensionName of change.extensionNames || []) {
+            extensionNames.add(extensionName);
+          }
+        }
+        for (const extensionName of extensionNames) {
+          await ensureExtensionInstalled({
+            extensionName,
+            onWillInstallExtension,
+            onExtensionInstalled,
+          });
+        }
+      } catch (e) {
+        return makeGenericFailure(
+          `Error installing extensions: ${
+            e.message
+          }. Try again or a different approach.`
+        );
+      }
+
+      try {
+        for (const change of directEventChanges) {
+          addUndeclaredVariables({
+            project,
+            scene,
+            undeclaredVariables: change.undeclaredVariables,
+          });
+
+          const objectNamesWithUndeclaredVariables = Object.keys(
+            change.undeclaredObjectVariables
+          );
+          for (const objectName of objectNamesWithUndeclaredVariables) {
+            const undeclaredVariables =
+              change.undeclaredObjectVariables[objectName];
+            addObjectUndeclaredVariables({
+              project,
+              scene,
+              objectName,
+              undeclaredVariables,
+            });
+          }
+
+          const objectNamesWithMissingBehavior = Object.keys(
+            change.missingObjectBehaviors
+          );
+          for (const objectName of objectNamesWithMissingBehavior) {
+            const missingBehaviors = change.missingObjectBehaviors[objectName];
+            addMissingObjectBehaviors({
+              project,
+              scene,
+              objectName,
+              missingBehaviors,
+            });
+          }
+        }
+
+        const { applied, errors } = applyEventsChanges(
+          project,
+          currentSceneEvents,
+          directEventChanges,
+          directGeneratedEventId
+        );
+
+        if (applied === 0) {
+          return {
+            success: false,
+            message: 'Events were provided but not applied.',
+            errors,
+          };
+        }
+
+        onSceneEventsModifiedOutsideEditor({
+          scene,
+          newOrChangedAiGeneratedEventIds: new Set([directGeneratedEventId]),
+        });
+
+        const allMissingResources = directEventChanges.flatMap(
+          change => change.missingResources || []
+        );
+        const {
+          results: newlyAddedResources,
+        } = await searchAndInstallResources({
+          resources: allMissingResources,
+        });
+
+        return {
+          success: true,
+          message: `Added ${applied} event operation(s).`,
+          aiGeneratedEventId: directGeneratedEventId,
+          newlyAddedResources,
+          ...(errors.length > 0 ? { errors } : undefined),
+        };
+      } catch (error) {
+        console.error('Unexpected error when adding direct events:', error);
+        return makeGenericFailure(
+          `Unexpected error adding provided events: ${
+            error.message
+          }. Try a different approach.`
+        );
+      }
+    }
+
+    const extensionNamesList = extractRequiredString(
+      args,
+      'extension_names_list'
+    );
     if (!relatedAiRequestId) {
       return makeGenericFailure(
         'No related AI request ID found for events generation.'
       );
     }
-    const scene = project.getLayout(sceneName);
-    const currentSceneEvents = scene.getEvents();
 
     const existingEventsAsText = renderNonTranslatedEventsAsText({
       eventsList: currentSceneEvents,

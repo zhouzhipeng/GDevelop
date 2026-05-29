@@ -4,6 +4,11 @@ import {
   type AiConfigurationPreset,
   type AiSettings,
 } from '../Utils/GDevelopServices/Generation';
+import {
+  getAiConfigurationPresetsForService,
+  isGDevelopCloudAiService,
+  type AiGenerationServiceConfig,
+} from './AiService';
 
 export type AiConfigurationPresetWithAvailability = {|
   ...AiConfigurationPreset,
@@ -14,10 +19,19 @@ export type AiConfigurationPresetWithAvailability = {|
 export const getAiConfigurationPresetsWithAvailability = ({
   getAiSettings,
   limits,
+  aiGenerationServiceConfig,
 }: {|
   getAiSettings: () => AiSettings | null,
   limits: ?Limits,
+  aiGenerationServiceConfig?: AiGenerationServiceConfig,
 |}): Array<AiConfigurationPresetWithAvailability> => {
+  if (
+    aiGenerationServiceConfig &&
+    !isGDevelopCloudAiService(aiGenerationServiceConfig)
+  ) {
+    return getAiConfigurationPresetsForService(aiGenerationServiceConfig);
+  }
+
   const aiSettings = getAiSettings();
   if (!aiSettings) {
     return [];

@@ -51,6 +51,7 @@ import {
 } from '../ProjectsStorage';
 import CloudStorageProvider from '../ProjectsStorage/CloudStorageProvider';
 import { checkIfHasTooManyCloudProjects } from '../MainFrame/EditorContainers/HomePage/CreateSection/MaxProjectCountAlertMessage';
+import { useAiGenerationService } from './AiService';
 
 const gd: libGDevelop = global.gd;
 
@@ -473,7 +474,13 @@ export const useAiRequestState = ({
   savingProjectForMessageId: ?string,
 } => {
   const authenticatedUser = React.useContext(AuthenticatedUserContext);
-  const { profile, getAuthorizationHeader } = authenticatedUser;
+  const { profile } = authenticatedUser;
+  const {
+    service: aiServiceConfig,
+    userId,
+    getAuthorizationHeader,
+    isGDevelopCloudService,
+  } = useAiGenerationService();
   const {
     aiRequestStorage,
     editorFunctionCallResultsStorage,
@@ -539,7 +546,7 @@ export const useAiRequestState = ({
           !selectedAiRequest.output ||
           selectedAiRequest.output.length === 0 ||
           selectedAiRequest.status !== 'ready' ||
-          !profile ||
+          !userId ||
           isFetchingSuggestions
         )
           return;
@@ -620,7 +627,8 @@ export const useAiRequestState = ({
           : null;
         const preparedAiUserContent = await prepareAiUserContent({
           getAuthorizationHeader,
-          userId: profile.id,
+          aiServiceConfig,
+          userId,
           simplifiedProjectJson,
           projectSpecificExtensionsSummaryJson,
           eventsJson: null,
@@ -633,7 +641,7 @@ export const useAiRequestState = ({
           const aiRequestWorkingForSuggestions = await getAiRequestSuggestions(
             getAuthorizationHeader,
             {
-              userId: profile.id,
+              userId,
               aiRequestId: selectedAiRequest.id,
               suggestionsType: isLastMessageFunctionCallOutputProjectInitialization
                 ? 'list-with-explanations'
@@ -645,6 +653,9 @@ export const useAiRequestState = ({
                 preparedAiUserContent.projectSpecificExtensionsSummaryJsonUserRelativeKey,
               projectSpecificExtensionsSummaryJson:
                 preparedAiUserContent.projectSpecificExtensionsSummaryJson,
+            },
+            {
+              aiServiceConfig,
             }
           );
 
@@ -687,8 +698,9 @@ export const useAiRequestState = ({
     },
     [
       selectedAiRequest,
-      profile,
+      userId,
       getAuthorizationHeader,
+      aiServiceConfig,
       project,
       getEditorFunctionCallResults,
       updateAiRequest,
@@ -711,7 +723,7 @@ export const useAiRequestState = ({
         shouldSaveVersionBeforeMessage: boolean,
         shouldSaveVersionAfterMessage: boolean,
       |}) {
-        if (!selectedAiRequest || !profile) return;
+        if (!selectedAiRequest || !profile || !isGDevelopCloudService) return;
 
         const projectVersionIdBeforeMessage = shouldSaveVersionBeforeMessage
           ? version
@@ -720,13 +732,19 @@ export const useAiRequestState = ({
           ? version
           : undefined;
 
-        await updateAiRequestMessage(getAuthorizationHeader, {
-          userId: profile.id,
-          aiRequestId: selectedAiRequest.id,
-          aiRequestMessageId: lastMessageId,
-          projectVersionIdBeforeMessage,
-          projectVersionIdAfterMessage,
-        });
+        await updateAiRequestMessage(
+          getAuthorizationHeader,
+          {
+            userId: profile.id,
+            aiRequestId: selectedAiRequest.id,
+            aiRequestMessageId: lastMessageId,
+            projectVersionIdBeforeMessage,
+            projectVersionIdAfterMessage,
+          },
+          {
+            aiServiceConfig,
+          }
+        );
         // Update the request with the project version, merging with the latest state
         updateAiRequest(selectedAiRequest.id, prevRequest => {
           if (!prevRequest) {
@@ -781,6 +799,7 @@ export const useAiRequestState = ({
           isSendingAiRequest(selectedAiRequest.id) ||
           !selectedAiRequest.output ||
           selectedAiRequest.output.length === 0 ||
+          !isGDevelopCloudService ||
           !profile ||
           !project ||
           !onSave ||
@@ -973,6 +992,8 @@ export const useAiRequestState = ({
       selectedAiRequest,
       profile,
       getAuthorizationHeader,
+      aiServiceConfig,
+      isGDevelopCloudService,
       project,
       getEditorFunctionCallResults,
       updateAiRequest,
@@ -989,25 +1010,31 @@ export const useAiRequestState = ({
 
   React.useEffect(
     () => {
-      // Reset selected request if user logs out.
-      if (!profile) {
+      // Reset selected request if the selected AI service cannot be used.
+      if (!userId) {
         setSelectedAiRequestId(null);
       }
     },
-    [profile, setSelectedAiRequestId]
+    [userId, setSelectedAiRequestId]
   );
 
   React.useEffect(
     () => {
       // If a request ID is selected but not in storage, try to fetch it directly
       // This can happen when navigating to a request that hasn't been loaded yet (pagination)
-      if (selectedAiRequestId && !selectedAiRequest && profile) {
+      if (selectedAiRequestId && !selectedAiRequest && userId) {
         (async () => {
           try {
-            const fetchedRequest = await getAiRequest(getAuthorizationHeader, {
-              userId: profile.id,
-              aiRequestId: selectedAiRequestId,
-            });
+            const fetchedRequest = await getAiRequest(
+              getAuthorizationHeader,
+              {
+                userId,
+                aiRequestId: selectedAiRequestId,
+              },
+              {
+                aiServiceConfig,
+              }
+            );
             // Add it to the storage
             updateAiRequest(selectedAiRequestId, () => fetchedRequest);
           } catch (error) {
@@ -1024,8 +1051,9 @@ export const useAiRequestState = ({
     [
       selectedAiRequestId,
       selectedAiRequest,
-      profile,
+      userId,
       getAuthorizationHeader,
+      aiServiceConfig,
       updateAiRequest,
       setSelectedAiRequestId,
     ]
@@ -1047,5 +1075,5 @@ export type OpenAskAiOptions = {|
 export type NewAiRequestOptions = {|
   mode: 'chat' | 'agent' | 'orchestrator',
   userRequest: string,
-  aiConfigurationPresetId: string,
+  aiConfigurationPresetId: string | null,
 |};

@@ -319,7 +319,7 @@ type Props = {|
   onStartNewAiRequest: ({|
     mode: 'chat' | 'agent' | 'orchestrator',
     userRequest: string,
-    aiConfigurationPresetId: string,
+    aiConfigurationPresetId: string | null,
   |}) => void,
   onSendUserMessage: ({|
     userMessage: string,
@@ -590,12 +590,17 @@ export const AiRequestChat: React.ComponentType<{
       isRefreshingLimits: isRefreshingLimitsStable,
     });
 
-    const chosenOrDefaultAiConfigurationPresetId =
-      aiConfigurationPresetId ||
-      getDefaultAiConfigurationPresetId(
-        selectedMode,
-        aiConfigurationPresetsWithAvailability
-      );
+    const shouldDisplayAiConfigurationPresetSelector =
+      aiConfigurationPresetsWithAvailability.filter(
+        preset => preset.mode === selectedMode
+      ).length > 0;
+    const chosenOrDefaultAiConfigurationPresetId = shouldDisplayAiConfigurationPresetSelector
+      ? aiConfigurationPresetId ||
+        getDefaultAiConfigurationPresetId(
+          selectedMode,
+          aiConfigurationPresetsWithAvailability
+        )
+      : null;
     const hasFunctionsCallsToProcess =
       aiRequest &&
       getFunctionCallsToProcess({
@@ -824,19 +829,23 @@ export const AiRequestChat: React.ComponentType<{
                           alignItems="flex-end"
                           justifyContent="space-between"
                         >
-                          <AiConfigurationPresetSelector
-                            chosenOrDefaultAiConfigurationPresetId={
-                              chosenOrDefaultAiConfigurationPresetId
-                            }
-                            setAiConfigurationPresetId={
-                              setAiConfigurationPresetId
-                            }
-                            aiConfigurationPresetsWithAvailability={
-                              aiConfigurationPresetsWithAvailability
-                            }
-                            aiRequestMode={selectedMode}
-                            disabled={isWorking}
-                          />
+                          {shouldDisplayAiConfigurationPresetSelector ? (
+                            <AiConfigurationPresetSelector
+                              chosenOrDefaultAiConfigurationPresetId={
+                                chosenOrDefaultAiConfigurationPresetId || ''
+                              }
+                              setAiConfigurationPresetId={
+                                setAiConfigurationPresetId
+                              }
+                              aiConfigurationPresetsWithAvailability={
+                                aiConfigurationPresetsWithAvailability
+                              }
+                              aiRequestMode={selectedMode}
+                              disabled={isWorking}
+                            />
+                          ) : (
+                            <span />
+                          )}
                           <RaisedButton
                             color="primary"
                             icon={sendButtonIcon}
