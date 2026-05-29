@@ -12,6 +12,13 @@ import { serializeToJSON } from '../Utils/Serializer';
 import { renderNonTranslatedEventsAsText } from '../EventsSheet/EventsTree/TextRenderer';
 import { mapFor } from '../Utils/MapFor';
 import { type EditorCallbacks } from '../EditorFunctions';
+import {
+  getEventOperationReference,
+  getEventsJsonExamples,
+  getExactInstructionMetadata,
+  searchInstructionMetadata,
+  validateEventsJson,
+} from './McpEventKnowledge';
 
 const gd: libGDevelop = global.gd;
 
@@ -432,6 +439,66 @@ const callMcpTool = async ({
 
   if (toolName === 'gdevelop_list_commands') {
     return textResult(getCommandSummaries());
+  }
+
+  if (toolName === 'gdevelop_get_events_json_examples') {
+    if (!project) return errorResult('No project opened.');
+    return textResult(
+      getEventsJsonExamples({
+        project,
+        sceneName:
+          args && typeof args.scene_name === 'string'
+            ? args.scene_name
+            : null,
+        includeExistingSceneEvents:
+          !!(args && args.include_existing_scene_events),
+      })
+    );
+  }
+
+  if (toolName === 'gdevelop_get_event_operation_reference') {
+    return textResult(getEventOperationReference());
+  }
+
+  if (toolName === 'gdevelop_validate_events_json') {
+    if (!project) return errorResult('No project opened.');
+    return textResult(
+      validateEventsJson({
+        project,
+        sceneName:
+          args && typeof args.scene_name === 'string'
+            ? args.scene_name
+            : null,
+        eventsJson:
+          args && typeof args.events_json === 'string'
+            ? args.events_json
+            : null,
+      })
+    );
+  }
+
+  if (toolName === 'gdevelop_search_instruction_metadata') {
+    if (!project) return errorResult('No project opened.');
+    return textResult(
+      searchInstructionMetadata({
+        project,
+        i18n: context.i18n,
+        query: args && typeof args.query === 'string' ? args.query : null,
+        kind: args && typeof args.kind === 'string' ? args.kind : null,
+        limit: args && typeof args.limit === 'number' ? args.limit : null,
+      })
+    );
+  }
+
+  if (toolName === 'gdevelop_get_instruction_metadata') {
+    if (!project) return errorResult('No project opened.');
+    return textResult(
+      getExactInstructionMetadata({
+        project,
+        type: args && typeof args.type === 'string' ? args.type : null,
+        kind: args && typeof args.kind === 'string' ? args.kind : null,
+      })
+    );
   }
 
   if (toolName === 'gdevelop_run_command') {

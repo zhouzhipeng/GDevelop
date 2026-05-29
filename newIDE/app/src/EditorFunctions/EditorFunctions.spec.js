@@ -1289,6 +1289,51 @@ describe('editorFunctions', () => {
         newOrChangedAiGeneratedEventIds: new Set(['mcp-direct-event']),
       });
     });
+
+    it('rejects direct events JSON with invalid parameter values before writing', async () => {
+      testScene
+        .getObjects()
+        .insertNewObject(
+          project,
+          'PrimitiveDrawing::Drawer',
+          'RedRoseButtonShape',
+          0
+        );
+      // $FlowFixMe[underconstrained-implicit-instantiation]
+      const generateEvents = jest.fn();
+      // $FlowFixMe[underconstrained-implicit-instantiation]
+      const onSceneEventsModifiedOutsideEditor = jest.fn();
+
+      const result = await editorFunctions.add_scene_events.launchFunction({
+        ...makeFakeLaunchFunctionOptionsWithProject(project),
+        args: {
+          scene_name: 'TestScene',
+          events_json: JSON.stringify([
+            {
+              type: 'BuiltinCommonInstructions::Standard',
+              conditions: [],
+              actions: [
+                {
+                  type: { value: 'PrimitiveDrawing::FillColor' },
+                  parameters: ['RedRoseButtonShape', '220;30;55'],
+                },
+              ],
+            },
+          ]),
+          generated_event_id: 'mcp-invalid-event',
+        },
+        relatedAiRequestId: null,
+        generateEvents,
+        onSceneEventsModifiedOutsideEditor,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Events validation failed');
+      expect(result.errors && result.errors[0]).toContain('220;30;55');
+      expect(testScene.getEvents().getEventsCount()).toBe(0);
+      expect(generateEvents).not.toHaveBeenCalled();
+      expect(onSceneEventsModifiedOutsideEditor).not.toHaveBeenCalled();
+    });
   });
 
   describe('add_or_edit_variable', () => {

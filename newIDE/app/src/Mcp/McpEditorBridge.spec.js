@@ -78,6 +78,184 @@ describe('McpEditorBridge', () => {
     }
   });
 
+  it('returns event JSON examples and operation reference for MCP clients', async () => {
+    // $FlowFixMe[invalid-constructor]
+    const project = new gd.ProjectHelper.createNewGDJSProject();
+    project.insertNewLayout('Level1', 0);
+
+    try {
+      const bridge = makeBridge({
+        getProject: () => project,
+      });
+
+      const examplesResponse = await bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: {
+          name: 'gdevelop_get_events_json_examples',
+          arguments: {
+            scene_name: 'Level1',
+          },
+        },
+      });
+      const examples = JSON.parse(examplesResponse.content[0].text);
+
+      expect(examples.eventJsonShape).toContain(
+        'BuiltinCommonInstructions::Standard'
+      );
+      expect(examples.examples[0].events_json).toContain('SceneJustBegins');
+      expect(examples.examples[0].event_changes[0].operation_name).toBe(
+        'insert_at_end'
+      );
+
+      const operationResponse = await bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: {
+          name: 'gdevelop_get_event_operation_reference',
+          arguments: {},
+        },
+      });
+      const reference = JSON.parse(operationResponse.content[0].text);
+
+      expect(reference.operations.map(operation => operation.name)).toContain(
+        'replace_all_actions'
+      );
+      expect(reference.targetPathFormat).toContain('event-0.1');
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('validates and renders events JSON without modifying a scene', async () => {
+    // $FlowFixMe[invalid-constructor]
+    const project = new gd.ProjectHelper.createNewGDJSProject();
+    const layout = project.insertNewLayout('Level1', 0);
+    layout.getVariables().insertNew('Score', 0);
+    layout
+      .getObjects()
+      .insertNewObject(project, 'PrimitiveDrawing::Drawer', 'ShapePainter', 0);
+
+    try {
+      const bridge = makeBridge({
+        getProject: () => project,
+      });
+
+      const response = await bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: {
+          name: 'gdevelop_validate_events_json',
+          arguments: {
+            scene_name: 'Level1',
+            events_json: JSON.stringify([
+              {
+                type: 'BuiltinCommonInstructions::Standard',
+                conditions: [
+                  {
+                    type: { value: 'SceneJustBegins' },
+                    parameters: [''],
+                  },
+                ],
+                actions: [
+                  {
+                    type: { value: 'SetNumberVariable' },
+                    parameters: ['Score', '=', '0'],
+                  },
+                ],
+              },
+            ]),
+          },
+        },
+      });
+      const validation = JSON.parse(response.content[0].text);
+
+      expect(validation.valid).toBe(true);
+      expect(validation.eventsCount).toBe(1);
+      expect(validation.eventsAsText).toContain('Score');
+      expect(layout.getEvents().getEventsCount()).toBe(0);
+
+      const invalidColorResponse = await bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: {
+          name: 'gdevelop_validate_events_json',
+          arguments: {
+            scene_name: 'Level1',
+            events_json: JSON.stringify([
+              {
+                type: 'BuiltinCommonInstructions::Standard',
+                conditions: [],
+                actions: [
+                  {
+                    type: { value: 'PrimitiveDrawing::FillColor' },
+                    parameters: ['ShapePainter', '220;30;55'],
+                  },
+                ],
+              },
+            ]),
+          },
+        },
+      });
+      const invalidColorValidation = JSON.parse(
+        invalidColorResponse.content[0].text
+      );
+
+      expect(invalidColorValidation.valid).toBe(false);
+      expect(invalidColorValidation.issues[0].type).toBe('invalid-parameter');
+      expect(invalidColorValidation.issues[0].parameterValue).toBe(
+        '220;30;55'
+      );
+      expect(layout.getEvents().getEventsCount()).toBe(0);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('searches and returns instruction metadata', async () => {
+    // $FlowFixMe[invalid-constructor]
+    const project = new gd.ProjectHelper.createNewGDJSProject();
+    project.insertNewLayout('Level1', 0);
+
+    try {
+      const bridge = makeBridge({
+        getProject: () => project,
+      });
+
+      const searchResponse = await bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: {
+          name: 'gdevelop_search_instruction_metadata',
+          arguments: {
+            query: 'SceneJustBegins',
+            kind: 'condition',
+            limit: 5,
+          },
+        },
+      });
+      const search = JSON.parse(searchResponse.content[0].text);
+
+      expect(search.results.map(result => result.type)).toContain(
+        'SceneJustBegins'
+      );
+
+      const metadataResponse = await bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: {
+          name: 'gdevelop_get_instruction_metadata',
+          arguments: {
+            kind: 'action',
+            type: 'SetNumberVariable',
+          },
+        },
+      });
+      const metadata = JSON.parse(metadataResponse.content[0].text);
+
+      expect(metadata.type).toBe('SetNumberVariable');
+      expect(metadata.kind).toBe('action');
+      expect(metadata.parameters.length).toBeGreaterThan(0);
+      expect(metadata.parameters[0].type).toBe('variableOrProperty');
+    } finally {
+      project.delete();
+    }
+  });
+
   it('blocks write tools when write permission is disabled', async () => {
     const bridge = makeBridge();
 

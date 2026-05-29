@@ -20,6 +20,10 @@ import {
   addUndeclaredVariables,
   applyEventsChanges,
 } from './ApplyEventsChanges';
+import {
+  scanEventsListForValidationErrors,
+  type ValidationError,
+} from '../Utils/EventsValidationScanner';
 import { isBehaviorDefaultCapability } from '../BehaviorsEditor/EnumerateBehaviorsMetadata';
 import { Trans } from '@lingui/macro';
 import { type I18n as I18nType } from '@lingui/core';
@@ -3943,6 +3947,102 @@ const makeDirectEventChanges = (
     .filter(Boolean);
 };
 
+const formatEventValidationError = (error: ValidationError): string => {
+  const instructionKind = error.isCondition ? 'condition' : 'action';
+  const eventPath =
+    error.eventPath.length > 0 ? error.eventPath.join('.') : 'root';
+  const parameterIndex =
+    typeof error.parameterIndex === 'number'
+      ? ` parameter ${error.parameterIndex}`
+      : '';
+  const parameterValue =
+    typeof error.parameterValue === 'string'
+      ? ` value "${error.parameterValue}"`
+      : '';
+  return `${error.type} in ${instructionKind} "${
+    error.instructionType
+  }" at event ${eventPath}${parameterIndex}${parameterValue}: ${
+    error.instructionSentence
+  }`;
+};
+
+const validateDirectEventChangesBeforeApply = ({
+  project,
+  scene,
+  eventChanges,
+}: {|
+  project: gdProject,
+  scene: gdLayout,
+  eventChanges: Array<AiGeneratedEventChange>,
+|}): Array<string> => {
+  const errors: Array<string> = [];
+
+  eventChanges.forEach((change, changeIndex) => {
+    if (change.operationName === 'delete_event') return;
+
+    const generatedEvents = change.generatedEvents;
+    if (!generatedEvents) {
+      errors.push(
+        `Event change ${changeIndex + 1} is missing generated events.`
+      );
+      return;
+    }
+
+    let parsedEvents;
+    try {
+      parsedEvents = JSON.parse(generatedEvents);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      errors.push(
+        `Event change ${changeIndex + 1} has invalid JSON: ${errorMessage}`
+      );
+      return;
+    }
+
+    if (!Array.isArray(parsedEvents)) {
+      errors.push(
+        `Event change ${changeIndex +
+          1} generated_events must be a JSON array of serialized events.`
+      );
+      return;
+    }
+
+    const eventsList = new gd.EventsList();
+    try {
+      unserializeFromJSObject(
+        eventsList,
+        parsedEvents,
+        'unserializeFrom',
+        project
+      );
+      const validationErrors = scanEventsListForValidationErrors({
+        project,
+        eventsList,
+        layout: scene,
+      });
+      for (const validationError of validationErrors) {
+        errors.push(
+          `Event change ${changeIndex + 1}: ${formatEventValidationError(
+            validationError
+          )}`
+        );
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      errors.push(
+        `Event change ${changeIndex +
+          1} could not be unserialized: ${errorMessage}`
+      );
+    } finally {
+      eventsList.delete();
+    }
+  });
+
+  return errors;
+};
+
 /**
  * Adds a new event to a scene's event sheet
  */
@@ -4302,6 +4402,20 @@ const addSceneEvents: EditorFunction = {
               missingBehaviors,
             });
           }
+        }
+
+        const validationErrors = validateDirectEventChangesBeforeApply({
+          project,
+          scene,
+          eventChanges: directEventChanges,
+        });
+        if (validationErrors.length > 0) {
+          return {
+            success: false,
+            message:
+              'Events validation failed. Events were not applied. Fix the event JSON and validate it again before writing.',
+            errors: validationErrors,
+          };
         }
 
         const { applied, errors } = applyEventsChanges(

@@ -236,6 +236,36 @@ const createValidationWorker = (
   return worker;
 };
 
+export const scanEventsListForValidationErrors = ({
+  project,
+  eventsList,
+  layout,
+}: {|
+  project: gdProject,
+  eventsList: gdEventsList,
+  layout?: ?gdLayout,
+|}): Array<ValidationError> => {
+  const errors: Array<ValidationError> = [];
+  const platform = gd.JsPlatform.get();
+  const worker = createValidationWorker(platform, errors);
+  const projectScopedContainers = layout
+    ? gd.ProjectScopedContainers.makeNewProjectScopedContainersForProjectAndLayout(
+        project,
+        layout
+      )
+    : gd.ProjectScopedContainers.makeNewProjectScopedContainersForProject(
+        project
+      );
+
+  try {
+    worker.launch(eventsList, projectScopedContainers);
+  } finally {
+    worker.delete();
+  }
+
+  return errors;
+};
+
 /**
  * Scans the entire project for validation errors in events.
  * This includes missing instructions (from uninstalled extensions)

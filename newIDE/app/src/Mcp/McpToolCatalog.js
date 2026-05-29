@@ -155,6 +155,102 @@ const readTools: Array<McpTool> = [
     inputSchema: emptyObjectSchema,
   },
   {
+    name: 'gdevelop_get_events_json_examples',
+    description:
+      'Return official-doc-informed, serializer-compatible GDevelop event JSON examples and add_scene_events payload shapes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        scene_name: {
+          type: 'string',
+          description:
+            'Optional scene name. When include_existing_scene_events is true, examples can include current serialized events from this scene.',
+        },
+        include_existing_scene_events: {
+          type: 'boolean',
+          description:
+            'When true, include current serialized scene events as a project-specific example if the scene has events.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'gdevelop_get_event_operation_reference',
+    description:
+      'Return the supported add_scene_events event_changes operation names, target path format, and required fields.',
+    inputSchema: emptyObjectSchema,
+  },
+  {
+    name: 'gdevelop_validate_events_json',
+    description:
+      'Validate serialized GDevelop events JSON without modifying the project, render it as event-sheet text, and report instruction/parameter issues.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        scene_name: {
+          type: 'string',
+          description:
+            'Optional scene name used as context for future validation; the current validator does not modify it.',
+        },
+        events_json: {
+          type: 'string',
+          description:
+            'JSON string containing an array of serialized GDevelop events.',
+        },
+      },
+      required: ['events_json'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'gdevelop_search_instruction_metadata',
+    description:
+      'Search GDevelop action, condition, and expression metadata by internal type, displayed name, description, group, object, or behavior. Use before generating event JSON parameters.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description:
+            'Search text, for example SceneJustBegins, variable, collision, animation, sound, object type, or behavior type.',
+        },
+        kind: {
+          type: 'string',
+          description:
+            'Optional kind: action, condition, expression, or all. Defaults to all.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of results to return. Defaults to 20.',
+        },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'gdevelop_get_instruction_metadata',
+    description:
+      'Return exact GDevelop action, condition, or expression metadata, including parameter order/types/defaults and event-scope relevance.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          description:
+            'Exact internal action, condition, or expression type, for example SetNumberVariable or SceneJustBegins.',
+        },
+        kind: {
+          type: 'string',
+          description: 'Required kind: action, condition, or expression.',
+        },
+      },
+      required: ['type', 'kind'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'gdevelop_editor_call',
     description:
       'Advanced escape hatch: call an exposed GDevelop EditorFunction by name. The target function still follows read/write MCP permission checks.',
