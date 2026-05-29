@@ -86,7 +86,6 @@ module.exports = function (config) {
       './newIDE/app/resources/GDJS/Runtime/inputmanager.js',
       './newIDE/app/resources/GDJS/Runtime/capturemanager.js',
       './newIDE/app/resources/GDJS/Runtime/runtimegame.js',
-      './newIDE/app/resources/GDJS/Runtime/runtimewatermark.js',
       './newIDE/app/resources/GDJS/Runtime/variable.js',
       './newIDE/app/resources/GDJS/Runtime/variablescontainer.js',
       './newIDE/app/resources/GDJS/Runtime/oncetriggers.js',

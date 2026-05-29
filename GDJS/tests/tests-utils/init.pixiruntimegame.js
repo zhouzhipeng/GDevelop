@@ -46,7 +46,7 @@ gdjs.createProjectData = (settings) => {
       },
       authorIds: [],
       authorUsernames: [],
-      watermark: { showWatermark: true, placement: 'bottom' },
+      watermark: { showWatermark: false, placement: 'bottom' },
       currentPlatform: '',
       extensionProperties: [],
       ...(settings ? settings.propertiesOverrides : undefined),

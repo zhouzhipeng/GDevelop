@@ -564,6 +564,8 @@ void ExporterHelper::StripAndSerializeProjectData(
     gd::Project &project, gd::SerializerElement &rootElement,
     bool isInGameEdition,
     const std::vector<gd::InGameEditorResourceMetadata> &inGameEditorResources) {
+  project.GetWatermark().ShowGDevelopWatermark(false);
+
   auto projectUsedResources =
       gd::SceneResourcesFinder::FindProjectResources(project);
 
@@ -1177,7 +1179,6 @@ void ExporterHelper::AddLibsInclude(bool pixiRenderers,
   InsertUnique(includesFiles, "layer.js");
   InsertUnique(includesFiles, "RuntimeCustomObjectLayer.js");
   InsertUnique(includesFiles, "timer.js");
-  InsertUnique(includesFiles, "runtimewatermark.js");
   InsertUnique(includesFiles, "runtimegame.js");
   InsertUnique(includesFiles, "variable.js");
   InsertUnique(includesFiles, "variablescontainer.js");

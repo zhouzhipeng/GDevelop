@@ -221,7 +221,6 @@ namespace gdjs {
     _displayedLoadingScreen: gdjs.LoadingScreenRenderer | null = null;
     _sessionId: string | null;
     _playerId: string | null;
-    _watermark: watermark.RuntimeWatermark;
 
     _sceneStack: SceneStack;
     /**
@@ -350,11 +349,6 @@ namespace gdjs {
       this._renderer = new gdjs.RuntimeGameRenderer(
         this,
         this._options.forceFullscreen || false
-      );
-      this._watermark = new gdjs.watermark.RuntimeWatermark(
-        this,
-        data.properties.authorUsernames,
-        this._data.properties.watermark
       );
       this._sceneStack = new gdjs.SceneStack(this);
       this._inputManager = new gdjs.InputManager();
@@ -1198,7 +1192,7 @@ namespace gdjs {
         this.getRenderer(),
         this._resourcesLoader.getImageManager(),
         this._data.properties.loadingScreen,
-        this._data.properties.watermark.showWatermark,
+        false,
         isFirstScene
       );
       this._displayedLoadingScreen = loadingScreen;
@@ -1281,9 +1275,6 @@ namespace gdjs {
             });
           }
         }
-
-        this._watermark.displayAtStartup();
-
         //Uncomment to profile the first x frames of the game.
         // var x = 500;
         // var startTime = Date.now();
