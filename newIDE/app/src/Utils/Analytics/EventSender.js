@@ -503,23 +503,6 @@ export const sendSignupDone = (email: string) => {
   });
 };
 
-export const sendSubscriptionCheckDialogShown = ({
-  mode,
-  id,
-}: {|
-  mode: string,
-  id: string,
-|}) => {
-  recordEvent('subscription-check-dialog-shown', {
-    mode,
-    title: id,
-  });
-};
-
-export const sendSubscriptionCheckDismiss = () => {
-  recordEvent('subscription-check-dialog-dismiss');
-};
-
 export type SubscriptionDialogDisplayReason =
   | 'Disable GDevelop splash at startup'
   | 'Debugger'

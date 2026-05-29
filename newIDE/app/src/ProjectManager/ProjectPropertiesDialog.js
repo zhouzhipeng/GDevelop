@@ -945,7 +945,6 @@ const ProjectPropertiesDialog = (props: Props) => {
                 loadingScreen={project.getLoadingScreen()}
                 watermark={project.getWatermark()}
                 onLoadingScreenUpdated={notifyOfLoadingScreenChange}
-                onChangeSubscription={onCancelChanges}
                 project={project}
                 resourceManagementProps={props.resourceManagementProps}
                 projectScopedContainersAccessor={

@@ -1,6 +1,4 @@
 // @flow
-import { Trans } from '@lingui/macro';
-
 import * as React from 'react';
 import LocalFileSystem from '../LocalFileSystem';
 import optionalRequire from '../../../Utils/OptionalRequire';
@@ -12,9 +10,6 @@ import {
   type PreviewLauncherProps,
   type CaptureOptions,
 } from '../../PreviewLauncher.flow';
-import SubscriptionChecker, {
-  type SubscriptionCheckerInterface,
-} from '../../../Profile/Subscription/SubscriptionChecker';
 import {
   getDebuggerServerAddress,
   localPreviewDebuggerServer,
@@ -34,7 +29,6 @@ type State = {|
   networkPreviewHost: ?string,
   networkPreviewPort: ?number,
   networkPreviewError: ?any,
-  hotReloadsCount: number,
   previewGamePath: ?string,
   previewBrowserWindowOptions: ?{
     width: number,
@@ -92,15 +86,11 @@ export default class LocalPreviewLauncher extends React.Component<
     networkPreviewError: null,
     previewGamePath: null,
     previewBrowserWindowOptions: null,
-    hotReloadsCount: 0,
     hideMenuBar: true,
     alwaysOnTop: true,
     numberOfWindows: 1,
     captureOptions: null,
   };
-  _networkPreviewSubscriptionChecker: ?SubscriptionCheckerInterface = null;
-  _hotReloadSubscriptionChecker: ?SubscriptionCheckerInterface = null;
-
   _openPreviewBrowserWindow = () => {
     const {
       previewGamePath,
@@ -201,8 +191,6 @@ export default class LocalPreviewLauncher extends React.Component<
                 networkPreviewPort: serverParams.port,
               });
             }
-
-            setTimeout(() => this._checkSubscriptionForNetworkPreview());
           });
           ipcRenderer.on('local-network-ip', (event, ipAddress) => {
             this.setState({
@@ -426,17 +414,6 @@ export default class LocalPreviewLauncher extends React.Component<
           });
         });
       }
-      if (!previewOptions.isForInGameEdition) {
-        if (
-          this.state.hotReloadsCount % 16 === 0 &&
-          this._hotReloadSubscriptionChecker
-        ) {
-          this._hotReloadSubscriptionChecker.checkUserHasSubscription();
-        }
-        this.setState(state => ({
-          hotReloadsCount: state.hotReloadsCount + 1,
-        }));
-      }
     } else {
       if (previewOptions.isForInGameEdition) {
         setEmbeddedGameFramePreviewLocation({
@@ -463,12 +440,6 @@ export default class LocalPreviewLauncher extends React.Component<
     return localPreviewDebuggerServer;
   }
 
-  _checkSubscriptionForNetworkPreview = (): any => {
-    if (!this._networkPreviewSubscriptionChecker) return true;
-
-    return this._networkPreviewSubscriptionChecker.checkUserHasSubscription();
-  };
-
   render(): any {
     const {
       networkPreviewDialogOpen,
@@ -478,45 +449,18 @@ export default class LocalPreviewLauncher extends React.Component<
     } = this.state;
 
     return (
-      <React.Fragment>
-        <SubscriptionChecker
-          ref={subscriptionChecker =>
-            (this._networkPreviewSubscriptionChecker = subscriptionChecker)
-          }
-          onChangeSubscription={() =>
-            this.setState({ networkPreviewDialogOpen: false })
-          }
-          id="Preview over wifi"
-          title={<Trans>Preview over wifi</Trans>}
-          placementId="preview-wifi"
-          mode="try"
-          isNotShownDuringInAppTutorial
-        />
-        <SubscriptionChecker
-          ref={subscriptionChecker =>
-            (this._hotReloadSubscriptionChecker = subscriptionChecker)
-          }
-          id="Hot reloading"
-          title={
-            <Trans>Live preview (apply changes to the running preview)</Trans>
-          }
-          placementId="hot-reloading"
-          mode="try"
-          isNotShownDuringInAppTutorial
-        />
-        <LocalNetworkPreviewDialog
-          open={networkPreviewDialogOpen}
-          url={
-            networkPreviewHost && networkPreviewPort
-              ? `${networkPreviewHost}:${networkPreviewPort}`
-              : null
-          }
-          error={networkPreviewError}
-          onClose={() => this.setState({ networkPreviewDialogOpen: false })}
-          onExport={this.props.onExport}
-          onRunPreviewLocally={this._openPreviewBrowserWindow}
-        />
-      </React.Fragment>
+      <LocalNetworkPreviewDialog
+        open={networkPreviewDialogOpen}
+        url={
+          networkPreviewHost && networkPreviewPort
+            ? `${networkPreviewHost}:${networkPreviewPort}`
+            : null
+        }
+        error={networkPreviewError}
+        onClose={() => this.setState({ networkPreviewDialogOpen: false })}
+        onExport={this.props.onExport}
+        onRunPreviewLocally={this._openPreviewBrowserWindow}
+      />
     );
   }
 }
