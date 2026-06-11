@@ -21,6 +21,11 @@ import { readLocalFileToFile } from '../../Utils/LocalFileUploader';
 import { isURL, isBlobURL } from '../../ResourcesList/ResourceUtils';
 import { cloudStorageProviderInternalName } from '../CloudStorageProvider/CloudStoageProviderInternalName';
 import { localFileStorageProviderInternalName } from '../LocalFileStorageProvider/LocalFileStorageProviderInternalName';
+import { myCloudStorageProviderInternalName } from '../MyCloudStorageProvider/MyCloudStorageProviderInternalName';
+import {
+  moveResourcesToMyCloudProject,
+  moveLocalResourcesToMyCloudProject,
+} from '../MyCloudStorageProvider/MyCloudResourceMover';
 const path = optionalRequire('path');
 
 const gd: libGDevelop = global.gd;
@@ -236,6 +241,19 @@ const movers: {
   [`${
     UrlStorageProvider.internalName
   }=>${cloudStorageProviderInternalName}`]: moveUrlResourcesToCloudProject,
+
+  // Moving to self-hosted "My Cloud" storage:
+
+  // From a local project to My Cloud, read local files and upload them.
+  [`${localFileStorageProviderInternalName}=>${myCloudStorageProviderInternalName}`]: moveLocalResourcesToMyCloudProject,
+  // From a My Cloud project to another, copy resources.
+  [`${myCloudStorageProviderInternalName}=>${myCloudStorageProviderInternalName}`]: moveResourcesToMyCloudProject,
+  // From a URL/web project or a GDevelop Cloud project to My Cloud, download +
+  // re-upload the resources.
+  [`${
+    UrlStorageProvider.internalName
+  }=>${myCloudStorageProviderInternalName}`]: moveResourcesToMyCloudProject,
+  [`${cloudStorageProviderInternalName}=>${myCloudStorageProviderInternalName}`]: moveResourcesToMyCloudProject,
 };
 
 const LocalResourceMover = {

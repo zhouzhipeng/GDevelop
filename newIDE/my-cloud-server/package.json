@@ -1,0 +1,20 @@
+{
+  "name": "gdevelop-my-cloud-server",
+  "version": "1.0.0",
+  "description": "Self-hosted cloud server for storing and sharing GDevelop projects.",
+  "license": "MIT",
+  "main": "src/core.js",
+  "bin": {
+    "gdevelop-my-cloud-server": "server.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.spec.js"
+  },
+  "dependencies": {
+    "yauzl": "^2.10.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

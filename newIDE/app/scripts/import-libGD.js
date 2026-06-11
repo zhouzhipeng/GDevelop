@@ -1,4 +1,5 @@
 const shell = require('shelljs');
+const fs = require('fs');
 const { downloadLocalFile } = require('./lib/DownloadLocalFile');
 const path = require('path');
 
@@ -9,6 +10,69 @@ const alreadyHasLibGdJs =
   shell.test('-f', '../public/libGD.wasm') &&
   shell.test('-f', destinationTestDirectory + '/index.js') &&
   shell.test('-f', destinationTestDirectory + '/libGD.wasm');
+
+/**
+ * libGD.js and libGD.wasm are loaded with a version in their URL so that a new
+ * version is fetched when the version changes. Historically this was done with
+ * a `?cache-buster=` query string, but CDNs (e.g. Cloudflare) do not cache URLs
+ * with a query string by default, so every deploy forced a slow re-download of
+ * the multi-MB wasm from the origin (and could time out the editor load).
+ *
+ * Instead, we put the version hash in the FILENAME: libGD.<versionWithHash>.js
+ * and libGD.<versionWithHash>.wasm. These are path-only, immutable URLs that a
+ * CDN caches forever, while a new build naturally produces a new path.
+ *
+ * The hashed files are byte-identical copies of public/libGD.js / libGD.wasm.
+ * The loaders (src/index.js, BackgroundSerializer.worker.js, the service
+ * worker) request the hashed names. The plain files are kept too (used by the
+ * test harness and as the copy source).
+ */
+const writeHashedLibGdCopies = () => {
+  const publicDir = path.join(__dirname, '..', 'public');
+  const plainJs = path.join(publicDir, 'libGD.js');
+  const plainWasm = path.join(publicDir, 'libGD.wasm');
+  if (!shell.test('-f', plainJs) || !shell.test('-f', plainWasm)) {
+    shell.echo(
+      '⚠️ Cannot create hashed libGD copies: public/libGD.js or libGD.wasm is missing.'
+    );
+    return;
+  }
+
+  // Read the freshly generated version metadata (make-version-metadata runs
+  // before this script in the import-resources npm script).
+  // Bust the require cache in case it was generated during this same process.
+  const versionMetadataPath = require.resolve('../src/Version/VersionMetadata');
+  delete require.cache[versionMetadataPath];
+  // eslint-disable-next-line global-require, import/no-dynamic-require
+  const { versionWithShortHash } = require(versionMetadataPath);
+  if (!versionWithShortHash) {
+    shell.echo(
+      '⚠️ Cannot create hashed libGD copies: versionWithShortHash is empty.'
+    );
+    return;
+  }
+
+  // Remove any stale hashed copies so public/ does not accumulate old versions.
+  fs.readdirSync(publicDir)
+    .filter(name => /^libGD\..+\.(js|wasm)$/.test(name))
+    .forEach(name => {
+      try {
+        fs.unlinkSync(path.join(publicDir, name));
+      } catch (error) {
+        // Best-effort cleanup.
+      }
+    });
+
+  const hashedJs = path.join(publicDir, `libGD.${versionWithShortHash}.js`);
+  const hashedWasm = path.join(publicDir, `libGD.${versionWithShortHash}.wasm`);
+  if (shell.cp(plainJs, hashedJs).stderr || shell.cp(plainWasm, hashedWasm).stderr) {
+    shell.echo('❌ Error while writing hashed libGD copies.');
+  } else {
+    shell.echo(
+      `✅ Wrote hashed libGD copies: libGD.${versionWithShortHash}.js / .wasm`
+    );
+  }
+};
 
 if (shell.mkdir('-p', destinationTestDirectory).stderr) {
   shell.echo('❌ Error while creating node_modules folder for libGD.js');
@@ -28,6 +92,7 @@ if (shell.test('-f', path.join(sourceDirectory, 'libGD.js'))) {
     'copy-to-newIDE.js'
   );
   shell.exec(`node ${copyToNewIDEScriptPath}`);
+  writeHashedLibGdCopies();
 } else if (
   alreadyHasLibGdJs &&
   !process.env.APPVEYOR &&
@@ -36,6 +101,7 @@ if (shell.test('-f', path.join(sourceDirectory, 'libGD.js'))) {
   shell.echo(
     'Reusing existing libGD.js from newIDE/app/public and node_modules.'
   );
+  writeHashedLibGdCopies();
 } else {
   // Download a pre-built version otherwise
   shell.echo(
@@ -156,6 +222,8 @@ if (shell.test('-f', path.join(sourceDirectory, 'libGD.js'))) {
     } else {
       shell.echo('❌ Error while copying libGD.js to node_modules folder');
     }
+
+    writeHashedLibGdCopies();
   };
 
   const branch = getBranchFromGitRef('HEAD');
@@ -187,6 +255,7 @@ if (shell.test('-f', path.join(sourceDirectory, 'libGD.js'))) {
                   shell.echo(
                     `ℹ️ Can't download any version of libGD.js, assuming you can go ahead with the existing one.`
                   );
+                  writeHashedLibGdCopies();
                   shell.exit(0);
                   return;
                 } else {

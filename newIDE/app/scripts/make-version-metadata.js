@@ -44,6 +44,9 @@ writeFile({
   version,
   gitHash,
   versionWithHash: [version, gitHash].join('-'),
+  // Shorter variant (7-char git hash) used for content-hashed asset filenames
+  // like libGD.<versionWithShortHash>.js, to keep filenames manageable.
+  versionWithShortHash: [version, (gitHash || '').slice(0, 7)].join('-'),
 }).then(
   () => console.info('✅ src/Version/VersionMetadata.js properly generated.'),
   err => console.error('❌ Error while src/Version/VersionMetadata.js', err)

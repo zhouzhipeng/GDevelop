@@ -33,6 +33,21 @@ const gdevelopAssetResourcesProxyPath = optionalProxyPath(
   process.env.REACT_APP_GDEVELOP_ASSET_RESOURCES_PROXY_PATH
 );
 
+// Optional same-origin proxy path for a self-hosted "My Cloud" server, set when
+// the web editor is deployed behind nginx next to a my-cloud-server instance
+// (see scripts/deploy-web-editor.py). Null when not deployed that way.
+const myCloudProxyPath = optionalProxyPath(
+  process.env.REACT_APP_MY_CLOUD_PROXY_PATH
+);
+
+// Optional base URL for a self-hosted GDJS Runtime (the game engine downloaded
+// for previews/exports). Set when the editor is deployed without access to
+// GDevelop's CDN, since the CDN only has official version-hash paths and not a
+// self-built one (see scripts/deploy-web-editor.py + BrowserS3GDJSFinder).
+const gdjsRuntimeBaseUrl = optionalProxyPath(
+  process.env.REACT_APP_GDJS_RUNTIME_BASE_URL
+);
+
 const getGDevelopApiBaseUrl = (apiName: string): string => {
   if (gdevelopApiProxyPath) return `${gdevelopApiProxyPath}/${apiName}`;
 
@@ -187,7 +202,26 @@ export const GDevelopPrivateGameTemplatesStorage = {
 
 export const GDevelopPublicAssetResourcesStorageBaseUrl =
   gdevelopAssetResourcesProxyPath || 'https://asset-resources.gdevelop.io';
-export const GDevelopPublicAssetResourcesStorageStagingBaseUrl =
-  gdevelopAssetResourcesProxyPath
-    ? `${gdevelopAssetResourcesProxyPath}/staging`
-    : 'https://asset-resources.gdevelop.io/staging';
+export const GDevelopPublicAssetResourcesStorageStagingBaseUrl = gdevelopAssetResourcesProxyPath
+  ? `${gdevelopAssetResourcesProxyPath}/staging`
+  : 'https://asset-resources.gdevelop.io/staging';
+
+// Self-hosted "My Cloud" server (see newIDE/my-cloud-server). `proxyPath` is the
+// same-origin base path when deployed behind nginx; null otherwise (in which
+// case the user must configure a full server URL in Preferences).
+export const GDevelopMyCloud = {
+  proxyPath: ((myCloudProxyPath: ?string): ?string),
+};
+
+// Self-hosted deployments don't use GDevelop accounts at all — projects are
+// stored/shared purely via the My Cloud token in Preferences. When true, the
+// editor hides all account UI (login/register buttons, profile chip). Set by
+// the deploy script via REACT_APP_HIDE_ACCOUNT_UI.
+export const hideAccountUI: boolean = !!process.env.REACT_APP_HIDE_ACCOUNT_UI;
+
+// Self-hosted GDJS Runtime base URL (game engine for previews/exports). When
+// null, BrowserS3GDJSFinder falls back to GDevelop's CDN. When set, the Runtime
+// files are fetched from `${baseUrl}/Runtime/...`.
+export const GDevelopGdjsRuntime = {
+  baseUrl: ((gdjsRuntimeBaseUrl: ?string): ?string),
+};

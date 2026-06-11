@@ -36,6 +36,10 @@ import {
   serializeAiGenerationServicePresets,
   type AiGenerationServiceConfig,
 } from '../../AiGeneration/AiService';
+import {
+  checkHealth as checkMyCloudHealth,
+  getMyCloudBaseUrl,
+} from '../../ProjectsStorage/MyCloudStorageProvider/MyCloudClient';
 const electron = optionalRequire('electron');
 
 type Props = {|
@@ -99,14 +103,14 @@ const PreferencesDialog = ({
     setSelectedAiGenerationServiceId,
     setEnableMcpServer,
     setMcpServerPort,
-    setMcpServerAuthorizationToken,
-    regenerateMcpServerAuthorizationToken,
     setMcpAllowWriteTools,
     setMcpAllowCommandTools,
     setShowCreateSectionByDefault,
     setDisableNpmScriptConfirmation,
     setUseBackgroundSerializerForSaving,
     setShowJsTypeError,
+    setMyCloudServerUrl,
+    setMyCloudAccessToken,
   } = React.useContext(PreferencesContext);
 
   const initialUse3DEditor = React.useRef<boolean>(values.use3DEditor);
@@ -138,25 +142,55 @@ const PreferencesDialog = ({
     error: null,
   });
 
-  const refreshMcpServerState = React.useCallback(
-    () => {
-      if (!electron || !electron.ipcRenderer) return;
-      electron.ipcRenderer
-        .invoke('mcp-server-get-state')
-        .then(state => {
-          if (state) setMcpServerState(state);
-        })
-        .catch(error => {
-          setMcpServerState({
-            isRunning: false,
-            port: null,
-            url: null,
-            error: error && error.message ? error.message : String(error),
-          });
-        });
-    },
-    []
+  const [myCloudTestResult, setMyCloudTestResult] = React.useState<?string>(
+    null
   );
+  const testMyCloudConnection = React.useCallback(
+    async () => {
+      setMyCloudTestResult(i18n._(t`Testing…`));
+      try {
+        const health = await checkMyCloudHealth(
+          values.myCloudServerUrl
+            ? {
+                serverUrl: values.myCloudServerUrl,
+                accessToken: values.myCloudAccessToken,
+              }
+            : undefined
+        );
+        setMyCloudTestResult(
+          health && health.ok
+            ? i18n._(
+                t`Connected. Server v${health.version || '?'}${
+                  health.authRequired ? ' (token required)' : ' (open)'
+                }.`
+              )
+            : i18n._(t`The server responded but is not healthy.`)
+        );
+      } catch (error) {
+        setMyCloudTestResult(
+          i18n._(t`Could not reach the server. Check the URL and token.`)
+        );
+      }
+    },
+    [i18n, values.myCloudServerUrl, values.myCloudAccessToken]
+  );
+
+  const refreshMcpServerState = React.useCallback(() => {
+    if (!electron || !electron.ipcRenderer) return;
+    electron.ipcRenderer
+      .invoke('mcp-server-get-state')
+      .then(state => {
+        if (state) setMcpServerState(state);
+      })
+      .catch(error => {
+        setMcpServerState({
+          isRunning: false,
+          port: null,
+          url: null,
+          error: error && error.message ? error.message : String(error),
+        });
+      });
+  }, []);
 
   React.useEffect(
     () => {
@@ -168,11 +202,10 @@ const PreferencesDialog = ({
           : ''
       );
     },
-    [
-      selectedCustomAiGenerationService
-        ? selectedCustomAiGenerationService.id
-        : null,
-    ]
+    // Intentionally keyed only on the selected service id (re-sync the presets
+    // text when the selected service changes).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedAiGenerationServiceId]
   );
 
   React.useEffect(
@@ -333,95 +366,152 @@ const PreferencesDialog = ({
     </ColumnStackLayout>
   );
 
-  const mcpServerPreferences = (
+  const myCloudPreferences = (
     <ColumnStackLayout noMargin>
       <Text size="block-title">
-        <Trans>MCP server</Trans>
+        <Trans>My Cloud server</Trans>
       </Text>
-      <CompactToggleField
-        labelColor="primary"
-        hideTooltip
-        onCheck={setEnableMcpServer}
-        checked={values.enableMcpServer}
-        label={i18n._(t`Enable local MCP server`)}
-      />
-      <LineStackLayout noMargin alignItems="center">
-        <Column noMargin expand>
-          <Text noMargin>
-            <Trans>Status</Trans>
-          </Text>
-        </Column>
-        <Column noMargin expand>
-          <Text noMargin>
-            {mcpServerState.error
-              ? mcpServerState.error
-              : mcpServerState.isRunning
-              ? i18n._(t`Running`)
-              : i18n._(t`Stopped`)}
-          </Text>
-        </Column>
-      </LineStackLayout>
+      <Text noMargin>
+        <Trans>
+          Store and share your projects on your own server. Leave empty to use a
+          server deployed on the same site, or enter the full URL of a remote
+          server.
+        </Trans>
+      </Text>
       <TextField
-        type="number"
-        value={values.mcpServerPort}
-        floatingLabelText={<Trans>Port</Trans>}
-        min={0}
-        max={65535}
+        value={values.myCloudServerUrl}
+        floatingLabelText={<Trans>Server URL</Trans>}
+        hintText="https://cloud.example.com"
         onChange={(event, value) => {
-          const port = parseInt(value, 10);
-          setMcpServerPort(Number.isFinite(port) ? port : 0);
+          setMyCloudServerUrl(value);
+          setMyCloudTestResult(null);
         }}
         fullWidth
       />
       <TextField
-        value={mcpServerState.url || ''}
-        floatingLabelText={<Trans>Server URL</Trans>}
-        readOnly
-        fullWidth
-      />
-      <TextField
         type="password"
-        value={values.mcpServerAuthorizationToken}
-        floatingLabelText={<Trans>Authorization token</Trans>}
-        onChange={(event, value) => setMcpServerAuthorizationToken(value)}
+        value={values.myCloudAccessToken}
+        floatingLabelText={<Trans>Access token</Trans>}
+        helperMarkdownText={i18n._(
+          t`This single token is used for both project storage and the MCP server.`
+        )}
+        onChange={(event, value) => {
+          setMyCloudAccessToken(value);
+          setMyCloudTestResult(null);
+        }}
         fullWidth
       />
+      <LineStackLayout noMargin alignItems="center">
+        <FlatButton
+          label={<Trans>Test connection</Trans>}
+          primary={false}
+          onClick={testMyCloudConnection}
+        />
+        {myCloudTestResult && <Text noMargin>{myCloudTestResult}</Text>}
+      </LineStackLayout>
+
+      {/* Standalone MCP endpoint hosted by the My Cloud server itself. Shown on
+          every platform: AI clients point at <server>/mcp with the access token
+          above. This is independent of the desktop editor's local MCP server. */}
+      <Text size="sub-title" noMargin>
+        <Trans>MCP server (AI tools)</Trans>
+      </Text>
+      <Text noMargin>
+        <Trans>
+          Let AI assistants inspect your cloud projects through the Model
+          Context Protocol. Point your MCP client at the URL below, using the
+          access token above as a Bearer token.
+        </Trans>
+      </Text>
       <TextField
-        value={
-          values.mcpServerAuthorizationToken
-            ? `Bearer ${values.mcpServerAuthorizationToken}`
-            : ''
-        }
-        floatingLabelText={<Trans>Authorization header</Trans>}
+        value={(() => {
+          try {
+            return `${getMyCloudBaseUrl()}/mcp`;
+          } catch (error) {
+            return '';
+          }
+        })()}
+        floatingLabelText={<Trans>MCP endpoint URL</Trans>}
+        hintText="https://your-server/my-cloud/mcp"
         readOnly
         fullWidth
       />
-      <LineStackLayout noMargin>
-        <FlatButton
-          label={<Trans>Generate token</Trans>}
-          primary={false}
-          onClick={regenerateMcpServerAuthorizationToken}
-        />
-        <FlatButton
-          label={<Trans>Refresh status</Trans>}
-          primary={false}
-          onClick={refreshMcpServerState}
-        />
-      </LineStackLayout>
-      <CompactToggleField
-        labelColor="primary"
-        hideTooltip
-        onCheck={setMcpAllowWriteTools}
-        checked={values.mcpAllowWriteTools}
-        label={i18n._(t`Allow MCP write tools`)}
-      />
-      <CompactToggleField
-        labelColor="primary"
-        hideTooltip
-        onCheck={setMcpAllowCommandTools}
-        checked={values.mcpAllowCommandTools}
-        label={i18n._(t`Allow MCP command tools`)}
-      />
+
+      {electron && (
+        <>
+          <Text size="sub-title" noMargin>
+            <Trans>Local editor MCP server</Trans>
+          </Text>
+          <Text noMargin>
+            <Trans>
+              Let AI assistants control THIS running editor through the Model
+              Context Protocol. It runs locally and uses the access token above.
+            </Trans>
+          </Text>
+          <CompactToggleField
+            labelColor="primary"
+            hideTooltip
+            onCheck={setEnableMcpServer}
+            checked={values.enableMcpServer}
+            label={i18n._(t`Enable MCP server`)}
+          />
+          <LineStackLayout noMargin alignItems="center">
+            <Column noMargin expand>
+              <Text noMargin>
+                <Trans>Status</Trans>
+              </Text>
+            </Column>
+            <Column noMargin expand>
+              <Text noMargin>
+                {mcpServerState.error
+                  ? mcpServerState.error
+                  : mcpServerState.isRunning
+                  ? i18n._(t`Running`)
+                  : i18n._(t`Stopped`)}
+              </Text>
+            </Column>
+          </LineStackLayout>
+          <TextField
+            type="number"
+            value={values.mcpServerPort}
+            floatingLabelText={<Trans>Port</Trans>}
+            min={0}
+            max={65535}
+            onChange={(event, value) => {
+              const port = parseInt(value, 10);
+              setMcpServerPort(Number.isFinite(port) ? port : 0);
+            }}
+            fullWidth
+          />
+          <TextField
+            value={mcpServerState.url || ''}
+            floatingLabelText={<Trans>MCP server URL</Trans>}
+            readOnly
+            fullWidth
+          />
+          <LineStackLayout noMargin>
+            <FlatButton
+              label={<Trans>Refresh status</Trans>}
+              primary={false}
+              onClick={refreshMcpServerState}
+            />
+          </LineStackLayout>
+          <CompactToggleField
+            labelColor="primary"
+            hideTooltip
+            onCheck={setMcpAllowWriteTools}
+            checked={values.mcpAllowWriteTools}
+            label={i18n._(t`Allow MCP write tools`)}
+          />
+          <CompactToggleField
+            labelColor="primary"
+            hideTooltip
+            onCheck={setMcpAllowCommandTools}
+            checked={values.mcpAllowCommandTools}
+            label={i18n._(t`Allow MCP command tools`)}
+          />
+        </>
+      )}
     </ColumnStackLayout>
   );
 
@@ -446,9 +536,7 @@ const PreferencesDialog = ({
           options={[
             { value: 'preferences', label: <Trans>Preferences</Trans> },
             { value: 'ai-services', label: <Trans>AI services</Trans> },
-            ...(electron
-              ? [{ value: 'mcp-server', label: <Trans>MCP server</Trans> }]
-              : []),
+            { value: 'my-cloud', label: <Trans>My Cloud</Trans> },
             { value: 'shortcuts', label: <Trans>Keyboard Shortcuts</Trans> },
             ...(electron
               ? [{ value: 'folders', label: <Trans>Folders</Trans> }]
@@ -1030,7 +1118,7 @@ const PreferencesDialog = ({
         </ColumnStackLayout>
       )}
       {currentTab === 'ai-services' && aiServicesPreferences}
-      {electron && currentTab === 'mcp-server' && mcpServerPreferences}
+      {currentTab === 'my-cloud' && myCloudPreferences}
       {currentTab === 'shortcuts' && (
         <Line expand>
           <Column expand noMargin>

@@ -110,7 +110,9 @@ export async function serializeInBackground(
   const result = await sendMessageToBackgroundSerializerWorker({
     type,
     binary: binaryBuffer,
-    versionWithHash: VersionMetadata.versionWithHash,
+    // Pass the short hash: the worker uses it to build the libGD.<hash>.js URL,
+    // which is named with the short hash (see scripts/import-libGD.js).
+    versionWithHash: VersionMetadata.versionWithShortHash,
   });
 
   const workerPromiseEndTime = Date.now();

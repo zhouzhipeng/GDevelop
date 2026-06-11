@@ -6,9 +6,11 @@ import {
   type MoveAllProjectResourcesFunction,
 } from './index';
 import CloudStorageProvider from '../CloudStorageProvider';
+import MyCloudStorageProvider from '../MyCloudStorageProvider';
 import UrlStorageProvider from '../UrlStorageProvider';
 import DownloadFileStorageProvider from '../DownloadFileStorageProvider';
 import { moveUrlResourcesToCloudProject } from '../CloudStorageProvider/CloudResourceMover';
+import { moveResourcesToMyCloudProject } from '../MyCloudStorageProvider/MyCloudResourceMover';
 
 const moveNothing = async () => {
   return {
@@ -33,6 +35,22 @@ const movers: {
     CloudStorageProvider.internalName
   }`]: moveUrlResourcesToCloudProject,
 
+  // Moving to self-hosted "My Cloud" storage:
+
+  // From a My Cloud project to another, copy resources (unless already hosted
+  // on the same server for the target project).
+  [`${MyCloudStorageProvider.internalName}=>${
+    MyCloudStorageProvider.internalName
+  }`]: moveResourcesToMyCloudProject,
+  // From a URL/web project to My Cloud, download + re-upload the resources.
+  [`${UrlStorageProvider.internalName}=>${
+    MyCloudStorageProvider.internalName
+  }`]: moveResourcesToMyCloudProject,
+  // From a GDevelop Cloud project to My Cloud, download + re-upload.
+  [`${CloudStorageProvider.internalName}=>${
+    MyCloudStorageProvider.internalName
+  }`]: moveResourcesToMyCloudProject,
+
   // Moving to "DownloadFile":
 
   // Saving to "DownloadFile" will *not* change any resources, as it's a
@@ -43,6 +61,10 @@ const movers: {
   }`]: moveNothing,
   // $FlowFixMe[incompatible-type]
   [`${UrlStorageProvider.internalName}=>${
+    DownloadFileStorageProvider.internalName
+  }`]: moveNothing,
+  // $FlowFixMe[incompatible-type]
+  [`${MyCloudStorageProvider.internalName}=>${
     DownloadFileStorageProvider.internalName
   }`]: moveNothing,
 };

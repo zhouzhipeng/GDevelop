@@ -68,10 +68,11 @@ class Bootstrapper extends Component<{}, State> {
     installAnalyticsEvents();
     GD_STARTUP_TIMES.push(['bootstrapperComponentDidMount', performance.now()]);
 
-    // Load GDevelop.js, ensuring a new version is fetched when the version changes.
-    loadScript(
-      `./libGD.js?cache-buster=${VersionMetadata.versionWithHash}`
-    ).then(() => {
+    // Load GDevelop.js. The version is in the FILENAME (not a query string) so
+    // that a new version is fetched when the version changes, while still being
+    // a path-only, immutable URL that CDNs cache forever. See
+    // scripts/import-libGD.js which produces these hashed copies.
+    loadScript(`./libGD.${VersionMetadata.versionWithShortHash}.js`).then(() => {
       GD_STARTUP_TIMES.push(['libGDLoadedTime', performance.now()]);
       const initializeGDevelopJs = global.initializeGDevelopJs;
       if (!initializeGDevelopJs) {
@@ -82,15 +83,19 @@ class Bootstrapper extends Component<{}, State> {
       }
 
       initializeGDevelopJs({
-        // Override the resolved URL for the .wasm file,
-        // to ensure a new version is fetched when the version changes.
+        // Override the resolved URL for the .wasm file, pointing to the
+        // version-in-filename copy (libGD.<versionWithHash>.wasm) so a new
+        // version is fetched on change and the URL stays CDN-cacheable.
         locateFile: (path: string, prefix: string) => {
           // This function is called by Emscripten to locate the .wasm file only.
-          // As the wasm is at the root of the public folder, we can just return
-          // the path to the file.
+          // `path` is "libGD.wasm"; rewrite it to the hashed filename. The wasm
+          // is at the root of the public folder, so no prefix is needed.
           // Plus, on Electron, the prefix seems to be pointing to the root of the
           // app.asar archive, which is completely wrong.
-          return path + `?cache-buster=${VersionMetadata.versionWithHash}`;
+          return path.replace(
+            /^libGD\.wasm$/,
+            `libGD.${VersionMetadata.versionWithShortHash}.wasm`
+          );
         },
       }).then(gd => {
         global.gd = gd;

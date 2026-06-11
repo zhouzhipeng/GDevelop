@@ -16,6 +16,7 @@ import IconButton from '../UI/IconButton';
 import { ColumnStackLayout } from '../UI/Layout';
 import { emptyStorageProvider } from '../ProjectsStorage/ProjectStorageProviders';
 import { findEmptyPathInWorkspaceFolder } from '../ProjectsStorage/LocalFileStorageProvider/LocalPathFinder';
+import { hideAccountUI } from '../Utils/GDevelopServices/ApiConfigs';
 import SelectField from '../UI/SelectField';
 import SelectOption from '../UI/SelectOption';
 import CreateProfile from '../Profile/CreateProfile';
@@ -822,6 +823,15 @@ const NewProjectSetupDialog = ({
                     .filter(
                       availableStorageProvider =>
                         !!availableStorageProvider.renderNewProjectSaveAsLocationChooser
+                    )
+                    // Self-hosted deployments hide GDevelop Cloud (it needs a
+                    // GDevelop account); use My Cloud instead.
+                    .filter(
+                      availableStorageProvider =>
+                        !(
+                          hideAccountUI &&
+                          availableStorageProvider.internalName === 'Cloud'
+                        )
                     )
                     .map(availableStorageProvider => (
                       <SelectOption

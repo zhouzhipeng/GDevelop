@@ -12,7 +12,9 @@ const getLibGDevelop = (versionWithHash /*: string */) => {
 
   modulePromise = new Promise((resolve, reject) => {
     try {
-      const url = `/libGD.js?cache-buster=${versionWithHash}`;
+      // Version is in the filename (not a query string) so the URL is
+      // CDN-cacheable. See scripts/import-libGD.js.
+      const url = `/libGD.${versionWithHash}.js`;
       // Load libGD.js in the worker context.
       // eslint-disable-next-line no-undef
       importScripts(url);
@@ -30,15 +32,13 @@ const getLibGDevelop = (versionWithHash /*: string */) => {
       // $FlowFixMe[cannot-resolve-name]
       initializeGDevelopJs({
         /* eslint-enable no-undef */
-        // Override the resolved URL for the .wasm file,
-        // to ensure a new version is fetched when the version changes.
+        // Override the resolved URL for the .wasm file, pointing to the
+        // version-in-filename copy so it stays CDN-cacheable.
         locateFile: (path /*: string */, prefix /*: string */) => {
           // This function is called by Emscripten to locate the .wasm file only.
-          // As the wasm is at the root of the public folder, we can just return
-          // the path to the file.
-          // Plus, on Electron, the prefix seems to be pointing to the root of the
-          // app.asar archive, which is completely wrong.
-          return path + `?cache-buster=${versionWithHash}`;
+          // `path` is "libGD.wasm"; rewrite it to the hashed filename, served
+          // from the root of the public folder.
+          return `/libGD.${versionWithHash}.wasm`;
         },
       })
         .then(module => {

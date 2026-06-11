@@ -9,8 +9,10 @@ import LocalFileStorageProvider from '../LocalFileStorageProvider';
 import { moveUrlResourcesToLocalFiles } from '../LocalFileStorageProvider/LocalFileResourceMover';
 import UrlStorageProvider from '../UrlStorageProvider';
 import CloudStorageProvider from '../CloudStorageProvider';
+import MyCloudStorageProvider from '../MyCloudStorageProvider';
 import { fetchRelativeResourcesToFullUrls } from '../UrlStorageProvider/UrlResourceFetcher';
 import { moveUrlResourcesToCloudFilesIfPrivate } from '../CloudStorageProvider/CloudResourceFetcher';
+import { fetchMyCloudProjectResources } from '../MyCloudStorageProvider/MyCloudResourceFetcher';
 
 const fetchers: {
   [string]: FetchAllProjectResourcesFunction,
@@ -19,6 +21,10 @@ const fetchers: {
   // private URLs by downloading them and reuploading them to the cloud.
   // $FlowFixMe[incompatible-type]
   [CloudStorageProvider.internalName]: moveUrlResourcesToCloudFilesIfPrivate,
+  // My Cloud resources are plain public URLs on the self-hosted server: nothing
+  // to fetch when opening.
+  // $FlowFixMe[incompatible-type]
+  [MyCloudStorageProvider.internalName]: fetchMyCloudProjectResources,
   // The local file storage provider fetches the resources that are URLs
   // by downloading them locally.
   // $FlowFixMe[incompatible-type]

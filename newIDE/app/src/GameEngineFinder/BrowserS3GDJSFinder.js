@@ -1,6 +1,7 @@
 // @flow
 import Window from '../Utils/Window';
 import { getIDEVersionWithHash } from '../Version';
+import { GDevelopGdjsRuntime } from '../Utils/GDevelopServices/ApiConfigs';
 
 type FileSet =
   | 'preview'
@@ -48,6 +49,13 @@ export const findGDJS = (
   // Get GDJS for this version. If you updated the version,
   // run `newIDE/web-app/scripts/deploy-GDJS-Runtime` script.
   let gdjsRoot = `https://resources.gdevelop-app.com/GDJS-${getIDEVersionWithHash()}`;
+
+  // Self-hosted deployments serve their own Runtime (the CDN only has official
+  // version-hash paths, so a self-built version 403s). See
+  // scripts/deploy-web-editor.py + ApiConfigs GDevelopGdjsRuntime.
+  if (GDevelopGdjsRuntime.baseUrl) {
+    gdjsRoot = GDevelopGdjsRuntime.baseUrl;
+  }
 
   if (Window.isDev()) {
     gdjsRoot = `http://localhost:5002`;

@@ -12,6 +12,7 @@ import {
   registerGame,
   type Game,
 } from '../../../../Utils/GDevelopServices/Game';
+import { hideAccountUI } from '../../../../Utils/GDevelopServices/ApiConfigs';
 import { type QuickCustomizationRecommendation } from '../../../../Utils/GDevelopServices/User';
 import PlaceholderError from '../../../../UI/PlaceholderError';
 import { Column, LargeSpacer, Line } from '../../../../UI/Grid';
@@ -200,9 +201,10 @@ const CreateSection = ({
   const hasAProjectOpenedNowOrRecentlyOrGameSaved =
     !!project || savedGames.length || !!allRecentProjectFiles.length;
   const hidePerformanceDashboard =
-    !!limits &&
-    !!limits.capabilities.classrooms &&
-    limits.capabilities.classrooms.hideSocials;
+    hideAccountUI ||
+    (!!limits &&
+      !!limits.capabilities.classrooms &&
+      limits.capabilities.classrooms.hideSocials);
 
   React.useEffect(
     () => {

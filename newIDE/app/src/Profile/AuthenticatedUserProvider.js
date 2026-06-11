@@ -43,6 +43,7 @@ import CreateAccountDialog from './CreateAccountDialog';
 import EditProfileDialog from './EditProfileDialog';
 import ChangeEmailDialog from './ChangeEmailDialog';
 import EmailVerificationDialog from './EmailVerificationDialog';
+import { hideAccountUI } from '../Utils/GDevelopServices/ApiConfigs';
 import { type PreferencesValues } from '../MainFrame/Preferences/PreferencesContext';
 import {
   listUserCloudProjects,
@@ -1158,6 +1159,9 @@ export default class AuthenticatedUserProvider extends React.Component<
   };
 
   _notifyUserAboutEmailVerification = () => {
+    // Self-hosted deployments hide all account UI; never show the email
+    // verification dialog there.
+    if (hideAccountUI) return;
     const { profile, firebaseUser } = this.state.authenticatedUser;
     if (!profile) return;
     if (firebaseUser && firebaseUser.emailVerified) return;
@@ -1895,7 +1899,7 @@ export default class AuthenticatedUserProvider extends React.Component<
               }
             />
           )}
-        {this.state.emailVerificationDialogOpen && (
+        {!hideAccountUI && this.state.emailVerificationDialogOpen && (
           <EmailVerificationDialog
             authenticatedUser={this.state.authenticatedUser}
             onClose={() => {

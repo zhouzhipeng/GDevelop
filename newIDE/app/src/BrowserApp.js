@@ -26,6 +26,7 @@ import ProjectStorageProviders from './ProjectsStorage/ProjectStorageProviders';
 import UrlStorageProvider from './ProjectsStorage/UrlStorageProvider';
 import DownloadFileStorageProvider from './ProjectsStorage/DownloadFileStorageProvider';
 import CloudStorageProvider from './ProjectsStorage/CloudStorageProvider';
+import MyCloudStorageProvider from './ProjectsStorage/MyCloudStorageProvider';
 import BrowserResourceMover from './ProjectsStorage/ResourceMover/BrowserResourceMover';
 import BrowserResourceFetcher from './ProjectsStorage/ResourceFetcher/BrowserResourceFetcher';
 import BrowserEventsFunctionsExtensionOpener from './EventsFunctionsExtensionsLoader/Storage/BrowserEventsFunctionsExtensionOpener';
@@ -69,6 +70,7 @@ export const create = (authentication: Authentication): React.Node => {
           storageProviders={[
             UrlStorageProvider,
             CloudStorageProvider,
+            MyCloudStorageProvider,
             DownloadFileStorageProvider,
           ]}
           defaultStorageProvider={UrlStorageProvider}

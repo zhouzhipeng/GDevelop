@@ -261,19 +261,20 @@ if (workbox) {
   // Will be replaced by make-service-worker.js to include the proper version.
   const VersionMetadata = {};
 
-  // Contrary to other static assets (JS, CSS, HTML), libGD.js/wasm are not
-  // versioned in their filenames. Instead, we version using a query string
-  // (see src/index.js where it's loaded with the same query string).
+  // libGD.js/wasm are versioned in their FILENAME
+  // (libGD.<versionWithHash>.js/.wasm, produced by scripts/import-libGD.js and
+  // loaded the same way in src/index.js). This keeps them as path-only,
+  // immutable URLs that CDNs cache forever while still busting on new versions.
   //
   // Don't cache them in development mode to ensure that the latest version is always served.
   if (!isDev) {
     workbox.precaching.precacheAndRoute([
       {
-        url: `libGD.js?cache-buster=${VersionMetadata.versionWithHash}`,
+        url: `libGD.${VersionMetadata.versionWithShortHash}.js`,
         revision: null, // Revision is null because versioning included in the URL.
       },
       {
-        url: `libGD.wasm?cache-buster=${VersionMetadata.versionWithHash}`,
+        url: `libGD.${VersionMetadata.versionWithShortHash}.wasm`,
         revision: null, // Revision is null because versioning included in the URL.
       },
     ]);

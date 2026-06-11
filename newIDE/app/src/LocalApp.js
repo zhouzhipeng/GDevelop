@@ -29,6 +29,7 @@ import { LocalGDJSDevelopmentWatcher } from './GameEngineFinder/LocalGDJSDevelop
 import { useCliCommandRunner } from './MainFrame/LocalCliCommandRunner';
 import { exportLocalHtml5Headless } from './ExportAndShare/Headless/ExportLocalHtml5Headless';
 import CloudStorageProvider from './ProjectsStorage/CloudStorageProvider';
+import MyCloudStorageProvider from './ProjectsStorage/MyCloudStorageProvider';
 import UrlStorageProvider from './ProjectsStorage/UrlStorageProvider';
 import LocalResourceMover from './ProjectsStorage/ResourceMover/LocalResourceMover';
 import LocalResourceFetcher from './ProjectsStorage/ResourceFetcher/LocalResourceFetcher';
@@ -63,6 +64,7 @@ export const create = (authentication: Authentication): React.Node => {
             LocalFileStorageProvider,
             UrlStorageProvider,
             CloudStorageProvider,
+            MyCloudStorageProvider,
           ]}
           defaultStorageProvider={LocalFileStorageProvider}
         >

@@ -1,26 +1,19 @@
 // @flow
 import * as React from 'react';
 import { I18n } from '@lingui/react';
-import { t, Trans } from '@lingui/macro';
+import { t } from '@lingui/macro';
 import TranslateIcon from '@material-ui/icons/Translate';
-import FlatButton from '../../../UI/FlatButton';
 import { Column, Line } from '../../../UI/Grid';
 import { LineStackLayout } from '../../../UI/Layout';
 import UserChip from '../../../UI/User/UserChip';
-import Window from '../../../Utils/Window';
-import optionalRequire from '../../../Utils/OptionalRequire';
 import TextButton from '../../../UI/TextButton';
 import IconButton from '../../../UI/IconButton';
-import { isNativeMobileApp } from '../../../Utils/Platform';
 import NotificationChip from '../../../UI/User/NotificationChip';
 import { useResponsiveWindowSize } from '../../../UI/Responsive/ResponsiveWindowMeasurer';
 import SaveProjectIcon from '../../SaveProjectIcon';
-import Mobile from '../../../UI/CustomSvgIcons/Mobile';
-import Desktop from '../../../UI/CustomSvgIcons/Desktop';
 import HistoryIcon from '../../../UI/CustomSvgIcons/History';
 import AuthenticatedUserContext from '../../../Profile/AuthenticatedUserContext';
 import { type FileMetadata } from '../../../ProjectsStorage';
-const electron = optionalRequire('electron');
 
 type Props = {|
   hasProject: boolean,
@@ -77,26 +70,6 @@ export const HomePageHeader = ({
           </Column>
           <Column>
             <LineStackLayout noMargin alignItems="center">
-              {!electron &&
-                !isNativeMobileApp() &&
-                (isMobile ? (
-                  <IconButton
-                    size="small"
-                    onClick={() =>
-                      Window.openExternalURL('https://gdevelop.io/download')
-                    }
-                  >
-                    <Mobile />
-                  </IconButton>
-                ) : (
-                  <FlatButton
-                    label={<Trans>Get the app</Trans>}
-                    onClick={() =>
-                      Window.openExternalURL('https://gdevelop.io/download')
-                    }
-                    leftIcon={<Desktop />}
-                  />
-                ))}
               <UserChip onOpenProfile={onOpenProfile} />
               {profile && <NotificationChip />}
               {isMobile ? (

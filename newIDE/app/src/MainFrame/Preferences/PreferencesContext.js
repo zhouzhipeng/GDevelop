@@ -290,6 +290,8 @@ export type PreferencesValues = {|
   showJsTypeError: boolean,
   canonicalEventSerialization: boolean,
   resourcesToolsSettings: ResourcesToolsSettings,
+  myCloudServerUrl: string,
+  myCloudAccessToken: string,
 |};
 
 /**
@@ -426,6 +428,8 @@ export type Preferences = {|
   setUseBackgroundSerializerForSaving: (enabled: boolean) => void,
   setShowJsTypeError: (enabled: boolean) => void,
   setCanonicalEventSerialization: (enabled: boolean) => void,
+  setMyCloudServerUrl: (serverUrl: string) => void,
+  setMyCloudAccessToken: (accessToken: string) => void,
 |};
 
 export const initialPreferences = {
@@ -500,6 +504,8 @@ export const initialPreferences = {
     showJsTypeError: false,
     canonicalEventSerialization: false,
     resourcesToolsSettings: defaultResourcesToolsSettings,
+    myCloudServerUrl: '',
+    myCloudAccessToken: '',
   },
   setMultipleValues: () => {},
   setLanguage: () => {},
@@ -595,6 +601,8 @@ export const initialPreferences = {
   setUseBackgroundSerializerForSaving: (enabled: boolean) => {},
   setShowJsTypeError: (enabled: boolean) => {},
   setCanonicalEventSerialization: (enabled: boolean) => {},
+  setMyCloudServerUrl: (serverUrl: string) => {},
+  setMyCloudAccessToken: (accessToken: string) => {},
 };
 
 const PreferencesContext: React.Context<Preferences> = React.createContext<Preferences>(

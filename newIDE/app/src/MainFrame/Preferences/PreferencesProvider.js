@@ -23,16 +23,13 @@ import { type EditorMosaicNode } from '../../UI/EditorMosaic';
 import { type FileMetadataAndStorageProviderName } from '../../ProjectsStorage';
 import defaultShortcuts from '../../KeyboardShortcuts/DefaultShortcuts';
 import { type CommandName } from '../../CommandPalette/CommandsList';
-import {
-  getBrowserLanguageOrLocale,
-  setLanguageInDOM,
-  selectLanguageOrLocale,
-} from '../../Utils/Language';
+import { setLanguageInDOM } from '../../Utils/Language';
 import { type GamesDashboardOrderBy } from '../../GameDashboard/GamesList';
 import {
   CHECK_APP_UPDATES_TIMEOUT,
   PERIODIC_APP_UPDATES_TIMEOUT,
 } from '../../Utils/GlobalFetchTimeouts';
+import { setMyCloudServerConfig } from '../../ProjectsStorage/MyCloudStorageProvider/MyCloudClient';
 const electron = optionalRequire('electron');
 const ipcRenderer = electron ? electron.ipcRenderer : null;
 
@@ -149,16 +146,14 @@ export const getInitialPreferences = (): {
   useShortcutToClosePreviewWindow: boolean,
   userShortcutMap: {},
   watchProjectFolderFilesForLocalProjects: boolean,
+  myCloudServerUrl: string,
+  myCloudAccessToken: string,
 } => {
-  let languageOrLocale = 'en';
-  const browserLanguageOrLocale = getBrowserLanguageOrLocale();
-  if (browserLanguageOrLocale)
-    languageOrLocale = selectLanguageOrLocale(
-      browserLanguageOrLocale,
-      languageOrLocale
-    );
-
-  return { ...initialPreferences.values, language: languageOrLocale };
+  // Default the editor to English. A user's chosen language is persisted in the
+  // browser (localStorage 'gd-preferences') and restored by
+  // loadPreferencesFromLocalStorage, so this default only applies on first run.
+  // (Previously the browser's language was auto-detected here.)
+  return { ...initialPreferences.values, language: 'en' };
 };
 
 const generateMcpServerAuthorizationToken = (): string => {
@@ -182,6 +177,9 @@ const hasMcpServerConfigurationChanged = (
 ): boolean =>
   oldValues.enableMcpServer !== newValues.enableMcpServer ||
   oldValues.mcpServerPort !== newValues.mcpServerPort ||
+  // The MCP server shares the single My Cloud access token (see
+  // _notifyMcpServerConfiguration), so a change to it must restart the server.
+  oldValues.myCloudAccessToken !== newValues.myCloudAccessToken ||
   oldValues.mcpServerAuthorizationToken !==
     newValues.mcpServerAuthorizationToken;
 
@@ -465,6 +463,10 @@ export default class PreferencesProvider extends React.Component<Props, State> {
     setCanonicalEventSerialization: (this._setCanonicalEventSerialization.bind(
       this
     ): any),
+    // $FlowFixMe[method-unbinding]
+    setMyCloudServerUrl: (this._setMyCloudServerUrl.bind(this): any),
+    // $FlowFixMe[method-unbinding]
+    setMyCloudAccessToken: (this._setMyCloudAccessToken.bind(this): any),
   };
 
   componentDidMount() {
@@ -477,12 +479,15 @@ export default class PreferencesProvider extends React.Component<Props, State> {
       PERIODIC_APP_UPDATES_TIMEOUT
     );
     this._notifyMcpServerConfiguration();
+    // Sync the My Cloud storage client with the persisted server config.
+    setMyCloudServerConfig({
+      serverUrl: this.state.values.myCloudServerUrl,
+      accessToken: this.state.values.myCloudAccessToken,
+    });
   }
 
   componentDidUpdate(prevProps: Props, prevState: State) {
-    if (
-      hasMcpServerConfigurationChanged(prevState.values, this.state.values)
-    ) {
+    if (hasMcpServerConfigurationChanged(prevState.values, this.state.values)) {
       this._notifyMcpServerConfiguration();
     }
   }
@@ -499,12 +504,16 @@ export default class PreferencesProvider extends React.Component<Props, State> {
       enableMcpServer,
       mcpServerPort,
       mcpServerAuthorizationToken,
+      myCloudAccessToken,
     } = this.state.values;
+    // Single shared token: the MCP server uses the My Cloud access token. Fall
+    // back to the legacy MCP token if no My Cloud token is set.
+    const token = myCloudAccessToken || mcpServerAuthorizationToken;
     ipcRenderer
       .invoke('mcp-server-update-config', {
         enabled: enableMcpServer,
         port: mcpServerPort,
-        token: mcpServerAuthorizationToken,
+        token,
       })
       .catch(error => {
         console.error('Unable to update MCP server configuration:', error);
@@ -1583,6 +1592,42 @@ export default class PreferencesProvider extends React.Component<Props, State> {
         },
       }),
       () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _setMyCloudServerUrl(newValue: string) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          myCloudServerUrl: newValue,
+        },
+      }),
+      () => {
+        this._persistValuesToLocalStorage(this.state);
+        setMyCloudServerConfig({
+          serverUrl: this.state.values.myCloudServerUrl,
+          accessToken: this.state.values.myCloudAccessToken,
+        });
+      }
+    );
+  }
+
+  _setMyCloudAccessToken(newValue: string) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          myCloudAccessToken: newValue,
+        },
+      }),
+      () => {
+        this._persistValuesToLocalStorage(this.state);
+        setMyCloudServerConfig({
+          serverUrl: this.state.values.myCloudServerUrl,
+          accessToken: this.state.values.myCloudAccessToken,
+        });
+      }
     );
   }
 

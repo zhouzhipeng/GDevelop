@@ -15,6 +15,7 @@ import UserAvatar from './UserAvatar';
 import { useResponsiveWindowSize } from '../Responsive/ResponsiveWindowMeasurer';
 import IconButton from '../IconButton';
 import FlatButton from '../FlatButton';
+import { hideAccountUI } from '../../Utils/GDevelopServices/ApiConfigs';
 
 const styles = {
   buttonContainer: { flexShrink: 0 },
@@ -59,6 +60,10 @@ const UserChip = ({
 
   const isPremium = hasValidSubscriptionPlan(subscription);
   const { isMobile } = useResponsiveWindowSize();
+
+  // Self-hosted deployments don't use GDevelop accounts: projects are stored and
+  // shared with the My Cloud token (Preferences). Hide all account UI.
+  if (hideAccountUI) return null;
 
   return !profile && loginState === 'loggingIn' ? (
     <CircularProgress size={25} />

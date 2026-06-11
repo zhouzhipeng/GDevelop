@@ -15,6 +15,8 @@ import {
   uploadProjectResourceFiles,
   PROJECT_RESOURCE_MAX_SIZE_IN_BYTES,
 } from '../Utils/GDevelopServices/Project';
+import { uploadResourceFiles as uploadMyCloudResourceFiles } from '../ProjectsStorage/MyCloudStorageProvider/MyCloudClient';
+import { myCloudStorageProviderInternalName } from '../ProjectsStorage/MyCloudStorageProvider/MyCloudStorageProviderInternalName';
 import { type StorageProvider, type FileMetadata } from '../ProjectsStorage';
 import { Line, Column } from '../UI/Grid';
 import LinearProgress from '../UI/LinearProgress';
@@ -110,14 +112,24 @@ export const FileToCloudProjectResourceUploader = ({
         setIsUploading(true);
         setError(null);
         setUploadProgress(0);
-        const results: UploadedProjectResourceFiles = await uploadProjectResourceFiles(
-          authenticatedUser,
-          cloudProjectId,
-          selectedFiles,
-          (current: number, total: number) => {
-            setUploadProgress((current / total) * 100);
-          }
-        );
+        const onUploadProgress = (current: number, total: number) => {
+          setUploadProgress((current / total) * 100);
+        };
+        // Upload to whichever cloud backs the project: GDevelop Cloud or the
+        // self-hosted My Cloud server.
+        const results: UploadedProjectResourceFiles =
+          storageProvider.internalName === myCloudStorageProviderInternalName
+            ? await uploadMyCloudResourceFiles(
+                cloudProjectId,
+                selectedFiles,
+                onUploadProgress
+              )
+            : await uploadProjectResourceFiles(
+                authenticatedUser,
+                cloudProjectId,
+                selectedFiles,
+                onUploadProgress
+              );
         const erroredResults = results.filter(({ error }) => !!error);
         const okResults = results.filter(({ url }) => !!url);
         if (erroredResults.length) {
@@ -146,6 +158,7 @@ export const FileToCloudProjectResourceUploader = ({
       onChooseResources,
       createNewResource,
       cloudProjectId,
+      storageProvider,
     ]
   );
 
@@ -161,9 +174,12 @@ export const FileToCloudProjectResourceUploader = ({
     })
     .filter(Boolean);
 
+  const isMyCloud =
+    storageProvider.internalName === myCloudStorageProviderInternalName;
   const canUploadWithThisStorageProvider =
-    storageProvider.internalName === 'Cloud' && !!fileMetadata;
-  const isConnected = !!authenticatedUser.authenticated;
+    (storageProvider.internalName === 'Cloud' || isMyCloud) && !!fileMetadata;
+  // My Cloud uses its own token (no GDevelop account needed); Cloud needs login.
+  const isConnected = isMyCloud || !!authenticatedUser.authenticated;
   const canChooseFiles =
     !isUploading && isConnected && canUploadWithThisStorageProvider;
 
@@ -230,8 +246,8 @@ export const FileToCloudProjectResourceUploader = ({
       ) : !canUploadWithThisStorageProvider ? (
         <AlertMessage kind="warning">
           <Trans>
-            Your need to first save your game on GDevelop Cloud to upload your
-            own resources.
+            You need to first save your project to the cloud to upload your own
+            resources.
           </Trans>
         </AlertMessage>
       ) : null}
