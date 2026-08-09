@@ -184,7 +184,8 @@ const value = 1;
       collectSerializedProjectJavaScriptBlocks(projectWithExternal)
     ).toEqual([
       expect.objectContaining({
-        fileUri: 'game://scenes/Main/externals/Shared%20Combat.events',
+        fileUri:
+          'game://scenes/Main/external-events/Shared%20Combat/functions/sceneUpdate.events',
       }),
     ]);
     expect(
@@ -195,7 +196,8 @@ const value = 1;
       expect.arrayContaining([
         expect.objectContaining({
           code: 'JS_API_TYPE_MISMATCH',
-          fileUri: 'game://scenes/Main/externals/Shared%20Combat.events',
+          fileUri:
+            'game://scenes/Main/external-events/Shared%20Combat/functions/sceneUpdate.events',
         }),
       ])
     );
@@ -422,7 +424,7 @@ objects[0]._behaviorData;
         ],
       },
       sourceFiles: {
-        'game://extensions/MousePointerLock/functions/RequestPointerLock/RequestPointerLock.events': `@js strict=true
+        'game://extensions/MousePointerLock/functions/RequestPointerLock.events': `@js strict=true
 document.body.requestPointerLock();
 gdjs._MousePointerLockExtension.handler.requestPointerLock();
 const broken = ;
@@ -461,7 +463,7 @@ document.body.requestPointerLock();
           eventsFunctionsExtensions: [extension],
         },
         sourceFiles: {
-          'game://extensions/MousePointerLock/functions/RequestPointerLock/RequestPointerLock.events': extensionSource,
+          'game://extensions/MousePointerLock/functions/RequestPointerLock.events': extensionSource,
         },
       });
 
@@ -589,11 +591,11 @@ while (true) {}
     );
   });
 
-  test('exposes eventsFunctionContext only in extension function sources', () => {
+  test('exposes eventsFunctionContext in extension and scene lifecycle function sources', () => {
     const functionValidation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://extensions/Combat/functions/Damage/Damage.events': `@js strict=true
+        'game://extensions/Combat/functions/Damage.events': `@js strict=true
 const amount = eventsFunctionContext.getArgument("Amount");
 eventsFunctionContext.returnValue = typeof amount === "number" ? amount : 0;
 @end js
@@ -601,6 +603,18 @@ eventsFunctionContext.returnValue = typeof amount === "number" ? amount : 0;
       },
     });
     expect(functionValidation.errors).toEqual([]);
+
+    const lifecycleValidation = validateProjectJavaScriptAuthoring({
+      serializedProject,
+      sourceFiles: {
+        'game://scenes/Main/functions/sceneSignal.events': `@js strict=true
+const signalName = eventsFunctionContext.getArgument("SignalName");
+if (typeof signalName === "string" && signalName.length > 0) runtimeScene.getElapsedTime();
+@end js
+`,
+      },
+    });
+    expect(lifecycleValidation.errors).toEqual([]);
 
     const sceneValidation = validateProjectJavaScriptAuthoring({
       serializedProject,

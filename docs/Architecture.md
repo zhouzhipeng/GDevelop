@@ -386,8 +386,7 @@ Picked object lists keep classic GDevelop runtime behavior:
 - Normal object/behavior actions still intentionally iterate all picked
   instances. They are not globally converted into single-target operations.
 
-Event authors can narrow scalar targets with picking conditions such as `Pick
-random` or `Pick nearest`, or use `For each object` when every instance needs
+Event authors can narrow scalar targets with picking conditions such as `Pick random` or `Pick nearest`, or use `For each object` when every instance needs
 an isolated selection context. Without that narrowing, scalar consumers use
 the first picked instance.
 
@@ -700,13 +699,12 @@ requested.
 | ------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Single JSON               | arbitrary `*.json`                              | Legacy input/output path supported by the serializer/storage layer.                                                |
 | Split JSON folder project | a JSON entry plus referenced `*.json` fragments | Legacy format using `ObjectSplitter` and `__REFERENCE_TO_SPLIT_OBJECT`. Still readable; not the new source format. |
-| Multi-file source project | `project.gdevelop`                              | Primary local authoring format on `new-format`; TOML settings plus layout/events DSL files.                        |
+| Multi-file source project | `project.gdevelop`                              | Primary local authoring format; version 5 TOML settings with embedded layout subtrees plus IfDo event files.       |
 
-Opening a legacy JSON project normalizes it through the current libGD
-serializer, decomposes it next to the source, verifies a compose round trip,
-and redirects the open file metadata to `project.gdevelop`. Migration metadata
-records the legacy source URI and SHA-256. If the old JSON later diverges from
-an existing migrated tree, the opener refuses to guess which side is newer.
+Opening a legacy single-JSON project normalizes it through the current libGD
+serializer, decomposes it directly to version 5 next to the source, verifies a
+compose round trip, and redirects the open file metadata to
+`project.gdevelop`. Production does not read version 3 or 4 folder projects.
 
 Packaged desktop builds associate `.gdevelop` with GDevelop. Windows and Linux
 open the selected document through the positional project argument; macOS
@@ -730,27 +728,43 @@ project.gdevelop
 resources.settings
 constants.toml
 objects/<encoded-name>.settings
-scenes/<encoded-name>/scene.settings
-scenes/<encoded-name>/<encoded-name>.layout
-scenes/<encoded-name>/<encoded-name>.events
-scenes/<encoded-name>/objects/*.settings
-scenes/<encoded-name>/externals/*.layout
-scenes/<encoded-name>/externals/*.events
+scenes/<encoded-name>/
+  scene.settings
+  objects/<encoded-name>.settings
+  functions/<lifecycle>.settings
+  functions/<lifecycle>.events
+  external-events/<encoded-name>/
+    external-events.settings
+    functions/<lifecycle>.settings
+    functions/<lifecycle>.events
+  external-layout/<encoded-name>.settings
 extensions/<encoded-name>/extension.settings
-extensions/<encoded-name>/functions/.../*.settings|*.events
-extensions/<encoded-name>/behaviors/.../*.settings|*.events
-extensions/<encoded-name>/prefabs/.../*.settings|*.layout|*.events
+extensions/<encoded-name>/functions/<encoded-name>.settings|.events
+extensions/<encoded-name>/behaviors/<encoded-name>/
+  behavior.settings
+  functions/<encoded-name>.settings|.events
+extensions/<encoded-name>/prefabs/<encoded-name>/
+  prefab.settings
+  objects/<encoded-name>.settings
+  functions/<encoded-name>.settings|.events
+  variants/<encoded-name>/
+    variant.settings
+    objects/<encoded-name>.settings
 ```
 
-- `*.settings` and `constants.toml` use TOML.
-- `*.layout` uses strict flat TOML in
-  `newIDE/app/src/ProjectsStorage/LayoutToml`.
+- `*.settings` and `constants.toml` use TOML. Layout-bearing owners embed the
+  strict layout schema below `[layout]`; there are no managed `.layout` files.
 - `*.events` uses the IfDo DSL in
   `newIDE/app/src/EventsSheet/IfDoEventsDsl`.
-- Canonical `game://` URIs connect owned documents.
+- Physical owner paths derive component association. Same-stem function event
+  bodies and embedded layouts do not use URI fields.
+- Every managed `.events` file is a function body and has a same-stem
+  `.settings` file in the same `functions/` directory.
 - Display names are encoded into portable, case-safe physical segments.
-- Logical folder-structure fields from the legacy JSON model are omitted;
-  physical ownership and paths are the source organization.
+- Objects remain first-class sources below a dedicated `objects/` directory in
+  every object-owning scope, including named prefab variants.
+- Logical function/object grouping is stored as a `folder` value inside each
+  first-class component, not as redundant nested function directories.
 
 The converter rejects unknown ownership, duplicate references, path escapes,
 non-canonical URIs, malformed namespaces, unsupported versions, and values that
@@ -767,16 +781,18 @@ Failures restore backups; opening a project recovers any interrupted staged or
 committed transaction. Obsolete managed files and now-empty owned directories
 are removed without deleting user-owned files.
 
-Reader safety limits bound per-file size, total composed size, and managed file
-count. URI resolution checks lexical containment and existing real paths so
-symlinks cannot escape the project root.
+Reader safety limits bound ordinary sources to 16 MiB, layout-bearing composite
+owner settings to 32 MiB, total composed size, and managed file count. URI
+resolution checks lexical containment and existing real paths so symlinks
+cannot escape the project root.
 
 ### Generated `.gdevelop` artifacts
 
 A multi-file save also regenerates editor/tooling projections:
 
 - `.gdevelop/instructions-catalog.json` and the deprecated instruction catalog;
-- `.gdevelop/settings-catalog.json` and `layout-catalog.json`;
+- `.gdevelop/settings-catalog.json`, including settings and embedded-layout
+  authoring schemas and owner contexts;
 - `.gdevelop/runtime-api.d.ts` and `project-api.d.ts`;
 - `.gdevelop/game.json`, a legacy-shaped compatibility projection without
   Constants;
@@ -847,7 +863,7 @@ Major domain areas include:
 | Objects and behaviors           | `ObjectEditor`, `BehaviorsEditor`, `CompactPropertiesEditor`                              |
 | Events-based extensions/prefabs | `EventsFunctionsExtensionEditor`, `PrefabDetailEditor`, `EventsFunctionsExtensionsLoader` |
 | Resources and project files     | `ResourcesEditor`, `ResourcesList`, `ProjectsStorage`                                     |
-| Constants                     | `Constants`, `ConstantsEditorContainer`                                                 |
+| Constants                       | `Constants`, `ConstantsEditorContainer`                                                   |
 | Preview/debug/in-game editing   | `ExportAndShare`, `EmbeddedGame`, `Debugger`, `HotReload`                                 |
 
 ### The editor works on C++ objects through wrappers
@@ -1025,6 +1041,22 @@ metadata-driven authoring tree into stripped data plus specialized imperative
 JavaScript loops. The exported game contains the result of authoring—not the
 authoring system itself.
 
+### Scene lifecycle event functions
+
+Each `gd::Layout` and `gd::ExternalEvents` owns four fixed, real
+`gd::EventsFunction` bodies: `sceneLoad`, `sceneSignal`, `sceneUpdate`, and
+`sceneUnload`. `Layout::GetEvents()` and `ExternalEvents::GetEvents()` remain
+compatibility aliases for `sceneUpdate`. Project walkers, refactorers, search,
+validation, code generation, and source tooling traverse all four functions
+with `(owner, lifecycle role)` identity.
+
+At runtime, load executes once before the first logical update; queued scene
+signals invoke signal once per delivered broadcast before update; update runs
+once per logical frame; unload runs once, synchronously, before scene-owned
+state is destroyed. Links preserve the caller lifecycle role when resolving a
+scene or External Events target. The normative design and migration contract is
+in `docs/scene-event-phases-spec.md`.
+
 ---
 
 ## Source map
@@ -1044,6 +1076,6 @@ authoring system itself.
 | Logical serialization           | `Core/GDCore/Serialization`, model `SerializeTo`/`UnserializeFrom` methods                                                                                                                                                                                                |
 | Multi-file source format        | `newIDE/app/src/ProjectsStorage/MultiFileProjectFormat`, `newIDE/app/src/ProjectsStorage/LayoutToml`, `newIDE/app/src/ProjectsStorage/LocalFileStorageProvider/LocalMultiFileProject.js`, `newIDE/app/src/ProjectsStorage/LocalFileStorageProvider/LocalProjectWriter.js` |
 | Source catalogs/APIs            | `newIDE/app/src/ProjectsStorage/ProjectSourceCatalog.js`, `newIDE/app/src/ProjectsStorage/JavaScriptAuthoringApi.js`, `newIDE/app/src/EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog.js`                                                                             |
-| Constants                     | `Core/GDCore/Project/Project.*`, `newIDE/app/src/Constants`, `docs/Constants.md`                                                                                                                                                                                        |
+| Constants                       | `Core/GDCore/Project/Project.*`, `newIDE/app/src/Constants`, `docs/Constants.md`                                                                                                                                                                                          |
 | Preview and export              | `GDJS/GDJS/IDE/Exporter*`, `newIDE/app/src/ExportAndShare`, `newIDE/app/src/HotReload`, `newIDE/app/src/EmbeddedGame`                                                                                                                                                     |
 | Editor shell                    | `newIDE/app/src/index.js`, `newIDE/app/src/LocalApp.js`, `newIDE/app/src/BrowserApp.js`, `newIDE/app/src/MainFrame`, domain editor directories                                                                                                                            |

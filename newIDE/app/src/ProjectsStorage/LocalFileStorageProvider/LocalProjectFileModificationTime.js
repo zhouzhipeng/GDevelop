@@ -2,17 +2,14 @@
 import optionalRequire from '../../Utils/OptionalRequire';
 import { PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH } from '../../EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog';
 import { MULTI_FILE_ENTRY_NAME } from '../MultiFileProjectFormat';
-import {
-  PROJECT_LAYOUT_CATALOG_RELATIVE_PATH,
-  PROJECT_SETTINGS_CATALOG_RELATIVE_PATH,
-} from '../ProjectSourceCatalog';
+import { PROJECT_SETTINGS_CATALOG_RELATIVE_PATH } from '../ProjectSourceCatalog';
 
 const fs = optionalRequire('fs-extra');
 const path = optionalRequire('path');
 
 const multiFileProjectDirectories = ['scenes', 'externals', 'extensions'];
 const multiFileProjectRootFiles = [MULTI_FILE_ENTRY_NAME, 'resources.settings'];
-const multiFileProjectExtensions = new Set(['.settings', '.layout', '.events']);
+const multiFileProjectExtensions = new Set(['.settings', '.events']);
 
 const getFileModificationTime = async (filePath: string): Promise<?number> => {
   try {
@@ -137,7 +134,6 @@ const getMultiFileProjectPathsToInspect = (projectRoot: string) => [
     ...PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH.split('/')
   ),
   path.join(projectRoot, ...PROJECT_SETTINGS_CATALOG_RELATIVE_PATH.split('/')),
-  path.join(projectRoot, ...PROJECT_LAYOUT_CATALOG_RELATIVE_PATH.split('/')),
 ];
 
 const getLatestModificationTime = (

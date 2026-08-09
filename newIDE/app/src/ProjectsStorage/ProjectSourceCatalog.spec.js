@@ -3,11 +3,8 @@
 import {
   ProjectSourceCatalogError,
   buildBehaviorPropertySchemasByType,
-  buildProjectLayoutCatalog,
   buildProjectSettingsCatalog,
-  serializeProjectLayoutCatalog,
   serializeProjectSettingsCatalog,
-  validateProjectLayoutCatalog,
   validateProjectSettingsCatalog,
 } from './ProjectSourceCatalog';
 import { insertNewEventsBasedBehavior } from '../EventsFunctionsList/CreateEventsBasedBehavior';
@@ -17,18 +14,26 @@ import { serializeToJSObject } from '../Utils/Serializer';
 
 const gd: libGDevelop = global.gd;
 
-const base = format => ({
-  format,
-  formatVersion: 1,
+const baseSettingsCatalog = () => ({
+  format: 'gdevelop-settings-catalog',
+  formatVersion: 2,
   project: { name: 'Test', uuid: 'test' },
   authoring: { rules: [] },
+  layoutAuthoring: {
+    sourceExtension: '.settings',
+    storage: 'embedded-settings',
+    rootTable: 'layout',
+  },
+  layoutTables: [],
+  layoutContexts: [],
+  behaviorOverrideSchemas: [],
   counts: {},
 });
 
 describe('project source catalogs', () => {
   test('validates and compactly serializes a settings catalog', () => {
     const catalog = {
-      ...base('gdevelop-settings-catalog'),
+      ...baseSettingsCatalog(),
       fileKinds: [
         {
           kind: 'project',
@@ -52,18 +57,7 @@ describe('project source catalogs', () => {
         },
       ],
       effectTypes: [{ type: 'Effects::Outline' }],
-    };
-
-    const source = serializeProjectSettingsCatalog(catalog);
-    expect(JSON.parse(source)).toEqual(catalog);
-    expect(source).toContain('\n{"type":"Sprite"}\n');
-    expect(validateProjectSettingsCatalog(JSON.parse(source))).toEqual(catalog);
-  });
-
-  test('validates and compactly serializes a layout catalog', () => {
-    const catalog = {
-      ...base('gdevelop-layout-catalog'),
-      tables: [
+      layoutTables: [
         { table: 'layout', header: '[layout]' },
         {
           table: 'layers',
@@ -71,7 +65,7 @@ describe('project source catalogs', () => {
           variant: 'external reference',
         },
       ],
-      contexts: [
+      layoutContexts: [
         {
           kind: 'scene',
           owner: { scene: 'Main' },
@@ -79,20 +73,20 @@ describe('project source catalogs', () => {
           objects: [],
         },
       ],
-      effectTypes: [],
       behaviorOverrideSchemas: [],
     };
 
-    const source = serializeProjectLayoutCatalog(catalog);
+    const source = serializeProjectSettingsCatalog(catalog);
     expect(JSON.parse(source)).toEqual(catalog);
+    expect(source).toContain('\n{"type":"Sprite"}\n');
     expect(source).toContain('\n{"kind":"scene"');
-    expect(validateProjectLayoutCatalog(JSON.parse(source))).toEqual(catalog);
+    expect(validateProjectSettingsCatalog(JSON.parse(source))).toEqual(catalog);
   });
 
   test('rejects duplicate type and malformed context entries', () => {
     expect(() =>
       validateProjectSettingsCatalog({
-        ...base('gdevelop-settings-catalog'),
+        ...baseSettingsCatalog(),
         fileKinds: [
           {
             kind: 'project',
@@ -107,7 +101,7 @@ describe('project source catalogs', () => {
     ).toThrow(ProjectSourceCatalogError);
     expect(() =>
       validateProjectSettingsCatalog({
-        ...base('gdevelop-settings-catalog'),
+        ...baseSettingsCatalog(),
         fileKinds: [{ kind: 'project' }],
         settingsOwners: [],
         objectTypes: [],
@@ -116,11 +110,15 @@ describe('project source catalogs', () => {
       })
     ).toThrow('File kind project must declare a schema');
     expect(() =>
-      validateProjectLayoutCatalog({
-        ...base('gdevelop-layout-catalog'),
-        tables: [{ table: 'layout', header: '[layout]' }],
-        contexts: [{ kind: 'scene' }],
+      validateProjectSettingsCatalog({
+        ...baseSettingsCatalog(),
+        fileKinds: [],
+        settingsOwners: [],
+        objectTypes: [],
+        behaviorTypes: [],
         effectTypes: [],
+        layoutTables: [{ table: 'layout', header: '[layout]' }],
+        layoutContexts: [{ kind: 'scene' }],
         behaviorOverrideSchemas: [],
       })
     ).toThrow(ProjectSourceCatalogError);
@@ -128,7 +126,7 @@ describe('project source catalogs', () => {
 
   test('generates the flat layout TOML authoring schema', () => {
     const project = gd.ProjectHelper.createNewGDJSProject();
-    const catalog = buildProjectLayoutCatalog({
+    const catalog = buildProjectSettingsCatalog({
       project,
       serializedProject: {
         objects: [],
@@ -136,35 +134,39 @@ describe('project source catalogs', () => {
         externalLayouts: [],
         eventsFunctionsExtensions: [],
       },
-      effectTypes: [],
-      behaviorTypes: [],
     });
 
-    expect(catalog.authoring.syntax).toContain('Standard flat TOML');
-    expect(catalog.tables.map(table => table.header)).toEqual([
+    expect(catalog.layoutAuthoring).toMatchObject({
+      sourceExtension: '.settings',
+      storage: 'embedded-settings',
+      rootTable: 'layout',
+    });
+    expect(catalog.layoutTables.map(table => table.header)).toEqual([
       '[layout]',
-      '[editor]',
-      '[[layers]]',
-      '[[layers]]',
-      '[[effects]]',
-      '[[instances]]',
-      '[[variables]]',
-      '[[behaviors]]',
+      '[layout.editor]',
+      '[[layout.layers]]',
+      '[[layout.layers]]',
+      '[[layout.effects]]',
+      '[[layout.instances]]',
+      '[[layout.variables]]',
+      '[[layout.behaviors]]',
     ]);
     expect(
-      catalog.tables.find(table => table.table === 'editor').fields
+      catalog.layoutTables.find(table => table.table === 'editor').fields
     ).toContainEqual(
       expect.objectContaining({ name: 'selected_layer_unresolved' })
     );
     expect(
-      catalog.tables.find(table => table.table === 'instances').fields
+      catalog.layoutTables.find(table => table.table === 'instances').fields
     ).toContainEqual(expect.objectContaining({ name: 'properties' }));
     expect(
-      catalog.tables.find(table => table.table === 'instances').fields
+      catalog.layoutTables.find(table => table.table === 'instances').fields
     ).toContainEqual(
       expect.objectContaining({ name: 'hidden', default: false })
     );
-    const effectTable = catalog.tables.find(table => table.table === 'effects');
+    const effectTable = catalog.layoutTables.find(
+      table => table.table === 'effects'
+    );
     expect(effectTable.fields).not.toContainEqual(
       expect.objectContaining({ name: 'params' })
     );
@@ -173,10 +175,10 @@ describe('project source catalogs', () => {
       schema: 'effectTypes[type].parameters',
       scalarTypes: ['number', 'string', 'boolean'],
     });
-    expect(catalog.authoring.rules.join('\n')).toContain(
+    expect(catalog.layoutAuthoring.rules.join('\n')).toContain(
       'Effect parameters are direct fields on [[effects]]'
     );
-    expect(catalog.counts.tables).toBe(catalog.tables.length);
+    expect(catalog.counts.layoutTables).toBe(catalog.layoutTables.length);
     expect(catalog).not.toHaveProperty('elements');
     project.delete();
   });
@@ -469,50 +471,50 @@ describe('project source catalogs', () => {
     const sceneSchema = catalog.fileKinds.find(
       fileKind => fileKind.kind === 'scene'
     ).schema;
-    expect(sceneSchema.childTables).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          table: 'externalEventFiles',
-          header: '[[externalEventFiles]]',
-          fields: expect.arrayContaining([
-            expect.objectContaining({
-              name: 'order',
-              type: expect.stringContaining('project-wide'),
-              required: true,
-            }),
-            expect.objectContaining({
-              name: 'events',
-              type: expect.stringContaining('.events'),
-              required: true,
-            }),
-          ]),
-        }),
-        expect.objectContaining({
-          table: 'externalLayoutFiles',
-          header: '[[externalLayoutFiles]]',
-          fields: expect.arrayContaining([
-            expect.objectContaining({ name: 'order', required: true }),
-            expect.objectContaining({
-              name: 'layout',
-              type: expect.stringContaining('.layout'),
-              required: true,
-            }),
-          ]),
-        }),
-      ])
+    expect(sceneSchema.childTables.map(table => table.table)).not.toContain(
+      'externalLayoutFiles'
     );
-    sceneSchema.childTables
-      .filter(table =>
-        ['externalEventFiles', 'externalLayoutFiles'].includes(table.table)
+    expect(
+      catalog.fileKinds.find(fileKind => fileKind.kind === 'external-layout')
+    ).toEqual(
+      expect.objectContaining({
+        path: 'scenes/<Scene>/external-layout/<ExternalLayout>.settings',
+        embeddedLayout: { rootTable: 'layout', contextKind: 'external' },
+      })
+    );
+    expect(
+      catalog.fileKinds.find(
+        fileKind => fileKind.kind === 'scene-lifecycle-function'
       )
-      .forEach(table => {
-        expect(table.fields.map(field => field.name)).not.toContain(
-          'linkedScene'
-        );
-        expect(table.forbiddenFields).toEqual(
-          expect.arrayContaining(['linkedScene', 'unresolvedScene'])
-        );
-      });
+    ).toEqual(
+      expect.objectContaining({
+        path: 'scenes/<Scene>/functions/<Role>.settings',
+        requiredFields: expect.arrayContaining(['order', 'lifecycleRole']),
+      })
+    );
+    expect(
+      catalog.fileKinds.find(
+        fileKind => fileKind.kind === 'scene-lifecycle-function'
+      ).requiredFields
+    ).not.toContain('events');
+    expect(
+      catalog.fileKinds.find(fileKind => fileKind.kind === 'external-events')
+    ).toEqual(
+      expect.objectContaining({
+        path:
+          'scenes/<Scene>/external-events/<ExternalEvents>/external-events.settings',
+      })
+    );
+    expect(
+      catalog.fileKinds.find(
+        fileKind => fileKind.kind === 'external-lifecycle-function'
+      )
+    ).toEqual(
+      expect.objectContaining({
+        path:
+          'scenes/<Scene>/external-events/<ExternalEvents>/functions/<Role>.settings',
+      })
+    );
     expect(
       catalog.fileKinds
         .find(fileKind => fileKind.kind === 'function')
@@ -526,13 +528,12 @@ describe('project source catalogs', () => {
     );
     expect(
       catalog.fileKinds
-        .find(fileKind => fileKind.kind === 'prefab')
-        .schema.childTables.find(table => table.table === 'variants')
-        .childTables.map(table => table.header)
+        .find(fileKind => fileKind.kind === 'prefab-variant')
+        .schema.childTables.map(table => table.header)
     ).toEqual(
       expect.arrayContaining([
-        '[variants.objectGroups]',
-        '[variants.objectGroupRequiredBehaviors]',
+        '[objectGroups]',
+        '[objectGroupRequiredBehaviors]',
       ])
     );
     expect(catalog.authoring.rules.join('\n')).toContain(

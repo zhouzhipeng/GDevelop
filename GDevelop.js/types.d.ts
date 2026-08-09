@@ -67,6 +67,13 @@ export enum CustomObjectConfiguration_EdgeAnchor {
   Center = 4,
 }
 
+export enum SceneLifecycleEventsFunctions_Role {
+  SceneLoad = 0,
+  SceneSignal = 1,
+  SceneUpdate = 2,
+  SceneUnload = 3,
+}
+
 export enum ResourcesContainer_SourceType {
   Unknown = 0,
   Global = 1,
@@ -737,6 +744,9 @@ export class ProjectScopedContainers extends EmscriptenObject {
   getScopeFunctionName(): string;
   getScopeBehaviorName(): string;
   getScopeObjectName(): string;
+  getScopeSceneLifecycleFunctionName(): string;
+  setScopeExternalEventsName(externalEventsName: string): ProjectScopedContainers;
+  setScopeSceneLifecycleFunctionName(lifecycleFunctionName: string): ProjectScopedContainers;
 }
 
 export class ExtensionProperties extends EmscriptenObject {
@@ -884,6 +894,23 @@ export class CustomObjectConfiguration extends ObjectConfiguration {
   static getEdgeAnchorFromString(value: string): CustomObjectConfiguration_EdgeAnchor;
 }
 
+export class SceneLifecycleEventsFunctions extends EmscriptenObject {
+  get(role: SceneLifecycleEventsFunctions_Role): EventsFunction;
+  getByName(name: string): EventsFunction;
+  has(role: SceneLifecycleEventsFunctions_Role): boolean;
+  hasByName(name: string): boolean;
+  insert(role: SceneLifecycleEventsFunctions_Role): EventsFunction;
+  insertByName(name: string): EventsFunction;
+  remove(role: SceneLifecycleEventsFunctions_Role): boolean;
+  removeByName(name: string): boolean;
+  hasRoleName(name: string): boolean;
+  hasValidMetadata(): boolean;
+  getSceneLoadFunction(): EventsFunction;
+  getSceneSignalFunction(): EventsFunction;
+  getSceneUpdateFunction(): EventsFunction;
+  getSceneUnloadFunction(): EventsFunction;
+}
+
 export class Layout extends EmscriptenObject {
   constructor();
   setName(name: string): void;
@@ -898,6 +925,7 @@ export class Layout extends EmscriptenObject {
   getVariables(): VariablesContainer;
   getObjects(): ObjectsContainer;
   getEvents(): EventsList;
+  getLifecycleEventsFunctions(): SceneLifecycleEventsFunctions;
   getLayers(): LayersContainer;
   updateBehaviorsSharedData(project: Project): void;
   getAllBehaviorSharedDataNames(): VectorString;
@@ -930,6 +958,7 @@ export class ExternalEvents extends EmscriptenObject {
   getAssociatedLayout(): string;
   setAssociatedLayout(name: string): void;
   getEvents(): EventsList;
+  getLifecycleEventsFunctions(): SceneLifecycleEventsFunctions;
   serializeTo(element: SerializerElement): void;
   unserializeFrom(project: Project, element: SerializerElement): void;
 }
@@ -1530,6 +1559,9 @@ export class InstructionMetadata extends AbstractFunctionMetadata {
   isPrivate(): boolean;
   isAsync(): boolean;
   isOptionallyAsync(): boolean;
+  requiresSceneFutureFrame(): boolean;
+  emitsDeferredSceneSignal(): boolean;
+  mutatesSceneStack(): boolean;
   isRelevantForLayoutEvents(): boolean;
   isRelevantForFunctionEvents(): boolean;
   isRelevantForAsynchronousFunctionEvents(): boolean;
@@ -1542,6 +1574,9 @@ export class InstructionMetadata extends AbstractFunctionMetadata {
   setRelevantForFunctionEventsOnly(): InstructionMetadata;
   setRelevantForAsynchronousFunctionEventsOnly(): InstructionMetadata;
   setRelevantForCustomObjectEventsOnly(): InstructionMetadata;
+  setRequiresSceneFutureFrame(): InstructionMetadata;
+  setEmitsDeferredSceneSignal(): InstructionMetadata;
+  setMutatesSceneStack(): InstructionMetadata;
   addParameter(type: string, description: string, optionalObjectType?: string, parameterIsOptional?: boolean): InstructionMetadata;
   addCodeOnlyParameter(type: string, supplementaryInformation: string): InstructionMetadata;
   setDefaultValue(defaultValue: string): InstructionMetadata;
@@ -3023,6 +3058,8 @@ export class Model3DAnimation extends EmscriptenObject {
   getSourceModelResourceName(): string;
   setShouldLoop(shouldLoop: boolean): void;
   shouldLoop(): boolean;
+  setShouldUseRootMotion(shouldUseRootMotion: boolean): void;
+  shouldUseRootMotion(): boolean;
 }
 
 export class Model3DObjectConfiguration extends ObjectConfiguration {
@@ -3315,6 +3352,7 @@ export class PreviewExportOptions extends EmscriptenObject {
   setShouldReloadLibraries(enable: boolean): PreviewExportOptions;
   setShouldGenerateScenesEventsCode(enable: boolean): PreviewExportOptions;
   setNativeMobileApp(enable: boolean): PreviewExportOptions;
+  setDisplayCollisionShapes(enable: boolean): PreviewExportOptions;
   setDisplayCollisionMask(enable: boolean): PreviewExportOptions;
   setDisplaySignalAnimations(enable: boolean): PreviewExportOptions;
   setFullLoadingScreen(enable: boolean): PreviewExportOptions;

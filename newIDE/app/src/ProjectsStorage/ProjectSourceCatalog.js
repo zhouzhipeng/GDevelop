@@ -9,14 +9,21 @@ import {
   MULTI_FILE_ENTRY_NAME,
   MULTI_FILE_ENTRY_URI,
   MULTI_FILE_FORMAT_VERSION,
+  encodeManagedName,
 } from './MultiFileProjectFormat';
 
 const gd: libGDevelop = global.gd;
 
+const SCENE_LIFECYCLE_SOURCES = Object.freeze([
+  { name: 'sceneLoad', legacyField: 'sceneLoadEvents', order: 0 },
+  { name: 'sceneSignal', legacyField: 'sceneSignalEvents', order: 1 },
+  { name: 'sceneUpdate', legacyField: 'events', order: 2 },
+  { name: 'sceneUnload', legacyField: 'sceneUnloadEvents', order: 3 },
+]);
+
 export const PROJECT_SETTINGS_CATALOG_RELATIVE_PATH =
   '.gdevelop/settings-catalog.json';
-export const PROJECT_LAYOUT_CATALOG_RELATIVE_PATH =
-  '.gdevelop/layout-catalog.json';
+export const PROJECT_SETTINGS_CATALOG_FORMAT_VERSION = 2;
 
 export class ProjectSourceCatalogError extends Error {
   code: string;
@@ -1209,9 +1216,6 @@ const functionSchema = ({ folder, extensionRequired }: Object): Object => ({
           }),
         ]
       : []),
-    settingsField('events', 'canonical game:// URI ending in .events', {
-      required: true,
-    }),
     settingsField('functionType', 'enum', {
       required: true,
       values: [
@@ -1277,6 +1281,30 @@ const functionSchema = ({ folder, extensionRequired }: Object): Object => ({
   additionalFields:
     'preserve unknown current EventsFunction serializer metadata fields',
 });
+
+const lifecycleFunctionSchema = (() => {
+  const schema = functionSchema({ folder: true, extensionRequired: false });
+  return {
+    ...schema,
+    rootFields: [
+      ...schema.rootFields.map(field =>
+        field.name === 'order'
+          ? {
+              ...field,
+              type: 'fixed lifecycle integer',
+              values: [0, 1, 2, 3],
+            }
+          : field
+      ),
+      settingsField('lifecycleRole', 'fixed lifecycle role', {
+        required: true,
+        values: SCENE_LIFECYCLE_SOURCES.map(source => source.name),
+      }),
+    ],
+    additionalFields:
+      'Lifecycle metadata is fixed. Do not rename, reorder, delete, duplicate, make public/async, or change signatures.',
+  };
+})();
 
 const objectSettingsSchema = {
   rootFields: [
@@ -1561,12 +1589,6 @@ const SETTINGS_FILE_SCHEMAS = Object.freeze({
   scene: {
     rootFields: [
       ...formatFields({ kind: 'scene', ordered: true, name: true }),
-      settingsField('layout', 'canonical game:// URI ending in .layout', {
-        required: true,
-      }),
-      settingsField('events', 'canonical game:// URI ending in .events', {
-        required: true,
-      }),
       settingsField('mangledName', 'string'),
       settingsField('title', 'string'),
       settingsField('standardSortMethod', 'boolean'),
@@ -1604,58 +1626,28 @@ const SETTINGS_FILE_SCHEMAS = Object.freeze({
         additionalFields:
           'preserve unlisted existing shared-data serializer fields',
       },
-      {
-        table: 'externalEventFiles',
-        header: '[[externalEventFiles]]',
-        repeated: true,
-        emptyForm: 'externalEventFiles = [ ]',
-        fields: [
-          settingsField('name', 'globally unique external-event name', {
-            required: true,
-          }),
-          settingsField('order', 'project-wide contiguous zero-based integer', {
-            required: true,
-          }),
-          settingsField(
-            'events',
-            'canonical game://scenes/<owner>/externals URI ending in .events',
-            {
-              required: true,
-            }
-          ),
-        ],
-        forbiddenFields: ['associatedLayout', 'linkedScene', 'unresolvedScene'],
-        additionalFields:
-          'preserve unknown ExternalEvents serializer metadata fields; the owning scene supplies associatedLayout',
-      },
-      {
-        table: 'externalLayoutFiles',
-        header: '[[externalLayoutFiles]]',
-        repeated: true,
-        emptyForm: 'externalLayoutFiles = [ ]',
-        fields: [
-          settingsField('name', 'globally unique external-layout name', {
-            required: true,
-          }),
-          settingsField('order', 'project-wide contiguous zero-based integer', {
-            required: true,
-          }),
-          settingsField(
-            'layout',
-            'canonical game://scenes/<owner>/externals URI ending in .layout',
-            {
-              required: true,
-            }
-          ),
-        ],
-        forbiddenFields: ['associatedLayout', 'linkedScene', 'unresolvedScene'],
-        additionalFields:
-          'preserve unknown ExternalLayout serializer metadata fields; the owning scene supplies associatedLayout',
-      },
       rawJsonTable,
     ],
     additionalFields:
-      'preserve unknown current Layout serializer fields except layout/events/object ownership fields',
+      'preserve unknown current Layout serializer fields except layout/lifecycle-function/object ownership fields',
+  },
+  sceneLifecycleFunction: lifecycleFunctionSchema,
+  externalEvents: {
+    rootFields: [
+      ...formatFields({ kind: 'externalEvents', ordered: true, name: true }),
+    ],
+    childTables: [rawJsonTable],
+    additionalFields:
+      'preserve unknown current ExternalEvents serializer metadata fields except association and lifecycle bodies',
+  },
+  externalLifecycleFunction: lifecycleFunctionSchema,
+  externalLayout: {
+    rootFields: [
+      ...formatFields({ kind: 'externalLayout', ordered: true, name: true }),
+    ],
+    childTables: [rawJsonTable],
+    additionalFields:
+      'preserve unknown current ExternalLayout serializer metadata fields except association and embedded layout fields',
   },
   extension: {
     rootFields: [
@@ -1738,9 +1730,6 @@ const SETTINGS_FILE_SCHEMAS = Object.freeze({
   prefab: {
     rootFields: [
       ...formatFields({ kind: 'prefab', ordered: true, name: true }),
-      settingsField('layout', 'canonical game:// URI ending in .layout', {
-        required: true,
-      }),
       settingsField('defaultName', 'string'),
       settingsField('assetStoreTag', 'string'),
       settingsField('assetStoreAssetId', 'string'),
@@ -1765,30 +1754,24 @@ const SETTINGS_FILE_SCHEMAS = Object.freeze({
       propertyDescriptorTable('propertyDescriptors'),
       objectGroupsTable(),
       objectGroupRequiredBehaviorsTable(),
-      {
-        table: 'variants',
-        header: '[[variants]]',
-        repeated: true,
-        emptyForm: 'variants = [ ]',
-        fields: [
-          settingsField('name', 'unique variant name', { required: true }),
-          settingsField('layout', 'canonical game:// URI ending in .layout', {
-            required: true,
-          }),
-          settingsField('assetStoreAssetId', 'string'),
-          settingsField('assetStoreOriginalName', 'string'),
-        ],
-        childTables: [
-          objectGroupsTable('variants.'),
-          objectGroupRequiredBehaviorsTable('variants.'),
-        ],
-        additionalFields:
-          'preserve unknown current EventsBasedObjectVariant metadata fields except split layout/object fields',
-      },
       rawJsonTable,
     ],
     additionalFields:
       'preserve unknown current EventsBasedObject metadata fields except split functions/layout/objects',
+  },
+  prefabVariant: {
+    rootFields: [
+      ...formatFields({ kind: 'prefabVariant', ordered: true, name: true }),
+      settingsField('assetStoreAssetId', 'string'),
+      settingsField('assetStoreOriginalName', 'string'),
+    ],
+    childTables: [
+      objectGroupsTable(),
+      objectGroupRequiredBehaviorsTable(),
+      rawJsonTable,
+    ],
+    additionalFields:
+      'preserve unknown current EventsBasedObjectVariant metadata fields except split layout/object fields',
   },
   prefabFunction: functionSchema({
     folder: true,
@@ -1906,7 +1889,6 @@ const SETTINGS_FILE_KINDS = Object.freeze([
       'settingsFormatVersion',
       'order',
       'layout',
-      'events',
       'name',
     ],
     commonFields: [
@@ -1914,8 +1896,6 @@ const SETTINGS_FILE_KINDS = Object.freeze([
       'objectGroupRequiredBehaviors',
       'variables',
       'behaviorsSharedData',
-      'externalEventFiles',
-      'externalLayoutFiles',
       'runtime/loading/input/sound/sort settings',
     ],
     forbiddenFields: [
@@ -1927,7 +1907,97 @@ const SETTINGS_FILE_KINDS = Object.freeze([
       'v',
       'b',
     ],
+    embeddedLayout: { rootTable: 'layout', contextKind: 'scene' },
     schema: SETTINGS_FILE_SCHEMAS.scene,
+  },
+  {
+    kind: 'scene-lifecycle-function',
+    requiredMarker: { field: 'kind', value: 'function' },
+    path: 'scenes/<Scene>/functions/<Role>.settings',
+    mountedNamespace: 'scenes."<Scene>".functions."<Role>"',
+    tomlRoot: true,
+    requiredFields: [
+      'kind',
+      'settingsFormatVersion',
+      'order',
+      'folder',
+      'name',
+      'functionType',
+      'lifecycleRole',
+    ],
+    commonFields: ['fixed signature', 'parameters', 'objectGroups'],
+    forbiddenFields: ['mutable function identity', 'event body'],
+    note:
+      'Only sceneLoad, sceneSignal, sceneUpdate, and sceneUnload are valid. sceneUpdate is required; empty optional same-stem pairs are forbidden.',
+    schema: SETTINGS_FILE_SCHEMAS.sceneLifecycleFunction,
+  },
+  {
+    kind: 'external-events',
+    requiredMarker: { field: 'kind', value: 'externalEvents' },
+    path:
+      'scenes/<Scene>/external-events/<ExternalEvents>/external-events.settings',
+    mountedNamespace: 'scenes."<Scene>".externalEvents."<ExternalEvents>"',
+    tomlRoot: true,
+    requiredFields: ['kind', 'settingsFormatVersion', 'order', 'name'],
+    commonFields: ['External Events serializer metadata'],
+    forbiddenFields: [
+      'associatedLayout',
+      'linkedScene',
+      'unresolvedScene',
+      'events',
+      'functionFiles',
+    ],
+    note:
+      'The associated scene and function ownership are derived from the physical directory.',
+    schema: SETTINGS_FILE_SCHEMAS.externalEvents,
+  },
+  {
+    kind: 'external-layout',
+    requiredMarker: { field: 'kind', value: 'externalLayout' },
+    path: 'scenes/<Scene>/external-layout/<ExternalLayout>.settings',
+    mountedNamespace: 'scenes."<Scene>".externalLayouts."<ExternalLayout>"',
+    tomlRoot: true,
+    requiredFields: [
+      'kind',
+      'settingsFormatVersion',
+      'order',
+      'name',
+      'layout',
+    ],
+    commonFields: ['ExternalLayout serializer metadata'],
+    forbiddenFields: [
+      'associatedLayout',
+      'linkedScene',
+      'unresolvedScene',
+      'layout URI',
+    ],
+    embeddedLayout: { rootTable: 'layout', contextKind: 'external' },
+    note:
+      'The associated scene is derived from the physical directory; layout is an embedded TOML subtree.',
+    schema: SETTINGS_FILE_SCHEMAS.externalLayout,
+  },
+  {
+    kind: 'external-lifecycle-function',
+    requiredMarker: { field: 'kind', value: 'function' },
+    path:
+      'scenes/<Scene>/external-events/<ExternalEvents>/functions/<Role>.settings',
+    mountedNamespace:
+      'scenes."<Scene>".externalEvents."<ExternalEvents>".functions."<Role>"',
+    tomlRoot: true,
+    requiredFields: [
+      'kind',
+      'settingsFormatVersion',
+      'order',
+      'folder',
+      'name',
+      'functionType',
+      'lifecycleRole',
+    ],
+    commonFields: ['fixed signature', 'parameters', 'objectGroups'],
+    forbiddenFields: ['mutable function identity', 'event body'],
+    note:
+      'Only sceneLoad, sceneSignal, sceneUpdate, and sceneUnload are valid. sceneUpdate is required; empty optional same-stem pairs are forbidden.',
+    schema: SETTINGS_FILE_SCHEMAS.externalLifecycleFunction,
   },
   {
     kind: 'scene-object',
@@ -1970,7 +2040,7 @@ const SETTINGS_FILE_KINDS = Object.freeze([
   {
     kind: 'function',
     requiredMarker: { field: 'kind', value: 'function' },
-    path: 'extensions/<Extension>/functions/<Function>/function.settings',
+    path: 'extensions/<Extension>/functions/<Function>.settings',
     mountedNamespace: 'extensions."<Extension>".functions."<Function>"',
     tomlRoot: true,
     requiredFields: [
@@ -1979,7 +2049,6 @@ const SETTINGS_FILE_KINDS = Object.freeze([
       'order',
       'extension',
       'name',
-      'events',
       'functionType',
     ],
     commonFields: [
@@ -2010,7 +2079,6 @@ const SETTINGS_FILE_KINDS = Object.freeze([
       'objectGroupRequiredBehaviors',
       'variables',
       'propertyDescriptors',
-      'variants',
     ],
     forbiddenFields: [
       'instances',
@@ -2022,7 +2090,32 @@ const SETTINGS_FILE_KINDS = Object.freeze([
     ],
     note:
       'propertyDescriptors is one flat ordered array; property folders do not exist.',
+    embeddedLayout: { rootTable: 'layout', contextKind: 'prefab' },
     schema: SETTINGS_FILE_SCHEMAS.prefab,
+  },
+  {
+    kind: 'prefab-variant',
+    requiredMarker: { field: 'kind', value: 'prefabVariant' },
+    path:
+      'extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.settings',
+    mountedNamespace:
+      'extensions."<Extension>".prefabs."<Prefab>".variants."<Variant>"',
+    tomlRoot: true,
+    requiredFields: [
+      'kind',
+      'settingsFormatVersion',
+      'order',
+      'name',
+      'layout',
+    ],
+    commonFields: [
+      'objectGroups',
+      'objectGroupRequiredBehaviors',
+      'variant metadata',
+    ],
+    forbiddenFields: ['objects', 'layout URI'],
+    embeddedLayout: { rootTable: 'layout', contextKind: 'prefab-variant' },
+    schema: SETTINGS_FILE_SCHEMAS.prefabVariant,
   },
   {
     kind: 'prefab-object',
@@ -2030,7 +2123,7 @@ const SETTINGS_FILE_KINDS = Object.freeze([
     path:
       'extensions/<Extension>/prefabs/<Prefab>/{objects|variants/<Variant>/objects}/<Object>.settings',
     mountedNamespace:
-      'extensions."<Extension>".prefabs."<Prefab>".{objects|variantObjects."<Variant>"}."<Object>"',
+      'extensions."<Extension>".prefabs."<Prefab>".{objects|variants."<Variant>".objects}."<Object>"',
     tomlRoot: true,
     requiredFields: [
       'kind',
@@ -2053,7 +2146,7 @@ const SETTINGS_FILE_KINDS = Object.freeze([
     kind: 'prefab-function',
     requiredMarker: { field: 'kind', value: 'function' },
     path:
-      'extensions/<Extension>/prefabs/<Prefab>/functions/<Function>/function.settings',
+      'extensions/<Extension>/prefabs/<Prefab>/functions/<Function>.settings',
     mountedNamespace:
       'extensions."<Extension>".prefabs."<Prefab>".functions."<Function>"',
     tomlRoot: true,
@@ -2063,7 +2156,6 @@ const SETTINGS_FILE_KINDS = Object.freeze([
       'order',
       'folder',
       'name',
-      'events',
       'functionType',
     ],
     commonFields: [
@@ -2099,7 +2191,7 @@ const SETTINGS_FILE_KINDS = Object.freeze([
     kind: 'behavior-function',
     requiredMarker: { field: 'kind', value: 'function' },
     path:
-      'extensions/<Extension>/behaviors/<Behavior>/functions/<Function>/function.settings',
+      'extensions/<Extension>/behaviors/<Behavior>/functions/<Function>.settings',
     mountedNamespace:
       'extensions."<Extension>".behaviors."<Behavior>".functions."<Function>"',
     tomlRoot: true,
@@ -2109,7 +2201,6 @@ const SETTINGS_FILE_KINDS = Object.freeze([
       'order',
       'folder',
       'name',
-      'events',
       'functionType',
     ],
     commonFields: [
@@ -2147,10 +2238,61 @@ const buildSettingsOwners = (serializedProject: Object): Array<Object> => {
     },
   ];
   (serializedProject.layouts || []).forEach(scene => {
+    const sceneName = String(scene.name || '');
+    const sceneFolder = encodeManagedName(sceneName);
     owners.push({
       kind: 'scene',
-      name: String(scene.name || ''),
+      name: sceneName,
       objects: (scene.objects || []).map(summarizeObjectDefinition),
+      lifecycleFunctions: SCENE_LIFECYCLE_SOURCES.map(source => ({
+        name: source.name,
+        lifecycleRole: source.name,
+        order: source.order,
+        materialized:
+          source.name === 'sceneUpdate' ||
+          !!(scene[source.legacyField] || []).length,
+        settingsUri: `game://scenes/${sceneFolder}/functions/${
+          source.name
+        }.settings`,
+        eventsUri: `game://scenes/${sceneFolder}/functions/${
+          source.name
+        }.events`,
+      })),
+    });
+  });
+  (serializedProject.externalEvents || []).forEach(externalEvents => {
+    const sceneName = String(externalEvents.associatedLayout || '');
+    const name = String(externalEvents.name || '');
+    const ownerBaseUri = `game://scenes/${encodeManagedName(
+      sceneName
+    )}/external-events/${encodeManagedName(name)}`;
+    owners.push({
+      kind: 'external-events',
+      scene: sceneName,
+      name,
+      settingsUri: `${ownerBaseUri}/external-events.settings`,
+      lifecycleFunctions: SCENE_LIFECYCLE_SOURCES.map(source => ({
+        name: source.name,
+        lifecycleRole: source.name,
+        order: source.order,
+        materialized:
+          source.name === 'sceneUpdate' ||
+          !!(externalEvents[source.legacyField] || []).length,
+        settingsUri: `${ownerBaseUri}/functions/${source.name}.settings`,
+        eventsUri: `${ownerBaseUri}/functions/${source.name}.events`,
+      })),
+    });
+  });
+  (serializedProject.externalLayouts || []).forEach(externalLayout => {
+    const sceneName = String(externalLayout.associatedLayout || '');
+    const name = String(externalLayout.name || '');
+    owners.push({
+      kind: 'external-layout',
+      scene: sceneName,
+      name,
+      settingsUri: `game://scenes/${encodeManagedName(
+        sceneName
+      )}/external-layout/${encodeManagedName(name)}.settings`,
     });
   });
   (serializedProject.eventsFunctionsExtensions || []).forEach(extension => {
@@ -2178,6 +2320,21 @@ const buildSettingsOwners = (serializedProject: Object): Array<Object> => {
           String(item.name || '')
         ),
         variants: (prefab.variants || []).map(item => String(item.name || '')),
+      });
+      (prefab.variants || []).forEach(variant => {
+        const variantName = String(variant.name || '');
+        owners.push({
+          kind: 'prefab-variant',
+          extension: extensionName,
+          prefab: String(prefab.name || ''),
+          name: variantName,
+          settingsUri: `game://extensions/${encodeManagedName(
+            extensionName
+          )}/prefabs/${encodeManagedName(
+            String(prefab.name || '')
+          )}/variants/${encodeManagedName(variantName)}/variant.settings`,
+          objects: (variant.objects || []).map(summarizeObjectDefinition),
+        });
       });
     });
     (extension.eventsBasedBehaviors || []).forEach(behavior => {
@@ -2214,9 +2371,13 @@ export const buildProjectSettingsCatalog = ({
     additionalExtensions
   );
   const settingsOwners = buildSettingsOwners(serializedProject);
+  const embeddedLayoutCatalog = buildEmbeddedLayoutCatalog({
+    serializedProject,
+    behaviorTypes: registeredTypes.behaviorTypes,
+  });
   return validateProjectSettingsCatalog({
     format: 'gdevelop-settings-catalog',
-    formatVersion: 1,
+    formatVersion: PROJECT_SETTINGS_CATALOG_FORMAT_VERSION,
     project: projectIdentity(project),
     authoring: {
       sourceExtension: '.settings',
@@ -2227,15 +2388,16 @@ export const buildProjectSettingsCatalog = ({
         'Use the matching fileKinds[].schema as the complete structural contract: rootFields lists root scalars and childTables recursively lists every canonical TOML table header, record field, dynamic-key rule, empty form, and type-specific schema reference. commonFields is only a search summary and is not a schema.',
         'Write component fields at the TOML root. Never repeat project, scene, extension, prefab, behavior, function, or object names in TOML table headers; the canonical physical path supplies that namespace.',
         'At load time the editor parses each local .settings document, mounts it at fileKinds.mountedNamespace, and strictly merges all mounted settings documents. constants.toml is loaded separately as editor-only Constants. Duplicate ownership is an error.',
-        'Use canonical game:// URIs for .layout and .events references.',
-        `Use kind, settingsFormatVersion=${MULTI_FILE_FORMAT_VERSION}, and contiguous zero-based order fields exactly where the file-kind entry requires them. External event/layout order is global across all scene.settings documents.`,
-        'Store external event and layout manifests as [[externalEventFiles]] and [[externalLayoutFiles]] records in their owning scene.settings. Store their sources below that scene folder in externals/. The scene owner supplies associatedLayout; do not write associatedLayout, linkedScene, or unresolvedScene in source manifests.',
+        'Layout data is embedded below the reserved [layout] subtree of its owning settings file. Functions derive their same-stem .events sibling from the physical settings path; do not write layout or events URI fields.',
+        `Use kind and settingsFormatVersion=${MULTI_FILE_FORMAT_VERSION} exactly where the file-kind entry requires them. Ordinary owner order is contiguous and zero based. Lifecycle order is the fixed sparse semantic value sceneLoad=0, sceneSignal=1, sceneUpdate=2, sceneUnload=3. External Events and external-layout order are independently global.`,
+        'Scene and External Events bodies live in fixed functions/<Role>.settings plus same-stem <Role>.events sources. sceneUpdate is always materialized. Omit both files for empty sceneLoad, sceneSignal, and sceneUnload roles. Never rename, add, delete, reorder, duplicate, make async/public, or change the signature of a lifecycle function.',
+        'Store every External Events owner at scenes/<Scene>/external-events/<ExternalEvents>/external-events.settings and every external layout at scenes/<Scene>/external-layout/<ExternalLayout>.settings. Derive associatedLayout from that path; do not write associatedLayout, linkedScene, unresolvedScene, events, functionFiles, externalLayoutFiles, or layout URI fields.',
         'Write every non-empty variable container as repeated [[variables]], [[globalVariables]], or [[sceneVariables]] records. Each record contains an explicit non-empty name and the complete descriptor fields, for example name = "Controllers", type = "array", and children = [...]. Write variables = [ ], globalVariables = [ ], or sceneVariables = [ ] only for an empty container. Keyed [variables] tables, whole-container inline tables, and non-empty inline descriptor arrays are forbidden.',
         'Write object groups only as an [objectGroups] TOML table whose keys are group names and whose values are arrays of object names, for example Buttons = ["PauseButton", "Retry"]. Preserve per-group requiredBehaviors in the optional [objectGroupRequiredBehaviors] companion table using the same group key and an array of behavior-type strings. Write objectGroups = { } when there are no groups. The retired objectsGroups field and array/table-descriptor forms are forbidden.',
         'Write Sprite originPoint and centerPoint as inline TOML tables. Write named points and customCollisionMask polygons as inline arrays of point tables. Never expand point data into dotted TOML headers.',
         'Never write a legacy *FolderStructure field or optional grouping directories. For an object or owner function, write its editor grouping as folder = ["Parent", "Child"] in that component settings file. Use folder = [] for the root.',
-        'Each global, scene, default-prefab, or variant-prefab object definition and its attached behaviors belong in its flat objects/<Object>.settings source location; instances and per-instance behavior overrides belong in .layout.',
-        'Each prefab or behavior function owns the flat functions/<Function>/function.settings location and a sibling <Function>.events body. Owner settings never embed function metadata.',
+        'Each global, scene, default-prefab, or variant-prefab object definition and its attached behaviors belong in its dedicated objects/<Object>.settings source location; instances and per-instance behavior overrides belong in the owner settings [layout] subtree.',
+        'Each scene, External Events, extension, prefab, or behavior function owns its functions/<Function>.settings location and same-stem <Function>.events body. Function settings never store an events URI, and owner settings never embed function metadata.',
         'For an object, use objectTypes[type].properties for public generic-editor properties and objectTypes[type].schema for the complete known serialized TOML structure, including nested type-specific tables and repeated records. Preserve unlisted legacy or private serializer fields already present in an object definition.',
         'For an attached behavior, use behaviorTypes[].properties for author-writable fields. Editor-hidden and deprecated descriptors are intentionally absent from this catalog, but existing serialized fields not listed there are preserved verbatim because they may be configured by a specialized editor and required at runtime.',
         'Preserve unknown serializer fields. Never invent an object, behavior, or effect type absent from this catalog.',
@@ -2253,12 +2415,20 @@ export const buildProjectSettingsCatalog = ({
     objectTypes: registeredTypes.objectTypes,
     behaviorTypes: registeredTypes.behaviorTypes,
     effectTypes: registeredTypes.effectTypes,
+    layoutAuthoring: embeddedLayoutCatalog.authoring,
+    layoutTables: embeddedLayoutCatalog.tables,
+    layoutContexts: embeddedLayoutCatalog.contexts,
+    behaviorOverrideSchemas: embeddedLayoutCatalog.behaviorOverrideSchemas,
     counts: {
       fileKinds: SETTINGS_FILE_KINDS.length,
       settingsOwners: settingsOwners.length,
       objectTypes: registeredTypes.objectTypes.length,
       behaviorTypes: registeredTypes.behaviorTypes.length,
       effectTypes: registeredTypes.effectTypes.length,
+      layoutTables: embeddedLayoutCatalog.tables.length,
+      layoutContexts: embeddedLayoutCatalog.contexts.length,
+      behaviorOverrideSchemas:
+        embeddedLayoutCatalog.behaviorOverrideSchemas.length,
     },
   });
 };
@@ -2286,7 +2456,7 @@ const LAYOUT_TABLES = Object.freeze([
   },
   {
     table: 'editor',
-    header: '[editor]',
+    header: '[layout.editor]',
     contexts: ['scene', 'prefab', 'prefab-variant', 'external'],
     optional: true,
     fields: [
@@ -2318,7 +2488,7 @@ const LAYOUT_TABLES = Object.freeze([
   },
   {
     table: 'layers',
-    header: '[[layers]]',
+    header: '[[layout.layers]]',
     contexts: ['scene', 'prefab', 'prefab-variant'],
     repeated: true,
     fields: [
@@ -2375,7 +2545,7 @@ const LAYOUT_TABLES = Object.freeze([
   },
   {
     table: 'layers',
-    header: '[[layers]]',
+    header: '[[layout.layers]]',
     variant: 'external reference',
     contexts: ['external'],
     repeated: true,
@@ -2390,7 +2560,7 @@ const LAYOUT_TABLES = Object.freeze([
   },
   {
     table: 'effects',
-    header: '[[effects]]',
+    header: '[[layout.effects]]',
     contexts: ['scene', 'prefab', 'prefab-variant'],
     repeated: true,
     fields: [
@@ -2408,7 +2578,7 @@ const LAYOUT_TABLES = Object.freeze([
   },
   {
     table: 'instances',
-    header: '[[instances]]',
+    header: '[[layout.instances]]',
     contexts: ['scene', 'prefab', 'prefab-variant', 'external'],
     repeated: true,
     fields: [
@@ -2436,7 +2606,7 @@ const LAYOUT_TABLES = Object.freeze([
   },
   {
     table: 'variables',
-    header: '[[variables]]',
+    header: '[[layout.variables]]',
     contexts: ['scene', 'prefab', 'prefab-variant', 'external'],
     repeated: true,
     fields: [
@@ -2468,7 +2638,7 @@ const LAYOUT_TABLES = Object.freeze([
   },
   {
     table: 'behaviors',
-    header: '[[behaviors]]',
+    header: '[[layout.behaviors]]',
     contexts: ['scene', 'prefab', 'prefab-variant', 'external'],
     repeated: true,
     fields: [
@@ -2566,7 +2736,12 @@ const buildLayoutContexts = (serializedProject: Object): Array<Object> => {
     contexts.push(
       layoutContext({
         kind: 'scene',
-        owner: { scene: String(scene.name || '') },
+        owner: {
+          scene: String(scene.name || ''),
+          settingsUri: `game://scenes/${encodeManagedName(
+            String(scene.name || '')
+          )}/scene.settings`,
+        },
         objects: mergeObjects(scene.objects || [], globalObjects),
         instances: scene.instances || [],
         layerNames: (scene.layers || []).map(layer => String(layer.name || '')),
@@ -2580,7 +2755,13 @@ const buildLayoutContexts = (serializedProject: Object): Array<Object> => {
       contexts.push(
         layoutContext({
           kind: 'prefab',
-          owner: { extension: extensionName, prefab: prefabName },
+          owner: {
+            extension: extensionName,
+            prefab: prefabName,
+            settingsUri: `game://extensions/${encodeManagedName(
+              extensionName
+            )}/prefabs/${encodeManagedName(prefabName)}/prefab.settings`,
+          },
           objects: prefab.objects || [],
           instances: prefab.instances || [],
           layerNames: (prefab.layers || []).map(layer =>
@@ -2600,6 +2781,13 @@ const buildLayoutContexts = (serializedProject: Object): Array<Object> => {
               extension: extensionName,
               prefab: prefabName,
               variant: String(variant.name || ''),
+              settingsUri: `game://extensions/${encodeManagedName(
+                extensionName
+              )}/prefabs/${encodeManagedName(
+                prefabName
+              )}/variants/${encodeManagedName(
+                String(variant.name || '')
+              )}/variant.settings`,
             },
             objects: variantObjects,
             instances: variant.instances || [],
@@ -2622,6 +2810,11 @@ const buildLayoutContexts = (serializedProject: Object): Array<Object> => {
         owner: {
           external: String(external.name || ''),
           linkedScene: linkedSceneName,
+          settingsUri: `game://scenes/${encodeManagedName(
+            linkedSceneName
+          )}/external-layout/${encodeManagedName(
+            String(external.name || '')
+          )}.settings`,
         },
         objects: linkedScene
           ? mergeObjects(linkedScene.objects || [], globalObjects)
@@ -2636,26 +2829,14 @@ const buildLayoutContexts = (serializedProject: Object): Array<Object> => {
   return contexts;
 };
 
-export const buildProjectLayoutCatalog = ({
-  project,
+const buildEmbeddedLayoutCatalog = ({
   serializedProject,
-  effectTypes,
   behaviorTypes,
 }: {|
-  project: gdProject,
   serializedProject: Object,
-  effectTypes?: Array<Object>,
-  behaviorTypes?: Array<Object>,
+  behaviorTypes: Array<Object>,
 |}): Object => {
-  const registeredTypes =
-    effectTypes && behaviorTypes
-      ? null
-      : collectRegisteredTypes(project, serializedProject);
-  const registeredEffectTypes =
-    effectTypes || (registeredTypes && registeredTypes.effectTypes) || [];
-  const registeredBehaviorTypes =
-    behaviorTypes || (registeredTypes && registeredTypes.behaviorTypes) || [];
-  const behaviorOverrideSchemas = registeredBehaviorTypes.map(behavior => ({
+  const behaviorOverrideSchemas = behaviorTypes.map(behavior => ({
     behaviorType: behavior.type,
     keySpace: 'serialized',
     unknownPropertyPolicy: behavior.unknownPropertyPolicy || 'preserve',
@@ -2668,16 +2849,16 @@ export const buildProjectLayoutCatalog = ({
       })),
   }));
   const contexts = buildLayoutContexts(serializedProject);
-  return validateProjectLayoutCatalog({
-    format: 'gdevelop-layout-catalog',
-    formatVersion: 1,
-    project: projectIdentity(project),
+  return {
     authoring: {
-      sourceExtension: '.layout',
-      syntax: 'Standard flat TOML using short layout record headers.',
+      sourceExtension: '.settings',
+      storage: 'embedded-settings',
+      rootTable: 'layout',
+      syntax:
+        'Standard TOML embedded below the owning settings file layout namespace.',
       rules: [
-        'Read the owning settings namespace and the matching context entry before editing a layout.',
-        'Use only the listed [layout], [editor], [[layers]], [[effects]], [[instances]], [[variables]], and [[behaviors]] tables and fields.',
+        'Read the owning settings file and the matching context entry before editing its embedded layout subtree.',
+        'Use only the listed [layout], [layout.editor], [[layout.layers]], [[layout.effects]], [[layout.instances]], [[layout.variables]], and [[layout.behaviors]] tables and fields.',
         'Use standard TOML strings, booleans, numeric arrays, and inline tables. Colors are quoted uppercase #RRGGBB strings.',
         'Preserve existing instance UUIDs. New UUIDv4 values must be lowercase and unique within the owning layout.',
         'Layer ids are short file-local references. Every effect and instance uses an existing layer id; every variable and behavior uses an existing instance UUID.',
@@ -2690,15 +2871,8 @@ export const buildProjectLayoutCatalog = ({
     },
     tables: LAYOUT_TABLES,
     contexts,
-    effectTypes: registeredEffectTypes,
     behaviorOverrideSchemas,
-    counts: {
-      tables: LAYOUT_TABLES.length,
-      contexts: contexts.length,
-      effectTypes: registeredEffectTypes.length,
-      behaviorOverrideSchemas: behaviorOverrideSchemas.length,
-    },
-  });
+  };
 };
 
 export const buildBehaviorPropertySchemasByType = (
@@ -2733,7 +2907,7 @@ const validateBaseCatalog = (
     !catalog ||
     typeof catalog !== 'object' ||
     catalog.format !== format ||
-    catalog.formatVersion !== 1 ||
+    catalog.formatVersion !== PROJECT_SETTINGS_CATALOG_FORMAT_VERSION ||
     !catalog.project ||
     typeof catalog.project !== 'object' ||
     !catalog.authoring ||
@@ -2818,10 +2992,13 @@ export const validateProjectSettingsCatalog = (catalog: any): Object => {
     'objectTypes',
     'behaviorTypes',
     'effectTypes',
+    'layoutTables',
+    'layoutContexts',
+    'behaviorOverrideSchemas',
   ]);
   validateUniqueEntries(validated.fileKinds, entry => entry.kind, 'file kind');
   validated.fileKinds.forEach(fileKind => {
-    const expectedFileKind = SETTINGS_FILE_KINDS.find(
+    const expectedFileKind: any = SETTINGS_FILE_KINDS.find(
       entry => entry.kind === fileKind.kind
     );
     if (!expectedFileKind) fail(`Unknown file kind ${fileKind.kind}.`);
@@ -2938,22 +3115,20 @@ export const validateProjectSettingsCatalog = (catalog: any): Object => {
     entry => entry.type,
     'effect type'
   );
-  return validated;
-};
-
-export const validateProjectLayoutCatalog = (catalog: any): Object => {
-  const validated = validateBaseCatalog(catalog, 'gdevelop-layout-catalog', [
-    'tables',
-    'contexts',
-    'effectTypes',
-    'behaviorOverrideSchemas',
-  ]);
+  if (
+    !validated.layoutAuthoring ||
+    typeof validated.layoutAuthoring !== 'object' ||
+    validated.layoutAuthoring.rootTable !== 'layout' ||
+    validated.layoutAuthoring.storage !== 'embedded-settings'
+  ) {
+    fail('Settings catalog must declare embedded layout authoring metadata.');
+  }
   validateUniqueEntries(
-    validated.tables,
+    validated.layoutTables,
     entry => `${entry.table}\u0000${entry.variant || ''}`,
     'layout table'
   );
-  validated.contexts.forEach(context => {
+  validated.layoutContexts.forEach(context => {
     if (
       !context ||
       !['scene', 'prefab', 'prefab-variant', 'external'].includes(
@@ -2966,11 +3141,6 @@ export const validateProjectLayoutCatalog = (catalog: any): Object => {
       fail('Invalid layout context entry.');
     }
   });
-  validateUniqueEntries(
-    validated.effectTypes,
-    entry => entry.type,
-    'effect type'
-  );
   validateUniqueEntries(
     validated.behaviorOverrideSchemas,
     entry => entry.behaviorType,
@@ -3042,12 +3212,7 @@ export const serializeProjectSettingsCatalog = (catalog: Object): string =>
     'objectTypes',
     'behaviorTypes',
     'effectTypes',
-  ]);
-
-export const serializeProjectLayoutCatalog = (catalog: Object): string =>
-  serializeCatalog(validateProjectLayoutCatalog(catalog), [
-    'tables',
-    'contexts',
-    'effectTypes',
+    'layoutTables',
+    'layoutContexts',
     'behaviorOverrideSchemas',
   ]);

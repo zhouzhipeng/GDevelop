@@ -228,6 +228,72 @@ describe('libGD.js', function() {
           .getEventsCount()
       ).toBe(1);
     });
+    it('exposes optional reserved scene lifecycle functions', function() {
+      const lifecycleProject = gd.ProjectHelper.createNewGDJSProject();
+      const lifecycleLayout = lifecycleProject.insertNewLayout(
+        'LifecycleScene',
+        0
+      );
+      const lifecycleFunctions = lifecycleLayout.getLifecycleEventsFunctions();
+
+      expect(lifecycleFunctions.hasValidMetadata()).toBe(true);
+      expect(lifecycleFunctions.hasRoleName('sceneLoad')).toBe(true);
+      expect(lifecycleFunctions.hasRoleName('sceneSignal')).toBe(true);
+      expect(lifecycleFunctions.hasRoleName('sceneUpdate')).toBe(true);
+      expect(lifecycleFunctions.hasRoleName('sceneUnload')).toBe(true);
+      expect(lifecycleFunctions.hasRoleName('unknown')).toBe(false);
+      expect(lifecycleFunctions.hasByName('sceneLoad')).toBe(false);
+      expect(lifecycleFunctions.hasByName('sceneSignal')).toBe(false);
+      expect(lifecycleFunctions.hasByName('sceneUpdate')).toBe(true);
+      expect(lifecycleFunctions.hasByName('sceneUnload')).toBe(false);
+
+      expect(lifecycleFunctions.insertByName('sceneLoad').getName()).toBe(
+        'sceneLoad'
+      );
+      lifecycleFunctions.insert(gd.SceneLifecycleEventsFunctions.SceneSignal);
+      expect(
+        lifecycleFunctions.get(gd.SceneLifecycleEventsFunctions.SceneSignal)
+          .ptr
+      ).toBe(lifecycleFunctions.getSceneSignalFunction().ptr);
+      expect(lifecycleFunctions.getSceneUpdateFunction().getName()).toBe(
+        'sceneUpdate'
+      );
+      lifecycleFunctions.insertByName('sceneUnload');
+      expect(lifecycleFunctions.getByName('sceneUnload').getName()).toBe(
+        'sceneUnload'
+      );
+
+      const signalParameters = lifecycleFunctions
+        .getSceneSignalFunction()
+        .getParameters();
+      expect(signalParameters.getParametersCount()).toBe(2);
+      expect(signalParameters.getParameterAt(0).getName()).toBe('SignalName');
+      expect(signalParameters.getParameterAt(0).getType()).toBe('string');
+      expect(signalParameters.getParameterAt(1).getName()).toBe('Payload');
+      expect(signalParameters.getParameterAt(1).getType()).toBe('string');
+
+      expect(lifecycleLayout.getEvents().ptr).toBe(
+        lifecycleFunctions.getSceneUpdateFunction().getEvents().ptr
+      );
+      expect(lifecycleFunctions.removeByName('sceneUpdate')).toBe(true);
+      expect(lifecycleFunctions.hasByName('sceneUpdate')).toBe(false);
+      expect(lifecycleFunctions.removeByName('sceneUpdate')).toBe(false);
+      lifecycleLayout.getEvents();
+      expect(lifecycleFunctions.hasByName('sceneUpdate')).toBe(true);
+
+      const externalEvents = lifecycleProject.insertNewExternalEvents(
+        'Shared lifecycle',
+        0
+      );
+      expect(
+        externalEvents
+          .getLifecycleEventsFunctions()
+          .getSceneUpdateFunction()
+          .getEvents().ptr
+      ).toBe(externalEvents.getEvents().ptr);
+
+      lifecycleProject.delete();
+    });
     it('can have objects', function() {
       let object = layout
         .getObjects()
@@ -4096,7 +4162,7 @@ describe('libGD.js', function() {
         project,
         '/path/for/export/'
       );
-      previewExportOptions.setDisplayCollisionMask(true);
+      previewExportOptions.setDisplayCollisionShapes(true);
       previewExportOptions.setDisplaySignalAnimations(true);
 
       exporter.serializeProjectData(
@@ -4105,7 +4171,8 @@ describe('libGD.js', function() {
         projectDataElement
       );
       const projectData = JSON.parse(gd.Serializer.toJSON(projectDataElement));
-      expect(projectData.properties.displayCollisionMask).toBe(true);
+      expect(projectData.properties.displayCollisionShapes).toBe(true);
+      expect(projectData.properties.displayCollisionMask).toBeUndefined();
       expect(projectData.properties.displaySignalAnimations).toBe(true);
 
       previewExportOptions.delete();
@@ -4270,7 +4337,10 @@ describe('libGD.js', function() {
       previewExportOptions.setDisplaySignalAnimations(true);
 
       exporter.exportProjectForPixiPreview(previewExportOptions);
-      expect(exportedProjectData.properties.displayCollisionMask).toBe(true);
+      expect(exportedProjectData.properties.displayCollisionShapes).toBe(true);
+      expect(
+        exportedProjectData.properties.displayCollisionMask
+      ).toBeUndefined();
       expect(exportedProjectData.properties.displaySignalAnimations).toBe(true);
 
       previewExportOptions.delete();

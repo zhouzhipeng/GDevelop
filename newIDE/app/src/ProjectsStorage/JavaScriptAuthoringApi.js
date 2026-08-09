@@ -3,6 +3,7 @@
 import { sha256 } from 'js-sha256';
 import optionalRequire from '../Utils/OptionalRequire';
 import { extractIfDoJavaScriptBlocks } from '../EventsSheet/IfDoEventsDsl';
+import { encodeManagedName } from './MultiFileProjectFormat';
 
 let cachedTypeScript = null;
 const loadTypeScriptChecker = (): any => {
@@ -759,12 +760,12 @@ const safeDecode = (value: string): string => {
 };
 
 const getSourceContext = (fileUri: string, model: Object): Object => {
-  const externalMatch = /^game:\/\/scenes\/([^/]+)\/externals\/([^/]+)\.events$/.exec(
+  const externalLifecycleMatch = /^game:\/\/scenes\/([^/]+)\/external-events\/([^/]+)\/functions\/(sceneLoad|sceneSignal|sceneUpdate|sceneUnload)\.events$/.exec(
     fileUri
   );
-  if (externalMatch) {
-    const physicalSceneName = safeDecode(externalMatch[1]);
-    const externalName = safeDecode(externalMatch[2]);
+  if (externalLifecycleMatch) {
+    const physicalSceneName = safeDecode(externalLifecycleMatch[1]);
+    const externalName = safeDecode(externalLifecycleMatch[2]);
     const external = (model.externalEvents || []).find(
       external =>
         external.name === externalName &&
@@ -775,8 +776,21 @@ const getSourceContext = (fileUri: string, model: Object): Object => {
       : null;
     return {
       sceneName: scene ? scene.name : null,
-      isFunction: false,
+      isFunction: true,
       external: true,
+      lifecycleFunctionName: externalLifecycleMatch[3],
+    };
+  }
+  const sceneLifecycleMatch = /^game:\/\/scenes\/([^/]+)\/functions\/(sceneLoad|sceneSignal|sceneUpdate|sceneUnload)\.events$/.exec(
+    fileUri
+  );
+  if (sceneLifecycleMatch) {
+    const physicalName = safeDecode(sceneLifecycleMatch[1]);
+    const scene = model.scenes.find(scene => scene.name === physicalName);
+    return {
+      sceneName: scene ? scene.name : null,
+      isFunction: true,
+      lifecycleFunctionName: sceneLifecycleMatch[2],
     };
   }
   const sceneMatch = /^game:\/\/scenes\/([^/]+)\//.exec(fileUri);
@@ -825,24 +839,35 @@ export const collectSerializedProjectJavaScriptBlocks = (
   serializedProject: Object
 ): Array<Object> => {
   const blocks: Array<Object> = [];
-  (serializedProject.layouts || []).forEach(layout =>
-    collectEventsJavaScriptBlocks(
-      layout.events,
-      `game://scenes/${encodeURIComponent(
-        String(layout.name || '')
-      )}/${encodeURIComponent(String(layout.name || ''))}.events`,
-      blocks
-    )
-  );
-  (serializedProject.externalEvents || []).forEach(external =>
-    collectEventsJavaScriptBlocks(
-      external.events,
-      `game://scenes/${encodeURIComponent(
-        String(external.associatedLayout || '')
-      )}/externals/${encodeURIComponent(String(external.name || ''))}.events`,
-      blocks
-    )
-  );
+  const lifecycleSources = [
+    ['sceneLoad', 'sceneLoadEvents'],
+    ['sceneSignal', 'sceneSignalEvents'],
+    ['sceneUpdate', 'events'],
+    ['sceneUnload', 'sceneUnloadEvents'],
+  ];
+  (serializedProject.layouts || []).forEach(layout => {
+    const sceneName = encodeManagedName(String(layout.name || ''));
+    lifecycleSources.forEach(([role, legacyField]) =>
+      collectEventsJavaScriptBlocks(
+        layout[legacyField],
+        `game://scenes/${sceneName}/functions/${role}.events`,
+        blocks
+      )
+    );
+  });
+  (serializedProject.externalEvents || []).forEach(external => {
+    const sceneName = encodeManagedName(
+      String(external.associatedLayout || '')
+    );
+    const externalName = encodeManagedName(String(external.name || ''));
+    lifecycleSources.forEach(([role, legacyField]) =>
+      collectEventsJavaScriptBlocks(
+        external[legacyField],
+        `game://scenes/${sceneName}/external-events/${externalName}/functions/${role}.events`,
+        blocks
+      )
+    );
+  });
   (serializedProject.eventsFunctionsExtensions || []).forEach(extension => {
     const extensionName = encodeURIComponent(String(extension.name || ''));
     const collectFunctions = (base: string, functions: ?Array<Object>) =>
@@ -852,7 +877,7 @@ export const collectSerializedProjectJavaScriptBlocks = (
         );
         collectEventsJavaScriptBlocks(
           eventsFunction.events,
-          `${base}/functions/${functionName}/${functionName}.events`,
+          `${base}/functions/${functionName}.events`,
           blocks
         );
       });

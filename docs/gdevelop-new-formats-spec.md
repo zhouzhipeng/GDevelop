@@ -1,14 +1,43 @@
 # GDevelop Multi-file Project Format
 
-## TOML settings, flat layout TOML, and IfDo event source files
+## Version 5 TOML settings and IfDo event source files
 
-**Status:** Version 3.0 implemented format contract
+**Status:** Version 5 implemented format contract. The version 3/4 material
+later in this document is retained only as migration history and is not an
+authoring contract.
 **Entry file:** `project.gdevelop`
 
 **Text encoding:** UTF-8 without BOM
 **Line endings:** LF when written by GDevelop
 **Related specifications:** [gdevelop-events-dsl-spec.md](gdevelop-events-dsl-spec.md),
 [gdevelop-layout-toml-spec.md](gdevelop-layout-toml-spec.md)
+
+The controlling version 5 ownership and path contract is
+[embedded-layout-settings-format-spec.md](embedded-layout-settings-format-spec.md).
+Production accepts version 5 only. In particular:
+
+- scenes and default prefabs embed their layout below `[layout]` in
+  `scene.settings` or `prefab.settings`;
+- named variants use
+  `variants/<Variant>/variant.settings` and retain
+  `variants/<Variant>/objects/<Object>.settings`;
+- External Events owners use
+  `scenes/<Scene>/external-events/<External>/external-events.settings`, with
+  lifecycle function pairs below `functions/`;
+- external layouts use
+  `scenes/<Scene>/external-layout/<External>.settings`;
+- all functions use one same-stem
+  `functions/<Function>.settings` + `functions/<Function>.events` pair;
+- every managed `.events` body is a function and must have its same-stem
+  `.settings` owner;
+- no managed `.layout` file, layout URI, events URI, nested variant manifest,
+  or `externalLayoutFiles` manifest is valid in version 5.
+- `.gdevelop/settings-catalog.json` format version 2 contains both settings
+  and embedded-layout authoring contracts; the independent layout catalog is
+  retired and deleted during generation.
+
+When any historical example below conflicts with that contract, it describes
+an unsupported pre-v5 tree and must not be used for direct authoring.
 
 ---
 
@@ -204,7 +233,7 @@ MyGame/
     instructions-catalog.json
     deprecated-instructions-catalog.json
     settings-catalog.json
-    layout-catalog.json
+    layout-catalog.json       # pre-v5 generated artifact; retired in v5
     runtime-api.d.ts
     project-api.d.ts
     state.json
@@ -276,7 +305,7 @@ scene they are associated with. Their manifest entries live in that scene's
   runtime-managed or disposable. AI models must consult the catalog before
   creating settings-owned definitions, must preserve unlisted existing
   behavior fields, and must never edit the generated catalog.
-- `.gdevelop/layout-catalog.json`, regenerated on every manual project save.
+- **Pre-v5 only:** `.gdevelop/layout-catalog.json`, regenerated on every manual project save.
   It describes every layout TOML table and field plus the project-aware
   scene, prefab, variant, and external-layout contexts. Each context lists the
   object definitions, attached behaviors, and layers that can be referenced in
@@ -1808,18 +1837,17 @@ The writer:
 3. Writes a sibling temporary file.
 4. Flushes the file and, where supported, its directory entry.
 5. Atomically replaces the target.
-6. Regenerates the three AI authoring catalogs under `.gdevelop/` from the
+6. Regenerates the AI authoring catalogs under `.gdevelop/` from the
    loaded project and installed platform metadata:
-   `.gdevelop/instructions-catalog.json`,
-   `.gdevelop/settings-catalog.json`, and
-   `.gdevelop/layout-catalog.json`. The instruction catalog contains actions,
+   `.gdevelop/instructions-catalog.json` and
+   `.gdevelop/settings-catalog.json`. The instruction catalog contains actions,
    conditions, expressions, and function signatures. The settings catalog
    contains file ownership schemas and registered object/behavior/effect
    metadata. Every settings `fileKinds` entry contains a complete `schema`
    whose `rootFields` describe root scalars and whose recursive `childTables`
    describe canonical TOML headers, record fields, dynamic-key rules, and
    empty forms; `commonFields` remains only a compact search summary. The
-   layout catalog contains the layout TOML tables and each
+   settings catalog also contains `layoutTables`, `layoutContexts`, and each
    layout's resolvable objects, attached behaviors, and layers.
    Every registered `objectTypes[]` entry contains public generic-editor
    `properties` and a recursive `schema` for its serialized configuration.
@@ -2250,6 +2278,27 @@ Future versions may split resources further, add stable entity IDs, or
 introduce a direct typed source model after the compatibility format has
 proven reliable.
 
+## Version 4 scene lifecycle function sources
+
+Version 4 replaces the single scene/External Events body location with the
+same physical function shape used by prefab functions:
+
+```text
+scenes/<Scene>/functions/<Lifecycle>/function.settings
+scenes/<Scene>/functions/<Lifecycle>/<Lifecycle>.events
+scenes/<Scene>/externals/<External>/external-events.settings
+scenes/<Scene>/externals/<External>/functions/<Lifecycle>/function.settings
+scenes/<Scene>/externals/<External>/functions/<Lifecycle>/<Lifecycle>.events
+```
+
+`<Lifecycle>` is one of `sceneLoad`, `sceneSignal`, `sceneUpdate`, or
+`sceneUnload`. The update directory is always required. Other lifecycle
+directories are omitted while their bodies are empty. A version-3 scene or
+external `.events` body migrates byte-equivalently to `sceneUpdate`; the other
+three functions start empty. The version marker and every affected owner are
+committed transactionally, and version-3 readers reject version 4 before
+writing.
+
 ---
 
 ## 24. Final contract
@@ -2269,14 +2318,13 @@ A conforming implementation must satisfy all of the following:
    reference from or merge into `project.gdevelop`. Generated compatibility
    JSON and runtime exports omit the Constants map.
 6. Every scene has its own subfolder with `scene.settings`, a placement-focused
-   layout TOML file, an events DSL file, and flat object
-   settings. Object definitions and their behaviors belong to individual
+   layout TOML file, flat object settings, and fixed lifecycle function
+   directories. Object definitions and their behaviors belong to individual
    object settings; instances and layers belong to the layout.
-7. Each scene may own an `externals/` directory containing its associated
-   `<ExternalName>.events` and `<ExternalName>.layout` sources. That scene's
-   `scene.settings` owns their manifests; association is derived from the
-   owner, and global external-container order is explicit across all scene
-   manifests.
+7. Each scene may own an `externals/` directory containing External Events
+   owner directories and external-layout sources. An External Events owner has
+   `external-events.settings` plus fixed lifecycle function directories;
+   association is derived from its physical scene owner.
 8. Every extension-level function has a
    `functions/<Function>/function.settings` and matching
    `<Function>.events`. Every prefab and behavior function similarly has
@@ -2305,3 +2353,7 @@ A conforming implementation must satisfy all of the following:
     the verified composed legacy serializer tree.
 18. Prefab and behavior property descriptors are flat ordered arrays. The
     format neither serializes nor reconstructs property folder structures.
+19. Scene and External Events functions use
+    `functions/<Lifecycle>/function.settings` with a matching sibling
+    `<Lifecycle>.events`; `sceneUpdate` is required and empty load, signal, and
+    unload functions do not create managed files.

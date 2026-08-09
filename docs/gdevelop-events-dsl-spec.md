@@ -2,13 +2,25 @@
 
 ## A Minimal AI-Friendly DSL for GDevelop Events JSON and Functions
 
-**Status:** Version 3.0 codebase-aligned design specification
+**Status:** IfDo syntax contract used by multi-file format version 5
 **Canonical source filename:** `xx.events`
 
 **File extension:** `.events`
 
 **Encoding:** UTF-8
 **Target:** GDevelop scene event sheets, external event sheets, and extension functions
+
+Version 5 stores every function body as the same-stem sibling of its settings
+owner: `functions/<Function>.settings` and
+`functions/<Function>.events`. The settings file does not contain an events
+URI. Logical grouping is the settings `folder` value and never adds path
+segments. Any nested `functions/<Function>/function.settings` example later in
+this document is unsupported v3/v4 path history; it does not change the IfDo
+grammar described here. The controlling physical ownership contract is
+[embedded-layout-settings-format-spec.md](embedded-layout-settings-format-spec.md).
+Every managed `.events` source is therefore a function body; an `.events` file
+without its same-stem `.settings` owner is invalid. External lifecycle pairs
+live below `scenes/<Scene>/external-events/<External>/functions/`.
 
 ---
 
@@ -3876,3 +3888,27 @@ applied compatibility normalization.
   writing partial source files.
 - Corpus migration across repository game projects.
 - `current JSON -> DSL -> current JSON -> gd::Project -> canonical current JSON` equality.
+
+---
+
+## 37. Scene lifecycle function bodies
+
+An IfDo `.events` file does not declare its lifecycle role. Its sibling
+`function.settings` and owner path identify one of four fixed functions:
+`sceneLoad`, `sceneSignal`, `sceneUpdate`, or `sceneUnload`. Scene and External
+Events functions use the same grammar and instruction catalog as ordinary
+scene events, subject to these role rules:
+
+- Legacy `SignalReceived` instructions may be parsed and preserved only in
+  `sceneUpdate`, but are not emitted for new authoring; `sceneSignal` compares
+  its fixed `SignalName` parameter directly and reads `Payload`.
+- `SceneJustBegins` is retained for update compatibility but is redundant in
+  load and unload and is not suggested there.
+- `sceneUnload` rejects instructions whose metadata declares asynchronous or
+  future-frame work, deferred scene-signal emission, or scene-stack mutation.
+- Link events resolve the target owner's function with the same lifecycle role;
+  lifecycle-neutral function callers retain the compatibility update role.
+
+Direct authoring, compilation, catalog generation, and MCP edits carry the
+resolved lifecycle identity. Omitting the role from a legacy API request means
+`sceneUpdate`; it never means an arbitrary function inferred from a filename.

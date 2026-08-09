@@ -359,7 +359,7 @@ bool ExporterHelper::ExportProjectForPixiPreview(
                                                     includesFiles, runtimeGameOptions);
     ExportProjectData(fs, exportedProject, codeOutputDir + "/data.js",
                       runtimeGameOptions, options.isInGameEdition,
-                      inGameEditorResources, options.displayCollisionMask,
+                      inGameEditorResources, options.displayCollisionShapes,
                       options.displaySignalAnimations);
 
     previousTime = LogTimeSpent("Project data export", previousTime);
@@ -397,7 +397,7 @@ gd::String ExporterHelper::ExportProjectData(
     gd::AbstractFileSystem &fs, gd::Project &project, gd::String filename,
     const gd::SerializerElement &runtimeGameOptions, bool isInGameEdition,
     const std::vector<gd::InGameEditorResourceMetadata> &inGameEditorResources,
-    bool displayCollisionMask,
+    bool displayCollisionShapes,
     bool displaySignalAnimations) {
   fs.MkDir(fs.DirNameFrom(filename));
 
@@ -405,9 +405,9 @@ gd::String ExporterHelper::ExportProjectData(
   ExporterHelper::StripAndSerializeProjectData(project, projectDataElement,
                                                 isInGameEdition,
                                                 inGameEditorResources);
-  if (displayCollisionMask) {
+  if (displayCollisionShapes) {
     projectDataElement.GetChild("properties")
-        .SetAttribute("displayCollisionMask", true);
+        .SetAttribute("displayCollisionShapes", true);
   }
   if (displaySignalAnimations) {
     projectDataElement.GetChild("properties")
@@ -617,9 +617,9 @@ void ExporterHelper::SerializeProjectData(gd::AbstractFileSystem &fs,
   ExporterHelper::StripAndSerializeProjectData(clonedProject, rootElement,
                                                 options.isInGameEdition,
                                                 inGameEditorResources);
-  if (options.displayCollisionMask) {
+  if (options.displayCollisionShapes) {
     rootElement.GetChild("properties")
-        .SetAttribute("displayCollisionMask", true);
+        .SetAttribute("displayCollisionShapes", true);
   }
   if (options.displaySignalAnimations) {
     rootElement.GetChild("properties")
@@ -1403,6 +1403,17 @@ static std::size_t CountEventsRecursively(const gd::EventsList &events) {
   return count;
 }
 
+static std::size_t CountEventsRecursively(
+    const gd::SceneLifecycleEventsFunctions &lifecycleEventsFunctions) {
+  std::size_t count = 0;
+  lifecycleEventsFunctions.ForEach(
+      [&](gd::SceneLifecycleFunctionRole,
+          const gd::EventsFunction &eventsFunction) {
+        count += CountEventsRecursively(eventsFunction.GetEvents());
+      });
+  return count;
+}
+
 bool ExporterHelper::ExportScenesEventsCode(
     const gd::Project &project,
     gd::String outputDir,
@@ -1429,7 +1440,8 @@ bool ExporterHelper::ExportScenesEventsCode(
     gd::LogStatus(
         "  Scene '" + layout.GetName() + "': " +
         gd::String::From(GetTimeSpent(sceneStartTime)) + "ms, " +
-        gd::String::From(CountEventsRecursively(layout.GetEvents())) +
+        gd::String::From(CountEventsRecursively(
+            layout.GetLifecycleEventsFunctions())) +
         " events, " + gd::String::From(eventsOutput.size() / 1024) +
         " KB generated code");
 

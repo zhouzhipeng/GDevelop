@@ -2,8 +2,19 @@
 
 **Status:** normative version 1  
 **Implementation:** `newIDE/app/src/ProjectsStorage/LayoutToml`  
-**Canonical filename:** `<Name>.layout`  
+**Canonical storage:** embedded `[layout]` subtree in the component owner
+`.settings` file
 **Syntax:** standard TOML with a strict GDevelop schema
+
+Version 5 has no managed `.layout` source files. This document remains the
+normative layout schema and compiler contract, but its logical standalone
+examples are embedded by prefixing every non-root layout header with
+`layout.`: `[editor]` becomes `[layout.editor]`, `[[instances]]` becomes
+`[[layout.instances]]`, and so on. Scene and default-prefab layout data lives
+in their existing owner settings; named variants have independent
+`variant.settings` owners and external layouts use
+`scenes/<Scene>/external-layout/<External>.settings`. See
+[embedded-layout-settings-format-spec.md](embedded-layout-settings-format-spec.md).
 
 ## 1. Purpose
 
@@ -228,7 +239,7 @@ fast = true
 
 `layer`, `name`, and `type` are required. The layer ID must resolve. Effect
 names are unique per layer. The effect type and every parameter name/type must
-match the generated layout catalog. Parameters are direct fields on the
+match the generated settings catalog. Parameters are direct fields on the
 `[[effects]]` record and must be flat finite numbers, strings, or booleans.
 `params` is not a valid field. `folded` defaults false and `enabled` defaults
 true.
@@ -390,17 +401,19 @@ properties = { maxSpeed = 500 }
 
 ## 14. Catalog contract
 
-`.gdevelop/layout-catalog.json` is regenerated from the loaded project. It
-contains:
+`.gdevelop/settings-catalog.json` format version 2 is regenerated from the
+loaded project. Its embedded-layout contract contains:
 
-- `tables`: the exact headers, fields, types, defaults, and context rules;
-- `contexts`: owner-specific layers, objects, attached behaviors, and observed
-  instance properties;
+- `layoutTables`: the exact headers, fields, types, defaults, and context
+  rules;
+- `layoutContexts`: owner-specific layers, objects, attached behaviors, and
+  observed instance properties;
 - `effectTypes`: registered effect parameters;
 - `behaviorOverrideSchemas`: serialized behavior property keys and types.
 
-AI and direct-file tooling must select the matching `contexts` entry and use
-only cataloged tables, objects, behaviors, effects, and fields.
+AI and direct-file tooling must select the matching `layoutContexts` entry and
+use only cataloged tables, objects, behaviors, effects, and fields. There is no
+independent generated layout catalog.
 
 ## 15. Compilation
 

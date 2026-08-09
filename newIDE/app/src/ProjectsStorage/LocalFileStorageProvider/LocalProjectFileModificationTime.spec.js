@@ -60,14 +60,14 @@ describe('getLocalProjectLastModifiedDate', () => {
       400000
     );
 
-    expect(await getLocalProjectLastModifiedDate(entryPath)).toBe(400000);
+    expect(await getLocalProjectLastModifiedDate(entryPath)).toBe(350000);
   });
 
   it('ignores resources and generated autosaves', async () => {
     const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
     writeFileWithModificationTime(entryPath, 100000);
     writeFileWithModificationTime(
-      path.join(temporaryDirectory, 'scenes', 'Main', 'Main.layout'),
+      path.join(temporaryDirectory, 'scenes', 'Main', 'scene.settings'),
       200000
     );
     writeFileWithModificationTime(
