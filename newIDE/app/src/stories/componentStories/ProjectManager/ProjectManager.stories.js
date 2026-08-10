@@ -34,6 +34,7 @@ const mainMenuCallbacks = {
   onInviteCollaborators: () => action('onInviteCollaborators'),
   onCreateProject: () => action('onCreateProject'),
   onOpenProjectManager: () => action('onOpenProjectManager'),
+  onOpenRecentEditorSwitcher: () => action('onOpenRecentEditorSwitcher'),
   onOpenHomePage: () => action('onOpenHomePage'),
   onOpenDebugger: () => action('onOpenDebugger'),
   onOpenAbout: () => action('onOpenAbout'),
@@ -107,6 +108,10 @@ export const NoProjectOpen = (): React.Node => {
                     'onDeleteEventsFunctionsExtension'
                   )}
                   onDeleteExternalEvents={action('onDeleteExternalEvents')}
+                  onDeleteGameplayTest={action('onDeleteGameplayTest')}
+                  onRenameGameplayTest={action('onRenameGameplayTest')}
+                  onOpenGameplayTest={action('onOpenGameplayTest')}
+                  onRunGameplayTest={action('onRunGameplayTest')}
                   onRenameLayout={action('onRenameLayout')}
                   onRenameExternalLayout={action('onRenameExternalLayout')}
                   onRenameEventsFunctionsExtension={action(
@@ -222,6 +227,10 @@ export const ProjectOpen = (): React.Node => {
                     'onDeleteEventsFunctionsExtension'
                   )}
                   onDeleteExternalEvents={action('onDeleteExternalEvents')}
+                  onDeleteGameplayTest={action('onDeleteGameplayTest')}
+                  onRenameGameplayTest={action('onRenameGameplayTest')}
+                  onOpenGameplayTest={action('onOpenGameplayTest')}
+                  onRunGameplayTest={action('onRunGameplayTest')}
                   onRenameLayout={action('onRenameLayout')}
                   onRenameExternalLayout={action('onRenameExternalLayout')}
                   onRenameEventsFunctionsExtension={action(

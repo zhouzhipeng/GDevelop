@@ -30,6 +30,7 @@ import SearchIcon from '../UI/CustomSvgIcons/Search';
 import SparkleIcon from '../UI/CustomSvgIcons/Sparkle';
 import PlayIcon from '../UI/CustomSvgIcons/Play';
 import RefreshIcon from '../UI/CustomSvgIcons/Refresh';
+import PreviewIcon from '../UI/CustomSvgIcons/Preview';
 import ProjectTitlebar from './ProjectTitlebar';
 import StickyNotes, { type StickyNotesInterface } from './StickyNotes';
 import PreferencesDialog from './Preferences/PreferencesDialog';
@@ -69,6 +70,7 @@ import {
   closeLayoutTabs,
   closeExternalLayoutTabs,
   closeExternalEventsTabs,
+  closeGameplayTestTabs,
   closeEventsFunctionsExtensionTabs,
   closeCustomObjectTab,
   closeEventsBasedObjectVariantTab,
@@ -94,10 +96,13 @@ import {
   popInTab,
   moveTabToPosition,
 } from './EditorTabs/EditorTabsHandler';
+import { getEditorTabKey } from './EditorTabs/EditorTabKey';
+import { getProjectGameplayTestRecentEditorItems } from './GameplayTestRecentEditorItems';
 import {
   getRenamedLayoutTabProjectItemName,
   getRenamedExternalLayoutTabProjectItemName,
   getRenamedExternalEventsTabProjectItemName,
+  getRenamedGameplayTestTabProjectItemName,
   getRenamedExtensionTabProjectItemName,
 } from './EditorTabs/EditorTabsRenaming';
 import { renderDebuggerEditorContainer } from './EditorContainers/DebuggerEditorContainer';
@@ -114,6 +119,22 @@ import { renderPrefabDetailEditorContainer } from './EditorContainers/PrefabDeta
 import PrefabDetailEditor from '../PrefabDetailEditor';
 import EventsFunctionsExtensionEditor from '../EventsFunctionsExtensionEditor';
 import { renderCustomObjectEditorContainer } from './EditorContainers/CustomObjectEditorContainer';
+import { renderGameplayTestEditorContainer } from './EditorContainers/GameplayTestEditorContainer';
+
+import { GameplayTestFrame } from '../GameplayTests/GameplayTestFrame';
+import { areGameplayTestsEnabled } from '../GameplayTests/AreGameplayTestsEnabled';
+import {
+  getGameplayTestProjectItemName,
+  getIsGameplayTestRunInProgress,
+  getTestsContainer,
+  registerGameplayTestRunnerDependencies,
+  useIsGameplayTestRunInProgress,
+  runProjectGameplayTests,
+  type GameplayTestScope,
+  stopRunningProjectGameplayTest,
+  type GameplayTestToRun,
+  type GameplayTestsCallbacks,
+} from '../GameplayTests/GameplayTestRunner';
 import { renderHomePageContainer } from './EditorContainers/HomePage';
 import { type OpenAskAiOptions } from '../AiGeneration/Utils';
 import { exceptionallyGuardAgainstDeadObject } from '../Utils/IsNullPtr';
@@ -121,6 +142,7 @@ import { renderAskAiEditorContainer } from '../AiGeneration/AskAiEditorContainer
 import { createMcpEditorBridge } from '../Mcp/McpEditorBridge';
 import { saveProjectAfterPendingSave } from '../Mcp/McpSaveCoordinator';
 import { type EditorCallbacks } from '../EditorFunctions';
+import { requestAskAiPrefill } from '../AiGeneration/AskAiPrefill';
 import { renderResourcesEditorContainer } from './EditorContainers/ResourcesEditorContainer';
 import { renderConstantsEditorContainer } from './EditorContainers/ConstantsEditorContainer';
 import { renderGlobalEventsSearchEditorContainer } from './EditorContainers/GlobalEventsSearchEditorContainer';
@@ -136,6 +158,7 @@ import { type EditorId as SceneEditorPanelId } from '../SceneEditor/utils';
 import {
   type ProjectItemRenamedOutsideEditorChanges,
   type WillDeleteSceneChanges,
+  type WillDeleteGameplayTestChanges,
   type WillDeleteObjectChanges,
 } from '../EditorFunctions/OutsideEditorChanges';
 import { type Exporter } from '../ExportAndShare/ShareDialog';
@@ -279,7 +302,10 @@ import useLocalProjectChangesWatcher, {
 import { localFileStorageProviderInternalName } from '../ProjectsStorage/LocalFileStorageProvider/LocalFileStorageProviderInternalName';
 import { writeProjectSourceCatalogs } from '../ProjectsStorage/LocalFileStorageProvider/LocalProjectWriter';
 import { getLocalProjectLastModifiedDateSync } from '../ProjectsStorage/LocalFileStorageProvider/LocalProjectFileModificationTime';
-import { openMultiFileProject } from '../ProjectsStorage/LocalFileStorageProvider/LocalMultiFileProject';
+import {
+  openMultiFileProject,
+  writeGameplayTestResults,
+} from '../ProjectsStorage/LocalFileStorageProvider/LocalMultiFileProject';
 import {
   MULTI_FILE_ENTRY_NAME,
   areLegacyProjectsEquivalent,
@@ -374,6 +400,7 @@ const editorKindToRenderer: {
   'function detail': renderFunctionDetailEditorContainer,
   'prefab detail': renderPrefabDetailEditorContainer,
   'custom object': renderCustomObjectEditorContainer,
+  'gameplay-test': renderGameplayTestEditorContainer,
   'start page': renderHomePageContainer,
   resources: renderResourcesEditorContainer,
   constants: renderConstantsEditorContainer,
@@ -931,6 +958,64 @@ const MainFrame = (props: Props): React.MixedElement => {
     EventsFunctionsExtensionsContext
   );
   const unsavedChanges = React.useContext(UnsavedChangesContext);
+
+  // Allow gameplay tests to be run from anywhere in the editor. Registered
+  // ONCE (the only dependency is a stable ref), reading the latest values
+  // through refs: re-registering on renders would leave the registry
+  // momentarily null, which the AI function calls processor could hit
+  // ("no editor registered").
+  const isGameplayTestRunInProgress = useIsGameplayTestRunInProgress();
+  const unsavedChangesRef = useStableUpToDateRef(unsavedChanges);
+  const currentFileMetadataRef = useStableUpToDateRef(
+    state.currentFileMetadata
+  );
+  const gameplayTestProjectRef = useStableUpToDateRef(state.currentProject);
+  const getStorageProviderRef = useStableUpToDateRef(props.getStorageProvider);
+  React.useEffect(
+    () => {
+      registerGameplayTestRunnerDependencies({
+        getPreviewLauncher: () => _previewLauncher.current,
+        onTestsRunFinished: async project => {
+          // The last run summary of tests was updated on the project.
+          const currentUnsavedChanges = unsavedChangesRef.current;
+          const fileMetadata = currentFileMetadataRef.current;
+          if (gameplayTestProjectRef.current !== project) return;
+          const isLocalMultiFileProject =
+            !!fileMetadata &&
+            getStorageProviderRef.current().internalName ===
+              localFileStorageProviderInternalName &&
+            fileMetadata.fileIdentifier
+              .replace(/\\/g, '/')
+              .toLowerCase()
+              .split('/')
+              .pop() === MULTI_FILE_ENTRY_NAME;
+          if (isLocalMultiFileProject && fileMetadata) {
+            try {
+              await writeGameplayTestResults(
+                serializeToJSObject(project, 'serializeTo'),
+                fileMetadata.fileIdentifier
+              );
+              return;
+            } catch (error) {
+              console.error(
+                'Unable to persist local gameplay test results:',
+                error
+              );
+            }
+          }
+          if (currentUnsavedChanges)
+            currentUnsavedChanges.triggerUnsavedChanges();
+        },
+      });
+      return () => registerGameplayTestRunnerDependencies(null);
+    },
+    [
+      currentFileMetadataRef,
+      gameplayTestProjectRef,
+      getStorageProviderRef,
+      unsavedChangesRef,
+    ]
+  );
   const {
     hasUnsavedChanges,
     sealUnsavedChanges,
@@ -1440,6 +1525,8 @@ const MainFrame = (props: Props): React.MixedElement => {
           ? name.split('::')[1] + ` ${i18n._(t`(Prefab)`)}`
           : kind === 'custom object'
           ? name.split('::')[2] || name.split('::')[1] + ` ${i18n._(t`(UI)`)}`
+          : kind === 'gameplay-test'
+          ? (name.split('::').pop() || name) + ` ${i18n._(t`(Test)`)}`
           : name;
       const tabOptions =
         kind === 'layout'
@@ -1447,19 +1534,7 @@ const MainFrame = (props: Props): React.MixedElement => {
           : kind === 'layout events'
           ? { data: { scene: name, type: 'layout-events' } }
           : undefined;
-      const key = [
-        'layout',
-        'layout events',
-        'external events',
-        'external layout',
-        'events functions extension',
-        'behavior detail',
-        'function detail',
-        'prefab detail',
-        'custom object',
-      ].includes(kind)
-        ? `${kind} ${name}`
-        : kind;
+      const key = getEditorTabKey(kind, name);
 
       let customIconUrl = '';
       if (
@@ -1505,6 +1580,8 @@ const MainFrame = (props: Props): React.MixedElement => {
           kind === 'prefab detail' ||
           kind === 'custom object' ? (
           <ExtensionIcon />
+        ) : kind === 'gameplay-test' ? (
+          <PreviewIcon />
         ) : kind === 'ask-ai' ? (
           <RobotIcon size={16} />
         ) : null;
@@ -1781,9 +1858,16 @@ const MainFrame = (props: Props): React.MixedElement => {
         aiRequestId,
         paneIdentifier,
         continueProcessingFunctionCallsOnMount,
+        prefilledUserRequest,
       } = options || {};
       const newPaneIdentifier =
         paneIdentifier || (currentProject ? 'right' : 'center');
+
+      if (prefilledUserRequest) {
+        // Delivered to the Ask AI editor as soon as it's mounted (or
+        // immediately if it already is).
+        requestAskAiPrefill(prefilledUserRequest);
+      }
 
       setState(state => {
         let openedEditor = getOpenedAskAiEditor(state.editorTabs);
@@ -2759,6 +2843,136 @@ const MainFrame = (props: Props): React.MixedElement => {
     });
   };
 
+  const deleteGameplayTest = (scope: GameplayTestScope, test: gdTest) => {
+    const { i18n } = props;
+    const { currentProject } = state;
+    if (!currentProject) return;
+
+    const answer = Window.showConfirmDialog(
+      i18n._(
+        t`Are you sure you want to remove this gameplay test? This can't be undone.`
+      )
+    );
+    if (!answer) return;
+
+    const testName = test.getName();
+    setState(state => ({
+      ...state,
+      editorTabs: closeGameplayTestTabs(
+        state.editorTabs,
+        getGameplayTestProjectItemName(scope, testName)
+      ),
+    })).then(state => {
+      if (!state.currentProject) return;
+      const testsContainer = getTestsContainer(state.currentProject, scope);
+      if (testsContainer) testsContainer.removeTest(testName);
+      _onProjectItemModified();
+    });
+  };
+
+  const renameGameplayTest = (
+    scope: GameplayTestScope,
+    oldName: string,
+    newName: string
+  ) => {
+    const { currentProject } = state;
+    const { i18n } = props;
+    if (!currentProject) return;
+
+    const testsContainer = getTestsContainer(currentProject, scope);
+    if (!testsContainer) return;
+
+    if (!testsContainer.hasTestNamed(oldName) || newName === oldName) return;
+
+    const uniqueNewName = newNameGenerator(
+      newName || i18n._(t`Unnamed`),
+      tentativeNewName => {
+        return testsContainer.hasTestNamed(tentativeNewName);
+      }
+    );
+
+    const test = testsContainer.getTest(oldName);
+    test.setName(uniqueNewName);
+    setState(state => ({
+      ...state,
+      editorTabs: getEditorTabsWithRenamedProjectItem(
+        state.editorTabs,
+        currentProject,
+        editorTab =>
+          getRenamedGameplayTestTabProjectItemName(
+            editorTab,
+            getGameplayTestProjectItemName(scope, oldName),
+            getGameplayTestProjectItemName(scope, uniqueNewName)
+          )
+      ),
+    })).then(() => {
+      _onProjectItemModified();
+    });
+  };
+
+  const runGameplayTestFromUi = React.useCallback(
+    async (scope: GameplayTestScope, testName: string) => {
+      const { currentProject } = state;
+      if (!currentProject) return;
+
+      try {
+        await runProjectGameplayTests({
+          project: currentProject,
+          tests: [{ scope, testName }],
+          options: {},
+        });
+      } catch (error) {
+        console.error('Error while running the gameplay test:', error);
+      }
+    },
+    [state]
+  );
+
+  const runAllGameplayTestsFromUi = React.useCallback(
+    async () => {
+      const { currentProject } = state;
+      if (!currentProject) return;
+
+      // Run the tests of the project, then the tests of every extension.
+      const tests: Array<GameplayTestToRun> = [];
+      const projectTests = currentProject.getTests();
+      for (let i = 0; i < projectTests.getTestsCount(); i++) {
+        tests.push({
+          scope: { type: 'project' },
+          testName: projectTests.getTestAt(i).getName(),
+        });
+      }
+      for (
+        let extensionIndex = 0;
+        extensionIndex < currentProject.getEventsFunctionsExtensionsCount();
+        extensionIndex++
+      ) {
+        const extension = currentProject.getEventsFunctionsExtensionAt(
+          extensionIndex
+        );
+        const extensionTests = extension.getTests();
+        for (let i = 0; i < extensionTests.getTestsCount(); i++) {
+          tests.push({
+            scope: { type: 'extension', extensionName: extension.getName() },
+            testName: extensionTests.getTestAt(i).getName(),
+          });
+        }
+      }
+      if (!tests.length) return;
+
+      try {
+        await runProjectGameplayTests({
+          project: currentProject,
+          tests,
+          options: {},
+        });
+      } catch (error) {
+        console.error('Error while running the gameplay tests:', error);
+      }
+    },
+    [state]
+  );
+
   const deleteEventsFunctionsExtension = async (
     eventsFunctionsExtension: gdEventsFunctionsExtension
   ) => {
@@ -3650,6 +3864,13 @@ const MainFrame = (props: Props): React.MixedElement => {
     }: LaunchPreviewOptions): Promise<boolean> => {
       if (!currentProject) return false;
       if (currentProject.getLayoutsCount() === 0) return false;
+      if (getIsGameplayTestRunInProgress()) {
+        // Launching or hot-reloading a preview would interfere with the
+        // gameplay test being run (the game also ignores these commands,
+        // as a backstop).
+        console.info('Preview not launched: a gameplay test is running.');
+        return false;
+      }
 
       const shouldDisplayCollisionShapes =
         displayCollisionShapes === undefined
@@ -4326,6 +4547,23 @@ const MainFrame = (props: Props): React.MixedElement => {
           state.editorTabs,
           // $FlowFixMe[incompatible-type]
           getEditorOpeningOptions({ kind: 'external layout', name })
+        ),
+      }));
+    },
+    [setState, getEditorOpeningOptions]
+  );
+
+  const openGameplayTest = React.useCallback(
+    (scope: GameplayTestScope, testName: string) => {
+      setState(state => ({
+        ...state,
+        editorTabs: openEditorTab(
+          state.editorTabs,
+          // $FlowFixMe[incompatible-type]
+          getEditorOpeningOptions({
+            kind: 'gameplay-test',
+            name: getGameplayTestProjectItemName(scope, testName),
+          })
         ),
       }));
     },
@@ -5607,7 +5845,7 @@ const MainFrame = (props: Props): React.MixedElement => {
   const onProjectItemRenamedOutsideEditor = (
     changes: ProjectItemRenamedOutsideEditorChanges
   ) => {
-    const { kind, newName } = changes;
+    const { kind, oldName, newName } = changes;
     const { currentProject } = state;
     if (!currentProject) return;
     if (kind === 'scene' && currentProject.hasLayoutNamed(newName)) {
@@ -5616,6 +5854,21 @@ const MainFrame = (props: Props): React.MixedElement => {
         editorTabs: closeLayoutTabs(
           state.editorTabs,
           currentProject.getLayout(newName)
+        ),
+      }));
+    }
+    if (kind === 'gameplay-test') {
+      setState(state => ({
+        ...state,
+        editorTabs: getEditorTabsWithRenamedProjectItem(
+          state.editorTabs,
+          currentProject,
+          editorTab =>
+            getRenamedGameplayTestTabProjectItemName(
+              editorTab,
+              oldName,
+              newName
+            )
         ),
       }));
     }
@@ -5634,6 +5887,20 @@ const MainFrame = (props: Props): React.MixedElement => {
     await setState(state => ({
       ...state,
       editorTabs: closeLayoutTabs(state.editorTabs, changes.scene),
+    }));
+  };
+
+  // Called before a gameplay test is actually deleted from the project, so
+  // any tab bound to it is closed first (mirrors the manual delete flow).
+  const onWillDeleteGameplayTest = async (
+    changes: WillDeleteGameplayTestChanges
+  ): Promise<void> => {
+    await setState(state => ({
+      ...state,
+      editorTabs: closeGameplayTestTabs(
+        state.editorTabs,
+        changes.gameplayTestProjectItemName
+      ),
     }));
   };
 
@@ -7131,10 +7398,9 @@ const MainFrame = (props: Props): React.MixedElement => {
 
   /**
    * Similar to `currentProjectRef`, a fresh reference (fresh=value of the last render)
-   * to the latest `currentFileMetadata`. Only use this reference in fetchNewlyAddedResources.
-   * Anywhere else, pass the currentFileMetadata directly as argument.
+   * to the latest `currentFileMetadata`. It is shared by callbacks registered
+   * once outside the render lifecycle and by fetchNewlyAddedResources.
    */
-  const currentFileMetadataRef = useStableUpToDateRef(currentFileMetadata);
   const fetchNewlyAddedResources = React.useCallback(
     async (): Promise<void> => {
       if (!currentProjectRef.current || !currentFileMetadataRef.current) return;
@@ -7386,6 +7652,19 @@ const MainFrame = (props: Props): React.MixedElement => {
       <SettingsIcon />,
       () => activateProjectManagerItemFromSwitcher(gamePropertiesItemId)
     );
+    if (areGameplayTestsEnabled()) {
+      for (const { id, testName } of getProjectGameplayTestRecentEditorItems(
+        currentProject
+      )) {
+        addRecentEditorSwitcherSideMenuItem(
+          id,
+          testName,
+          i18n._(t`Test script`),
+          <PreviewIcon />,
+          () => openGameplayTest({ type: 'project' }, testName)
+        );
+      }
+    }
     addRecentEditorSwitcherSideMenuItem(
       'resources',
       i18n._(t`Resources`),
@@ -7712,9 +7991,15 @@ const MainFrame = (props: Props): React.MixedElement => {
   useMainFrameCommands({
     i18n,
     project: currentProject,
-    previewEnabled: !!currentProject && currentProject.getLayoutsCount() > 0,
+    // Launching or hot-reloading a preview while a gameplay test runs would
+    // interfere with it: the commands are disabled meanwhile.
+    previewEnabled:
+      !!currentProject &&
+      currentProject.getLayoutsCount() > 0 &&
+      !isGameplayTestRunInProgress,
     onOpenProjectManager: toggleProjectManager,
-    hasPreviewsRunning: hasNonEditionPreviewsRunning,
+    hasPreviewsRunning:
+      hasNonEditionPreviewsRunning && !isGameplayTestRunInProgress,
     allowNetworkPreview:
       !!_previewLauncher.current &&
       _previewLauncher.current.canDoNetworkPreview(),
@@ -7755,6 +8040,11 @@ const MainFrame = (props: Props): React.MixedElement => {
     onOpenExternalEvents: openExternalEvents,
     onOpenExternalLayout: openExternalLayout,
     onOpenEventsFunctionsExtension: openEventsFunctionsExtension,
+    onOpenGameplayTest: (testName: string) =>
+      openGameplayTest({ type: 'project' }, testName),
+    onRunGameplayTest: (testName: string) =>
+      runGameplayTestFromUi({ type: 'project' }, testName),
+    onRunAllGameplayTests: runAllGameplayTestsFromUi,
     onOpenCommandPalette: openCommandPalette,
     onOpenRecentEditorSwitcher: openRecentEditorSwitcher,
     onOpenProfile: onOpenProfileDialog,
@@ -8413,6 +8703,7 @@ const MainFrame = (props: Props): React.MixedElement => {
     },
     onCreateProject: () => setNewProjectSetupDialogOpen(true),
     onOpenProjectManager: showProjectManager,
+    onOpenRecentEditorSwitcher: openRecentEditorSwitcher,
     onOpenHomePage: openHomePage,
     onOpenDebugger: openDebugger,
     onOpenStickyNotes: openStickyNotesManager,
@@ -8432,6 +8723,15 @@ const MainFrame = (props: Props): React.MixedElement => {
     !!currentProject &&
     !isSavingProject &&
     (!currentFileMetadata || !isProjectOwnedBySomeoneElse);
+
+  // Not memoized: the handlers close over the current state (like the other
+  // project item handlers).
+  const gameplayTestsCallbacks: GameplayTestsCallbacks = {
+    onOpenGameplayTest: openGameplayTest,
+    onRenameGameplayTest: renameGameplayTest,
+    onDeleteGameplayTest: deleteGameplayTest,
+    onRunGameplayTest: runGameplayTestFromUi,
+  };
 
   const editorTabsPaneProps: EditorTabsPaneCommonProps = {
     gameEditorMode,
@@ -8482,6 +8782,7 @@ const MainFrame = (props: Props): React.MixedElement => {
     onCloseAskAi: closeAskAi,
     onCreateStickyNote: createStickyNoteFromTitlebar,
     isStickyNotesManagerShown,
+    gameplayTestsCallbacks,
     getStorageProvider: getStorageProvider,
     // $FlowFixMe[incompatible-type]
     setPreviewedLayout: setPreviewedLayout,
@@ -8541,6 +8842,7 @@ const MainFrame = (props: Props): React.MixedElement => {
     onObjectGroupsModifiedOutsideEditor: onObjectGroupsModifiedOutsideEditor,
     onProjectItemRenamedOutsideEditor: onProjectItemRenamedOutsideEditor,
     onWillDeleteScene: onWillDeleteScene,
+    onWillDeleteGameplayTest: onWillDeleteGameplayTest,
     onWillDeleteObject: onWillDeleteObject,
     onWillInstallExtension: onWillInstallExtension,
     onExtensionInstalled: onExtensionInstalled,
@@ -8592,10 +8894,22 @@ const MainFrame = (props: Props): React.MixedElement => {
       onDeleteExternalLayout={deleteExternalLayout}
       onDeleteEventsFunctionsExtension={deleteEventsFunctionsExtension}
       onDeleteExternalEvents={deleteExternalEvents}
+      onDeleteGameplayTest={(test: gdTest) =>
+        deleteGameplayTest({ type: 'project' }, test)
+      }
       onRenameLayout={renameLayout}
       onRenameExternalLayout={renameExternalLayout}
       onRenameEventsFunctionsExtension={renameEventsFunctionsExtension}
       onRenameExternalEvents={renameExternalEvents}
+      onRenameGameplayTest={(oldName: string, newName: string) =>
+        renameGameplayTest({ type: 'project' }, oldName, newName)
+      }
+      onOpenGameplayTest={(testName: string) =>
+        openGameplayTest({ type: 'project' }, testName)
+      }
+      onRunGameplayTest={(testName: string) =>
+        runGameplayTestFromUi({ type: 'project' }, testName)
+      }
       onOpenResources={openResources}
       onOpenConstants={openConstants}
       onReloadEventsFunctionsExtensions={onReloadEventsFunctionsExtensions}
@@ -8659,6 +8973,10 @@ const MainFrame = (props: Props): React.MixedElement => {
         enabled={gameEditorMode === 'embedded-game'}
         previewDebuggerServer={previewDebuggerServer || null}
         onLaunchPreviewForInGameEdition={onLaunchPreviewForInGameEdition}
+      />
+      <GameplayTestFrame
+        previewDebuggerServer={previewDebuggerServer || null}
+        onStopRequested={stopRunningProjectGameplayTest}
       />
       {!!renderMainMenu &&
         renderMainMenu(
@@ -8826,6 +9144,7 @@ const MainFrame = (props: Props): React.MixedElement => {
             onBehaviorEdited={onStandaloneSettingsEdited}
             onObjectEdited={onStandaloneSettingsEdited}
             onFunctionEdited={onStandaloneSettingsEdited}
+            gameplayTestsCallbacks={gameplayTestsCallbacks}
             initiallyFocusedFunctionName={null}
             initiallyFocusedBehaviorName={standaloneBehaviorSettingsDialog.eventsBasedBehavior.getName()}
             initiallyFocusedObjectName={null}
