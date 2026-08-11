@@ -35,6 +35,7 @@ describe('gdjs.RuntimeScene integration tests', function () {
       const runtimeScene = new gdjs.RuntimeScene(runtimeGame);
 
       expect(runtimeScene._debugDrawEnabled).to.be(true);
+      expect(runtimeScene._debugDrawShowHitBoxes).to.be(true);
     });
 
     it('should support the legacy collision mask display setting', function () {
@@ -47,6 +48,7 @@ describe('gdjs.RuntimeScene integration tests', function () {
       const runtimeScene = new gdjs.RuntimeScene(runtimeGame);
 
       expect(runtimeScene._debugDrawEnabled).to.be(true);
+      expect(runtimeScene._debugDrawShowHitBoxes).to.be(true);
     });
 
     it('should not display collision shapes by default', function () {
@@ -54,6 +56,7 @@ describe('gdjs.RuntimeScene integration tests', function () {
       const runtimeScene = new gdjs.RuntimeScene(runtimeGame);
 
       expect(runtimeScene._debugDrawEnabled).to.be(false);
+      expect(runtimeScene._debugDrawShowHitBoxes).to.be(false);
     });
   });
 

@@ -113,7 +113,7 @@ describe('gdjs.DebuggerPixiRenderer', function () {
 
     const debuggerRenderer = runtimeScene.getDebuggerRenderer();
     const clearMaskCache = sinon.spy(object, 'clear3DDebugCollisionMaskCache');
-    debuggerRenderer.renderDebugDraw([object], false, false, false);
+    debuggerRenderer.renderDebugDraw([object], true, false, false, false, []);
 
     const threeGroup = layer.getRenderer().getThreeGroup();
     if (!threeGroup) {
@@ -147,7 +147,7 @@ describe('gdjs.DebuggerPixiRenderer', function () {
       positionX: 400,
     };
     debuggerRenderer._debugDrawLastRenderTime = 0;
-    debuggerRenderer.renderDebugDraw([object], false, false, false);
+    debuggerRenderer.renderDebugDraw([object], true, false, false, false, []);
 
     expect(threeGroup.children[0]).to.be(lineSegments);
     expect(disposePreviousGeometry.calledOnce).to.be(true);
@@ -180,7 +180,7 @@ describe('gdjs.DebuggerPixiRenderer', function () {
 
     const debuggerRenderer = runtimeScene.getDebuggerRenderer();
     const clearMaskCache = sinon.spy(object, 'clear3DDebugCollisionMaskCache');
-    debuggerRenderer.renderDebugDraw([object], false, false, false);
+    debuggerRenderer.renderDebugDraw([object], true, false, false, false, []);
     const threeGroup = layer.getRenderer().getThreeGroup();
     if (!threeGroup) {
       throw new Error('The 3D layer should have a Three.js group.');
@@ -220,7 +220,7 @@ describe('gdjs.DebuggerPixiRenderer', function () {
     object.get3DDebugCollisionMasks = () => collisionMasks;
 
     const debuggerRenderer = runtimeScene.getDebuggerRenderer();
-    debuggerRenderer.renderDebugDraw([object], false, false, false);
+    debuggerRenderer.renderDebugDraw([object], true, false, false, false, []);
     const threeGroup = layer.getRenderer().getThreeGroup();
     if (!threeGroup) {
       throw new Error('The 3D layer should have a Three.js group.');
@@ -233,7 +233,7 @@ describe('gdjs.DebuggerPixiRenderer', function () {
     object.hide(true);
     collisionMasks = [];
     debuggerRenderer._debugDrawLastRenderTime = 0;
-    debuggerRenderer.renderDebugDraw([object], false, false, false);
+    debuggerRenderer.renderDebugDraw([object], true, false, false, false, []);
 
     expect(threeGroup.children.length).to.be(0);
     expect(disposeGeometry.calledOnce).to.be(true);

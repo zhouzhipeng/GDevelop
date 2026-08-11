@@ -239,6 +239,7 @@ namespace gdjs {
    * @category Debugging > Debugger Renderer
    */
   export class DebuggerPixiRenderer {
+    // as this is for debug draw.
     _instanceContainer: gdjs.RuntimeInstanceContainer;
     _debugDraw: PIXI.Graphics | null = null;
     _debugDrawContainer: PIXI.Container | null = null;
@@ -517,9 +518,11 @@ namespace gdjs {
      */
     renderDebugDraw(
       instances: gdjs.RuntimeObject[],
+      showHitBoxes: boolean,
       showHiddenInstances: boolean,
       showPointsNames: boolean,
-      showCustomPoints: boolean
+      showCustomPoints: boolean,
+      debugDrawHooks: Array<(rendererObject: any) => void>
     ) {
       const now = Date.now();
       const renderSignature = this._getDebugDrawRenderSignature(
@@ -592,6 +595,15 @@ namespace gdjs {
       };
 
       debugDraw.clear();
+
+      for (const render of debugDrawHooks) {
+        render(debugDraw);
+      }
+
+      if (!showHitBoxes) {
+        return;
+      }
+
       debugDraw.beginFill();
       debugDraw.alpha = 0.8;
       debugDraw.lineStyle(2, 0xff0000, 1);

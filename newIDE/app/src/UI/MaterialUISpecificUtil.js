@@ -162,6 +162,22 @@ const elementContainsActiveElement = (element: Element): boolean => {
   }
 };
 
+const releaseFocusFromElement = (element: Element): void => {
+  const activeElement = document.activeElement;
+  try {
+    if (
+      activeElement &&
+      element.contains(activeElement) &&
+      activeElement instanceof HTMLElement
+    ) {
+      activeElement.blur();
+    }
+  } catch (error) {
+    // Focus recovery is best effort. The external document that owned the
+    // focused element may already have been destroyed.
+  }
+};
+
 const hasVisibleInteractiveOverlayContent = (element: Element): boolean => {
   const surfaces = element.querySelectorAll(materialUiOverlaySurfaceSelector);
   for (let index = 0; index < surfaces.length; index++) {
@@ -367,14 +383,17 @@ export const cleanupLeakedOverlaysAfterPopOutClose = (
         overlay
       );
       const shouldRemove =
-        !elementContainsActiveElement(overlay) &&
-        (!overlay.firstElementChild ||
-          (!isKeepMountedTemporarySideMenu &&
-            (isElementHiddenOrClosed(overlay) ||
-              !hasVisibleInteractiveContent)));
+        !overlay.firstElementChild ||
+        (!isKeepMountedTemporarySideMenu &&
+          (isElementHiddenOrClosed(overlay) || !hasVisibleInteractiveContent));
 
-      if (shouldRemove && neutralizeElement(overlay)) {
-        neutralizedCount++;
+      if (shouldRemove) {
+        // A menu item can remain document.activeElement after its BrowserWindow
+        // loses focus. Do not let this stale focus keep a hidden full-window
+        // overlay alive forever: it is precisely what prevents the Preview
+        // split button (and other controls) from receiving another click.
+        releaseFocusFromElement(overlay);
+        if (neutralizeElement(overlay)) neutralizedCount++;
       }
     });
 

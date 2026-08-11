@@ -47,6 +47,7 @@ const MaterialUIContextMenu = React.forwardRef<
     0,
   ]);
   const [openMenu, setOpenMenu] = React.useState<boolean>(false);
+  const [menuOpeningId, setMenuOpeningId] = React.useState<number>(0);
   const [buildOptions, setBuildOptions] = React.useState<any>({});
   const forceUpdate = useForceUpdate();
   const portalContainer = getValidPortalContainer(
@@ -62,6 +63,12 @@ const MaterialUIContextMenu = React.forwardRef<
   const open = (x, y, options) => {
     setAnchorPosition([x, y]);
     setBuildOptions(options);
+    // Always mount a fresh MUI Menu/Modal for an explicit open request. A
+    // native preview or pop-out window can disappear while MUI is tearing down
+    // a portal. If that leaves the previous portal inert or hidden while this
+    // component still believes it is open, setOpenMenu(true) alone is a no-op
+    // and the dropdown can never be shown again.
+    setMenuOpeningId(menuOpeningId => menuOpeningId + 1);
     setOpenMenu(true);
   };
 
@@ -85,6 +92,7 @@ const MaterialUIContextMenu = React.forwardRef<
 
     return (
       <Drawer
+        key={menuOpeningId}
         anchor={'bottom'}
         open={true}
         onClose={() => setOpenMenu(false)}
@@ -111,6 +119,7 @@ const MaterialUIContextMenu = React.forwardRef<
 
   return (
     <Menu
+      key={menuOpeningId}
       open
       anchorPosition={{
         left: anchorPosition[0],

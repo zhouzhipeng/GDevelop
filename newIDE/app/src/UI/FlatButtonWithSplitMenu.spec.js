@@ -99,4 +99,59 @@ describe('FlatButtonWithSplitMenu', () => {
     act(() => root.unmount());
     container.remove();
   });
+
+  test('remounts its menu when a preview close left the previous portal inert', () => {
+    const container = document.createElement('div');
+    const body = document.body;
+    if (!body) throw new Error('Document body not found.');
+    body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <FlatButtonWithSplitMenu
+          label="Preview"
+          onClick={() => {}}
+          splitMenuButtonId="preview-split-menu"
+          buildMenuTemplate={() => [
+            { label: 'Preview option', click: () => {} },
+          ]}
+        />
+      );
+    });
+
+    const splitMenuButton = document.getElementById('preview-split-menu');
+    if (!splitMenuButton)
+      throw new Error('Preview split-menu button not found.');
+
+    act(() => {
+      splitMenuButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const firstMenu = document.querySelector('[role="menu"]');
+    const firstMenuRoot: any =
+      firstMenu && firstMenu.closest('.MuiPopover-root');
+    if (!firstMenuRoot) throw new Error('Preview dropdown root not found.');
+
+    // Recreate a BrowserWindow teardown that leaves the React menu state open
+    // but makes its existing portal incapable of receiving or showing input.
+    firstMenuRoot.style.pointerEvents = 'none';
+    firstMenuRoot.style.visibility = 'hidden';
+    firstMenuRoot.setAttribute('data-gdevelop-stale-overlay', 'true');
+
+    act(() => {
+      splitMenuButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const reopenedMenu = document.querySelector('[role="menu"]');
+    const reopenedMenuRoot: any =
+      reopenedMenu && reopenedMenu.closest('.MuiPopover-root');
+    expect(reopenedMenuRoot).not.toBe(null);
+    expect(reopenedMenuRoot).not.toBe(firstMenuRoot);
+    expect(reopenedMenuRoot.style.pointerEvents).not.toBe('none');
+    expect(reopenedMenuRoot.style.visibility).not.toBe('hidden');
+
+    act(() => root.unmount());
+    container.remove();
+  });
 });
