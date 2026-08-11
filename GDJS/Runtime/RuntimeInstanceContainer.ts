@@ -76,6 +76,7 @@ namespace gdjs {
       this._debugDrawEnabled = !!(
         displayCollisionShapes ?? displayCollisionMask
       );
+      this._debugDrawShowHitBoxes = this._debugDrawEnabled;
       if (runtimeGame.isInGameEdition()) {
         // Register an UnknownRuntimeObject to use when the object doesn't exist.
         this.registerObject(unknownObjectData);
