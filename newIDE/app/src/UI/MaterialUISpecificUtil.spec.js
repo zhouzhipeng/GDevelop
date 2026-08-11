@@ -489,4 +489,42 @@ describe('MaterialUISpecificUtil', () => {
       restoreDom();
     }
   });
+
+  test('releases focus trapped in a stale overlay before neutralizing it', () => {
+    const body = new FakeElement('body');
+    const appRoot = new FakeElement();
+    body.appendChild(appRoot);
+
+    const overlay = new FakeElement('MuiPopover-root MuiMenu-root', {
+      rect: fullWindowRect,
+      style: {
+        ...fullWindowStyle,
+        visibility: 'hidden',
+      },
+    });
+    overlay.setAttribute('aria-hidden', 'true');
+    const focusedMenuItem = new FakeElement('MuiMenuItem-root', {
+      style: {
+        display: 'block',
+        pointerEvents: 'auto',
+        position: 'relative',
+        visibility: 'hidden',
+      },
+    });
+    (focusedMenuItem: any).blur = jest.fn();
+    overlay.appendChild(focusedMenuItem);
+    body.appendChild(overlay);
+
+    const restoreDom = installFakeDom(body, focusedMenuItem);
+    try {
+      cleanupLeakedOverlaysAfterPopOutClose();
+
+      expect((focusedMenuItem: any).blur).toHaveBeenCalledTimes(1);
+      expect(overlay.style.pointerEvents).toBe('none');
+      expect(overlay.style.visibility).toBe('hidden');
+      expect(overlay.getAttribute('data-gdevelop-stale-overlay')).toBe('true');
+    } finally {
+      restoreDom();
+    }
+  });
 });

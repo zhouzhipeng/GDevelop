@@ -1453,6 +1453,11 @@ const MainFrame = (props: Props): React.MixedElement => {
           remainingPreviewWindowsForParent,
         }: { remainingPreviewWindowsForParent?: number } = {}
       ) => {
+        // Preview windows do not always have a debugger pop-out, so do not rely
+        // on debugger-popout-close-requested to restore the main window. Run
+        // input/overlay recovery for every native preview close, including one
+        // of several preview windows being closed.
+        healMainWindowAfterPopOutClose();
         const isLastPreviewWindowClosed =
           remainingPreviewWindowsForParent === 0;
         if (isLastPreviewWindowClosed) {
@@ -1479,6 +1484,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       cancelPendingPreviewLaunchAfterWindowClosed,
       clearPreviewDebuggerStatuses,
       hasNonEditionPreviewsRunning,
+      healMainWindowAfterPopOutClose,
       previewDebuggerServer,
     ]
   );
