@@ -219,6 +219,12 @@ const jsExtensions = [
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Steamworks/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
+  {
+    name: 'NavMeshPathfinding',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/NavMeshPathfinding/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
 ];
 
 const getExpectedNumberOfJSExtensionModules = ({
