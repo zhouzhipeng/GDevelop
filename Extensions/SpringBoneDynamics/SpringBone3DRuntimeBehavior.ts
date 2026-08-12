@@ -633,7 +633,8 @@ namespace gdjs {
         !configuration ||
         this._configurationStatus !== 'ready' ||
         this._colliderRendererWorldData.length !==
-          configuration.colliders.length * 8
+          configuration.colliders.length * 8 ||
+        this._colliderWorldData.length !== configuration.colliders.length * 8
       ) {
         this._debugCollisionMasks.length = 0;
         return this._debugCollisionMasks;
@@ -678,8 +679,12 @@ namespace gdjs {
         const deltaY = by - ay;
         const deltaZ = bz - az;
         const length = Math.hypot(deltaX, deltaY, deltaZ);
-        const radiusA = this._colliderRendererWorldData[worldOffset + 3];
-        const radiusB = this._colliderRendererWorldData[worldOffset + 7];
+        // The points above are converted from Three.js world coordinates to
+        // the debug layer's GDevelop coordinates by worldToLocal. Use the
+        // already converted solver radii so geometry and positions share the
+        // same coordinate scale.
+        const radiusA = this._colliderWorldData[worldOffset + 3];
+        const radiusB = this._colliderWorldData[worldOffset + 7];
         const geometryOffset = index * 3;
         let debugMask = this._debugCollisionMasks[index];
         if (
