@@ -126,9 +126,8 @@ describe('gdjs.evtTools.signal', () => {
     const { runtimeScene } = createSignalRuntimeScene();
     gdjs.evtTools.signal.emitSceneSignal(runtimeScene, 'Captured', 'value');
     dispatchFrame(runtimeScene);
-    const signal = gdjs.evtTools.signal.getDeliveredSceneSignalBatch(
-      runtimeScene
-    )[0];
+    const signal =
+      gdjs.evtTools.signal.getDeliveredSceneSignalBatch(runtimeScene)[0];
     gdjs.evtTools.signal.setCurrentSignalForSceneCondition(
       runtimeScene,
       signal
@@ -304,6 +303,31 @@ describe('gdjs.evtTools.signal', () => {
     expect(
       gdjs.evtTools.signal.getDeliveredSceneSignals(runtimeScene, 'Direct')
     ).to.have.length(0);
+  });
+
+  it('records the center Z of 3D signal emitters and receivers', () => {
+    const { runtimeScene, receiver } = createSignalRuntimeScene();
+    runtimeScene.isSignalMonitorDebugEnabled = () => true;
+    const receiverWith3DPosition = /** @type {any} */ (receiver);
+    receiverWith3DPosition.getCenterZInScene = () => 123;
+
+    gdjs.evtTools.signal.emitSignalToInstanceFromEvents(
+      runtimeScene,
+      receiver.getUniqueId(),
+      'Direct3D',
+      '',
+      receiver
+    );
+    dispatchFrame(runtimeScene);
+
+    const signalRecord = runtimeScene.getSignalBus().getDebugInfo()
+      .signalsThisFrame[0];
+    if (!signalRecord.source) {
+      throw new Error('The signal debug source should have been recorded.');
+    }
+    expect(signalRecord.source.z).to.be(123);
+    expect(signalRecord.receiverPositions[0].z).to.be(123);
+    expect(signalRecord.targetPositions[0].z).to.be(123);
   });
 
   it('dismisses direct signals for missing instances and instances without onSignal', () => {

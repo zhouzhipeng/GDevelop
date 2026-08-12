@@ -901,6 +901,7 @@ namespace gdjs {
     _destroy() {
       // Dispose collision-mask debug rendering resources before their layers
       // are released.
+      this.getDebuggerRenderer().clearSignalDebugDraw();
       this.getDebuggerRenderer().clearDebugDraw();
       // It should not be necessary to reset these variables, but this help
       // ensuring that all memory related to the container is released immediately.

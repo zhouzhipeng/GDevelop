@@ -241,6 +241,7 @@ namespace gdjs {
   export class DebuggerPixiRenderer {
     // as this is for debug draw.
     _instanceContainer: gdjs.RuntimeInstanceContainer;
+    _debugOverlayContainer: PIXI.Container | null = null;
     _debugDraw: PIXI.Graphics | null = null;
     _debugDrawContainer: PIXI.Container | null = null;
     _debugDrawLastRenderTime: integer = 0;
@@ -287,8 +288,39 @@ namespace gdjs {
       this._debugDraw = null;
     }
 
-    getRendererObject() {
-      return this._debugDrawContainer;
+    getRendererObject(): PIXI.Container | null {
+      return this._debugOverlayContainer;
+    }
+
+    _ensureDebugOverlayContainer(): PIXI.Container {
+      if (!this._debugOverlayContainer) {
+        this._debugOverlayContainer = new PIXI.Container();
+        this._debugOverlayContainer.sortableChildren = true;
+        const pixiContainer = this._instanceContainer
+          .getRenderer()
+          .getRendererObject();
+        if (pixiContainer) {
+          pixiContainer.addChild(this._debugOverlayContainer);
+        }
+      }
+      return this._debugOverlayContainer;
+    }
+
+    _destroyDebugOverlayContainerIfEmpty(): void {
+      if (
+        !this._debugOverlayContainer ||
+        this._debugDrawContainer ||
+        this._signalDebugDrawContainer
+      ) {
+        return;
+      }
+      if (this._debugOverlayContainer.parent) {
+        this._debugOverlayContainer.parent.removeChild(
+          this._debugOverlayContainer
+        );
+      }
+      this._debugOverlayContainer.destroy({ children: true });
+      this._debugOverlayContainer = null;
     }
 
     _createDebugDraw3DCollisionMaskGeometry(
@@ -539,18 +571,15 @@ namespace gdjs {
       this._debugDrawLastRenderSignature = renderSignature;
       this._debugDrawLastRenderTime = now;
 
-      const pixiContainer = this._instanceContainer
-        .getRenderer()
-        .getRendererObject();
       if (!this._debugDraw || !this._debugDrawContainer) {
+        const debugOverlayContainer = this._ensureDebugOverlayContainer();
         this._debugDrawContainer = new PIXI.Container();
+        this._debugDrawContainer.zIndex = 0;
         this._debugDraw = new PIXI.Graphics();
 
         // Add on top of all layers:
         this._debugDrawContainer.addChild(this._debugDraw);
-        if (pixiContainer) {
-          pixiContainer.addChild(this._debugDrawContainer);
-        }
+        debugOverlayContainer.addChild(this._debugDrawContainer);
       }
       const debugDraw = this._debugDraw;
 
@@ -873,19 +902,16 @@ namespace gdjs {
     }
 
     _ensureSignalDebugDraw(): PIXI.Graphics | null {
-      const pixiContainer = this._instanceContainer
-        .getRenderer()
-        .getRendererObject();
       if (!this._signalDebugDraw || !this._signalDebugDrawContainer) {
+        const debugOverlayContainer = this._ensureDebugOverlayContainer();
         this._signalDebugDrawContainer = new PIXI.Container();
         this._signalDebugDrawContainer.sortableChildren = true;
+        this._signalDebugDrawContainer.zIndex = 1;
         this._signalDebugDraw = new PIXI.Graphics();
         this._signalDebugDraw.zIndex = 0;
 
         this._signalDebugDrawContainer.addChild(this._signalDebugDraw);
-        if (pixiContainer) {
-          pixiContainer.addChild(this._signalDebugDrawContainer);
-        }
+        debugOverlayContainer.addChild(this._signalDebugDrawContainer);
       }
 
       return this._signalDebugDraw;
@@ -1831,6 +1857,43 @@ namespace gdjs {
         return null;
       }
 
+      const layerRenderer = layer.getRenderer();
+      const shouldRenderLayerIn3D =
+        this._instanceContainer.getGame().isInGameEdition() ||
+        (layer.getRenderingType() !== gdjs.RuntimeLayerRenderingType.TWO_D &&
+          layerRenderer.has3DObjects());
+      const threeCamera = shouldRenderLayerIn3D
+        ? layerRenderer.getThreeCamera()
+        : null;
+      if (threeCamera) {
+        if (point.objectName === 'scene' && point.objectId === -1) {
+          return [layer.getWidth() / 2, layer.getHeight() / 2];
+        }
+
+        const inverseWorldScale = layer
+          .getRuntimeScene()
+          .getRenderer3DInverseWorldScale();
+        threeCamera.updateMatrixWorld();
+        const projectedPoint = new THREE.Vector3(
+          point.x * inverseWorldScale,
+          -point.y * inverseWorldScale,
+          point.z * inverseWorldScale
+        ).project(threeCamera);
+        if (
+          !Number.isFinite(projectedPoint.x) ||
+          !Number.isFinite(projectedPoint.y) ||
+          !Number.isFinite(projectedPoint.z) ||
+          projectedPoint.z < -1 ||
+          projectedPoint.z > 1
+        ) {
+          return null;
+        }
+        return [
+          ((projectedPoint.x + 1) / 2) * layer.getWidth(),
+          ((1 - projectedPoint.y) / 2) * layer.getHeight(),
+        ];
+      }
+
       const transformedPoint = layer.applyLayerTransformation(
         point.x,
         point.y,
@@ -2081,15 +2144,14 @@ namespace gdjs {
       }
 
       if (this._signalDebugDrawContainer) {
+        if (this._signalDebugDrawContainer.parent) {
+          this._signalDebugDrawContainer.parent.removeChild(
+            this._signalDebugDrawContainer
+          );
+        }
         this._signalDebugDrawContainer.destroy({
           children: true,
         });
-        const pixiContainer: PIXI.Container | null = this._instanceContainer
-          .getRenderer()
-          .getRendererObject();
-        if (pixiContainer) {
-          pixiContainer.removeChild(this._signalDebugDrawContainer);
-        }
       }
       this._signalDebugDraw = null;
       this._signalDebugDrawContainer = null;
@@ -2108,6 +2170,7 @@ namespace gdjs {
       this._hasUserPositionedSignalDebugPanel = false;
       this._isDraggingSignalDebugPanel = false;
       this._isSignalDebugPanelFolded = false;
+      this._destroyDebugOverlayContainerIfEmpty();
     }
 
     clearDebugDraw(): void {
@@ -2117,15 +2180,12 @@ namespace gdjs {
       }
 
       if (this._debugDrawContainer) {
+        if (this._debugDrawContainer.parent) {
+          this._debugDrawContainer.parent.removeChild(this._debugDrawContainer);
+        }
         this._debugDrawContainer.destroy({
           children: true,
         });
-        const pixiContainer: PIXI.Container | null = this._instanceContainer
-          .getRenderer()
-          .getRendererObject();
-        if (pixiContainer) {
-          pixiContainer.removeChild(this._debugDrawContainer);
-        }
       }
       this._debugDraw = null;
       this._debugDrawContainer = null;
@@ -2133,6 +2193,7 @@ namespace gdjs {
       this._debugDrawLastRenderSignature = '';
       this._debugDrawStartIndex = 0;
       this._debugDrawRenderedObjectsPoints = {};
+      this._destroyDebugOverlayContainerIfEmpty();
     }
   }
 
