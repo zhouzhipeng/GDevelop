@@ -761,6 +761,9 @@ describe('Local multi-file project storage', () => {
     expect(
       fs.existsSync(path.join(temporaryDirectory, '.gdevelop/project-api.d.ts'))
     ).toBe(true);
+    expect(
+      fs.existsSync(path.join(temporaryDirectory, '.gdevelop/harness-api.d.ts'))
+    ).toBe(true);
   });
 
   test('rebuilds a pre-merge settings catalog and removes the retired layout catalog', async () => {
@@ -1658,15 +1661,24 @@ describe('Local multi-file project storage', () => {
 
     let counts: Object;
     let cachedCounts: Object;
+    let firstHarnessApi: string;
     try {
       counts = await writeProjectSourceCatalogs(project, temporaryDirectory, {
-        reportProgress: phase => progressPhases.push(phase),
+        reportProgress: phase => {
+          progressPhases.push(phase);
+        },
       });
+      firstHarnessApi = fs.readFileSync(
+        path.join(temporaryDirectory, '.gdevelop/harness-api.d.ts'),
+        'utf8'
+      );
       cachedCounts = await writeProjectSourceCatalogs(
         project,
         temporaryDirectory,
         {
-          reportProgress: phase => cachedProgressPhases.push(phase),
+          reportProgress: phase => {
+            cachedProgressPhases.push(phase);
+          },
         }
       );
     } finally {
@@ -1680,6 +1692,13 @@ describe('Local multi-file project storage', () => {
     expect(counts.javascript.counts.scenes).toBe(1);
     expect(cachedCounts).toEqual(counts);
     expect(counts.javascript.hashes.runtimeApi).toMatch(/^[0-9a-f]{64}$/);
+    expect(counts.javascript.hashes.projectApi).toMatch(/^[0-9a-f]{64}$/);
+    expect(counts.javascript.hashes.harnessApi).toMatch(/^[0-9a-f]{64}$/);
+    expect(counts.javascript.paths).toEqual({
+      runtimeApi: path.join(temporaryDirectory, '.gdevelop/runtime-api.d.ts'),
+      projectApi: path.join(temporaryDirectory, '.gdevelop/project-api.d.ts'),
+      harnessApi: path.join(temporaryDirectory, '.gdevelop/harness-api.d.ts'),
+    });
     expect(
       fs.existsSync(
         path.join(temporaryDirectory, '.gdevelop/instructions-catalog.json')
@@ -1710,11 +1729,23 @@ describe('Local multi-file project storage', () => {
       fs.existsSync(path.join(temporaryDirectory, '.gdevelop/project-api.d.ts'))
     ).toBe(true);
     expect(
+      fs.existsSync(path.join(temporaryDirectory, '.gdevelop/harness-api.d.ts'))
+    ).toBe(true);
+    expect(
       fs.readFileSync(
         path.join(temporaryDirectory, '.gdevelop/runtime-api.d.ts'),
         'utf8'
       )
     ).not.toContain('_instances');
+    const harnessApi = fs.readFileSync(
+      path.join(temporaryDirectory, '.gdevelop/harness-api.d.ts'),
+      'utf8'
+    );
+    expect(harnessApi).toBe(firstHarnessApi);
+    expect(harnessApi).toContain(
+      'declare const harness: GDevelopGameplayTests.GameplayTestHarness'
+    );
+    expect(harnessApi).not.toContain('_runtimeGame');
     expect(progressPhases).toEqual([
       'catalog-project-serializing',
       'catalog-project-serialized',
@@ -1733,11 +1764,14 @@ describe('Local multi-file project storage', () => {
       'catalog-settings-writing',
       'catalog-settings-written',
       'catalog-javascript-api-building',
+      'catalog-harness-api-building',
       'catalog-javascript-api-built',
       'catalog-runtime-api-writing',
       'catalog-runtime-api-written',
       'catalog-project-api-writing',
       'catalog-project-api-written',
+      'catalog-harness-api-writing',
+      'catalog-harness-api-verifying',
     ]);
     expect(cachedProgressPhases).toContain('catalog-instructions-cache-hit');
     expect(cachedProgressPhases).toContain(
@@ -1846,6 +1880,9 @@ column = "editor only"
     ).toBe(true);
     expect(
       fs.existsSync(path.join(temporaryDirectory, '.gdevelop/project-api.d.ts'))
+    ).toBe(true);
+    expect(
+      fs.existsSync(path.join(temporaryDirectory, '.gdevelop/harness-api.d.ts'))
     ).toBe(true);
     project.delete();
   });

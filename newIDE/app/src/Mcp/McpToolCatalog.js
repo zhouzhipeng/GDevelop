@@ -115,6 +115,70 @@ const toolNameSchema = {
   additionalProperties: false,
 };
 
+const inspectGlbModelSchema = {
+  type: 'object',
+  properties: {
+    file_path: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 4096,
+      description:
+        'Absolute path to a local .glb file, or a path relative to the directory containing the open project.gdevelop file.',
+    },
+  },
+  required: ['file_path'],
+  additionalProperties: false,
+};
+
+const runGameplayTestsSchema = {
+  type: 'object',
+  properties: {
+    file: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 1024,
+      description:
+        'Optional exact scheme-free canonical file value from tests.settings, for example tests/Player%20can%20jump.js. Omit to run every authored gameplay test in canonical order.',
+    },
+    timeout_ms: {
+      type: 'integer',
+      minimum: 1000,
+      maximum: 300000,
+      default: 30000,
+      description:
+        'Wall-clock budget in milliseconds for each selected test, excluding preview/asset loading. Defaults to 30000.',
+    },
+  },
+  additionalProperties: false,
+};
+
+const getGameplayTestResultsSchema = {
+  type: 'object',
+  properties: {
+    operation_id: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 128,
+      description:
+        'Operation ID returned by run_gameplay_tests. Omit to discover the active operation or latest retained terminal operation.',
+    },
+    offset: {
+      type: 'integer',
+      minimum: 0,
+      default: 0,
+      description: 'Zero-based offset into completed test results.',
+    },
+    limit: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 100,
+      default: 25,
+      description: 'Maximum completed test results to return. Defaults to 25.',
+    },
+  },
+  additionalProperties: false,
+};
+
 // Shared tile-spec item used by tilemap tools: a tile is a number (tileId; <0
 // clears), or an object addressing the tileset cell + optional flips.
 
@@ -900,9 +964,21 @@ const readTools: Array<McpTool> = [
     inputSchema: inspectSignalUsageSchema,
   },
   {
+    name: 'inspect_glb_model',
+    description:
+      'Inspect a local binary glTF (.glb) file without loading its meshes or textures. Returns the animation names GDevelop can select and the exact case-sensitive canonical bone names GDevelop can reference. Accepts an absolute local path or a path relative to the open project folder; empty and ambiguous duplicate bone names are omitted.',
+    inputSchema: inspectGlbModelSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
     name: 'generate-catalogs',
     description:
-      'Regenerate .gdevelop/instructions-catalog.json, .gdevelop/deprecated-instructions-catalog.json, .gdevelop/settings-catalog.json, .gdevelop/runtime-api.d.ts, and .gdevelop/project-api.d.ts from the current local multi-file project sources. The settings catalog includes the embedded-layout schema and contexts. The call waits for all five generated authoring files to be written and verified before returning. Accepts no inputs, writes only generated authoring files, removes the retired layout-catalog.json, and does not validate sources or reload editor memory. Call this after structural project-file changes, then read the refreshed catalogs and declarations before making dependent edits.',
+      'Regenerate .gdevelop/instructions-catalog.json, .gdevelop/deprecated-instructions-catalog.json, .gdevelop/settings-catalog.json, .gdevelop/runtime-api.d.ts, .gdevelop/project-api.d.ts, and .gdevelop/harness-api.d.ts from the current local multi-file project sources. The settings catalog includes the embedded-layout schema and contexts. The call waits for all six generated authoring files (three catalogs and three JavaScript declarations) to be written and verified before returning. Accepts no inputs, writes only generated authoring files, removes the retired layout-catalog.json, and does not validate sources or reload editor memory. Call this after structural project-file changes, then read the refreshed catalogs and declarations before making dependent edits.',
     inputSchema: noInputSchema,
     annotations: {
       readOnlyHint: false,
@@ -914,10 +990,34 @@ const readTools: Array<McpTool> = [
   {
     name: 'validate_project_files',
     description:
-      'Load the current local multi-file project from project.gdevelop, regenerate all catalogs and public JavaScript declaration files, reload the sources using the fresh instruction catalog, reconstruct the legacy game.json representation in memory, validate JavaScript event blocks against the generated context-aware API, then validate through GDevelop and preflight generated extension JavaScript. strict=true JavaScript API violations block validation; compatibility blocks report semantic warnings while syntax errors still block. valid:true proves structural, JavaScript authoring-API, and code-generation validity only; it does NOT verify runtime gameplay semantics, object picking, or action side effects. Accepts no inputs, writes only generated .gdevelop authoring files, does not reload editor memory, and reports the blocking file, error code, line, column, and source excerpt when available. Call this after direct project-file edits and require valid:true before reload_project, then runtime-test behavior-sensitive changes with a paused preview and run_frames.',
+      'Load the current local multi-file project from project.gdevelop, regenerate all three catalogs and all three public JavaScript declaration files (including .gdevelop/harness-api.d.ts), reload the sources using the fresh instruction catalog, reconstruct the legacy game.json representation in memory, validate JavaScript event blocks against the generated context-aware API, then validate through GDevelop and preflight generated extension JavaScript. strict=true JavaScript API violations block validation; compatibility blocks report semantic warnings while syntax errors still block. valid:true proves structural, JavaScript authoring-API, and code-generation validity only; it does NOT verify runtime gameplay semantics, object picking, or action side effects. Accepts no inputs, writes only six generated .gdevelop authoring files, does not reload editor memory, and reports the blocking file, error code, line, column, and source excerpt when available. Call this after direct project-file edits and require valid:true before reload_project, then runtime-test behavior-sensitive changes with a paused preview and run_frames or authored tests with run_gameplay_tests.',
     inputSchema: noInputSchema,
     annotations: {
       readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'run_gameplay_tests',
+    description:
+      'Start one authored gameplay test selected by its exact canonical tests.settings file value, or all project and extension gameplay tests when file is omitted. Returns a stable operation_id immediately while the shared dedicated gameplay-test preview runs in the background. Uses current in-memory test sources, an unpaced deterministic harness, the requested per-test timeout, and no screenshot capture. Poll get_gameplay_test_results until status is completed or failed.',
+    inputSchema: runGameplayTestsSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'get_gameplay_test_results',
+    description:
+      'Read progress, aggregate outcome, and a bounded page of completed authored gameplay-test results for an operation. Omit operation_id to recover the active or latest retained operation after a caller interruption. This tool never starts, retries, stops, or mutates a run; test failures are returned as completed result data.',
+    inputSchema: getGameplayTestResultsSchema,
+    annotations: {
+      readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false,
@@ -1063,8 +1163,47 @@ const toolUsageExamples: { [string]: Array<Object> } = {
   'generate-catalogs': [
     {
       description:
-        'Regenerate and verify the three project-source catalogs and two JavaScript declaration files after structural file changes.',
+        'Regenerate and verify the three project-source catalogs and three JavaScript declaration files after structural file changes.',
       arguments: {},
+    },
+  ],
+  inspect_glb_model: [
+    {
+      description:
+        'Inspect animation and usable canonical bone names in a project GLB asset.',
+      arguments: {
+        file_path: 'assets/models/hero.glb',
+      },
+    },
+  ],
+  run_gameplay_tests: [
+    {
+      description:
+        'Start all authored project and extension gameplay tests with the default per-test timeout.',
+      arguments: {},
+    },
+    {
+      description:
+        'Start one authored test using its exact flat tests.settings file identity.',
+      arguments: {
+        file: 'tests/Player%20can%20jump.js',
+        timeout_ms: 45000,
+      },
+    },
+  ],
+  get_gameplay_test_results: [
+    {
+      description:
+        'Recover the active or latest retained operation and return its first result page.',
+      arguments: {},
+    },
+    {
+      description: 'Poll a known operation and read its next completed page.',
+      arguments: {
+        operation_id: 'gameplay-tests-550e8400-e29b-41d4-a716-446655440000',
+        offset: 25,
+        limit: 25,
+      },
     },
   ],
   import_extension: [
@@ -1468,12 +1607,14 @@ export const getCapabilitiesSummary = (
       'gdevelop_list_scenes',
       'gdevelop_list_objects',
       'gdevelop_inspect_signal_usage',
+      'inspect_glb_model',
     ],
     'Project-file validation': [
       'generate-catalogs',
       'validate_project_files',
       'reload_project',
     ],
+    'Gameplay tests': ['run_gameplay_tests', 'get_gameplay_test_results'],
     'Tool discovery': ['inspect_tool_schema', 'get_tool_usage_examples'],
     'Preview runtime': [
       'launch_preview',
@@ -1500,7 +1641,7 @@ export const getCapabilitiesSummary = (
   });
   return {
     note:
-      'GDevelop MCP is intentionally limited to local project opening, one extension import/conversion tool, editor queries, synchronization, validation, and preview debugging. There are no Constants MCP tools: the AI model must read and modify constants.toml directly on disk. After import_extension generates canonical sources, author the game through project files and the generated .gdevelop/settings-catalog.json (including embedded-layout authoring data) and .gdevelop/instructions-catalog.json. Before authoring JavaScript events, also read .gdevelop/runtime-api.d.ts and .gdevelop/project-api.d.ts.',
+      'GDevelop MCP is intentionally limited to local project opening, one extension import/conversion tool, editor queries, bounded local GLB metadata inspection, synchronization, validation, authored gameplay-test execution, and preview debugging. There are no Constants MCP tools: the AI model must read and modify constants.toml directly on disk. After import_extension generates canonical sources, author the game through project files and the generated .gdevelop/settings-catalog.json (including embedded-layout authoring data) and .gdevelop/instructions-catalog.json. Before authoring JavaScript events, also read .gdevelop/runtime-api.d.ts and .gdevelop/project-api.d.ts; before authoring gameplay tests, read .gdevelop/harness-api.d.ts.',
     permissions: {
       writeToolsEnabled: !!permissions.allowWriteTools,
       commandToolsEnabled: !!permissions.allowCommandTools,

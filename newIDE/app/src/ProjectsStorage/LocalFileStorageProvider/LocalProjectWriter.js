@@ -59,6 +59,7 @@ import {
 } from '../ProjectSourceCatalog';
 import {
   PROJECT_API_RELATIVE_PATH,
+  PROJECT_HARNESS_API_RELATIVE_PATH,
   PROJECT_RUNTIME_API_RELATIVE_PATH,
   JavaScriptAuthoringApiError,
   buildJavaScriptAuthoringArtifacts,
@@ -126,7 +127,11 @@ const deleteExistingFilesFromDirs = (
   });
 };
 
-const checkFileContent = (filePath: string, expectedContent: string) => {
+const checkFileContent = (
+  filePath: string,
+  expectedContent: string,
+  expectedSha256?: string
+) => {
   const time = performance.now();
   return new Promise((resolve, reject) => {
     fs.readFile(filePath, { encoding: 'utf8' }, (err, content) => {
@@ -142,6 +147,24 @@ const checkFileContent = (filePath: string, expectedContent: string) => {
           )
         );
       }
+      if (expectedSha256) {
+        if (!crypto) {
+          return reject(
+            new Error('Cryptographic hash verification is not supported.')
+          );
+        }
+        const actualSha256 = crypto
+          .createHash('sha256')
+          .update(content)
+          .digest('hex');
+        if (actualSha256 !== expectedSha256) {
+          return reject(
+            new Error(
+              `Written file hash does not match the expected SHA-256 hash.`
+            )
+          );
+        }
+      }
       const verificationTime = performance.now() - time;
       console.info(
         `Verified ${filePath} content in ${verificationTime.toFixed()}ms.`
@@ -153,7 +176,8 @@ const checkFileContent = (filePath: string, expectedContent: string) => {
 
 const writeAndCheckFile = async (
   content: string,
-  filePath: string
+  filePath: string,
+  expectedSha256?: string
 ): Promise<void> => {
   if (!fs) throw new Error('Filesystem is not supported.');
   if (content === '')
@@ -167,7 +191,7 @@ const writeAndCheckFile = async (
     await fs.writeFile(temporaryPath, content);
     await checkFileContent(temporaryPath, content);
     await fs.move(temporaryPath, filePath, { overwrite: true });
-    await checkFileContent(filePath, content);
+    await checkFileContent(filePath, content, expectedSha256);
   } finally {
     if (await fs.pathExists(temporaryPath)) {
       await fs.remove(temporaryPath);
@@ -190,7 +214,11 @@ const writeAndCheckFormattedJSONFile = async (
 // otherwise responsive. Synchronous, atomic temp-file replacement either
 // completes or throws at the exact artifact subphase, so reload_project can
 // never be left waiting on an unobservable libuv filesystem callback.
-const checkFileContentSync = (filePath: string, expectedContent: string) => {
+const checkFileContentSync = (
+  filePath: string,
+  expectedContent: string,
+  expectedSha256?: string
+) => {
   const time = performance.now();
   const content = fs.readFileSync(filePath, { encoding: 'utf8' });
   if (content === '') {
@@ -201,6 +229,20 @@ const checkFileContentSync = (filePath: string, expectedContent: string) => {
       `Written file is not containing the expected content, did the write fail?`
     );
   }
+  if (expectedSha256) {
+    if (!crypto) {
+      throw new Error('Cryptographic hash verification is not supported.');
+    }
+    const actualSha256 = crypto
+      .createHash('sha256')
+      .update(content)
+      .digest('hex');
+    if (actualSha256 !== expectedSha256) {
+      throw new Error(
+        `Written file hash does not match the expected SHA-256 hash.`
+      );
+    }
+  }
   const verificationTime = performance.now() - time;
   console.info(
     `Verified ${filePath} content synchronously in ${verificationTime.toFixed()}ms.`
@@ -209,7 +251,9 @@ const checkFileContentSync = (filePath: string, expectedContent: string) => {
 
 const writeAndCheckGeneratedFileSync = (
   content: string,
-  filePath: string
+  filePath: string,
+  expectedSha256?: string,
+  onVerifying?: () => void
 ): void => {
   if (!fs) throw new Error('Filesystem is not supported.');
   if (content === '')
@@ -223,7 +267,8 @@ const writeAndCheckGeneratedFileSync = (
     fs.writeFileSync(temporaryPath, content);
     checkFileContentSync(temporaryPath, content);
     fs.moveSync(temporaryPath, filePath, { overwrite: true });
-    checkFileContentSync(filePath, content);
+    if (onVerifying) onVerifying();
+    checkFileContentSync(filePath, content, expectedSha256);
   } finally {
     if (fs.pathExistsSync(temporaryPath)) {
       fs.removeSync(temporaryPath);
@@ -244,7 +289,7 @@ export class ProjectSourceCatalogGenerationError extends Error {
   catalogArtifact: ?string;
 
   constructor(catalogPhase: string, error: Error) {
-    const artifactMatch = /^catalog-(.+)-(?:building|built|writing|written)$/.exec(
+    const artifactMatch = /^catalog-(.+)-(?:building|built|writing|written|verifying|verified)$/.exec(
       catalogPhase
     );
     super(
@@ -409,23 +454,52 @@ export const writeProjectJavaScriptAuthoringApi = async (
   reportCatalogProgress(options, 'catalog-javascript-api-building');
   const serializedProject =
     serializedProjectObject || serializeToJSObject(project, 'serializeTo');
-  const artifacts = buildJavaScriptAuthoringArtifacts(serializedProject);
+  const artifacts = buildJavaScriptAuthoringArtifacts(serializedProject, {
+    onHarnessApiBuilding: () =>
+      reportCatalogProgress(options, 'catalog-harness-api-building'),
+  });
   reportCatalogProgress(options, 'catalog-javascript-api-built');
+  const runtimeApiPath = path.join(
+    projectPath,
+    ...PROJECT_RUNTIME_API_RELATIVE_PATH.split('/')
+  );
+  const projectApiPath = path.join(
+    projectPath,
+    ...PROJECT_API_RELATIVE_PATH.split('/')
+  );
+  const harnessApiPath = path.join(
+    projectPath,
+    ...PROJECT_HARNESS_API_RELATIVE_PATH.split('/')
+  );
   reportCatalogProgress(options, 'catalog-runtime-api-writing');
   writeAndCheckGeneratedFileSync(
     artifacts.runtimeApi,
-    path.join(projectPath, ...PROJECT_RUNTIME_API_RELATIVE_PATH.split('/'))
+    runtimeApiPath,
+    artifacts.hashes.runtimeApi
   );
   reportCatalogProgress(options, 'catalog-runtime-api-written');
   reportCatalogProgress(options, 'catalog-project-api-writing');
   writeAndCheckGeneratedFileSync(
     artifacts.projectApi,
-    path.join(projectPath, ...PROJECT_API_RELATIVE_PATH.split('/'))
+    projectApiPath,
+    artifacts.hashes.projectApi
   );
   reportCatalogProgress(options, 'catalog-project-api-written');
+  reportCatalogProgress(options, 'catalog-harness-api-writing');
+  writeAndCheckGeneratedFileSync(
+    artifacts.harnessApi,
+    harnessApiPath,
+    artifacts.hashes.harnessApi,
+    () => reportCatalogProgress(options, 'catalog-harness-api-verifying')
+  );
   return {
     counts: artifacts.counts,
     hashes: artifacts.hashes,
+    paths: {
+      runtimeApi: runtimeApiPath,
+      projectApi: projectApiPath,
+      harnessApi: harnessApiPath,
+    },
   };
 };
 
@@ -655,11 +729,18 @@ const writeProjectFiles = async ({
     );
     await writeAndCheckFile(
       javascriptArtifacts.runtimeApi,
-      path.join(projectPath, ...PROJECT_RUNTIME_API_RELATIVE_PATH.split('/'))
+      path.join(projectPath, ...PROJECT_RUNTIME_API_RELATIVE_PATH.split('/')),
+      javascriptArtifacts.hashes.runtimeApi
     );
     await writeAndCheckFile(
       javascriptArtifacts.projectApi,
-      path.join(projectPath, ...PROJECT_API_RELATIVE_PATH.split('/'))
+      path.join(projectPath, ...PROJECT_API_RELATIVE_PATH.split('/')),
+      javascriptArtifacts.hashes.projectApi
+    );
+    await writeAndCheckFile(
+      javascriptArtifacts.harnessApi,
+      path.join(projectPath, ...PROJECT_HARNESS_API_RELATIVE_PATH.split('/')),
+      javascriptArtifacts.hashes.harnessApi
     );
     const generatedLegacyProject = stripGameplayTestResultsFromLegacyProject(
       removeLegacyFolderStructuresFromProject(authoringSerializedProjectObject)

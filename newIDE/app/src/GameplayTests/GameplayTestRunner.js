@@ -73,8 +73,13 @@ export type GameplayTestRunOptions = {|
   // Pace the run for a human watching it: game seconds simulated per real
   // second (1 = normal speed, 4 = 4x...). Omitted: run as fast as possible.
   speedFactor?: number,
+  onRunStarted?: () => void,
   onTestStarted?: (test: GameplayTestToRun) => void,
   onProgress?: (test: GameplayTestToRun, frame: number) => void,
+  onTestFinished?: (
+    test: GameplayTestToRun,
+    result: GameplayTestResult
+  ) => void,
 |};
 
 /**
@@ -447,6 +452,22 @@ export const runGameplayTests = async ({
   const runPromise = lastRunPromise.then(
     async (): Promise<Array<GameplayTestResult>> => {
       const results: Array<GameplayTestResult> = [];
+      const appendResult = (
+        test: GameplayTestToRun,
+        result: GameplayTestResult
+      ): void => {
+        results.push(result);
+        if (!options.onTestFinished) return;
+        try {
+          options.onTestFinished(test, result);
+        } catch (error) {
+          // Lifecycle callbacks observe a run and must not change its outcome.
+          console.error(
+            '[GameplayTestRunner] onTestFinished callback failed.',
+            error
+          );
+        }
+      };
       const timeoutMs =
         options.timeoutMs ||
         (options.speedFactor
@@ -457,63 +478,74 @@ export const runGameplayTests = async ({
         abortBootWait: () => {},
       };
       currentBatchStopController = stopController;
-      setRunInProgress(true);
       let anyTestRan = false;
 
-      // Close any frame left open by a previous run, so the new preview
-      // always loads in a fresh frame (and a stale game can never answer
-      // in place of the new one).
-      clearGameplayTestFramePreview();
-
-      // Readable state for object/behavior snapshots, derived once per batch
-      // from the extensions metadata.
-      const stateInspectors = enumerateGameplayTestStateInspectors(project);
-
-      // Resolve the sources of the tests first, so an unknown test does not
-      // interrupt the batch in the middle.
-      const testsWithSources = tests.map(test => {
-        if (test.source !== undefined) {
-          return { test, source: test.source, error: null };
-        }
-        const testsContainer = getTestsContainer(project, test.scope);
-        if (!testsContainer) {
-          return {
-            test,
-            source: null,
-            error: `The scope (${getGameplayTestScopeDescription(
-              test.scope
-            )}) does not exist in the project.`,
-          };
-        }
-        if (!testsContainer.hasTestNamed(test.testName)) {
-          return {
-            test,
-            source: null,
-            error: `No test named "${
-              test.testName
-            }" in ${getGameplayTestScopeDescription(test.scope)}.`,
-          };
-        }
-        return {
-          test,
-          source: testsContainer.getTest(test.testName).getSource(),
-          error: null,
-        };
-      });
-
-      const firstTest = testsWithSources[0];
-      if (firstTest) {
-        setGameplayTestFrameRunStatus({
-          testName: firstTest.test.testName,
-          status: 'launching',
-          frame: null,
-          durationMs: null,
-          testIndex: 0,
-          testsCount: testsWithSources.length,
-        });
-      }
-
       try {
+        setRunInProgress(true);
+        if (options.onRunStarted) {
+          try {
+            options.onRunStarted();
+          } catch (error) {
+            // Lifecycle callbacks observe a run and must not prevent it.
+            console.error(
+              '[GameplayTestRunner] onRunStarted callback failed.',
+              error
+            );
+          }
+        }
+        // Close any frame left open by a previous run, so the new preview
+        // always loads in a fresh frame (and a stale game can never answer
+        // in place of the new one).
+        clearGameplayTestFramePreview();
+
+        // Readable state for object/behavior snapshots, derived once per batch
+        // from the extensions metadata.
+        const stateInspectors = enumerateGameplayTestStateInspectors(project);
+
+        // Resolve the sources of the tests first, so an unknown test does not
+        // interrupt the batch in the middle.
+        const testsWithSources = tests.map(test => {
+          if (test.source !== undefined) {
+            return { test, source: test.source, error: null };
+          }
+          const testsContainer = getTestsContainer(project, test.scope);
+          if (!testsContainer) {
+            return {
+              test,
+              source: null,
+              error: `The scope (${getGameplayTestScopeDescription(
+                test.scope
+              )}) does not exist in the project.`,
+            };
+          }
+          if (!testsContainer.hasTestNamed(test.testName)) {
+            return {
+              test,
+              source: null,
+              error: `No test named "${
+                test.testName
+              }" in ${getGameplayTestScopeDescription(test.scope)}.`,
+            };
+          }
+          return {
+            test,
+            source: testsContainer.getTest(test.testName).getSource(),
+            error: null,
+          };
+        });
+
+        const firstTest = testsWithSources[0];
+        if (firstTest) {
+          setGameplayTestFrameRunStatus({
+            testName: firstTest.test.testName,
+            status: 'launching',
+            frame: null,
+            durationMs: null,
+            testIndex: 0,
+            testsCount: testsWithSources.length,
+          });
+        }
+
         // Export and launch a fresh preview into the gameplay test frame.
         await previewLauncher.launchPreview({
           project,
@@ -561,11 +593,12 @@ export const runGameplayTests = async ({
           const { test, source, error } = testsWithSources[testIndex];
           if (stopController.stopRequested) {
             // The run was stopped: don't run the remaining tests.
-            results.push(makeStoppedResult(test.testName));
+            appendResult(test, makeStoppedResult(test.testName));
             continue;
           }
           if (error !== null || source === null) {
-            results.push(
+            appendResult(
+              test,
               makeErrorResult(test.testName, error || 'No source found.')
             );
             continue;
@@ -607,34 +640,52 @@ export const runGameplayTests = async ({
             frame: result.framesExecuted,
             durationMs: result.durationMs,
           });
-          results.push(result);
+          appendResult(test, result);
         }
       } catch (error) {
-        if (error.isStopRequested) {
+        if (error && error.isStopRequested) {
           // The run was stopped while the game was still exporting or
           // booting: mark the tests that could not be run as stopped.
-          for (const { test } of testsWithSources.slice(results.length)) {
-            results.push(makeStoppedResult(test.testName));
+          for (const test of tests.slice(results.length)) {
+            appendResult(test, makeStoppedResult(test.testName));
           }
         } else {
           const errorMessage =
             'Unable to run the gameplay tests: ' +
-            (error.message || String(error));
+            (error && error.message ? error.message : String(error));
           console.error('[GameplayTestRunner] ' + errorMessage, error);
           // Fill the results of the tests that could not be run.
-          for (const { test } of testsWithSources.slice(results.length)) {
-            results.push(makeErrorResult(test.testName, errorMessage));
+          for (const test of tests.slice(results.length)) {
+            appendResult(test, makeErrorResult(test.testName, errorMessage));
           }
         }
       } finally {
         currentBatchStopController = null;
-        setRunInProgress(false);
+        try {
+          setRunInProgress(false);
+        } catch (error) {
+          // A run-state observer must not keep the batch promise rejected or
+          // prevent the remaining cleanup from happening.
+          console.error(
+            '[GameplayTestRunner] Unable to notify that the run finished.',
+            error
+          );
+        }
         // When at least one test ran, the frame stays open (showing the
         // frozen game and the outcome of the run) until its close button
         // is used or another run starts. Otherwise (the game could not
         // boot, or the run was stopped before the first test), close it.
         if (!anyTestRan) {
-          clearGameplayTestFramePreview();
+          try {
+            clearGameplayTestFramePreview();
+          } catch (error) {
+            // The initial frame cleanup might be the error that ended the
+            // batch. Do not let a second attempt hide its synthetic results.
+            console.error(
+              '[GameplayTestRunner] Unable to clear the gameplay test frame.',
+              error
+            );
+          }
         }
       }
 
@@ -684,6 +735,13 @@ type GameplayTestRunnerDependencies = {|
 |};
 
 let gameplayTestRunnerDependencies: GameplayTestRunnerDependencies | null = null;
+
+export const getIsGameplayTestRunnerAvailable = (): boolean => {
+  const dependencies = gameplayTestRunnerDependencies;
+  if (!dependencies) return false;
+  const previewLauncher = dependencies.getPreviewLauncher();
+  return !!(previewLauncher && previewLauncher.getPreviewDebuggerServer());
+};
 
 export const registerGameplayTestRunnerDependencies = (
   dependencies: GameplayTestRunnerDependencies | null

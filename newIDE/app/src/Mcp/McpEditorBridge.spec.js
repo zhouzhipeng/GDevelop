@@ -4,6 +4,10 @@ import { autoQuoteEventParameters } from './McpEventKnowledge';
 import { serializeToJSObject } from '../Utils/Serializer';
 import { decomposeLegacyProjectToFiles } from '../ProjectsStorage/MultiFileProjectFormat';
 import { writeMultiFileSourceTree } from '../ProjectsStorage/LocalFileStorageProvider/LocalMultiFileProject';
+import {
+  createMcpGameplayTestOperations,
+  McpGameplayTestOperationError,
+} from './McpGameplayTestOperations';
 
 // Mock the behavior store registry fetch (search_behavior_store) so the test
 // does not hit the network.
@@ -19,6 +23,21 @@ const os = require('os');
 const path = require('path');
 
 const gd: libGDevelop = global.gd;
+
+const makeGlbModelBuffer = (json: Object): Uint8Array => {
+  const jsonSource = new TextEncoder().encode(JSON.stringify(json));
+  const jsonChunkLength = Math.ceil(jsonSource.byteLength / 4) * 4;
+  const glb = new Uint8Array(20 + jsonChunkLength);
+  glb.fill(0x20, 20);
+  glb.set([0x67, 0x6c, 0x54, 0x46], 0);
+  const view = new DataView(glb.buffer);
+  view.setUint32(4, 2, true);
+  view.setUint32(8, glb.byteLength, true);
+  view.setUint32(12, jsonChunkLength, true);
+  view.setUint32(16, 0x4e4f534a, true);
+  glb.set(jsonSource, 20);
+  return glb;
+};
 
 describe('McpEditorBridge', () => {
   const serializeProjectWithConstants = (project: gdProject): Object => ({
@@ -187,7 +206,299 @@ describe('McpEditorBridge', () => {
     );
     expect(response.tools.map(tool => tool.name)).toContain('reload_project');
     expect(response.tools.map(tool => tool.name)).toContain('open_project');
+    expect(response.tools.map(tool => tool.name)).toContain(
+      'inspect_glb_model'
+    );
+    expect(response.tools.map(tool => tool.name)).toContain(
+      'run_gameplay_tests'
+    );
+    expect(response.tools.map(tool => tool.name)).toContain(
+      'get_gameplay_test_results'
+    );
     expect(response.tools.map(tool => tool.name)).not.toContain('create_scene');
+  });
+
+  it('inspects GLB animation and canonical bone names from a project-relative path', async () => {
+    const temporaryDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'gdevelop-mcp-glb-')
+    );
+    try {
+      const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+      const modelDirectory = path.join(temporaryDirectory, 'assets', 'models');
+      const modelFile = path.join(modelDirectory, 'Hero.glb');
+      fs.mkdirSync(modelDirectory, { recursive: true });
+      fs.writeFileSync(
+        modelFile,
+        makeGlbModelBuffer({
+          asset: { version: '2.0' },
+          animations: [{ name: 'Idle' }, {}],
+          nodes: [
+            { name: 'Hips' },
+            { name: 'Arm.L' },
+            { name: 'Duplicate' },
+            { name: 'Duplicate' },
+          ],
+          skins: [{ joints: [0, 1, 2, 3] }],
+        })
+      );
+      const project: any = { getProjectFile: () => projectFile };
+      const response = await makeBridge({
+        getProject: () => project,
+      }).handleRendererMcpRequest({
+        method: 'tools/call',
+        params: {
+          name: 'inspect_glb_model',
+          arguments: { file_path: 'assets/models/Hero.glb' },
+        },
+      });
+
+      expect(response.isError).not.toBe(true);
+      expect(JSON.parse(response.content[0].text)).toEqual({
+        success: true,
+        filePath: 'assets/models/Hero.glb',
+        resolvedFilePath: modelFile,
+        animationNames: ['Idle', 'animation_1'],
+        boneNames: ['Arm.L', 'Hips'],
+      });
+    } finally {
+      fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it('requires relative GLB paths to resolve inside an open project', async () => {
+    const withoutProject = await makeBridge().handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'inspect_glb_model',
+        arguments: { file_path: 'assets/Hero.glb' },
+      },
+    });
+    expect(JSON.parse(withoutProject.content[0].text).code).toBe(
+      'GLB_PROJECT_PATH_UNAVAILABLE'
+    );
+
+    const project: any = {
+      getProjectFile: () => path.join(os.tmpdir(), 'game', 'project.gdevelop'),
+    };
+    const outsideProject = await makeBridge({
+      getProject: () => project,
+    }).handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'inspect_glb_model',
+        arguments: { file_path: '../Hero.glb' },
+      },
+    });
+    expect(JSON.parse(outsideProject.content[0].text).code).toBe(
+      'GLB_FILE_PATH_OUTSIDE_PROJECT'
+    );
+  });
+
+  it('dispatches authored gameplay-test starts by canonical file and queries results', async () => {
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    project.setName('Gameplay test project');
+    project.setProjectFile('C:\\Games\\Test\\project.gdevelop');
+    project
+      .getTests()
+      .insertNewTest('Player can jump', 0)
+      .setSource('await harness.stepFrames(1);');
+    const start = jest.fn((request: Object) => ({
+      success: true,
+      operation_id: 'gameplay-tests-bridge',
+      status: 'queued',
+      selection: {
+        mode: 'file',
+        file: request.args.file,
+        test_count: request.descriptors.length,
+      },
+    }));
+    const get = jest.fn(() => ({
+      success: true,
+      operation_id: 'gameplay-tests-bridge',
+      status: 'running',
+      results: [],
+    }));
+    const gameplayTestOperations: any = {
+      start,
+      get,
+      getActiveOperationId: () => null,
+    };
+    const bridge = makeBridge({
+      getProject: () => project,
+      gameplayTestOperations,
+      getIsGameplayTestRunInProgress: () => false,
+    });
+
+    const startResponse = await bridge.handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'run_gameplay_tests',
+        arguments: {
+          file: 'tests/Player%20can%20jump.js',
+          timeout_ms: 45000,
+        },
+      },
+    });
+    const startResult = JSON.parse(startResponse.content[0].text);
+    expect(startResponse.isError).not.toBe(true);
+    expect(startResult.operation_id).toBe('gameplay-tests-bridge');
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        project,
+        args: {
+          file: 'tests/Player%20can%20jump.js',
+          timeout_ms: 45000,
+        },
+        descriptors: [
+          {
+            scope: 'project',
+            name: 'Player can jump',
+            file: 'tests/Player%20can%20jump.js',
+          },
+        ],
+      })
+    );
+
+    const queryResponse = await bridge.handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'get_gameplay_test_results',
+        arguments: { operation_id: 'gameplay-tests-bridge', limit: 10 },
+      },
+    });
+    expect(JSON.parse(queryResponse.content[0].text).status).toBe('running');
+    expect(get).toHaveBeenCalledWith({
+      operation_id: 'gameplay-tests-bridge',
+      limit: 10,
+    });
+    project.delete();
+  });
+
+  it('keeps gameplay-test operation state when the editor bridge is recreated', async () => {
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    project.setName('Stable owner project');
+    project
+      .getTests()
+      .insertNewTest('Smoke', 0)
+      .setSource('');
+    const gameplayTestOperations = createMcpGameplayTestOperations({
+      runGameplayTests: () => new Promise(() => {}),
+      isGameplayTestRunInProgress: () => false,
+      createOperationId: () => 'gameplay-tests-stable-owner',
+    });
+    const context = {
+      getProject: () => project,
+      gameplayTestOperations,
+      getIsGameplayTestRunInProgress: () => false,
+    };
+
+    const startResponse = await makeBridge(context).handleRendererMcpRequest({
+      method: 'tools/call',
+      params: { name: 'run_gameplay_tests', arguments: {} },
+    });
+    expect(JSON.parse(startResponse.content[0].text).operation_id).toBe(
+      'gameplay-tests-stable-owner'
+    );
+
+    const queryResponse = await makeBridge(context).handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'get_gameplay_test_results',
+        arguments: { operation_id: 'gameplay-tests-stable-owner' },
+      },
+    });
+    expect(JSON.parse(queryResponse.content[0].text)).toEqual(
+      expect.objectContaining({
+        operation_id: 'gameplay-tests-stable-owner',
+        status: 'queued',
+      })
+    );
+    project.delete();
+  });
+
+  it('returns structured gameplay-test validation errors and runner availability errors', async () => {
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    project.getTests().insertNewTest('Smoke', 0);
+    const gameplayTestOperations: any = {
+      start: () => {
+        throw new McpGameplayTestOperationError(
+          'INVALID_GAMEPLAY_TEST_FILE',
+          'Invalid gameplay-test file.'
+        );
+      },
+      get: jest.fn(),
+      getActiveOperationId: () => null,
+    };
+    const bridge = makeBridge({
+      getProject: () => project,
+      gameplayTestOperations,
+      getIsGameplayTestRunInProgress: () => false,
+    });
+    const invalidResponse = await bridge.handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'run_gameplay_tests',
+        arguments: { file: '../Smoke.js' },
+      },
+    });
+    expect(JSON.parse(invalidResponse.content[0].text).code).toBe(
+      'INVALID_GAMEPLAY_TEST_FILE'
+    );
+
+    const unavailableResponse = await makeBridge({
+      getProject: () => project,
+    }).handleRendererMcpRequest({
+      method: 'tools/call',
+      params: { name: 'run_gameplay_tests', arguments: {} },
+    });
+    expect(JSON.parse(unavailableResponse.content[0].text).code).toBe(
+      'GAMEPLAY_TEST_RUNNER_UNAVAILABLE'
+    );
+    project.delete();
+  });
+
+  it('blocks project/preview replacement workflows during gameplay-test runs', async () => {
+    const gameplayTestOperations: any = {
+      start: jest.fn(),
+      get: jest.fn(),
+      getActiveOperationId: () => 'gameplay-tests-active',
+    };
+    const bridge = makeBridge({
+      gameplayTestOperations,
+      getIsGameplayTestRunInProgress: () => false,
+    });
+
+    for (const name of [
+      'open_project',
+      'reload_project',
+      'launch_preview',
+      'verify_project_change',
+    ]) {
+      const response = await bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: { name, arguments: {} },
+      });
+      expect(JSON.parse(response.content[0].text)).toEqual(
+        expect.objectContaining({
+          code: 'GAMEPLAY_TEST_RUN_IN_PROGRESS',
+          active_operation_id: 'gameplay-tests-active',
+        })
+      );
+    }
+  });
+
+  it('does not launch a preview while another preview sequence owns the pipeline', async () => {
+    const response = await makeBridge({
+      beginPreviewLaunchSequence: () => false,
+      launchPreviewForScene: jest.fn(),
+    }).handleRendererMcpRequest({
+      method: 'tools/call',
+      params: { name: 'launch_preview', arguments: {} },
+    });
+
+    expect(JSON.parse(response.content[0].text).code).toBe(
+      'PREVIEW_LAUNCH_SEQUENCE_ALREADY_IN_PROGRESS'
+    );
   });
 
   it('opens a specific local project and returns the loaded project receipt', async () => {
@@ -197,6 +508,8 @@ describe('McpEditorBridge', () => {
       'project.gdevelop'
     );
     const reportProgress: any = jest.fn();
+    const beginPreviewLaunchSequence: any = jest.fn(() => true);
+    const endPreviewLaunchSequence: any = jest.fn();
     const openProjectAndWait: any = jest.fn(async request => ({
       opened: true,
       projectName: 'Opened project',
@@ -209,6 +522,8 @@ describe('McpEditorBridge', () => {
         changesCount: 0,
         timeOfFirstChangeSinceLastSave: null,
       }),
+      beginPreviewLaunchSequence,
+      endPreviewLaunchSequence,
     });
 
     const response = await bridge.handleRendererMcpRequest({
@@ -236,6 +551,40 @@ describe('McpEditorBridge', () => {
       discardUnsavedChanges: false,
       reportProgress,
     });
+    expect(beginPreviewLaunchSequence).toHaveBeenCalledTimes(1);
+    expect(endPreviewLaunchSequence).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not open a project while another preview sequence owns the pipeline', async () => {
+    const projectPath = path.join(
+      os.tmpdir(),
+      'gdevelop-mcp-open-project',
+      'project.gdevelop'
+    );
+    const openProjectAndWait: any = jest.fn();
+    const bridge = makeBridge({
+      openProjectAndWait,
+      beginPreviewLaunchSequence: () => false,
+      endPreviewLaunchSequence: jest.fn(),
+      getPersistenceState: () => ({
+        hasUnsavedChanges: false,
+        changesCount: 0,
+        timeOfFirstChangeSinceLastSave: null,
+      }),
+    });
+
+    const response = await bridge.handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'open_project',
+        arguments: { project_path: projectPath },
+      },
+    });
+
+    expect(JSON.parse(response.content[0].text).code).toBe(
+      'PREVIEW_LAUNCH_SEQUENCE_ALREADY_IN_PROGRESS'
+    );
+    expect(openProjectAndWait).not.toHaveBeenCalled();
   });
 
   it('refuses to replace unsaved editor state unless explicitly allowed', async () => {
@@ -367,6 +716,7 @@ describe('McpEditorBridge', () => {
       settings: path.join(catalogDirectory, 'settings-catalog.json'),
       runtimeApi: path.join(catalogDirectory, 'runtime-api.d.ts'),
       projectApi: path.join(catalogDirectory, 'project-api.d.ts'),
+      harnessApi: path.join(catalogDirectory, 'harness-api.d.ts'),
     };
     const retiredLayoutCatalog = path.join(
       catalogDirectory,
@@ -421,6 +771,9 @@ describe('McpEditorBridge', () => {
     );
     expect(fs.readFileSync(catalogFiles.projectApi, 'utf8')).toContain(
       'declare namespace GDevelopProject'
+    );
+    expect(fs.readFileSync(catalogFiles.harnessApi, 'utf8')).toContain(
+      'declare const harness'
     );
     expect(fs.existsSync(retiredLayoutCatalog)).toBe(false);
     expect(result.generatedGameJson).toBeUndefined();
@@ -536,6 +889,11 @@ describe('McpEditorBridge', () => {
     expect(
       fs.existsSync(
         path.join(temporaryDirectory, '.gdevelop', 'project-api.d.ts')
+      )
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(temporaryDirectory, '.gdevelop', 'harness-api.d.ts')
       )
     ).toBe(true);
     expect(result.nextAction).toContain('reload_project');

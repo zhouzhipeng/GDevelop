@@ -15,9 +15,10 @@ const loadTypeScriptChecker = (): any => {
   return typescript;
 };
 
-export const JAVASCRIPT_AUTHORING_API_VERSION = 1;
+export const JAVASCRIPT_AUTHORING_API_VERSION = 2;
 export const PROJECT_RUNTIME_API_RELATIVE_PATH = '.gdevelop/runtime-api.d.ts';
 export const PROJECT_API_RELATIVE_PATH = '.gdevelop/project-api.d.ts';
+export const PROJECT_HARNESS_API_RELATIVE_PATH = '.gdevelop/harness-api.d.ts';
 
 const MAX_JAVASCRIPT_BLOCKS = 500;
 const MAX_JAVASCRIPT_SOURCE_SIZE = 2 * 1024 * 1024;
@@ -326,6 +327,429 @@ declare namespace gdjs {
     }
   }
 }
+`;
+
+// This is an intentionally reviewed authoring surface. Do not derive it by
+// reflecting on GameplayTestHarness: the runtime class also owns runner,
+// debugger and rendering implementation members that test scripts must not
+// depend on.
+const harnessApiBody = `
+declare namespace GDevelopGameplayTests {
+  export type GameplayTestVariableType =
+    | "number"
+    | "string"
+    | "boolean"
+    | "structure"
+    | "array"
+    | "enum";
+
+  /** A JSON-safe variable snapshot returned by an inspection helper. */
+  export interface GameplayTestVariableSnapshot {
+    readonly name: string;
+    readonly value: string | number | boolean;
+    readonly children?: GameplayTestVariableSnapshot[];
+    readonly type: GameplayTestVariableType;
+    readonly owner: number | null;
+  }
+
+  /** Values evaluated from public object and behavior state inspectors. */
+  export interface GameplayTestEvaluatedState {
+    readonly [conditionOrExpressionName: string]: boolean | number | string;
+  }
+
+  /** A JSON-safe snapshot of one object instance. */
+  export interface GameplayTestObjectSnapshot {
+    readonly id: number;
+    readonly name: string;
+    readonly x: number;
+    readonly y: number;
+    readonly z?: number;
+    readonly angle: number;
+    readonly rotationX?: number;
+    readonly rotationY?: number;
+    readonly width: number;
+    readonly height: number;
+    readonly depth?: number;
+    readonly centerX: number;
+    readonly centerY: number;
+    readonly centerZ?: number;
+    readonly layer: string;
+    readonly hidden: boolean;
+    readonly animation?: string;
+    readonly text?: string;
+    readonly opacity?: number;
+    readonly variables: GameplayTestVariableSnapshot[];
+    readonly state: GameplayTestEvaluatedState;
+    readonly behaviors: {
+      readonly [behaviorName: string]: {
+        readonly act: boolean;
+        readonly state: GameplayTestEvaluatedState;
+      };
+    };
+    readonly flippedX?: boolean;
+    readonly flippedY?: boolean;
+    readonly children?: {
+      readonly [objectName: string]: GameplayTestObjectSnapshot[];
+    };
+  }
+
+  /** An object snapshot enriched with its position relative to a reference. */
+  export interface GameplayTestNearbyObjectSnapshot
+    extends GameplayTestObjectSnapshot {
+    readonly distance: number;
+    readonly relativeX: number;
+    readonly relativeY: number;
+    readonly relativeZ?: number;
+    readonly above: boolean;
+    readonly below: boolean;
+    readonly left: boolean;
+    readonly right: boolean;
+    readonly bearingFromReference: number;
+  }
+
+  export type GameplayTestNavigationTarget =
+    | { readonly name: string; readonly id?: number }
+    | { readonly x: number; readonly y: number; readonly z?: number };
+
+  /** A target position relative to the first instance of an object. */
+  export interface GameplayTestRelativePosition {
+    readonly relativeX: number;
+    readonly relativeY: number;
+    readonly relativeZ?: number;
+    readonly distance: number;
+    readonly horizontalDistance: number;
+    readonly yawDiff: number;
+    readonly pitchDiff: number;
+    readonly dominantAxis: "x" | "y";
+    readonly reached: boolean;
+    readonly targetX: number;
+    readonly targetY: number;
+    readonly targetZ?: number;
+  }
+
+  export interface GameplayTestControlProbeResult {
+    readonly dx: number;
+    readonly dy: number;
+    readonly dz?: number;
+    readonly minDx: number;
+    readonly maxDx: number;
+    readonly minDy: number;
+    readonly maxDy: number;
+    readonly minDz?: number;
+    readonly maxDz?: number;
+    readonly yawDelta: number;
+  }
+
+  export interface GameplayTestAimResult {
+    readonly aimed: boolean;
+    readonly yawDiff: number;
+    readonly pitchDiff: number;
+    readonly sawYawResponse: boolean;
+    readonly sawPitchResponse: boolean;
+    readonly measuredFrom: "camera" | "object";
+  }
+
+  export interface GameplayTestProgressStatus {
+    readonly frame: number;
+    readonly distance: number;
+    readonly reached: boolean;
+    readonly stalled: boolean;
+  }
+
+  export interface GameplayTestProgressTracker {
+    update(): GameplayTestProgressStatus | null;
+    reset(): void;
+  }
+
+  export interface GameplayTestEvent {
+    readonly frame: number;
+    readonly event:
+      | "spawned"
+      | "removed"
+      | "stuck"
+      | "sceneChanged"
+      | "sceneReset";
+    readonly object?: string;
+    readonly count?: number;
+    readonly sceneName?: string;
+    readonly cause?:
+      | "harness"
+      | "controlsProbe"
+      | "game"
+      | "networkSync"
+      | "external"
+      | "unknown";
+    readonly causeDetail?: string;
+  }
+
+  export interface GameplayTestProfilingResult {
+    readonly startFrame: number;
+    readonly endFrame: number;
+    readonly avgStepTimeMs: number;
+    readonly maxStepTimeMs: number;
+    readonly sections: Array<{
+      readonly name: string;
+      readonly avgTimeMs: number;
+      readonly maxTimeMs: number;
+    }>;
+    readonly worstFrames: Array<{
+      readonly frame: number;
+      readonly timeMs: number;
+    }>;
+    readonly frameTimesMs: number[];
+    readonly frameTimesBucketSize: number;
+    readonly objectCounts: { readonly [objectName: string]: number };
+    readonly renderer: {
+      readonly drawCalls: number;
+      readonly triangles: number;
+      readonly geometries: number;
+      readonly textures: number;
+    } | null;
+    readonly jsHeapUsedMb?: number;
+  }
+
+  export interface GameplayTestAssertion {
+    readonly message: string;
+    readonly passed: boolean;
+  }
+
+  export interface GameplayTestLog {
+    readonly level: "log" | "warn" | "error";
+    readonly message: string;
+  }
+
+  export interface GameplayTestScreenshot {
+    readonly label: string;
+    readonly frame: number;
+    readonly jpegBase64: string;
+  }
+
+  /** The complete JSON-safe outcome produced for one gameplay test. */
+  export interface GameplayTestResult {
+    readonly testName: string;
+    readonly status: "passed" | "failed" | "error" | "stopped" | "timeout";
+    readonly framesExecuted: number;
+    readonly durationMs: number;
+    readonly loadingMs: number;
+    readonly timeoutMs: number;
+    readonly gameTimeMs: number;
+    readonly assertions: GameplayTestAssertion[];
+    readonly errors: string[];
+    readonly consoleLogs: GameplayTestLog[];
+    readonly eventLog: GameplayTestEvent[];
+    readonly finalState: {
+      readonly sceneName: string;
+      readonly objectCounts: { readonly [objectName: string]: number };
+      readonly watchedObjects: {
+        readonly [objectName: string]: GameplayTestObjectSnapshot[];
+      };
+      readonly sceneVariables: GameplayTestVariableSnapshot[];
+    };
+    readonly screenshots: GameplayTestScreenshot[];
+    readonly profiles: GameplayTestProfilingResult[];
+    readonly performance: {
+      readonly avgStepMs: number;
+      readonly worstStepMs: number;
+    } | null;
+  }
+
+  export interface GameplayTestStepFramesOptions {
+    readonly dtMs?: number;
+    readonly onFrame?: (context: { readonly frame: number }) => void;
+  }
+
+  export interface GameplayTestStepUntilOptions {
+    readonly maxFrames: number;
+    readonly onFrame?: (context: { readonly frame: number }) => void;
+    readonly stuckDetection?: {
+      readonly objectName: string;
+      readonly windowFrames?: number;
+      readonly minDisplacement?: number;
+      readonly onStuck?: (context: {
+        readonly frame: number;
+        readonly x: number;
+        readonly y: number;
+        readonly z: number;
+      }) => void;
+    };
+  }
+
+  /** The reviewed object passed to a gameplay test script as harness. */
+  export interface GameplayTestHarness {
+    goToScene(
+      sceneName: string,
+      options?: { readonly skipCreatingInstances?: boolean }
+    ): Promise<void>;
+    stepFrames(
+      frameCount: number,
+      options?: GameplayTestStepFramesOptions
+    ): Promise<void>;
+    stepUntil(
+      condition: () => boolean,
+      options: GameplayTestStepUntilOptions
+    ): Promise<boolean>;
+    stepUntilObjectIsStable(
+      objectName: string,
+      options?: {
+        readonly tolerance?: number;
+        readonly stableFrames?: number;
+        readonly maxFrames?: number;
+      }
+    ): Promise<boolean>;
+
+    getSceneName(): string;
+    getSceneStack(): string[];
+
+    setKeyPressed(keyName: string, pressed: boolean): void;
+    setMousePosition(x: number, y: number, layerName?: string): void;
+    setMousePositionScreen(screenX: number, screenY: number): void;
+    setMouseDelta(deltaX: number, deltaY: number): void;
+    setMouseButtonPressed(
+      pressed: boolean,
+      button?: "left" | "right" | "middle"
+    ): void;
+    touchStart(
+      identifier: number,
+      x: number,
+      y: number,
+      layerName?: string
+    ): void;
+    touchMove(
+      identifier: number,
+      x: number,
+      y: number,
+      layerName?: string
+    ): void;
+    touchEnd(identifier: number): void;
+    getGameResolutionWidth(): number;
+    getGameResolutionHeight(): number;
+    releaseAllInputs(): void;
+
+    getObjects(objectName: string): GameplayTestObjectSnapshot[];
+    getNearby(
+      objectName: string,
+      referenceObjectName: string,
+      radius: number
+    ): GameplayTestNearbyObjectSnapshot[];
+    has2dLineOfSight(
+      referenceObjectName: string,
+      targetObjectName: string,
+      blockerObjectNames: string[]
+    ): {
+      readonly clear: boolean;
+      readonly blockedBy?: string;
+      readonly blockedAt?: { readonly x: number; readonly y: number };
+    };
+    getRuntimeGame(): gdjs.RuntimeGame;
+    getCurrentRuntimeScene(): gdjs.RuntimeScene;
+    getRuntimeLayer(layerName: string): gdjs.RuntimeLayer | null;
+    getCameraState(layerName?: string): {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+      readonly rotationX: number;
+      readonly rotationY: number;
+      readonly angle: number;
+      readonly zoom: number;
+    } | null;
+    getRuntimeObject(
+      objectIdOrName: number | string
+    ): gdjs.RuntimeObject | null;
+    getSceneVariable(
+      variableName: string
+    ): GameplayTestVariableSnapshot | undefined;
+    getGlobalVariable(
+      variableName: string
+    ): GameplayTestVariableSnapshot | undefined;
+    getObjectVariable(
+      objectIdOrName: number | string,
+      variableName: string
+    ): GameplayTestVariableSnapshot | undefined;
+    getEventLog(): GameplayTestEvent[];
+    getPlayedSounds(): Array<{
+      readonly sound: string;
+      readonly frame: number;
+    }>;
+    watch(objectName: string): void;
+
+    getRelativePosition(
+      referenceObjectName: string,
+      target: GameplayTestNavigationTarget,
+      options?: {
+        readonly reachRadius?: number;
+        readonly fromCamera?: string;
+        readonly fromZ?: number;
+        readonly heading?: number;
+      }
+    ): GameplayTestRelativePosition | null;
+    resetSceneAndProbeControls(
+      objectName: string,
+      keyNames: string[],
+      options?: { readonly frames?: number }
+    ): Promise<{
+      readonly baseline: GameplayTestControlProbeResult | null;
+      readonly keys: {
+        readonly [keyName: string]: GameplayTestControlProbeResult | null;
+      };
+    }>;
+    makeProgressTracker(
+      referenceObjectName: string,
+      target: GameplayTestNavigationTarget,
+      options?: {
+        readonly windowFrames?: number;
+        readonly minProgress?: number;
+        readonly reachRadius?: number;
+      }
+    ): GameplayTestProgressTracker;
+    lookTowardWithMouseDelta(
+      referenceObjectName: string,
+      target: GameplayTestNavigationTarget,
+      options?: {
+        readonly yawOnly?: boolean;
+        readonly fromCamera?: string;
+        readonly toleranceDegrees?: number;
+      }
+    ): Promise<GameplayTestAimResult | null>;
+
+    spawn(
+      objectName: string,
+      x: number,
+      y: number,
+      z?: number,
+      layerName?: string
+    ): GameplayTestObjectSnapshot;
+    removeObject(id: number): void;
+    setObjectPosition(id: number, x: number, y: number, z?: number): void;
+    setSceneVariable(
+      variableName: string,
+      value: string | number | boolean
+    ): void;
+    setObjectVariable(
+      objectIdOrName: number | string,
+      variableName: string,
+      value: string | number | boolean
+    ): void;
+    setGlobalVariable(
+      variableName: string,
+      value: string | number | boolean
+    ): void;
+    loadExternalLayout(
+      externalLayoutName: string,
+      x?: number,
+      y?: number,
+      z?: number
+    ): void;
+
+    assert(condition: boolean, message: string): void;
+    fail(message: string): void;
+    takeScreenshot(label?: string): Promise<void>;
+    startProfiling(): void;
+    stopProfiling(): GameplayTestProfilingResult | null;
+  }
+}
+
+/** The gameplay-test API available inside every authored test body. */
+declare const harness: GDevelopGameplayTests.GameplayTestHarness;
 `;
 
 const generatedHeader = (metadata: Array<[string, string]>): string =>
@@ -747,6 +1171,24 @@ ${functionDeclarations}
     `${generatedHeader([
       ['runtimeApiHash', `sha256:${runtimeHash}`],
       ['projectApiHash', `sha256:${modelHash}`],
+    ])}${body}`
+  );
+};
+
+export const buildHarnessApiDeclaration = (
+  runtimeApiDeclaration?: string,
+  projectApiDeclaration?: string
+): string => {
+  const runtimeDeclaration =
+    runtimeApiDeclaration || buildRuntimeApiDeclaration();
+  const projectDeclaration =
+    projectApiDeclaration || buildProjectApiDeclaration({}, runtimeDeclaration);
+  const body = addFinalNewline(harnessApiBody.trim());
+  return addFinalNewline(
+    `${generatedHeader([
+      ['runtimeApiHash', `sha256:${sha256(runtimeDeclaration)}`],
+      ['projectApiHash', `sha256:${sha256(projectDeclaration)}`],
+      ['harnessApiHash', `sha256:${sha256(body)}`],
     ])}${body}`
   );
 };
@@ -1490,14 +1932,20 @@ export const validateReviewedExtensionJavaScriptAuthoring = ({
 };
 
 export const buildJavaScriptAuthoringArtifacts = (
-  serializedProject: Object
+  serializedProject: Object,
+  options?: {| onHarnessApiBuilding?: () => void |}
 ): Object => {
   const runtimeApi = buildRuntimeApiDeclaration();
   const projectApi = buildProjectApiDeclaration(serializedProject, runtimeApi);
+  if (options && options.onHarnessApiBuilding) {
+    options.onHarnessApiBuilding();
+  }
+  const harnessApi = buildHarnessApiDeclaration(runtimeApi, projectApi);
   const model = buildProjectApiModel(serializedProject);
   return {
     runtimeApi,
     projectApi,
+    harnessApi,
     counts: {
       scenes: model.scenes.length,
       globalObjects: model.globalObjects.length,
@@ -1507,6 +1955,7 @@ export const buildJavaScriptAuthoringArtifacts = (
     hashes: {
       runtimeApi: sha256(runtimeApi),
       projectApi: sha256(projectApi),
+      harnessApi: sha256(harnessApi),
     },
   };
 };

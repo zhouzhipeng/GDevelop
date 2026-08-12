@@ -17,6 +17,7 @@ import {
 import {
   MULTI_FILE_ENTRY_NAME,
   decomposeLegacyProjectToFiles,
+  getGameplayTestDescriptors,
   parseTomlSource,
 } from '../ProjectsStorage/MultiFileProjectFormat';
 import {
@@ -39,6 +40,14 @@ import { type EditorCallbacks } from '../EditorFunctions';
 
 import { inspectSignalUsage } from './McpExtensionTools';
 import { validateSerializedProject } from './McpProjectTools';
+import {
+  type McpGameplayTestOperations,
+  McpGameplayTestOperationError,
+} from './McpGameplayTestOperations';
+import {
+  GlbModelInspectionError,
+  inspectGlbModelFile,
+} from './McpGlbModelInspector';
 
 import optionalRequire from '../Utils/OptionalRequire';
 
@@ -103,6 +112,8 @@ type McpEditorBridgeContext = {|
   getPreviewLaunchState?: () => Object,
   beginPreviewLaunchSequence?: () => boolean,
   endPreviewLaunchSequence?: () => void,
+  gameplayTestOperations?: McpGameplayTestOperations,
+  getIsGameplayTestRunInProgress?: () => boolean,
   reloadProjectAndWait?: (
     reportProgress?: McpRequestProgressReporter
   ) => Promise<any>,
@@ -4153,10 +4164,12 @@ const callMcpTool = async ({
   toolName,
   args,
   context,
+  previewLaunchSequenceAlreadyReserved,
 }: {|
   toolName: string,
   args: Object,
   context: McpEditorBridgeContext,
+  previewLaunchSequenceAlreadyReserved?: boolean,
 |}): Promise<McpToolResult> => {
   const permissions = context.getPermissions();
   const permission = canCallMcpTool(toolName, permissions);
@@ -4166,12 +4179,192 @@ const callMcpTool = async ({
 
   const project = context.getProject();
 
+  const gameplayTestOperations = context.gameplayTestOperations;
+  const activeGameplayTestOperationId = gameplayTestOperations
+    ? gameplayTestOperations.getActiveOperationId()
+    : null;
+  const isGameplayTestRunInProgress =
+    !!activeGameplayTestOperationId ||
+    !!(
+      context.getIsGameplayTestRunInProgress &&
+      context.getIsGameplayTestRunInProgress()
+    );
+  if (
+    isGameplayTestRunInProgress &&
+    (toolName === 'open_project' ||
+      toolName === 'reload_project' ||
+      toolName === 'launch_preview' ||
+      toolName === 'verify_project_change')
+  ) {
+    return errorResult(
+      'The project or preview cannot be replaced while gameplay tests are running.',
+      {
+        code: 'GAMEPLAY_TEST_RUN_IN_PROGRESS',
+        active_operation_id: activeGameplayTestOperationId || undefined,
+      }
+    );
+  }
+
+  if (toolName === 'inspect_glb_model') {
+    if (!fs || !path) {
+      return errorResult(
+        'Local GLB inspection is only available in the GDevelop desktop app.',
+        { code: 'GLB_FILE_SYSTEM_UNAVAILABLE' }
+      );
+    }
+
+    const requestedFilePath =
+      args && typeof args.file_path === 'string' ? args.file_path.trim() : '';
+    if (!requestedFilePath) {
+      return errorResult('file_path must be a non-empty string.', {
+        code: 'GLB_FILE_PATH_INVALID',
+      });
+    }
+    if (path.extname(requestedFilePath).toLowerCase() !== '.glb') {
+      return errorResult('file_path must point to a .glb file.', {
+        code: 'GLB_FILE_EXTENSION_INVALID',
+        filePath: requestedFilePath,
+      });
+    }
+
+    let resolvedFilePath;
+    if (path.isAbsolute(requestedFilePath)) {
+      resolvedFilePath = path.normalize(requestedFilePath);
+    } else {
+      if (!project) {
+        return errorResult(
+          'A project must be open to resolve a project-relative GLB path.',
+          {
+            code: 'GLB_PROJECT_PATH_UNAVAILABLE',
+            filePath: requestedFilePath,
+          }
+        );
+      }
+      const { projectFolder } = getProjectFileLocation(project);
+      if (!projectFolder) {
+        return errorResult(
+          'The open project has no local disk folder for resolving file_path.',
+          {
+            code: 'GLB_PROJECT_PATH_UNAVAILABLE',
+            filePath: requestedFilePath,
+          }
+        );
+      }
+      resolvedFilePath = path.resolve(projectFolder, requestedFilePath);
+      const relativeToProject = path.relative(projectFolder, resolvedFilePath);
+      if (
+        relativeToProject === '..' ||
+        relativeToProject.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativeToProject)
+      ) {
+        return errorResult(
+          'A relative file_path must stay inside the open project folder.',
+          {
+            code: 'GLB_FILE_PATH_OUTSIDE_PROJECT',
+            filePath: requestedFilePath,
+            resolvedFilePath,
+          }
+        );
+      }
+    }
+
+    try {
+      const inspection = inspectGlbModelFile(resolvedFilePath, {
+        fileSystem: fs,
+      });
+      return textResult({
+        success: true,
+        filePath: requestedFilePath,
+        resolvedFilePath,
+        ...inspection,
+      });
+    } catch (error) {
+      if (error instanceof GlbModelInspectionError) {
+        return errorResult(error.message, {
+          ...(error.details || {}),
+          code: error.code,
+          filePath: requestedFilePath,
+          resolvedFilePath,
+        });
+      }
+      return errorResult(
+        error && error.message
+          ? error.message
+          : 'Unable to inspect the GLB model.',
+        {
+          code: 'GLB_INSPECTION_FAILED',
+          filePath: requestedFilePath,
+          resolvedFilePath,
+        }
+      );
+    }
+  }
+
+  if (toolName === 'run_gameplay_tests') {
+    if (!project) {
+      return errorResult('No project opened.', { code: 'NO_PROJECT_OPEN' });
+    }
+    if (!gameplayTestOperations) {
+      return errorResult(
+        'The editor did not register the MCP gameplay-test operation owner.',
+        { code: 'GAMEPLAY_TEST_RUNNER_UNAVAILABLE' }
+      );
+    }
+    try {
+      const serializedProject = serializeToJSObject(project, 'serializeTo');
+      const descriptors = getGameplayTestDescriptors(serializedProject);
+      return textResult(
+        gameplayTestOperations.start({ project, descriptors, args: args || {} })
+      );
+    } catch (error) {
+      if (error instanceof McpGameplayTestOperationError) {
+        return errorResult(error.message, {
+          code: error.code,
+          ...error.details,
+        });
+      }
+      return errorResult(
+        error && error.message
+          ? error.message
+          : 'Unable to start the gameplay-test operation.',
+        { code: 'GAMEPLAY_TEST_OPERATION_START_FAILED' }
+      );
+    }
+  }
+
+  if (toolName === 'get_gameplay_test_results') {
+    if (!gameplayTestOperations) {
+      return errorResult(
+        'The editor did not register the MCP gameplay-test operation owner.',
+        { code: 'GAMEPLAY_TEST_RUNNER_UNAVAILABLE' }
+      );
+    }
+    try {
+      return textResult(gameplayTestOperations.get(args || {}));
+    } catch (error) {
+      if (error instanceof McpGameplayTestOperationError) {
+        return errorResult(error.message, {
+          code: error.code,
+          ...error.details,
+        });
+      }
+      return errorResult(
+        error && error.message
+          ? error.message
+          : 'Unable to read gameplay-test operation results.',
+        { code: 'GAMEPLAY_TEST_OPERATION_QUERY_FAILED' }
+      );
+    }
+  }
+
   if (toolName === 'verify_project_change') {
+    const beginPreviewLaunchSequence = context.beginPreviewLaunchSequence;
     const hasPreviewLaunchSequenceReservation =
-      typeof context.beginPreviewLaunchSequence === 'function';
+      typeof beginPreviewLaunchSequence === 'function';
     if (
       hasPreviewLaunchSequenceReservation &&
-      !context.beginPreviewLaunchSequence()
+      beginPreviewLaunchSequence &&
+      !beginPreviewLaunchSequence()
     ) {
       return errorResult(
         'Could not start verification because another MCP preview workflow is already in progress.',
@@ -4198,6 +4391,7 @@ const callMcpTool = async ({
           toolName: name,
           args: stageArgs,
           context,
+          previewLaunchSequenceAlreadyReserved: true,
         });
         const receipt = parseMcpToolResult(response);
         receipts.push({ stage, toolName: name, receipt });
@@ -4242,12 +4436,7 @@ const callMcpTool = async ({
       // Stop any preview that may still be compiling from the current native
       // project before reload_project replaces and deletes that project. The
       // sequence reservation prevents tab effects from starting another one.
-      stageResult = await runStage('reload', 'reload_project', {
-        // verify_project_change already owns the preview launch sequence for
-        // the whole validate/close/reload/launch workflow. Avoid trying to
-        // acquire the same non-reentrant reservation again in reload_project.
-        _preview_launch_sequence_already_reserved: true,
-      });
+      stageResult = await runStage('reload', 'reload_project', {});
       if (stageResult.failed) return stageResult.result;
 
       stageResult = await runStage('launch', 'launch_preview', {
@@ -4469,6 +4658,23 @@ const callMcpTool = async ({
       );
     }
 
+    const beginPreviewLaunchSequence = context.beginPreviewLaunchSequence;
+    const hasPreviewLaunchSequenceReservation =
+      typeof beginPreviewLaunchSequence === 'function';
+    let didReservePreviewLaunchSequence = false;
+    if (hasPreviewLaunchSequenceReservation && beginPreviewLaunchSequence) {
+      didReservePreviewLaunchSequence = !!beginPreviewLaunchSequence();
+      if (!didReservePreviewLaunchSequence) {
+        return errorResult(
+          'Could not open the project because another MCP preview workflow is already in progress.',
+          {
+            code: 'PREVIEW_LAUNCH_SEQUENCE_ALREADY_IN_PROGRESS',
+            projectPath: normalizedProjectPath,
+          }
+        );
+      }
+    }
+
     try {
       const openResult = await openProjectAndWait({
         projectPath: normalizedProjectPath,
@@ -4508,6 +4714,10 @@ const callMcpTool = async ({
           projectPath: normalizedProjectPath,
         }
       );
+    } finally {
+      if (didReservePreviewLaunchSequence && context.endPreviewLaunchSequence) {
+        context.endPreviewLaunchSequence();
+      }
     }
   }
 
@@ -4583,11 +4793,12 @@ const callMcpTool = async ({
           ),
           runtimeApi: path.join(projectRoot, '.gdevelop', 'runtime-api.d.ts'),
           projectApi: path.join(projectRoot, '.gdevelop', 'project-api.d.ts'),
+          harnessApi: path.join(projectRoot, '.gdevelop', 'harness-api.d.ts'),
         },
         nextAction:
           'Read the refreshed catalogs before making edits that depend on newly added or changed project structure. Run validate_project_files after the final source edit before reload_project.',
         note:
-          'All generated catalog files and both JavaScript declaration files were written sequentially and verified before this response. Embedded-layout authoring data is included in settings-catalog.json; the retired layout-catalog.json was removed. Project source files and editor memory were not modified.',
+          'All three generated catalog files and all three JavaScript declaration files were written sequentially and verified before this response. Embedded-layout authoring data is included in settings-catalog.json; the retired layout-catalog.json was removed. Project source files and editor memory were not modified.',
       });
     } catch (error) {
       const diagnostic = getProjectFilesValidationDiagnostic(
@@ -4789,11 +5000,8 @@ const callMcpTool = async ({
     // preview, load large 3D resources into the editor renderer, and keep the
     // shared preview launch lock busy. Reserve the preview sequence for a
     // standalone reload just like verify_project_change does for its complete
-    // workflow. The internal flag is only used by verify_project_change, which
-    // already owns this non-reentrant reservation.
-    const previewLaunchSequenceAlreadyReserved = !!(
-      args && args._preview_launch_sequence_already_reserved === true
-    );
+    // workflow. Nested stages are explicitly told when
+    // verify_project_change already owns this non-reentrant reservation.
     const beginPreviewLaunchSequence = context.beginPreviewLaunchSequence;
     let didReservePreviewLaunchSequence = false;
     if (
@@ -5315,6 +5523,20 @@ const callMcpTool = async ({
     const launchPreviewForScene = context.getLaunchPreviewForScene
       ? context.getLaunchPreviewForScene()
       : context.launchPreviewForScene;
+    const beginPreviewLaunchSequence = context.beginPreviewLaunchSequence;
+    let didReservePreviewLaunchSequence = false;
+    if (
+      typeof beginPreviewLaunchSequence === 'function' &&
+      !previewLaunchSequenceAlreadyReserved
+    ) {
+      didReservePreviewLaunchSequence = !!beginPreviewLaunchSequence();
+      if (!didReservePreviewLaunchSequence) {
+        return errorResult(
+          'Could not launch a preview because another MCP preview workflow is already in progress.',
+          { code: 'PREVIEW_LAUNCH_SEQUENCE_ALREADY_IN_PROGRESS' }
+        );
+      }
+    }
     try {
       const result = await launchPreview(
         previewDebuggerServer,
@@ -5329,6 +5551,10 @@ const callMcpTool = async ({
       return textResult(result);
     } catch (error) {
       return errorResult(error.message);
+    } finally {
+      if (didReservePreviewLaunchSequence && context.endPreviewLaunchSequence) {
+        context.endPreviewLaunchSequence();
+      }
     }
   }
 
