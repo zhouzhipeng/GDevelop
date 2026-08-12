@@ -78,6 +78,7 @@ describe('McpGlbModelInspector', () => {
           {},
           { name: 'root' },
         ],
+        scenes: [{ nodes: [0, 1, 2, 3, 4, 5, 6] }],
         skins: [{ joints: [1, 2, 3, 1] }, { joints: [2, 4, 5, 6] }],
       })
     );
@@ -103,9 +104,39 @@ describe('McpGlbModelInspector', () => {
     ).toEqual({ animationNames: [], boneNames: [] });
   });
 
+  it('only returns bones reachable through the selected GLB scene', () => {
+    expect(
+      inspectGlbModelJson({
+        asset: { version: '2.0' },
+        scene: 1,
+        scenes: [{ nodes: [0] }, { nodes: [1] }],
+        nodes: [
+          { name: 'InactiveRoot', children: [2] },
+          { name: 'ActiveRoot', children: [3] },
+          { name: 'InactiveBone' },
+          { name: 'ActiveBone' },
+        ],
+        skins: [{ joints: [2, 3] }],
+      })
+    ).toEqual({ animationNames: [], boneNames: ['ActiveBone'] });
+  });
+
+  it.each([undefined, '1.0', 'not-a-version'])(
+    'rejects unsupported glTF asset version %p',
+    assetVersion => {
+      const asset =
+        assetVersion === undefined ? undefined : { version: assetVersion };
+      const error = captureInspectionError(() =>
+        inspectGlbModelJson({ asset })
+      );
+      expect(error.code).toBe('GLB_UNSUPPORTED_ASSET_VERSION');
+    }
+  );
+
   it('rejects invalid joint indexes instead of returning misleading names', () => {
     const error = captureInspectionError(() =>
       inspectGlbModelJson({
+        asset: { version: '2.0' },
         nodes: [{ name: 'Root' }],
         skins: [{ joints: [1] }],
       })
@@ -195,6 +226,7 @@ describe('McpGlbModelInspector', () => {
         asset: { version: '2.0' },
         animations: [{ name: 'Run' }],
         nodes: [{ name: 'Hips' }],
+        scenes: [{ nodes: [0] }],
         skins: [{ joints: [0] }],
       })
     );

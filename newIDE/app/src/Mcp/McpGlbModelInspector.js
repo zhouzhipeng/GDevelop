@@ -111,6 +111,21 @@ const decodeJsonChunk = (jsonBytes: Uint8Array): Object => {
  * and ambiguous authored node names are omitted.
  */
 export const inspectGlbModelJson = (json: Object): GlbModelInspection => {
+  const asset = json.asset;
+  const assetVersion =
+    asset && typeof asset === 'object' ? asset.version : undefined;
+  const assetMajorVersion =
+    typeof assetVersion === 'string'
+      ? Number.parseInt(assetVersion.split('.')[0], 10)
+      : NaN;
+  if (!Number.isFinite(assetMajorVersion) || assetMajorVersion < 2) {
+    throw inspectionError(
+      'GLB_UNSUPPORTED_ASSET_VERSION',
+      'The GLB JSON must declare glTF asset version 2.0 or newer.',
+      { assetVersion }
+    );
+  }
+
   const animationDefinitions =
     json.animations === undefined ? [] : json.animations;
   if (!Array.isArray(animationDefinitions)) {
@@ -140,6 +155,88 @@ export const inspectGlbModelJson = (json: Object): GlbModelInspection => {
     );
   }
 
+  const sceneDefinitions = json.scenes === undefined ? [] : json.scenes;
+  if (!Array.isArray(sceneDefinitions)) {
+    throw inspectionError(
+      'GLB_STRUCTURE_INVALID',
+      'The GLB "scenes" property must be an array.'
+    );
+  }
+  const selectedSceneIndex = json.scene === undefined ? 0 : json.scene;
+  if (
+    sceneDefinitions.length > 0 &&
+    (!Number.isInteger(selectedSceneIndex) ||
+      selectedSceneIndex < 0 ||
+      selectedSceneIndex >= sceneDefinitions.length)
+  ) {
+    throw inspectionError(
+      'GLB_STRUCTURE_INVALID',
+      `The GLB default scene index ${String(selectedSceneIndex)} is invalid.`,
+      { selectedSceneIndex }
+    );
+  }
+
+  // GDevelop builds its bone cache by traversing GLTFLoader's selected
+  // `gltf.scene` only. Bones that exist solely in another scene are not usable
+  // runtime identifiers and must not be returned.
+  const reachableNodeIndexes = new Set<number>();
+  const pendingNodeIndexes: Array<number> = [];
+  if (sceneDefinitions.length > 0) {
+    const selectedScene = sceneDefinitions[selectedSceneIndex];
+    if (!selectedScene || typeof selectedScene !== 'object') {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB scene ${selectedSceneIndex} must be an object.`,
+        { selectedSceneIndex }
+      );
+    }
+    const rootNodeIndexes =
+      selectedScene.nodes === undefined ? [] : selectedScene.nodes;
+    if (!Array.isArray(rootNodeIndexes)) {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB scene ${selectedSceneIndex} must contain a nodes array when nodes are specified.`,
+        { selectedSceneIndex }
+      );
+    }
+    pendingNodeIndexes.push(...rootNodeIndexes);
+  }
+  while (pendingNodeIndexes.length > 0) {
+    const nodeIndex = pendingNodeIndexes.pop();
+    if (
+      !Number.isInteger(nodeIndex) ||
+      nodeIndex < 0 ||
+      nodeIndex >= nodeDefinitions.length
+    ) {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `The selected GLB scene references invalid node index ${String(
+          nodeIndex
+        )}.`,
+        { selectedSceneIndex, nodeIndex }
+      );
+    }
+    if (reachableNodeIndexes.has(nodeIndex)) continue;
+    reachableNodeIndexes.add(nodeIndex);
+    const node = nodeDefinitions[nodeIndex];
+    if (!node || typeof node !== 'object') {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB node ${nodeIndex} must be an object.`,
+        { nodeIndex }
+      );
+    }
+    const children = node.children === undefined ? [] : node.children;
+    if (!Array.isArray(children)) {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB node ${nodeIndex} must contain a children array when children are specified.`,
+        { nodeIndex }
+      );
+    }
+    pendingNodeIndexes.push(...children);
+  }
+
   const jointNodeIndexes = new Set<number>();
   skinDefinitions.forEach((skin, skinIndex) => {
     if (!skin || typeof skin !== 'object' || !Array.isArray(skin.joints)) {
@@ -163,7 +260,9 @@ export const inspectGlbModelJson = (json: Object): GlbModelInspection => {
           { skinIndex, jointIndex, jointNodeIndex }
         );
       }
-      jointNodeIndexes.add(jointNodeIndex);
+      if (reachableNodeIndexes.has(jointNodeIndex)) {
+        jointNodeIndexes.add(jointNodeIndex);
+      }
     });
   });
 

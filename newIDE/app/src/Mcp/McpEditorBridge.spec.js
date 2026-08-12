@@ -238,6 +238,7 @@ describe('McpEditorBridge', () => {
             { name: 'Duplicate' },
             { name: 'Duplicate' },
           ],
+          scenes: [{ nodes: [0, 1, 2, 3] }],
           skins: [{ joints: [0, 1, 2, 3] }],
         })
       );
