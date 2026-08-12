@@ -36,6 +36,7 @@ describe('gdjs.ResourcePackManager', () => {
     r: 0,
     v: 0,
     b: 0,
+    renderer3DWorldScale: 100,
     mangledName: name,
     name,
     objects: [],

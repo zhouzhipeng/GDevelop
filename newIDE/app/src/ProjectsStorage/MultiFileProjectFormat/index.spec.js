@@ -98,6 +98,7 @@ const projectFixture = {
       title: 'Game',
       standardSortMethod: true,
       stopSoundsOnStartup: true,
+      renderer3DWorldScale: 42.5,
       disableInputWhenNotFocused: true,
       variables: [],
       objectsGroups: [],
@@ -573,6 +574,9 @@ describe('GDevelop multi-file project format', () => {
     expect(files[MULTI_FILE_ENTRY_URI]).not.toContain('[project.constants');
     expect(files[MULTI_FILE_CONSTANTS_URI]).toContain('[sheet.row]');
     expect(files[MULTI_FILE_CONSTANTS_URI]).toContain('column = "ssdfs"');
+    expect(files['game://scenes/Main/scene.settings']).toContain(
+      'renderer3DWorldScale = 42.5'
+    );
     expect(files[MULTI_FILE_CONSTANTS_URI]).not.toContain('[settings');
     expect(files[MULTI_FILE_CONSTANTS_URI]).not.toContain('[constants');
     expect(files[MULTI_FILE_CONSTANTS_URI]).not.toContain(

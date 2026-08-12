@@ -31,6 +31,7 @@ describe('gdjs.NavMeshCharacterRuntimeBehavior', function () {
         r: 0,
         v: 0,
         b: 0,
+        renderer3DWorldScale: 100,
         mangledName: 'Scene1',
         name: 'Scene1',
         stopSoundsOnStartup: false,

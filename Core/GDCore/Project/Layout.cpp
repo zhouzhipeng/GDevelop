@@ -281,6 +281,7 @@ void Layout::SerializeTo(SerializerElement& element) const {
     element.SetAttribute("resourcesUnloading", resourcesUnloading);
   element.SetAttribute("disableInputWhenNotFocused",
                        disableInputWhenNotFocused);
+  element.SetAttribute("renderer3DWorldScale", renderer3DWorldScale);
 
   editorSettings.SerializeTo(element.AddChild("uiSettings"));
 
@@ -344,6 +345,10 @@ void Layout::UnserializeFrom(gd::Project& project,
       element.GetStringAttribute("resourcesUnloading", "inherit");
   disableInputWhenNotFocused =
       element.GetBoolAttribute("disableInputWhenNotFocused");
+  renderer3DWorldScale =
+      element.GetDoubleAttribute("renderer3DWorldScale", 100);
+  if (!std::isfinite(renderer3DWorldScale) || renderer3DWorldScale <= 0)
+    renderer3DWorldScale = 100;
 
   editorSettings.UnserializeFrom(
       element.GetChild("uiSettings", 0, "UISettings"));
@@ -432,6 +437,7 @@ void Layout::Init(const Layout& other) {
   resourcesPreloading = other.resourcesPreloading;
   resourcesUnloading = other.resourcesUnloading;
   disableInputWhenNotFocused = other.disableInputWhenNotFocused;
+  renderer3DWorldScale = other.renderer3DWorldScale;
   initialInstances = other.initialInstances;
   layers = other.layers;
   variables = other.GetVariables();

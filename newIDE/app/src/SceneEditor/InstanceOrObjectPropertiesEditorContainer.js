@@ -106,6 +106,7 @@ type Props = {|
 
   // For scenes
   onBackgroundColorChanged: () => void,
+  onRenderer3DWorldScaleFieldChanged: () => void,
   openSceneVariables: () => void,
 
   // For object groups
@@ -202,6 +203,7 @@ export const InstanceOrObjectPropertiesEditorContainer: React.ComponentType<{
 
       // For scenes
       onBackgroundColorChanged,
+      onRenderer3DWorldScaleFieldChanged,
       openSceneVariables,
 
       // For object groups
@@ -386,6 +388,9 @@ export const InstanceOrObjectPropertiesEditorContainer: React.ComponentType<{
             unsavedChanges={unsavedChanges}
             i18n={i18n}
             onBackgroundColorChanged={onBackgroundColorChanged}
+            onRenderer3DWorldScaleFieldChanged={
+              onRenderer3DWorldScaleFieldChanged
+            }
             openSceneVariables={openSceneVariables}
           />
         ) : null}

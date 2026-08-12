@@ -6,6 +6,7 @@
 #include "catch.hpp"
 
 #include <map>
+#include <limits>
 #include <vector>
 
 #include "DummyPlatform.h"
@@ -168,6 +169,7 @@ TEST_CASE("SceneLifecycleEventsFunctions", "[common]") {
 
   SECTION("copying owners preserves every independent lifecycle body") {
     gd::Layout layout;
+    layout.SetRenderer3DWorldScale(42.5);
     auto& functions = layout.GetLifecycleEventsFunctions();
     InsertOneEvent(functions.GetSceneLoadFunction());
     InsertOneEvent(functions.GetSceneSignalFunction());
@@ -175,6 +177,7 @@ TEST_CASE("SceneLifecycleEventsFunctions", "[common]") {
     InsertOneEvent(functions.GetSceneUnloadFunction());
 
     gd::Layout copiedLayout(layout);
+    REQUIRE(copiedLayout.GetRenderer3DWorldScale() == 42.5);
     RequireOneEventInEveryLifecycleFunction(
         copiedLayout.GetLifecycleEventsFunctions());
     functions.GetSceneLoadFunction().GetEvents().Clear();
@@ -189,6 +192,38 @@ TEST_CASE("SceneLifecycleEventsFunctions", "[common]") {
     gd::ExternalEvents copiedExternalEvents(externalEvents);
     RequireOneEventInEveryLifecycleFunction(
         copiedExternalEvents.GetLifecycleEventsFunctions());
+  }
+
+  SECTION("layout 3D renderer world scale is normalized and serialized") {
+    gd::Platform platform;
+    gd::Project project;
+    SetupProjectWithDummyPlatform(project, platform);
+
+    gd::Layout layout;
+    REQUIRE(layout.GetRenderer3DWorldScale() == 100);
+    layout.SetRenderer3DWorldScale(42.5);
+    REQUIRE(layout.GetRenderer3DWorldScale() == 42.5);
+    layout.SetRenderer3DWorldScale(0);
+    REQUIRE(layout.GetRenderer3DWorldScale() == 100);
+    layout.SetRenderer3DWorldScale(-50);
+    REQUIRE(layout.GetRenderer3DWorldScale() == 100);
+    layout.SetRenderer3DWorldScale(std::numeric_limits<double>::infinity());
+    REQUIRE(layout.GetRenderer3DWorldScale() == 100);
+    layout.SetRenderer3DWorldScale(42.5);
+
+    gd::SerializerElement element;
+    layout.SerializeTo(element);
+    gd::Layout roundTrippedLayout;
+    roundTrippedLayout.UnserializeFrom(project, element);
+    REQUIRE(roundTrippedLayout.GetRenderer3DWorldScale() == 42.5);
+
+    element.SetAttribute("renderer3DWorldScale", 0);
+    roundTrippedLayout.UnserializeFrom(project, element);
+    REQUIRE(roundTrippedLayout.GetRenderer3DWorldScale() == 100);
+
+    element.SetAttribute("renderer3DWorldScale", -50);
+    roundTrippedLayout.UnserializeFrom(project, element);
+    REQUIRE(roundTrippedLayout.GetRenderer3DWorldScale() == 100);
   }
 
   SECTION("serialization preserves present empty functions") {

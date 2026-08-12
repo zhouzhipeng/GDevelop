@@ -1220,7 +1220,14 @@ namespace gdjs {
             threeCamera.updateMatrixWorld();
             // The three.js world Y axis is the opposite of the scene one
             // (see `transformTo3DWorld`, the inverse of this projection).
-            const vector = new THREE.Vector3(x, -y, 0);
+            const inverseWorldScale = layer
+              .getRuntimeScene()
+              .getRenderer3DInverseWorldScale();
+            const vector = new THREE.Vector3(
+              x * inverseWorldScale,
+              -y * inverseWorldScale,
+              0
+            );
             vector.project(threeCamera);
             if (Number.isFinite(vector.x) && Number.isFinite(vector.y)) {
               return [

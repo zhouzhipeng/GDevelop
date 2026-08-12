@@ -505,6 +505,14 @@ describe('project source catalogs', () => {
     const sceneSchema = catalog.fileKinds.find(
       fileKind => fileKind.kind === 'scene'
     ).schema;
+    expect(sceneSchema.rootFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'renderer3DWorldScale',
+          type: 'number',
+        }),
+      ])
+    );
     expect(sceneSchema.childTables.map(table => table.table)).not.toContain(
       'externalLayoutFiles'
     );

@@ -86,6 +86,7 @@ export type SceneEditorsDisplayProps = {|
   onLayersModified: () => void,
   onLayersVisibilityInEditorChanged: () => void,
   onBackgroundColorChanged: () => void,
+  onRenderer3DWorldScaleFieldChanged: () => void,
   selectedObjectGroup: gdObjectGroup | null,
   onSelectObjectGroup: (objectGroup: gdObjectGroup | null) => void,
   openSceneVariables: () => void,
