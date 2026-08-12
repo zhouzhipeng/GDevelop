@@ -1521,6 +1521,85 @@ runtimeScene._instances.length;
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   });
 
+  it('reports persisted imported sources without reformatting imported events', async () => {
+    const temporaryDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'gdevelop-mcp-extension-import-events-')
+    );
+    const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    project.setProjectFile(projectFile);
+    const baseFiles = decomposeLegacyProjectToFiles(
+      serializeProjectWithConstants(project)
+    );
+    const ensureExtensionInstalled: any = jest.fn(async (options: any) => {
+      const extension = project.insertNewEventsFunctionsExtension(
+        options.extensionName,
+        0
+      );
+      const eventsFunction = extension
+        .getEventsFunctions()
+        .insertNewEventsFunction('Initialize', 0);
+      eventsFunction.setFunctionType(gd.EventsFunction.Action);
+      const standardEvent = gd.asStandardEvent(
+        eventsFunction
+          .getEvents()
+          .insertNewEvent(project, 'BuiltinCommonInstructions::Standard', 0)
+      );
+      const onceCondition = new gd.Instruction();
+      onceCondition.setType('BuiltinCommonInstructions::Once');
+      standardEvent.getConditions().insert(onceCondition, 0);
+      onceCondition.delete();
+      options.onExtensionInstalled([options.extensionName]);
+      return { installed: true, preflightReceipts: [] };
+    });
+    const saveProjectAndWait = jest.fn(async () => {
+      await writeMultiFileSourceTree({
+        entryPath: projectFile,
+        files: {
+          ...baseFiles,
+          'game://extensions/Billboard/extension.settings':
+            'kind = "extension"\nsettingsFormatVersion = 5\norder = 0\nname = "Billboard"\n',
+          'game://extensions/Billboard/functions/Initialize.settings':
+            'kind = "function"\nsettingsFormatVersion = 5\norder = 0\nextension = "Billboard"\nname = "Initialize"\nfunctionType = "Action"\n',
+          'game://extensions/Billboard/functions/Initialize.events':
+            '@event\nif BuiltinCommonInstructions::Once\n',
+        },
+      });
+      return { saved: true };
+    });
+    const bridge = makeBridge({
+      getProject: () => project,
+      ensureExtensionInstalled,
+      saveProjectAndWait,
+    });
+
+    const response = await bridge.handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'import_extension',
+        arguments: { extension_name: 'Billboard' },
+      },
+    });
+    const result = JSON.parse(response.content[0].text);
+
+    expect(response.isError).not.toBe(true);
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: true,
+        persistedSourcesVerified: true,
+      })
+    );
+    expect(result.generatedSources.Billboard).toEqual(
+      expect.arrayContaining([
+        'game://extensions/Billboard/extension.settings',
+        'game://extensions/Billboard/functions/Initialize.settings',
+        'game://extensions/Billboard/functions/Initialize.events',
+      ])
+    );
+    project.delete();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  });
+
   it('blocks a registry extension with mismatched downloaded identity before project mutation or saving', async () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-extension-preflight-')

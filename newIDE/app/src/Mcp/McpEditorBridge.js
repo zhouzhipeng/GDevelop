@@ -16,7 +16,6 @@ import {
 } from '../Utils/Serializer';
 import {
   MULTI_FILE_ENTRY_NAME,
-  decomposeLegacyProjectToFiles,
   getGameplayTestDescriptors,
   parseTomlSource,
 } from '../ProjectsStorage/MultiFileProjectFormat';
@@ -5173,37 +5172,35 @@ const callMcpTool = async ({
       const namesToReport = installedExtensionNames.length
         ? installedExtensionNames
         : [extensionName];
-      const decomposedFiles = decomposeLegacyProjectToFiles(
-        serializeToJSObject(project)
-      );
+      // The normal save already formatted events with its project instruction
+      // catalog. Read that persisted source tree directly: decomposing the
+      // in-memory project again here would require rebuilding the same catalog
+      // and can fail after a successful save for imported instruction events.
+      const savedSourceTree = await readMultiFileSourceTree(projectFile);
+      const savedFiles = savedSourceTree.files;
+      const savedSourceUris = Object.keys(savedFiles);
       const generatedSources: { [string]: Array<string> } = {};
+      const missingGeneratedSources: Array<string> = [];
       namesToReport.forEach(name => {
-        const extensionSettingsUri = Object.keys(decomposedFiles).find(uri => {
+        const extensionSettingsUri = savedSourceUris.find(uri => {
           if (!uri.endsWith('/extension.settings')) return false;
-          const settings = parseTomlSource(decomposedFiles[uri], uri);
+          const settings = parseTomlSource(savedFiles[uri], uri);
           return settings.kind === 'extension' && settings.name === name;
         });
         if (!extensionSettingsUri) {
           generatedSources[name] = [];
+          missingGeneratedSources.push(`extension.settings for ${name}`);
           return;
         }
         const extensionRoot = extensionSettingsUri.slice(
           0,
           -'extension.settings'.length
         );
-        generatedSources[name] = Object.keys(decomposedFiles)
+        generatedSources[name] = savedSourceUris
           .filter(uri => uri.indexOf(extensionRoot) === 0)
           .sort((left, right) => left.localeCompare(right));
       });
 
-      const savedSourceTree = await readMultiFileSourceTree(projectFile);
-      const savedSourceUris = new Set(Object.keys(savedSourceTree.files));
-      const missingGeneratedSources: Array<string> = [];
-      Object.keys(generatedSources).forEach(name => {
-        generatedSources[name].forEach(uri => {
-          if (!savedSourceUris.has(uri)) missingGeneratedSources.push(uri);
-        });
-      });
       if (missingGeneratedSources.length) {
         return errorResult(
           `Extension "${extensionName}" was saved, but generated multi-file sources could not be read back from disk.`,
