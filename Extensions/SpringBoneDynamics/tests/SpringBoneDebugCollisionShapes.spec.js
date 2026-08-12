@@ -81,7 +81,7 @@ describe('Spring bone debug collision shapes', function () {
       ],
       pointCount: 2,
     };
-    unsafeBehavior._colliderWorldData = new Float32Array([
+    unsafeBehavior._colliderRendererWorldData = new Float32Array([
       1, 2, 3, 1, 1, 2, 3, 1, 0, 0, 0, 1, 0, 0, 10, 2,
     ]);
     return behavior;
@@ -109,7 +109,7 @@ describe('Spring bone debug collision shapes', function () {
     const firstMasks = behavior.get3DDebugCollisionMasks();
     const capsuleVertices = firstMasks[1].vertices;
 
-    /** @type {any} */ (behavior)._colliderWorldData.set(
+    /** @type {any} */ (behavior)._colliderRendererWorldData.set(
       [0, 0, 0, 1, 10, 0, 0, 2],
       8
     );
@@ -128,7 +128,6 @@ describe('Spring bone debug collision shapes', function () {
 
   it('converts Three.js world points back to debug-layer coordinates', function () {
     const behavior = makeBehavior();
-    const unsafeBehavior = /** @type {any} */ (behavior);
     const rendererObject = behavior.owner.getRenderer().get3DRendererObject();
     const layerGroup = new THREE.Group();
     layerGroup.scale.y = -1;
@@ -138,6 +137,5 @@ describe('Spring bone debug collision shapes', function () {
     expect(masks[0].positionX).to.be(1);
     expect(masks[0].positionY).to.be(-2);
     expect(masks[0].positionZ).to.be(3);
-    expect(unsafeBehavior._debugColliderPointA.y).to.be(-2);
   });
 });

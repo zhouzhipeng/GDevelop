@@ -44,6 +44,7 @@ import ProjectManager, {
   globalObjectsItemId,
 } from '../ProjectManager';
 import LoaderModal from '../UI/LoaderModal';
+import NonBlockingLoader from '../UI/NonBlockingLoader';
 import {
   cleanupLeakedOverlaysAfterPopOutClose,
   captureMaterialUiOverlayCleanupCandidates,
@@ -1487,7 +1488,11 @@ const MainFrame = (props: Props): React.MixedElement => {
         event: any,
         {
           remainingPreviewWindowsForParent,
-        }: { remainingPreviewWindowsForParent?: number } = {}
+          debuggerCloseRequested,
+        }: {
+          remainingPreviewWindowsForParent?: number,
+          debuggerCloseRequested?: boolean,
+        } = {}
       ) => {
         // Preview windows do not always have a debugger pop-out, so do not rely
         // on debugger-popout-close-requested to restore the main window. Run
@@ -1502,9 +1507,14 @@ const MainFrame = (props: Props): React.MixedElement => {
           }
           clearPreviewDebuggerStatuses();
         }
-        if (isLastPreviewWindowClosed || !hasNonEditionPreviewsRunning) {
+        if (isLastPreviewWindowClosed && !debuggerCloseRequested) {
+          // A preview without a debugger pop-out has no correlated debugger
+          // close event, so its own close notification owns cancellation.
           cancelPendingPreviewLaunchAfterWindowClosed(
-            'a preview window was closed'
+            'the last preview window was closed'
+          );
+          releaseCancelledPreviewPreparation(
+            'the last preview window was closed before preparation finished'
           );
         }
       };
@@ -1519,9 +1529,9 @@ const MainFrame = (props: Props): React.MixedElement => {
     [
       cancelPendingPreviewLaunchAfterWindowClosed,
       clearPreviewDebuggerStatuses,
-      hasNonEditionPreviewsRunning,
       healMainWindowAfterPopOutClose,
       previewDebuggerServer,
+      releaseCancelledPreviewPreparation,
     ]
   );
 
@@ -1720,6 +1730,9 @@ const MainFrame = (props: Props): React.MixedElement => {
         cancelPendingPreviewLaunchAfterWindowClosed(
           'the debugger window was closed'
         );
+        releaseCancelledPreviewPreparation(
+          'the debugger window was closed before preview preparation finished'
+        );
         setState(prevState => {
           const debuggerTab = getEditorTabOpenedWithKey(
             prevState.editorTabs,
@@ -1754,6 +1767,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       forceRefreshProjectManagerList,
       healMainWindowAfterPopOutClose,
       cancelPendingPreviewLaunchAfterWindowClosed,
+      releaseCancelledPreviewPreparation,
     ]
   );
 
@@ -8761,10 +8775,8 @@ const MainFrame = (props: Props): React.MixedElement => {
     !!authenticatedUser.limits &&
     !!authenticatedUser.limits.capabilities.classrooms &&
     authenticatedUser.limits.capabilities.classrooms.hideAskAi;
-  const showLoaderAfterDelay =
-    previewLoading === 'hot-reload-for-in-game-edition';
-  const showLoaderImmediately =
-    isProjectOpening || isLoadingProject || previewLoading === 'preview';
+  const showBlockingLoader = isProjectOpening || isLoadingProject;
+  const showPreviewLoader = !!previewLoading && !showBlockingLoader;
 
   const buildMainMenuProps = {
     i18n: i18n,
@@ -9280,14 +9292,17 @@ const MainFrame = (props: Props): React.MixedElement => {
         />
       </WindowCommandsProvider>
       <LoaderModal
-        showImmediately={showLoaderImmediately}
-        showAfterDelay={showLoaderAfterDelay}
+        showImmediately={showBlockingLoader}
         progress={fileMetadataOpeningProgress}
-        message={
-          loaderModalOpeningMessage ||
-          fileMetadataOpeningMessage ||
-          (previewLoading ? t`Loading preview...` : null)
+        message={loaderModalOpeningMessage || fileMetadataOpeningMessage}
+      />
+      <NonBlockingLoader
+        showImmediately={showPreviewLoader && previewLoading === 'preview'}
+        showAfterDelay={
+          showPreviewLoader &&
+          previewLoading === 'hot-reload-for-in-game-edition'
         }
+        message={t`Loading preview...`}
       />
       <Snackbar
         open={state.snackMessageOpen}

@@ -13,6 +13,9 @@ const {
   getBoundsFittingDisplayHeight,
 } = require('./PreviewWindowBounds');
 const { injectPreviewClickUserGesture } = require('./PreviewWindowUserInput');
+const {
+  createDebuggerPopOutCloseCoordinator,
+} = require('./PreviewWindowLifecycle');
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -20,6 +23,7 @@ const { injectPreviewClickUserGesture } = require('./PreviewWindowUserInput');
 let previewWindows = [];
 let debuggerPopOutWindows = new Map();
 let closingDebuggerPopOutWindowIds = new Set();
+const debuggerPopOutCloseCoordinator = createDebuggerPopOutCloseCoordinator();
 
 let openDevToolsByDefault = false;
 const DEBUGGER_POP_OUT_FORCE_CLOSE_DELAY_MS = 17000;
@@ -369,12 +373,17 @@ const setDebuggerPopOutWindow = (parentWindowId, debuggerWindow) => {
 
   debuggerWindow.on('closed', () => {
     closingDebuggerPopOutWindowIds.delete(debuggerWindow.id);
+    const wasClosedAfterLastPreview = debuggerPopOutCloseCoordinator.consumeClosingAfterLastPreview(
+      debuggerWindow.id
+    );
 
     if (debuggerPopOutWindows.get(parentWindowId) === debuggerWindow) {
       debuggerPopOutWindows.delete(parentWindowId);
     }
-    sendDebuggerPopOutCloseRequested(parentWindowId);
-    closePreviewWindowsForParent(parentWindowId);
+    if (!wasClosedAfterLastPreview) {
+      sendDebuggerPopOutCloseRequested(parentWindowId);
+      closePreviewWindowsForParent(parentWindowId);
+    }
     keepParentWindowVisibleAfterChildClose(
       parentWindowId,
       parentWasMinimizedBeforeDebuggerClose
@@ -398,13 +407,17 @@ const sendDebuggerPopOutCloseRequested = parentWindowId => {
 };
 
 const closeDebuggerPopOutWindow = parentWindowId => {
-  const parentWasNotified = sendDebuggerPopOutCloseRequested(parentWindowId);
-
   const debuggerWindow = debuggerPopOutWindows.get(parentWindowId);
-  if (!debuggerWindow || debuggerWindow.isDestroyed()) return;
+  if (!debuggerWindow || debuggerWindow.isDestroyed()) return false;
+
+  let parentWasNotified = false;
 
   try {
+    debuggerPopOutCloseCoordinator.markClosingAfterLastPreview(
+      debuggerWindow.id
+    );
     closingDebuggerPopOutWindowIds.add(debuggerWindow.id);
+    parentWasNotified = sendDebuggerPopOutCloseRequested(parentWindowId);
 
     if (typeof debuggerWindow.setParentWindow === 'function') {
       debuggerWindow.setParentWindow(null);
@@ -436,6 +449,7 @@ const closeDebuggerPopOutWindow = parentWindowId => {
   } catch (error) {
     console.warn('Ignoring exception when closing debugger window:', error);
   }
+  return parentWasNotified;
 };
 
 /**
@@ -551,9 +565,11 @@ const openPreviewWindow = ({
       ).length;
       if (remainingPreviewWindowsForParent > 0) {
         arrangeDebuggerPopOutWithLatestPreview(parentWindowId);
-      } else {
-        closeDebuggerPopOutWindow(parentWindowId);
       }
+      const debuggerCloseRequested =
+        remainingPreviewWindowsForParent === 0
+          ? closeDebuggerPopOutWindow(parentWindowId)
+          : false;
       keepParentWindowVisibleAfterChildClose(
         parentWindowId,
         parentWasMinimizedBeforePreviewClose
@@ -562,6 +578,7 @@ const openPreviewWindow = ({
       if (openEvent.sender && !openEvent.sender.isDestroyed()) {
         openEvent.sender.send('preview-window-closed', {
           remainingPreviewWindowsForParent,
+          debuggerCloseRequested,
         });
       }
       previewWindow = null;
