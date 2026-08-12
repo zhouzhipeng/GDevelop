@@ -13,16 +13,24 @@ import {
   isWriteTool,
 } from './McpToolCatalog';
 
+// $FlowFixMe[cannot-resolve-module]
+const fs = require('fs');
+// $FlowFixMe[cannot-resolve-module]
+const path = require('path');
+
 const expectedAlwaysAvailableTools = [
   'open_project',
   'gdevelop_get_editor_state',
   'gdevelop_get_editor_selection',
   'gdevelop_get_project_summary',
   'gdevelop_inspect_signal_usage',
+  'inspect_glb_model',
   'gdevelop_list_scenes',
   'gdevelop_list_objects',
   'generate-catalogs',
   'validate_project_files',
+  'run_gameplay_tests',
+  'get_gameplay_test_results',
   'inspect_tool_schema',
   'get_tool_usage_examples',
   'reload_project',
@@ -137,6 +145,7 @@ describe('McpToolCatalog', () => {
     expect(Object.keys(capabilities.categories).sort()).toEqual([
       'Editor queries',
       'Extension import',
+      'Gameplay tests',
       'Preview runtime',
       'Project opening',
       'Project-file validation',
@@ -150,6 +159,13 @@ describe('McpToolCatalog', () => {
     expect(
       capabilities.categories['Project-file validation'].map(tool => tool.name)
     ).toContain('reload_project');
+    expect(
+      capabilities.categories['Gameplay tests'].map(tool => tool.name)
+    ).toEqual(['run_gameplay_tests', 'get_gameplay_test_results']);
+    expect(
+      capabilities.categories['Editor queries'].map(tool => tool.name)
+    ).toContain('inspect_glb_model');
+    expect(capabilities.note).toContain('GLB metadata inspection');
   });
 
   it('exposes open_project as an always-available destructive synchronization tool', () => {
@@ -257,11 +273,45 @@ describe('McpToolCatalog', () => {
     );
   });
 
+  it('documents mouse-wheel simulation inputs and direction semantics', () => {
+    const tool = getMcpTools({
+      allowWriteTools: false,
+      allowCommandTools: false,
+    }).find(tool => tool.name === 'simulate_preview_input');
+
+    if (!tool) throw new Error('simulate_preview_input tool is missing.');
+    const inputItemProperties =
+      tool.inputSchema.properties.inputs.items.properties;
+    expect(inputItemProperties.type.description).toContain('mouseWheel');
+    expect(inputItemProperties.delta_x).toEqual(
+      expect.objectContaining({ type: 'number' })
+    );
+    expect(inputItemProperties.delta_y).toEqual(
+      expect.objectContaining({
+        type: 'number',
+        description: expect.stringContaining('Positive scrolls up'),
+      })
+    );
+    expect(inputItemProperties.delta_z).toEqual(
+      expect.objectContaining({ type: 'number' })
+    );
+    expect(
+      getMcpToolUsageExamples('simulate_preview_input').simulate_preview_input
+    ).toContainEqual(
+      expect.objectContaining({
+        arguments: {
+          inputs: [{ type: 'mouseWheel', delta_y: -120 }],
+        },
+      })
+    );
+  });
+
   it('exposes generate-catalogs as an awaited, non-destructive catalog write', () => {
     const tool = getMcpTools({
       allowWriteTools: false,
       allowCommandTools: false,
     }).find(tool => tool.name === 'generate-catalogs');
+    if (!tool) throw new Error('generate-catalogs tool is missing.');
 
     expect(tool).toEqual(
       expect.objectContaining({
@@ -276,9 +326,10 @@ describe('McpToolCatalog', () => {
         }),
       })
     );
-    expect(tool.description).toContain('all five generated authoring files');
+    expect(tool.description).toContain('all six generated authoring files');
     expect(tool.description).toContain('runtime-api.d.ts');
     expect(tool.description).toContain('project-api.d.ts');
+    expect(tool.description).toContain('harness-api.d.ts');
     expect(
       canCallMcpTool('generate-catalogs', {
         allowWriteTools: false,
@@ -287,11 +338,113 @@ describe('McpToolCatalog', () => {
     ).toEqual({ canCall: true });
   });
 
+  it('publishes read-only GLB model inspection with a project-relative path', () => {
+    const tool = getMcpTools({
+      allowWriteTools: false,
+      allowCommandTools: false,
+    }).find(tool => tool.name === 'inspect_glb_model');
+    if (!tool) throw new Error('inspect_glb_model tool is missing.');
+
+    expect(tool.inputSchema).toEqual({
+      type: 'object',
+      properties: {
+        file_path: expect.objectContaining({
+          type: 'string',
+          minLength: 1,
+        }),
+      },
+      required: ['file_path'],
+      additionalProperties: false,
+    });
+    expect(tool.annotations).toEqual({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    });
+    expect(tool.description).toContain('animation clip source names');
+    expect(tool.description).toContain('alias/name may differ');
+    expect(
+      getMcpToolUsageExamples('inspect_glb_model').inspect_glb_model
+    ).toContainEqual(
+      expect.objectContaining({
+        arguments: { file_path: 'assets/models/hero.glb' },
+      })
+    );
+  });
+
+  it('publishes the asynchronous gameplay-test start and query contracts', () => {
+    const tools = getMcpTools({
+      allowWriteTools: false,
+      allowCommandTools: false,
+    });
+    const runTool = tools.find(tool => tool.name === 'run_gameplay_tests');
+    const resultsTool = tools.find(
+      tool => tool.name === 'get_gameplay_test_results'
+    );
+    if (!runTool || !resultsTool) {
+      throw new Error('Gameplay-test MCP tools are missing.');
+    }
+
+    expect(runTool.inputSchema).toEqual(
+      expect.objectContaining({
+        additionalProperties: false,
+        properties: expect.objectContaining({
+          file: expect.objectContaining({
+            type: 'string',
+            minLength: 1,
+            maxLength: 1024,
+          }),
+          timeout_ms: expect.objectContaining({
+            type: 'integer',
+            minimum: 1000,
+            maximum: 300000,
+            default: 30000,
+          }),
+        }),
+      })
+    );
+    expect(runTool.annotations).toEqual({
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    });
+    expect(resultsTool.inputSchema).toEqual(
+      expect.objectContaining({
+        additionalProperties: false,
+        properties: expect.objectContaining({
+          operation_id: expect.objectContaining({ maxLength: 128 }),
+          offset: expect.objectContaining({ minimum: 0, default: 0 }),
+          limit: expect.objectContaining({
+            minimum: 1,
+            maximum: 100,
+            default: 25,
+          }),
+        }),
+      })
+    );
+    expect(resultsTool.annotations).toEqual({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    });
+    expect(
+      getMcpToolUsageExamples('run_gameplay_tests').run_gameplay_tests
+    ).toHaveLength(2);
+    expect(
+      getMcpToolUsageExamples('get_gameplay_test_results')
+        .get_gameplay_test_results
+    ).toHaveLength(2);
+  });
+
   it('exposes validate_project_files as a no-input catalog-regenerating validation gate', () => {
     const tool = getMcpTools({
       allowWriteTools: false,
       allowCommandTools: false,
     }).find(tool => tool.name === 'validate_project_files');
+    if (!tool) throw new Error('validate_project_files tool is missing.');
 
     expect(tool).toEqual(
       expect.objectContaining({
@@ -328,5 +481,38 @@ describe('McpToolCatalog', () => {
       'inspect-current-game',
       'debug-preview',
     ]);
+  });
+
+  it('bundles the gameplay-test authoring and verification workflow', () => {
+    const skillDirectory = path.join(
+      // $FlowFixMe[cannot-resolve-name] - Jest provides Node's __dirname.
+      __dirname,
+      '../../resources/gd-project-template/skills/gdevelop-project-files'
+    );
+    const skill = fs.readFileSync(
+      path.join(skillDirectory, 'SKILL.md'),
+      'utf8'
+    );
+    const harnessReference = fs.readFileSync(
+      path.join(skillDirectory, 'references/gameplay-test-harness.md'),
+      'utf8'
+    );
+
+    expect(skill).toContain('references/gameplay-test-harness.md');
+    expect(skill).toContain('run_gameplay_tests');
+    expect(skill).toContain('get_gameplay_test_results');
+    expect(skill).toContain('summary.all_passed: true');
+    expect(skill).toContain('inspect_glb_model');
+    expect(skill).toContain('animationNames');
+    expect(skill).toContain('boneNames');
+    expect(skill).toContain('Model3D animation `source`');
+    expect(skill).toContain('alias selected by events');
+    expect(harnessReference).toContain('.gdevelop/harness-api.d.ts');
+    expect(harnessReference).toContain('await harness.stepFrames');
+    expect(harnessReference).toContain('poll get_gameplay_test_results');
+    expect(harnessReference).toContain('summary.all_passed: true');
+    expect(harnessReference).toContain(
+      'https://wiki.gdevelop.io/gdevelop5/interface/gameplay-tests/'
+    );
   });
 });

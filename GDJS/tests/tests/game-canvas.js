@@ -70,6 +70,7 @@ describe('gdjs.RuntimeGameRenderer canvas tests', () => {
 
         const actualGameCanvas = renderer.getCanvas();
         const actualPixiRenderer = renderer.getPIXIRenderer();
+        const actualThreeRenderer = renderer.getThreeRenderer();
         const runtimeScene = new gdjs.RuntimeScene(runtimeGame);
         const actualSceneContainer = runtimeScene
             .getRenderer()
@@ -77,7 +78,9 @@ describe('gdjs.RuntimeGameRenderer canvas tests', () => {
 
         expect(actualGameCanvas).to.not.be(null);
         expect(actualPixiRenderer).to.not.be(null);
+        expect(actualThreeRenderer).to.not.be(null);
         expect(actualPixiRenderer.resolution).to.be(2);
+        expect(actualThreeRenderer.getPixelRatio()).to.be(2);
         expect(actualPixiRenderer.width).to.be(
             runtimeGame.getGameResolutionWidth() * 2
         );
@@ -114,6 +117,7 @@ describe('gdjs.RuntimeGameRenderer canvas tests', () => {
         runtimeScene.onGameResolutionResized();
 
         expect(actualPixiRenderer.resolution).to.be(1.5);
+        expect(actualThreeRenderer.getPixelRatio()).to.be(1.5);
         expect(actualPixiRenderer.width).to.be(
             runtimeGame.getGameResolutionWidth() * 1.5
         );

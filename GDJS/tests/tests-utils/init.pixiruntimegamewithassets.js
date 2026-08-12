@@ -98,6 +98,7 @@ gdjs.getPixiRuntimeGameWithAssets = (props = null) => {
         behaviorsSharedData: [],
         stopSoundsOnStartup: false,
         title: '',
+        renderer3DWorldScale: 100,
         variables: [],
         usedResources: [],
         uiSettings: {

@@ -1151,6 +1151,122 @@ const allocateGameplayTestSourcePaths = tests => {
   return pathsByIdentity;
 };
 
+const collectGameplayTestInfos = serializedProject => {
+  const project = asObject(serializedProject, 'Project', MULTI_FILE_ENTRY_URI);
+  const testInfos = [];
+  const addTests = ({ tests, scope, extension }) => {
+    const names = new Set();
+    asArray(tests, `${scope} gameplay tests`, MULTI_FILE_TESTS_URI).forEach(
+      (testValue, order) => {
+        const test = asObject(
+          testValue,
+          `${scope} gameplay test ${order}`,
+          MULTI_FILE_TESTS_URI
+        );
+        assertOnlyFields(
+          test,
+          LEGACY_TEST_FIELDS,
+          `${scope} gameplay test ${order}`,
+          MULTI_FILE_TESTS_URI
+        );
+        const name = expectString(
+          test.name,
+          `${scope} gameplay test ${order}.name`,
+          MULTI_FILE_TESTS_URI
+        );
+        if (names.has(name)) {
+          fail(
+            'MULTIFILE_DUPLICATE_TEST_IDENTITY',
+            `${scope} gameplay tests contain duplicate name ${JSON.stringify(
+              name
+            )}.`,
+            MULTI_FILE_TESTS_URI
+          );
+        }
+        names.add(name);
+        const type = expectString(
+          test.type,
+          `${scope} gameplay test ${name}.type`,
+          MULTI_FILE_TESTS_URI
+        );
+        const description = expectString(
+          test.description,
+          `${scope} gameplay test ${name}.description`,
+          MULTI_FILE_TESTS_URI
+        );
+        const source = expectLegacyMultilineString(
+          test.source,
+          `${scope} gameplay test ${name}.source`,
+          MULTI_FILE_TESTS_URI
+        );
+        testInfos.push({
+          scope,
+          ...(extension === undefined ? {} : { extension }),
+          order,
+          name,
+          type,
+          description,
+          sourceText: source,
+        });
+      }
+    );
+  };
+
+  addTests({ tests: project.tests, scope: 'project' });
+  asArray(
+    project.eventsFunctionsExtensions,
+    'Project eventsFunctionsExtensions',
+    MULTI_FILE_ENTRY_URI
+  ).forEach((extensionValue, extensionIndex) => {
+    const extension = asObject(
+      extensionValue,
+      `Project extension ${extensionIndex}`,
+      MULTI_FILE_ENTRY_URI
+    );
+    const extensionName = expectString(
+      extension.name,
+      `Project extension ${extensionIndex}.name`,
+      MULTI_FILE_ENTRY_URI
+    );
+    addTests({
+      tests: extension.tests,
+      scope: 'extension',
+      extension: extensionName,
+    });
+  });
+
+  return testInfos;
+};
+
+const allocateGameplayTestDescriptors = testInfos => {
+  const sourcePaths = allocateGameplayTestSourcePaths(testInfos);
+  return testInfos.map(testInfo => {
+    const file = sourcePaths.get(gameplayTestLogicalIdentity(testInfo));
+    if (!file) {
+      fail(
+        'MULTIFILE_INVALID_TEST_SOURCE',
+        `Unable to allocate a source path for gameplay test ${testInfo.name}.`,
+        MULTI_FILE_TESTS_URI
+      );
+    }
+    return {
+      scope: testInfo.scope,
+      ...(testInfo.extension === undefined
+        ? {}
+        : { extension: testInfo.extension }),
+      name: testInfo.name,
+      file,
+    };
+  });
+};
+
+/**
+ * Return the canonical flat-file identities for every gameplay test in a
+ * serialized in-memory project, without decomposing or writing project files.
+ */
+export const getGameplayTestDescriptors = serializedProject =>
+  allocateGameplayTestDescriptors(collectGameplayTestInfos(serializedProject));
+
 const assertOnlyFields = (value, allowedFields, label, fileUri) => {
   const unexpectedField = Object.keys(value).find(
     field => !allowedFields.has(field)
@@ -1848,98 +1964,11 @@ const removeEmptyBehaviorSharedData = layout =>
       };
 
 const decomposeGameplayTests = (project, files) => {
-  const testInfos = [];
-  const addTests = ({ tests, scope, extension }) => {
-    const names = new Set();
-    asArray(tests, `${scope} gameplay tests`, MULTI_FILE_TESTS_URI).forEach(
-      (testValue, order) => {
-        const test = asObject(
-          testValue,
-          `${scope} gameplay test ${order}`,
-          MULTI_FILE_TESTS_URI
-        );
-        assertOnlyFields(
-          test,
-          LEGACY_TEST_FIELDS,
-          `${scope} gameplay test ${order}`,
-          MULTI_FILE_TESTS_URI
-        );
-        const name = expectString(
-          test.name,
-          `${scope} gameplay test ${order}.name`,
-          MULTI_FILE_TESTS_URI
-        );
-        if (names.has(name)) {
-          fail(
-            'MULTIFILE_DUPLICATE_TEST_IDENTITY',
-            `${scope} gameplay tests contain duplicate name ${JSON.stringify(
-              name
-            )}.`,
-            MULTI_FILE_TESTS_URI
-          );
-        }
-        names.add(name);
-        const type = expectString(
-          test.type,
-          `${scope} gameplay test ${name}.type`,
-          MULTI_FILE_TESTS_URI
-        );
-        const description = expectString(
-          test.description,
-          `${scope} gameplay test ${name}.description`,
-          MULTI_FILE_TESTS_URI
-        );
-        const source = expectLegacyMultilineString(
-          test.source,
-          `${scope} gameplay test ${name}.source`,
-          MULTI_FILE_TESTS_URI
-        );
-        testInfos.push({
-          scope,
-          ...(extension === undefined ? {} : { extension }),
-          order,
-          name,
-          type,
-          description,
-          sourceText: source,
-        });
-      }
-    );
-  };
-
-  addTests({ tests: project.tests, scope: 'project' });
-  asArray(
-    project.eventsFunctionsExtensions,
-    'Project eventsFunctionsExtensions',
-    MULTI_FILE_ENTRY_URI
-  ).forEach((extensionValue, extensionIndex) => {
-    const extension = asObject(
-      extensionValue,
-      `Project extension ${extensionIndex}`,
-      MULTI_FILE_ENTRY_URI
-    );
-    const extensionName = expectString(
-      extension.name,
-      `Project extension ${extensionIndex}.name`,
-      MULTI_FILE_ENTRY_URI
-    );
-    addTests({
-      tests: extension.tests,
-      scope: 'extension',
-      extension: extensionName,
-    });
-  });
-
-  const sourcePaths = allocateGameplayTestSourcePaths(testInfos);
-  const records = testInfos.map(testInfo => {
-    const sourcePath = sourcePaths.get(gameplayTestLogicalIdentity(testInfo));
-    if (!sourcePath) {
-      fail(
-        'MULTIFILE_INVALID_TEST_SOURCE',
-        `Unable to allocate a source path for gameplay test ${testInfo.name}.`,
-        MULTI_FILE_TESTS_URI
-      );
-    }
+  const testInfos = collectGameplayTestInfos(project);
+  const descriptors = allocateGameplayTestDescriptors(testInfos);
+  const records = testInfos.map((testInfo, index) => {
+    const descriptor = descriptors[index];
+    const sourcePath = descriptor.file;
     const sourceUri = `game://${sourcePath}`;
     if (files[sourceUri] !== undefined) {
       fail(

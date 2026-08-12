@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <map>
 #include <memory>
 #include <vector>
@@ -408,6 +409,19 @@ class GD_CORE_API Layout {
    * `inherit` (default).
    */
   const gd::String& GetResourcesUnloading() const { return resourcesUnloading; }
+
+  /**
+   * Get the world scale used by the 3D renderer.
+   */
+  const double GetRenderer3DWorldScale() const { return renderer3DWorldScale; };
+
+  /**
+   * Set the world scale used by the 3D renderer.
+   */
+  void SetRenderer3DWorldScale(double worldScale) {
+    renderer3DWorldScale =
+        std::isfinite(worldScale) && worldScale > 0 ? worldScale : 100;
+  };
   ///@}
 
   /** \name Saving and loading
@@ -457,6 +471,7 @@ class GD_CORE_API Layout {
 
   gd::SceneLifecycleEventsFunctions lifecycleEventsFunctions;
   gd::EditorSettings editorSettings;
+  double renderer3DWorldScale = 100;
 
   /**
    * Initialize from another layout. Used by copy-ctor and assign-op.

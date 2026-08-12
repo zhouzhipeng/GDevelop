@@ -125,6 +125,7 @@ import { GameplayTestFrame } from '../GameplayTests/GameplayTestFrame';
 import {
   getGameplayTestProjectItemName,
   getIsGameplayTestRunInProgress,
+  getIsGameplayTestRunnerAvailable,
   getTestsContainer,
   registerGameplayTestRunnerDependencies,
   useIsGameplayTestRunInProgress,
@@ -139,6 +140,10 @@ import { type OpenAskAiOptions } from '../AiGeneration/Utils';
 import { exceptionallyGuardAgainstDeadObject } from '../Utils/IsNullPtr';
 import { renderAskAiEditorContainer } from '../AiGeneration/AskAiEditorContainer';
 import { createMcpEditorBridge } from '../Mcp/McpEditorBridge';
+import {
+  createMcpGameplayTestOperations,
+  type McpGameplayTestOperations,
+} from '../Mcp/McpGameplayTestOperations';
 import { saveProjectAfterPendingSave } from '../Mcp/McpSaveCoordinator';
 import { type EditorCallbacks } from '../EditorFunctions';
 import { requestAskAiPrefill } from '../AiGeneration/AskAiPrefill';
@@ -741,21 +746,48 @@ const MainFrame = (props: Props): React.MixedElement => {
     isMcpPreviewLaunchSequenceInProgress,
     setIsMcpPreviewLaunchSequenceInProgress,
   ] = React.useState<boolean>(false);
-  const beginMcpPreviewLaunchSequence = React.useCallback(() => {
-    if (
-      mcpPreviewLaunchSequenceInProgressRef.current ||
-      mcpPreviewLaunchInProgressRef.current
-    ) {
-      return false;
-    }
-    mcpPreviewLaunchSequenceInProgressRef.current = true;
-    setIsMcpPreviewLaunchSequenceInProgress(true);
-    return true;
-  }, []);
+  const beginMcpPreviewLaunchSequence = React.useCallback(
+    () => {
+      if (
+        mcpPreviewLaunchSequenceInProgressRef.current ||
+        mcpPreviewLaunchInProgressRef.current ||
+        previewLaunchInProgressRef.current ||
+        previewLoadingRef.current
+      ) {
+        return false;
+      }
+      mcpPreviewLaunchSequenceInProgressRef.current = true;
+      setIsMcpPreviewLaunchSequenceInProgress(true);
+      return true;
+    },
+    [previewLoadingRef]
+  );
   const endMcpPreviewLaunchSequence = React.useCallback(() => {
     mcpPreviewLaunchSequenceInProgressRef.current = false;
     setIsMcpPreviewLaunchSequenceInProgress(false);
   }, []);
+  // MCP gameplay-test runs outlive individual renderer requests and bridge
+  // instances. Keep one owner for this MainFrame lifetime so callers can
+  // recover an active/completed operation after React recreates the bridge.
+  const mcpGameplayTestOperationsRef = React.useRef<?McpGameplayTestOperations>(
+    null
+  );
+  const mcpGameplayTestOperations =
+    mcpGameplayTestOperationsRef.current ||
+    createMcpGameplayTestOperations({
+      runGameplayTests: runProjectGameplayTests,
+      isGameplayTestRunInProgress: getIsGameplayTestRunInProgress,
+      isGameplayTestRunnerAvailable: getIsGameplayTestRunnerAvailable,
+      beginPreviewLaunchSequence: beginMcpPreviewLaunchSequence,
+      endPreviewLaunchSequence: endMcpPreviewLaunchSequence,
+    });
+  mcpGameplayTestOperationsRef.current = mcpGameplayTestOperations;
+  const hasGameplayTestRunConflict = React.useCallback(
+    () =>
+      mcpGameplayTestOperations.hasActiveOperation() ||
+      getIsGameplayTestRunInProgress(),
+    [mcpGameplayTestOperations]
+  );
   const inGameEditionPreviewLaunchInProgressRef = React.useRef<boolean>(false);
   const previewLaunchIdRef = React.useRef<number>(0);
   const activePreviewLaunchIdRef = React.useRef<?number>(null);
@@ -1000,6 +1032,10 @@ const MainFrame = (props: Props): React.MixedElement => {
                 'Unable to persist local gameplay test results:',
                 error
               );
+              if (currentUnsavedChanges) {
+                currentUnsavedChanges.triggerUnsavedChanges();
+              }
+              throw error;
             }
           }
           if (currentUnsavedChanges)
@@ -1768,6 +1804,10 @@ const MainFrame = (props: Props): React.MixedElement => {
 
   const openShareDialog = React.useCallback(
     async (initialTab?: ShareTab) => {
+      if (initialTab === 'publish' && hasGameplayTestRunConflict()) {
+        console.info('Export not opened: a gameplay-test run is in progress.');
+        return;
+      }
       if (
         await checkDiagnosticErrorsAndIfShouldBlock(currentProject, 'export')
       ) {
@@ -1779,7 +1819,12 @@ const MainFrame = (props: Props): React.MixedElement => {
       setShareDialogInitialTab(initialTab || null);
       setShareDialogOpen(true);
     },
-    [state.editorTabs, currentProject, checkDiagnosticErrorsAndIfShouldBlock]
+    [
+      state.editorTabs,
+      currentProject,
+      checkDiagnosticErrorsAndIfShouldBlock,
+      hasGameplayTestRunConflict,
+    ]
   );
 
   const closeShareDialog = React.useCallback(
@@ -3869,7 +3914,7 @@ const MainFrame = (props: Props): React.MixedElement => {
     }: LaunchPreviewOptions): Promise<boolean> => {
       if (!currentProject) return false;
       if (currentProject.getLayoutsCount() === 0) return false;
-      if (getIsGameplayTestRunInProgress()) {
+      if (hasGameplayTestRunConflict()) {
         // Launching or hot-reloading a preview would interfere with the
         // gameplay test being run (the game also ignores these commands,
         // as a backstop).
@@ -4265,6 +4310,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       checkDiagnosticErrorsAndIfShouldBlock,
       isPreviewLaunchCancelled,
       clearPreviewLoadingForLaunch,
+      hasGameplayTestRunConflict,
     ]
   );
 
@@ -6012,12 +6058,18 @@ const MainFrame = (props: Props): React.MixedElement => {
 
   const openOpenFromStorageProviderDialog = React.useCallback(
     (open: boolean = true) => {
+      if (open && hasGameplayTestRunConflict()) {
+        console.info(
+          'Project picker not opened: a gameplay-test run is in progress.'
+        );
+        return;
+      }
       setState(state => ({
         ...state,
         openFromStorageProviderDialogOpen: open,
       }));
     },
-    [setState]
+    [setState, hasGameplayTestRunConflict]
   );
 
   // When opening a project, we always open a scene to avoid confusing the user.
@@ -6115,6 +6167,10 @@ const MainFrame = (props: Props): React.MixedElement => {
 
   const chooseProjectWithStorageProviderPicker = React.useCallback(
     () => {
+      if (hasGameplayTestRunConflict()) {
+        console.info('Project not opened: a gameplay-test run is in progress.');
+        return;
+      }
       const storageProviderOperations = getStorageProviderOperations();
 
       if (!storageProviderOperations.onOpenWithPicker) return;
@@ -6180,6 +6236,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       openSceneOrProjectManager,
       getStorageProvider,
       setHasProjectOpened,
+      hasGameplayTestRunConflict,
     ]
   );
 
@@ -6196,6 +6253,10 @@ const MainFrame = (props: Props): React.MixedElement => {
         reportProgress?: (phase: string) => void,
       |}
     ): Promise<?State> => {
+      if (hasGameplayTestRunConflict()) {
+        console.info('Project not opened: a gameplay-test run is in progress.');
+        return null;
+      }
       if (hasUnsavedChanges && !(options && options.ignoreUnsavedChanges)) {
         const answer = Window.showConfirmDialog(
           i18n._(
@@ -6290,6 +6351,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       hasAPreviousSaveForEditorTabsState,
       openEditorTabsFromPersistedState,
       openAskAi,
+      hasGameplayTestRunConflict,
     ]
   );
 
@@ -6917,6 +6979,10 @@ const MainFrame = (props: Props): React.MixedElement => {
    */
   const askToCloseProject = React.useCallback(
     async (): Promise<boolean> => {
+      if (hasGameplayTestRunConflict()) {
+        console.info('Project not closed: a gameplay-test run is in progress.');
+        return false;
+      }
       if (!currentProject) return true;
 
       if (hasUnsavedChanges) {
@@ -6930,7 +6996,13 @@ const MainFrame = (props: Props): React.MixedElement => {
       await closeProject();
       return true;
     },
-    [currentProject, hasUnsavedChanges, i18n, closeProject]
+    [
+      currentProject,
+      hasUnsavedChanges,
+      i18n,
+      closeProject,
+      hasGameplayTestRunConflict,
+    ]
   );
 
   const dismissLocalProjectFilesChangedDialogRef = React.useRef<?() => void>(
@@ -6943,6 +7015,12 @@ const MainFrame = (props: Props): React.MixedElement => {
       rethrowOpenError?: boolean,
       reportProgress?: (phase: string) => void,
     }): Promise<void> => {
+      if (hasGameplayTestRunConflict()) {
+        console.info(
+          'Project not reloaded: a gameplay-test run is in progress.'
+        );
+        return;
+      }
       if (!currentProject || !currentFileMetadata) return;
       if (reloadProjectInProgressRef.current) {
         if (dismissLocalProjectFilesChangedDialogRef.current) {
@@ -7001,6 +7079,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       i18n,
       getStorageProvider,
       openFromFileMetadataWithStorageProvider,
+      hasGameplayTestRunConflict,
     ]
   );
 
@@ -8026,6 +8105,10 @@ const MainFrame = (props: Props): React.MixedElement => {
       openShareDialog('publish');
     },
     onExportHtml5External: async () => {
+      if (hasGameplayTestRunConflict()) {
+        console.info('Export not started: a gameplay-test run is in progress.');
+        return;
+      }
       const project = currentProject;
       if (!project || !onExportHtml5External) return;
       try {
@@ -8354,6 +8437,8 @@ const MainFrame = (props: Props): React.MixedElement => {
         getPreviewLaunchState: getPreviewLaunchStateForMcp,
         beginPreviewLaunchSequence: beginMcpPreviewLaunchSequence,
         endPreviewLaunchSequence: endMcpPreviewLaunchSequence,
+        gameplayTestOperations: mcpGameplayTestOperations,
+        getIsGameplayTestRunInProgress,
         getLaunchPreviewForScene: () => launchPreviewForSceneRef.current,
         cancelPreviewLaunch: cancelPreviewLaunchForMcp,
         reloadProjectAndWait: async reportProgress => {
@@ -8543,6 +8628,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       getPreviewLaunchStateForMcp,
       beginMcpPreviewLaunchSequence,
       endMcpPreviewLaunchSequence,
+      mcpGameplayTestOperations,
       cancelPendingPreviewLaunchAfterWindowClosed,
       releaseCancelledPreviewPreparation,
       cancelPreviewLaunchForMcp,

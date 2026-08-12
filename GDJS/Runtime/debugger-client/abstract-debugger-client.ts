@@ -530,6 +530,30 @@ namespace gdjs {
               }
             }
           }
+        } else if (data.command === 'setRenderer3DWorldScale') {
+          if (inGameEditor) {
+            const editedInstanceContainer =
+              inGameEditor.getEditedInstanceContainer();
+            if (editedInstanceContainer) {
+              const renderer3DWorldScale = data.payload.renderer3DWorldScale;
+              if (
+                typeof renderer3DWorldScale === 'number' &&
+                Number.isFinite(renderer3DWorldScale) &&
+                editedInstanceContainer instanceof gdjs.RuntimeScene
+              ) {
+                const sceneData = runtimeGame.getSceneData(
+                  editedInstanceContainer.getScene().getName()
+                );
+                if (sceneData) {
+                  editedInstanceContainer.setRenderer3DWorldScale(
+                    renderer3DWorldScale
+                  );
+                  sceneData.renderer3DWorldScale =
+                    editedInstanceContainer.getRenderer3DWorldScale();
+                }
+              }
+            }
+          }
         } else if (data.command === 'hotReloadAllInstances') {
           if (inGameEditor) {
             const editedInstanceContainer =
@@ -1448,6 +1472,7 @@ namespace gdjs {
      *   releaseAllKeys: { type }
      *   mouseMove: { type, x, y }   (game coordinates)
      *   mouseButtonPressed/mouseButtonReleased: { type, button }
+     *   mouseWheel: { type, deltaY, deltaX, deltaZ }
      *   touchStart/touchMove: { type, identifier, x, y }
      *   touchEnd: { type, identifier }
      * Mouse/touch coordinates are in game (scene) coordinates.
@@ -1502,6 +1527,18 @@ namespace gdjs {
         case 'mouseButtonReleased':
           inputManager.onMouseButtonReleased(input.button || 0);
           applied.push('mouseButtonReleased:' + (input.button || 0));
+          break;
+        case 'mouseWheel':
+          inputManager.onMouseWheel(
+            input.deltaY || 0,
+            input.deltaX || 0,
+            input.deltaZ || 0
+          );
+          applied.push(
+            `mouseWheel:${input.deltaY || 0},${input.deltaX || 0},${
+              input.deltaZ || 0
+            }`
+          );
           break;
         case 'touchStart':
           inputManager.onTouchStart(input.identifier || 0, input.x, input.y);

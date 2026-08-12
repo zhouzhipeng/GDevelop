@@ -31,6 +31,7 @@ namespace gdjs {
           private _light: THREE.DirectionalLight;
           private _shadowMapDirty = true;
           private _shadowCameraDirty = true;
+          private _shadowCameraInverseWorldScale: float | null = null;
           private _shadowCameraHelper: THREE.CameraHelper | null;
 
           constructor() {
@@ -47,18 +48,27 @@ namespace gdjs {
             this._light.shadow.camera.updateProjectionMatrix();
           }
 
-          private _updateShadowCamera(): void {
-            if (!this._shadowCameraDirty) {
+          private _updateShadowCamera(scene: gdjs.RuntimeScene): void {
+            const inverseWorldScale = scene.getRenderer3DInverseWorldScale();
+            if (
+              !this._shadowCameraDirty &&
+              this._shadowCameraInverseWorldScale === inverseWorldScale
+            ) {
               return;
             }
             this._shadowCameraDirty = false;
+            this._shadowCameraInverseWorldScale = inverseWorldScale;
 
-            this._light.shadow.camera.near = 1;
-            this._light.shadow.camera.far = this._distanceFromCamera + 10000;
-            this._light.shadow.camera.right = this._frustumSize / 2;
-            this._light.shadow.camera.left = -this._frustumSize / 2;
-            this._light.shadow.camera.top = this._frustumSize / 2;
-            this._light.shadow.camera.bottom = -this._frustumSize / 2;
+            const frustumSize = this._frustumSize * inverseWorldScale;
+
+            this._light.shadow.camera.near = 1 * inverseWorldScale;
+            this._light.shadow.camera.far =
+              (this._distanceFromCamera + 10000) * inverseWorldScale;
+            this._light.shadow.camera.right = frustumSize / 2;
+            this._light.shadow.camera.left = -frustumSize / 2;
+            this._light.shadow.camera.top = frustumSize / 2;
+            this._light.shadow.camera.bottom = -frustumSize / 2;
+            this._light.shadow.camera.updateProjectionMatrix();
           }
 
           private _updateShadowMapSize(): void {
@@ -125,8 +135,10 @@ namespace gdjs {
             return true;
           }
           updatePreRender(target: gdjs.EffectsTarget): any {
+            const scene = target.getRuntimeScene().getScene();
+
             // Apply any update to the camera or shadow map size.
-            this._updateShadowCamera();
+            this._updateShadowCamera(scene);
             this._updateShadowMapSize();
 
             // Avoid shadow acne due to depth buffer precision.
@@ -148,6 +160,8 @@ namespace gdjs {
             const y = layer.getCameraY();
             const z = layer.getCameraZ(layer.getInitialCamera3DFieldOfView());
 
+            // Contrary to cameras, lights are within the scene so they already
+            // take world scale into account.
             const roundedX = Math.floor(x / 100) * 100;
             const roundedY = Math.floor(y / 100) * 100;
             const roundedZ = Math.floor(z / 100) * 100;
@@ -183,7 +197,6 @@ namespace gdjs {
                 roundedZ +
                 this._distanceFromCamera *
                   Math.sin(gdjs.toRad(this._elevation));
-
               this._light.position.set(posLightX, posLightY, posLightZ);
               this._light.target.position.set(roundedX, roundedY, roundedZ);
             }
@@ -197,8 +210,10 @@ namespace gdjs {
               this._rotation = value;
             } else if (parameterName === 'distanceFromCamera') {
               this._distanceFromCamera = value;
+              this._shadowCameraDirty = true;
             } else if (parameterName === 'frustumSize') {
               this._frustumSize = value;
+              this._shadowCameraDirty = true;
             } else if (parameterName === 'minimumShadowBias') {
               this._minimumShadowBias = value;
             }

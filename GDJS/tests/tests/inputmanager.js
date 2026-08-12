@@ -401,6 +401,63 @@ describe('gdjs.InputManager', () => {
   });
 });
 
+describe('gdjs.evtTools.scene3d', () => {
+  it('raycasts using authored GDevelop coordinates', () => {
+    const runtimeGame = gdjs.getPixiRuntimeGame();
+    const runtimeScene = new gdjs.RuntimeScene(runtimeGame);
+    runtimeScene.addLayer({
+      name: '3D layer',
+      renderingType: '3d',
+      cameraType: 'perspective',
+      visibility: true,
+      cameras: [],
+      effects: [],
+      ambientLightColorR: 0,
+      ambientLightColorG: 0,
+      ambientLightColorB: 0,
+      isLightingLayer: false,
+      followBaseLayerCamera: false,
+    });
+    const threeGroup = runtimeScene
+      .getLayer('3D layer')
+      .getRenderer()
+      .getThreeGroup();
+    expect(threeGroup).not.to.be(null);
+    const geometry = new THREE.BoxGeometry(100, 100, 100);
+    const material = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.x = 100;
+    threeGroup.add(mesh);
+    threeGroup.parent.updateMatrixWorld(true);
+    const object = {
+      getRuntimeScene: () => runtimeScene,
+      get3DRendererObject: () => mesh,
+    };
+
+    try {
+      const results = gdjs.evtTools.scene3d.raycastObjects(
+        -100,
+        0,
+        0,
+        1,
+        0,
+        0,
+        [object]
+      );
+      expect(results.length).to.be.greaterThan(0);
+      expect(results[0].distance).to.be.within(149.99, 150.01);
+      expect(results[0].pointX).to.be.within(49.99, 50.01);
+      expect(results[0].pointY).to.be.within(-0.001, 0.001);
+      expect(results[0].pointZ).to.be.within(-0.001, 0.001);
+    } finally {
+      mesh.removeFromParent();
+      geometry.dispose();
+      material.dispose();
+      runtimeScene._destroy();
+    }
+  });
+});
+
 describe('gdjs.RuntimeObject.cursorOnObject', () => {
   const runtimeGame = gdjs.getPixiRuntimeGame();
   var runtimeScene = new gdjs.RuntimeScene(runtimeGame);

@@ -296,10 +296,13 @@ namespace gdjs {
       if (this._threeCamera instanceof THREE.OrthographicCamera) {
         const width = this._layer.getWidth();
         const height = this._layer.getHeight();
-        this._threeCamera.left = -width / 2;
-        this._threeCamera.right = width / 2;
-        this._threeCamera.top = height / 2;
-        this._threeCamera.bottom = -height / 2;
+        const inverseWorldScale = this._layer
+          .getRuntimeScene()
+          .getRenderer3DInverseWorldScale();
+        this._threeCamera.left = (-width / 2) * inverseWorldScale;
+        this._threeCamera.right = (width / 2) * inverseWorldScale;
+        this._threeCamera.top = (height / 2) * inverseWorldScale;
+        this._threeCamera.bottom = (-height / 2) * inverseWorldScale;
       } else {
         this._threeCamera.aspect =
           this._layer.getWidth() / this._layer.getHeight();
@@ -403,11 +406,6 @@ namespace gdjs {
           }
 
           this._threeScene = new THREE.Scene();
-
-          // Use a mirroring on the Y axis to follow the same axis as in the 2D, PixiJS, rendering.
-          // We use a mirroring rather than a camera rotation so that the Z order is not changed.
-          this._threeScene.scale.y = -1;
-
           this._threeGroup = new THREE.Group();
           this._threeScene.add(this._threeGroup);
 
@@ -421,19 +419,17 @@ namespace gdjs {
               -width / 2,
               width / 2,
               height / 2,
-              -height / 2,
-              this._layer.getInitialCamera3DNearPlaneDistance(),
-              this._layer.getInitialCamera3DFarPlaneDistance()
+              -height / 2
             );
           } else {
             this._threeCamera = new THREE.PerspectiveCamera(
               this._layer.getInitialCamera3DFieldOfView(),
-              1,
-              this._layer.getInitialCamera3DNearPlaneDistance(),
-              this._layer.getInitialCamera3DFarPlaneDistance()
+              1
             );
           }
           this._threeCamera.rotation.order = 'ZYX';
+
+          this.updateWorldScale();
 
           const game = this._layer.getRuntimeScene().getGame();
           const threeRenderer = game.getRenderer().getThreeRenderer();
@@ -447,12 +443,7 @@ namespace gdjs {
               new THREE_ADDONS.RenderPass(this._threeScene, this._threeCamera)
             );
             if (game.getAntialiasingMode() !== 'none') {
-              this._threeEffectComposer.addPass(
-                new THREE_ADDONS.SMAAPass(
-                  game.getGameResolutionWidth(),
-                  game.getGameResolutionHeight()
-                )
-              );
+              this._threeEffectComposer.addPass(new THREE_ADDONS.SMAAPass());
             }
             this._threeEffectComposer.addPass(new THREE_ADDONS.OutputPass());
           }
@@ -571,10 +562,13 @@ namespace gdjs {
     setCamera3DNearPlaneDistance(distance: number) {
       if (!this._threeCamera) return;
 
+      const inverseWorldScale = this._layer
+        .getRuntimeScene()
+        .getRenderer3DInverseWorldScale();
       this._threeCamera.near = Math.min(
         // 0 is not a valid value for three js perspective camera:
         // https://threejs.org/docs/#api/en/cameras/PerspectiveCamera.
-        Math.max(distance, 0.0001),
+        Math.max(distance * inverseWorldScale, 0.000001),
         // Near value cannot exceed far value.
         this._threeCamera.far
       );
@@ -583,18 +577,30 @@ namespace gdjs {
 
     getCamera3DNearPlaneDistance(): float {
       if (!this._threeCamera) return 0;
-      return this._threeCamera.near;
+      const worldScale = this._layer
+        .getRuntimeScene()
+        .getRenderer3DWorldScale();
+      return this._threeCamera.near * worldScale;
     }
 
     setCamera3DFarPlaneDistance(distance: number) {
       if (!this._threeCamera) return;
-      this._threeCamera.far = Math.max(distance, this._threeCamera.near);
+      const inverseWorldScale = this._layer
+        .getRuntimeScene()
+        .getRenderer3DInverseWorldScale();
+      this._threeCamera.far = Math.max(
+        distance * inverseWorldScale,
+        this._threeCamera.near
+      );
       this._threeCameraDirty = true;
     }
 
     getCamera3DFarPlaneDistance(): float {
       if (!this._threeCamera) return 0;
-      return this._threeCamera.far;
+      const worldScale = this._layer
+        .getRuntimeScene()
+        .getRenderer3DWorldScale();
+      return this._threeCamera.far * worldScale;
     }
 
     setCamera3DFieldOfView(angle: number) {
@@ -718,8 +724,14 @@ namespace gdjs {
         if (p.y < minY) minY = p.y;
         if (p.y > maxY) maxY = p.y;
       }
-      let boxW = Math.max(1e-8, maxX - minX);
-      let boxH = Math.max(1e-8, maxY - minY);
+      // The frustum is expressed in Three.js world coordinates. Convert its
+      // bounds back to authored GDevelop coordinates before assigning them to
+      // the plane, which is a child of the scaled Three.js scene.
+      const worldScale = this._layer
+        .getRuntimeScene()
+        .getRenderer3DWorldScale();
+      let boxW = Math.max(1e-8, (maxX - minX) * worldScale);
+      let boxH = Math.max(1e-8, (maxY - minY) * worldScale);
 
       // Keep 2D layer aspect ratio (so texture isn't stretched).
       const targetAspect = this._layer.getWidth() / this._layer.getHeight();
@@ -777,6 +789,9 @@ namespace gdjs {
 
     private _get2DPlanePosition(boxH: number): [number, number] {
       if (!this._threeCamera) return [0, 0];
+      const worldScale = this._layer
+        .getRuntimeScene()
+        .getRenderer3DWorldScale();
 
       // Choose the plane position (anchor to bottom of screen, heading-invariant) ---
       const bottomLeft = projectNDCToZ0(this._threeCamera, -1, -1);
@@ -786,8 +801,8 @@ namespace gdjs {
 
       if (bottomLeft && bottomRight) {
         // Midpoint of the bottom-of-screen segment on Z=0:
-        const mx = 0.5 * (bottomLeft.x + bottomRight.x);
-        const my = 0.5 * (bottomLeft.y + bottomRight.y);
+        const mx = 0.5 * (bottomLeft.x + bottomRight.x) * worldScale;
+        const my = 0.5 * (bottomLeft.y + bottomRight.y) * worldScale;
 
         // Tangent along the bottom line (unit):
         let dx = bottomRight.x - bottomLeft.x;
@@ -804,8 +819,8 @@ namespace gdjs {
         // Ensure n points "into the screen":
         const midIn = projectNDCToZ0(this._threeCamera, 0, -0.5);
         if (midIn) {
-          const vx = midIn.x - mx;
-          const vy = midIn.y - my;
+          const vx = midIn.x * worldScale - mx;
+          const vy = midIn.y * worldScale - my;
           if (vx * nx + vy * ny < 0) {
             nx = -nx;
             ny = -ny;
@@ -819,36 +834,85 @@ namespace gdjs {
         // Fallback to the camera center projected on Z=0 if bottom line not visible:
         const centerRay = projectNDCToZ0(this._threeCamera, 0, 0);
         if (centerRay) {
-          cx = centerRay.x;
-          cy = centerRay.y;
+          cx = centerRay.x * worldScale;
+          cy = centerRay.y * worldScale;
         } else {
           // Fallback to the camera position if the center ray is not visible:
-          cx = this._threeCamera.position.x;
-          cy = this._threeCamera.position.y;
+          cx = this._threeCamera.position.x * worldScale;
+          cy = this._threeCamera.position.y * worldScale;
         }
       }
       return [cx, cy];
     }
 
+    updateWorldScale(previousWorldScale?: float): void {
+      if (!this._threeScene || !this._threeCamera) {
+        return;
+      }
+      const inverseWorldScale = this._layer
+        .getRuntimeScene()
+        .getRenderer3DInverseWorldScale();
+      const nearDistance =
+        previousWorldScale === undefined
+          ? this._layer.getInitialCamera3DNearPlaneDistance()
+          : this._threeCamera.near * previousWorldScale;
+      const farDistance =
+        previousWorldScale === undefined
+          ? this._layer.getInitialCamera3DFarPlaneDistance()
+          : this._threeCamera.far * previousWorldScale;
+      // Use a mirroring on the Y axis to follow the same axis as in the 2D, PixiJS, rendering.
+      // We use a mirroring rather than a camera rotation so that the Z order is not changed.
+      this._threeScene.scale.set(
+        inverseWorldScale,
+        -inverseWorldScale,
+        inverseWorldScale
+      );
+
+      if (this._threeCamera instanceof THREE.OrthographicCamera) {
+        const width = this._layer.getWidth();
+        const height = this._layer.getHeight();
+        this._threeCamera.left = (-width / 2) * inverseWorldScale;
+        this._threeCamera.right = (width / 2) * inverseWorldScale;
+        this._threeCamera.top = (height / 2) * inverseWorldScale;
+        this._threeCamera.bottom = (-height / 2) * inverseWorldScale;
+      }
+
+      this._threeCamera.near = Math.max(
+        nearDistance * inverseWorldScale,
+        0.000001
+      );
+      this._threeCamera.far = Math.max(
+        farDistance * inverseWorldScale,
+        this._threeCamera.near
+      );
+      this._threeCamera.updateProjectionMatrix();
+    }
+
     updatePosition(): void {
       const instanceContainer = this._layer.getInstanceContainer();
       const runtimeGame = instanceContainer.getGame();
+      const inverseWorldScale = this._layer
+        .getRuntimeScene()
+        .getRenderer3DInverseWorldScale();
 
       // Update the 3D camera position and rotation.
       if (this._threeCamera) {
         const angle = -gdjs.toRad(this._layer.getCameraRotation());
-        this._threeCamera.position.x = this._layer.getCameraX();
-        this._threeCamera.position.y = -this._layer.getCameraY(); // scene is mirrored on Y
+        this._threeCamera.position.x =
+          this._layer.getCameraX() * inverseWorldScale;
+        // The scene is mirrored on Y
+        this._threeCamera.position.y =
+          -this._layer.getCameraY() * inverseWorldScale;
         this._threeCamera.rotation.z = angle;
 
         if (this._threeCamera instanceof THREE.OrthographicCamera) {
           this._threeCamera.zoom = this._layer.getCameraZoom();
           this._threeCamera.updateProjectionMatrix();
-          this._threeCamera.position.z = this._layer.getCameraZ(null);
+          this._threeCamera.position.z =
+            this._layer.getCameraZ(null) * inverseWorldScale;
         } else {
-          this._threeCamera.position.z = this._layer.getCameraZ(
-            this._threeCamera.fov
-          );
+          this._threeCamera.position.z =
+            this._layer.getCameraZ(this._threeCamera.fov) * inverseWorldScale;
         }
       }
 
@@ -1130,6 +1194,10 @@ namespace gdjs {
       const height = this._layer.getHeight();
       const normalizedX = (screenX / width) * 2 - 1;
       const normalizedY = -(screenY / height) * 2 + 1;
+      const runtimeScene = this._layer.getRuntimeScene();
+      const worldScale = runtimeScene.getRenderer3DWorldScale();
+      const threeWorldZ =
+        worldZ * runtimeScene.getRenderer3DInverseWorldScale();
 
       let vector = LayerPixiRenderer.vectorForProjections;
       if (!vector) {
@@ -1147,7 +1215,7 @@ namespace gdjs {
         // Find x and y for a given z along the camera direction line.
         const direction = new THREE.Vector3();
         camera.getWorldDirection(direction);
-        const distance = (worldZ - vector.z) / direction.z;
+        const distance = (threeWorldZ - vector.z) / direction.z;
         vector.x += distance * direction.x;
         vector.y += distance * direction.y;
       } else {
@@ -1158,7 +1226,7 @@ namespace gdjs {
         // Find x and y for a given z along the line between the camera and
         // the one on the frustum.
         vector.sub(camera.position).normalize();
-        const distance = (worldZ - camera.position.z) / vector.z;
+        const distance = (threeWorldZ - camera.position.z) / vector.z;
         vector.x = distance * vector.x + camera.position.x;
         vector.y = distance * vector.y + camera.position.y;
       }
@@ -1170,8 +1238,8 @@ namespace gdjs {
         return result;
       }
 
-      result[0] = vector.x;
-      result[1] = -vector.y;
+      result[0] = vector.x * worldScale;
+      result[1] = -vector.y * worldScale;
       return result;
     }
 
@@ -1484,7 +1552,9 @@ namespace gdjs {
         // "Hack" into the Three.js renderer by getting the internal WebGL texture for the PixiJS plane,
         // and set it so that it's the same as the WebGL texture for the PixiJS RenderTexture.
         // This works because PixiJS and Three.js are using the same WebGL context.
-        const texture = threeRenderer.properties.get(this._threePlaneTexture);
+        const texture: any = threeRenderer.properties.get(
+          this._threePlaneTexture
+        );
         texture.__webglTexture = glTexture.texture;
       }
     }

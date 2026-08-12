@@ -1,6 +1,9 @@
 // @flow
 
 import {
+  JAVASCRIPT_AUTHORING_API_VERSION,
+  PROJECT_HARNESS_API_RELATIVE_PATH,
+  buildHarnessApiDeclaration,
   buildJavaScriptAuthoringArtifacts,
   buildProjectApiDeclaration,
   buildRuntimeApiDeclaration,
@@ -10,6 +13,9 @@ import {
   validateProjectJavaScriptAuthoring,
   validateReviewedExtensionJavaScriptAuthoring,
 } from './JavaScriptAuthoringApi';
+import optionalRequire from '../Utils/OptionalRequire';
+
+const typescript = optionalRequire('typescript');
 
 const serializedProject = {
   properties: { name: 'Typed project' },
@@ -68,6 +74,72 @@ const serializedProject = {
       eventsBasedBehaviors: [],
     },
   ],
+};
+
+const getGameplayTestTypeScriptDiagnostics = (source: string): Array<any> => {
+  if (!typescript) throw new Error('TypeScript is required for this test.');
+  const ts = typescript;
+  const artifacts = buildJavaScriptAuthoringArtifacts(serializedProject);
+  const root = 'C:/__gdevelop_gameplay_test_api__';
+  const runtimePath = `${root}/runtime-api.d.ts`;
+  const projectPath = `${root}/project-api.d.ts`;
+  const harnessPath = `${root}/harness-api.d.ts`;
+  const sourcePath = `${root}/gameplay-test.js`;
+  const virtualFiles = new Map([
+    [runtimePath.toLowerCase(), artifacts.runtimeApi],
+    [projectPath.toLowerCase(), artifacts.projectApi],
+    [harnessPath.toLowerCase(), artifacts.harnessApi],
+    [
+      sourcePath.toLowerCase(),
+      `async function __gdevelopGameplayTestBody__() {\n${source}\n}\n`,
+    ],
+  ]);
+  const compilerOptions = {
+    allowJs: true,
+    checkJs: true,
+    noEmit: true,
+    strict: true,
+    target: ts.ScriptTarget.ES2020,
+    module: ts.ModuleKind.None,
+    lib: ['lib.es2020.d.ts'],
+    types: [],
+    skipLibCheck: true,
+  };
+  const baseHost = ts.createCompilerHost(compilerOptions, true);
+  const readVirtual = (fileName: string): ?string =>
+    virtualFiles.get(fileName.toLowerCase());
+  const host = {
+    ...baseHost,
+    fileExists: (fileName: string): boolean =>
+      readVirtual(fileName) !== undefined || baseHost.fileExists(fileName),
+    readFile: (fileName: string): ?string => {
+      const virtual = readVirtual(fileName);
+      return virtual !== undefined ? virtual : baseHost.readFile(fileName);
+    },
+    getSourceFile: (fileName: string, languageVersion: any): any => {
+      const virtual = readVirtual(fileName);
+      if (virtual !== undefined) {
+        return ts.createSourceFile(
+          fileName,
+          virtual,
+          languageVersion,
+          true,
+          fileName.endsWith('.js') ? ts.ScriptKind.JS : ts.ScriptKind.TS
+        );
+      }
+      return baseHost.getSourceFile(fileName, languageVersion);
+    },
+  };
+  const program = ts.createProgram(
+    [runtimePath, projectPath, harnessPath, sourcePath],
+    compilerOptions,
+    host
+  );
+  const sourceFile = program.getSourceFile(sourcePath);
+  return [
+    ...program.getSyntacticDiagnostics(sourceFile),
+    ...program.getSemanticDiagnostics(sourceFile),
+  ];
 };
 
 describe('JavaScript authoring API', () => {
@@ -140,6 +212,137 @@ describe('JavaScript authoring API', () => {
     });
     expect(artifacts.hashes.runtimeApi).toHaveLength(64);
     expect(artifacts.hashes.projectApi).toHaveLength(64);
+    expect(artifacts.hashes.harnessApi).toHaveLength(64);
+  });
+
+  test('generates a deterministic reviewed gameplay-test harness declaration', () => {
+    const artifacts = buildJavaScriptAuthoringArtifacts(serializedProject);
+    const declaration = buildHarnessApiDeclaration(
+      artifacts.runtimeApi,
+      artifacts.projectApi
+    );
+
+    expect(JAVASCRIPT_AUTHORING_API_VERSION).toBe(2);
+    expect(PROJECT_HARNESS_API_RELATIVE_PATH).toBe(
+      '.gdevelop/harness-api.d.ts'
+    );
+    expect(artifacts.harnessApi).toBe(declaration);
+    expect(
+      buildHarnessApiDeclaration(artifacts.runtimeApi, artifacts.projectApi)
+    ).toBe(declaration);
+    expect(declaration).toContain(
+      `// runtimeApiHash: sha256:${artifacts.hashes.runtimeApi}`
+    );
+    expect(declaration).toContain(
+      `// projectApiHash: sha256:${artifacts.hashes.projectApi}`
+    );
+    expect(declaration).toMatch(/\/\/ harnessApiHash: sha256:[0-9a-f]{64}/);
+    expect(declaration).toContain(
+      'declare const harness: GDevelopGameplayTests.GameplayTestHarness'
+    );
+    expect(declaration).toContain('stepFrames(');
+    expect(declaration).toContain('stepUntilObjectIsStable(');
+    expect(declaration).toContain('releaseAllInputs(): void');
+    expect(declaration).toContain('getCameraState(layerName?: string)');
+    expect(declaration).toContain('getObjectVariable(');
+    expect(declaration).toContain('resetSceneAndProbeControls(');
+    expect(declaration).toContain('makeProgressTracker(');
+    expect(declaration).toContain('lookTowardWithMouseDelta(');
+    expect(declaration).toContain('interface GameplayTestProfilingResult');
+    expect(declaration).toContain('interface GameplayTestResult');
+    expect(declaration).not.toContain('requestStop');
+    expect(declaration).not.toContain('_runtimeGame');
+    expect(declaration).not.toContain('_makeResult');
+    expect(declaration).not.toContain('_installPointerLockShim');
+    expect(declaration).not.toContain('getRenderer');
+  });
+
+  test('reports harness declaration building after its dependencies are available', () => {
+    const onHarnessApiBuilding: any = jest.fn();
+    const artifacts = buildJavaScriptAuthoringArtifacts(serializedProject, {
+      onHarnessApiBuilding,
+    });
+
+    expect(onHarnessApiBuilding).toHaveBeenCalledTimes(1);
+    expect(artifacts.runtimeApi).toContain('declare namespace gdjs');
+    expect(artifacts.projectApi).toContain('declare namespace GDevelopProject');
+    expect(artifacts.harnessApi).toContain('declare const harness');
+  });
+
+  test('type-checks representative async gameplay-test bodies against all declarations', () => {
+    const diagnostics = getGameplayTestTypeScriptDiagnostics(`
+await harness.goToScene('Main');
+const player = harness.spawn('Player', 100, 200);
+harness.setSceneVariable('Score', 10);
+harness.setObjectVariable(player.id, 'Health', 3);
+harness.setKeyPressed('Right', true);
+await harness.stepFrames(30, {
+  onFrame: ({ frame }) => {
+    if (frame === 10) harness.setMousePosition(100, 50, 'UI');
+  },
+});
+harness.setKeyPressed('Right', false);
+harness.releaseAllInputs();
+const reached = await harness.stepUntil(
+  () => harness.getObjects('Player')[0].x >= 100,
+  { maxFrames: 60 }
+);
+const stable = await harness.stepUntilObjectIsStable('Player', {
+  maxFrames: 120,
+});
+const relative = harness.getRelativePosition('Player', { x: 200, y: 200 });
+const nearby = harness.getNearby('Bullet', 'Player', 300);
+const lineOfSight = harness.has2dLineOfSight('Player', 'Bullet', ['Wall']);
+const tracker = harness.makeProgressTracker('Player', { x: 200, y: 200 });
+const progress = tracker.update();
+const controls = await harness.resetSceneAndProbeControls(
+  'Player',
+  ['Left', 'Right']
+);
+const aim = await harness.lookTowardWithMouseDelta('Player', {
+  name: 'Bullet',
+});
+const layer = harness.getRuntimeLayer('UI');
+const score = harness.getSceneVariable('Score');
+harness.startProfiling();
+await harness.stepFrames(2);
+const profile = harness.stopProfiling();
+harness.watch('Player');
+await harness.takeScreenshot('movement');
+harness.assert(
+  reached && stable && !!relative && nearby.length >= 0 &&
+    lineOfSight.clear === true && !!progress && !!controls.keys.Right &&
+    !!aim && !!layer && score?.value === 10 && !!profile,
+  'The movement scenario completed'
+);
+`);
+
+    expect(
+      diagnostics.map(diagnostic =>
+        typescript.flattenDiagnosticMessageText(diagnostic.messageText, '\n')
+      )
+    ).toEqual([]);
+  });
+
+  test('does not type-check unsupported or runtime-private harness members', () => {
+    const diagnostics = getGameplayTestTypeScriptDiagnostics(`
+await harness.stepFrame(1);
+harness.requestStop();
+harness._runtimeGame;
+harness.getRenderer();
+`);
+    const messages = diagnostics.map(diagnostic =>
+      typescript.flattenDiagnosticMessageText(diagnostic.messageText, '\n')
+    );
+
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Property 'stepFrame' does not exist"),
+        expect.stringContaining("Property 'requestStop' does not exist"),
+        expect.stringContaining("Property '_runtimeGame' does not exist"),
+        expect.stringContaining("Property 'getRenderer' does not exist"),
+      ])
+    );
   });
 
   test('extracts JavaScript with exact IfDo source locations', () => {

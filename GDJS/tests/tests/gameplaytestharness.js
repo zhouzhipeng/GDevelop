@@ -1213,5 +1213,57 @@ describe('gdjs.gameplayTests', () => {
       harness.setMousePosition(100, 50, '');
       expect(typeof inputManager.getMouseX()).to.be('number');
     });
+
+    it('projects authored positions through a scaled 3D camera', async () => {
+      const sceneData = createSceneData('Scene 1');
+      sceneData.renderer3DWorldScale = 100;
+      sceneData.layers = [
+        {
+          name: '',
+          renderingType: '3d',
+          cameraType: 'perspective',
+          visibility: true,
+          cameras: [],
+          effects: [],
+          ambientLightColorR: 0,
+          ambientLightColorG: 0,
+          ambientLightColorB: 0,
+          isLightingLayer: false,
+          followBaseLayerCamera: false,
+        },
+      ];
+      const runtimeGame = gdjs.getPixiRuntimeGame({ layouts: [sceneData] });
+      const inputManager = runtimeGame.getInputManager();
+      const harness = makeStartedHarness(runtimeGame);
+      await harness.goToScene('Scene 1');
+      const runtimeScene = runtimeGame.getSceneStack().getCurrentScene();
+      if (!runtimeScene) throw new Error('The gameplay test scene is missing.');
+      const layer = runtimeScene.getLayer('');
+      layer.setCameraRotationX(20);
+      const threeCamera = layer.getRenderer().getThreeCamera();
+      if (!threeCamera) throw new Error('The gameplay test camera is missing.');
+      threeCamera.updateMatrixWorld();
+      const inverseWorldScale = runtimeScene.getRenderer3DInverseWorldScale();
+      const projectedPoint = new THREE.Vector3(
+        100 * inverseWorldScale,
+        -50 * inverseWorldScale,
+        0
+      ).project(threeCamera);
+      const expectedScreenX =
+        ((projectedPoint.x + 1) / 2) * layer.getWidth();
+      const expectedScreenY =
+        ((1 - projectedPoint.y) / 2) * layer.getHeight();
+
+      harness.setMousePosition(100, 50, '');
+
+      expect(inputManager.getMouseX()).to.be.within(
+        expectedScreenX - 0.001,
+        expectedScreenX + 0.001
+      );
+      expect(inputManager.getMouseY()).to.be.within(
+        expectedScreenY - 0.001,
+        expectedScreenY + 0.001
+      );
+    });
   });
 });

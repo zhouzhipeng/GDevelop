@@ -11,6 +11,7 @@ import {
   composeLegacyProjectFromFiles,
   decomposeLegacyProjectToFiles,
   encodeManagedName,
+  getGameplayTestDescriptors,
   getLegacyProjectFirstDifferenceDescription,
   parseConstantsFromToml,
   parseTomlSource,
@@ -97,6 +98,7 @@ const projectFixture = {
       title: 'Game',
       standardSortMethod: true,
       stopSoundsOnStartup: true,
+      renderer3DWorldScale: 42.5,
       disableInputWhenNotFocused: true,
       variables: [],
       objectsGroups: [],
@@ -360,6 +362,72 @@ describe('GDevelop multi-file project format', () => {
     ).toBe(true);
   });
 
+  test('allocates pure gameplay test descriptors matching tests.settings paths', () => {
+    const project = JSON.parse(JSON.stringify(projectFixture));
+    project.tests = [
+      {
+        name: 'Player jumps / lands',
+        type: 'gameplay',
+        description: '',
+        source: 'encoded',
+      },
+      {
+        name: 'Combat - Smoke',
+        type: 'gameplay',
+        description: '',
+        source: 'project collision',
+      },
+    ];
+    project.eventsFunctionsExtensions[0].tests = [
+      {
+        name: 'Smoke',
+        type: 'gameplay',
+        description: '',
+        source: 'extension collision',
+      },
+    ];
+    const projectBeforeAllocation = JSON.parse(JSON.stringify(project));
+
+    const descriptors = getGameplayTestDescriptors(project);
+    const files = decomposeLegacyProjectToFiles(project);
+    const settingsRecords = parseTomlSource(files[MULTI_FILE_TESTS_URI]).tests;
+
+    expect(project).toEqual(projectBeforeAllocation);
+    expect(descriptors).toEqual(
+      settingsRecords.map(record => ({
+        scope: record.scope,
+        ...(record.extension === undefined
+          ? {}
+          : { extension: record.extension }),
+        name: record.name,
+        file: record.file,
+      }))
+    );
+    expect(descriptors[0]).toEqual({
+      scope: 'project',
+      name: 'Player jumps / lands',
+      file: 'tests/Player%20jumps%20%2F%20lands.js',
+    });
+    expect(descriptors.slice(1)).toEqual([
+      {
+        scope: 'project',
+        name: 'Combat - Smoke',
+        file: expect.stringMatching(
+          /^tests\/Combat%20-%20Smoke~[0-9a-f]{8}\.js$/
+        ),
+      },
+      {
+        scope: 'extension',
+        extension: 'Combat',
+        name: 'Smoke',
+        file: expect.stringMatching(
+          /^tests\/Combat%20-%20Smoke~[0-9a-f]{8}\.js$/
+        ),
+      },
+    ]);
+    expect(descriptors[1].file).not.toBe(descriptors[2].file);
+  });
+
   test('describes the first normalized verification difference without dumping large values', () => {
     const left = {
       ...projectFixture,
@@ -506,6 +574,9 @@ describe('GDevelop multi-file project format', () => {
     expect(files[MULTI_FILE_ENTRY_URI]).not.toContain('[project.constants');
     expect(files[MULTI_FILE_CONSTANTS_URI]).toContain('[sheet.row]');
     expect(files[MULTI_FILE_CONSTANTS_URI]).toContain('column = "ssdfs"');
+    expect(files['game://scenes/Main/scene.settings']).toContain(
+      'renderer3DWorldScale = 42.5'
+    );
     expect(files[MULTI_FILE_CONSTANTS_URI]).not.toContain('[settings');
     expect(files[MULTI_FILE_CONSTANTS_URI]).not.toContain('[constants');
     expect(files[MULTI_FILE_CONSTANTS_URI]).not.toContain(

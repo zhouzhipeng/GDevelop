@@ -13,9 +13,9 @@ namespace gdjs {
    */
   export class RuntimeScene extends gdjs.RuntimeInstanceContainer {
     _eventsFunction: null | ((runtimeScene: RuntimeScene) => void) = null;
-    _sceneUnloadLifecycleFunction: null | ((
-      runtimeScene: RuntimeScene
-    ) => void) = null;
+    _sceneUnloadLifecycleFunction:
+      | null
+      | ((runtimeScene: RuntimeScene) => void) = null;
     _idToCallbackMap: null | Map<
       string,
       (
@@ -69,6 +69,9 @@ namespace gdjs {
      * that the scene is re-created on every peer.
      */
     networkId: string | null = null;
+
+    private _renderer3DWorldScale: float = 100;
+    private _renderer3DInverseWorldScale: float = 0.01;
 
     /**
      * @param runtimeGame The game associated to this scene.
@@ -184,6 +187,7 @@ namespace gdjs {
       }
       this._name = sceneData.name;
       this._resourcesUnloading = sceneData.resourcesUnloading || 'inherit';
+      this.setRenderer3DWorldScale(sceneData.renderer3DWorldScale);
       this.setBackgroundColor(sceneData.r, sceneData.v, sceneData.b);
 
       //Load layers
@@ -327,8 +331,7 @@ namespace gdjs {
       // Run author cleanup while the scene, its variables and all objects are
       // still alive. Clear the slot first so recursive unload requests cannot
       // execute it twice.
-      const sceneUnloadLifecycleFunction =
-        this._sceneUnloadLifecycleFunction;
+      const sceneUnloadLifecycleFunction = this._sceneUnloadLifecycleFunction;
       this._sceneUnloadLifecycleFunction = null;
       if (sceneUnloadLifecycleFunction) {
         try {
@@ -1173,6 +1176,31 @@ namespace gdjs {
         this.networkId = newNetworkId;
       }
       return this.networkId;
+    }
+
+    setRenderer3DWorldScale(worldScale: float): void {
+      const value =
+        Number.isFinite(worldScale) && worldScale > 0 ? worldScale : 100;
+      const previousWorldScale = this._renderer3DWorldScale;
+      if (value === previousWorldScale) {
+        return;
+      }
+      this._renderer3DWorldScale = value;
+      this._renderer3DInverseWorldScale = 1 / value;
+
+      for (const layer of this._orderedLayers) {
+        const layerRenderer = layer.getRenderer();
+        layerRenderer.updateWorldScale(previousWorldScale);
+        layerRenderer.updatePosition();
+      }
+    }
+
+    getRenderer3DWorldScale(): float {
+      return this._renderer3DWorldScale;
+    }
+
+    getRenderer3DInverseWorldScale(): float {
+      return this._renderer3DInverseWorldScale;
     }
   }
 

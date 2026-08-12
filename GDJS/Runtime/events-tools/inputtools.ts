@@ -617,22 +617,45 @@ namespace gdjs {
         ) {
           return [];
         }
-        const direction = new THREE.Vector3(directionX, directionY, directionZ);
-        if (direction.lengthSq() === 0) return [];
-        direction.normalize();
-        const raycaster = new THREE.Raycaster(
-          new THREE.Vector3(originX, originY, originZ),
-          direction,
-          Number.isFinite(near) && near >= 0 ? near : 0,
-          Number.isFinite(far) && far >= 0 ? far : Infinity
-        );
+        if (directionX === 0 && directionY === 0 && directionZ === 0) return [];
+        const authoredNear = Number.isFinite(near) && near >= 0 ? near : 0;
+        const authoredFar = Number.isFinite(far) && far >= 0 ? far : Infinity;
         const results: RaycastResult[] = [];
+        const raycastersByScene = new Map<
+          gdjs.RuntimeScene,
+          { raycaster: THREE.Raycaster; worldScale: float }
+        >();
         objects.slice(0, 1000).forEach((object, objectIndex) => {
           const rendererObject =
             object && typeof (object as any).get3DRendererObject === 'function'
               ? (object as any).get3DRendererObject()
               : null;
           if (!rendererObject) return;
+          const runtimeScene = object.getRuntimeScene();
+          let raycastContext = raycastersByScene.get(runtimeScene);
+          if (!raycastContext) {
+            const inverseWorldScale =
+              runtimeScene.getRenderer3DInverseWorldScale();
+            raycastContext = {
+              raycaster: new THREE.Raycaster(
+                new THREE.Vector3(
+                  originX * inverseWorldScale,
+                  -originY * inverseWorldScale,
+                  originZ * inverseWorldScale
+                ),
+                new THREE.Vector3(
+                  directionX,
+                  -directionY,
+                  directionZ
+                ).normalize(),
+                authoredNear * inverseWorldScale,
+                authoredFar * inverseWorldScale
+              ),
+              worldScale: runtimeScene.getRenderer3DWorldScale(),
+            };
+            raycastersByScene.set(runtimeScene, raycastContext);
+          }
+          const { raycaster, worldScale } = raycastContext;
           raycaster
             .intersectObject(rendererObject, recursive)
             .slice(0, 16)
@@ -641,10 +664,10 @@ namespace gdjs {
               results.push({
                 object,
                 objectIndex,
-                distance: intersection.distance,
-                pointX: intersection.point.x,
-                pointY: intersection.point.y,
-                pointZ: intersection.point.z,
+                distance: intersection.distance * worldScale,
+                pointX: intersection.point.x * worldScale,
+                pointY: -intersection.point.y * worldScale,
+                pointZ: intersection.point.z * worldScale,
               });
             });
         });

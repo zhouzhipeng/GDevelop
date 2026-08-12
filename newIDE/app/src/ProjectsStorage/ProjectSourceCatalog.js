@@ -1631,6 +1631,7 @@ const SETTINGS_FILE_SCHEMAS = Object.freeze({
       settingsField('title', 'string'),
       settingsField('standardSortMethod', 'boolean'),
       settingsField('stopSoundsOnStartup', 'boolean'),
+      settingsField('renderer3DWorldScale', 'number'),
       settingsField('resourcesPreloading', 'string'),
       settingsField('resourcesUnloading', 'string'),
       settingsField('disableInputWhenNotFocused', 'boolean'),
