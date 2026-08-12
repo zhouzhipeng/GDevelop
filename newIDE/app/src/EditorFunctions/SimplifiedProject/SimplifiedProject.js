@@ -61,6 +61,7 @@ type SimplifiedTest = {|
   testName: string,
   type: string,
   description?: string,
+  source?: string,
   lastRunStatus?: string,
   lastRunAt?: number,
 |};
@@ -544,6 +545,7 @@ export const makeSimplifiedProjectBuilder = (
         };
         if (test.getDescription())
           simplifiedTest.description = test.getDescription();
+        if (test.getSource()) simplifiedTest.source = test.getSource();
         if (test.getLastRunStatus()) {
           simplifiedTest.lastRunStatus = test.getLastRunStatus();
           simplifiedTest.lastRunAt = test.getLastRunAt();
