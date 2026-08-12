@@ -335,6 +335,12 @@ describe('WorkingDesk', () => {
     );
     expect(source).toContain('if (is3DModelFile(selectedNode))');
     expect(source).toContain(
+      'const { previewCacheVersion } = React.useContext(Resource3DPreviewContext);'
+    );
+    expect(source).toContain(
+      'is3DModelFile(selectedNode) ? previewCacheVersion : undefined'
+    );
+    expect(source).toContain(
       '<InteractiveModel3DPreview modelUrl={fileUrl} />'
     );
   });

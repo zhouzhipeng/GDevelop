@@ -64,6 +64,7 @@ import {
   buildJavaScriptAuthoringArtifacts,
   validateProjectJavaScriptAuthoring,
 } from '../JavaScriptAuthoringApi';
+import { normalizeProjectLocalResourceFilePaths } from '../../ResourcesList/ResourceUtils';
 
 const fs = optionalRequire('fs-extra');
 const path = optionalRequire('path');
@@ -529,6 +530,12 @@ const writeProjectFiles = async ({
   canonicalEventSerialization: boolean,
 }): Promise<void> => {
   const startTime = Date.now();
+  const isMultiFileProject =
+    path.basename(filePath).toLowerCase() === MULTI_FILE_ENTRY_NAME;
+
+  if (isMultiFileProject) {
+    normalizeProjectLocalResourceFilePaths(project);
+  }
 
   let serializedProjectObject;
   if (useBackgroundSerializer) {
@@ -545,7 +552,7 @@ const writeProjectFiles = async ({
   const serializeEndTime = Date.now();
   const constants = JSON.parse(project.getConstantsJson());
 
-  if (path.basename(filePath).toLowerCase() === MULTI_FILE_ENTRY_NAME) {
+  if (isMultiFileProject) {
     const authoringCatalog = buildProjectInstructionCatalog(project);
     const baseDeprecatedCatalog = buildProjectDeprecatedInstructionCatalog(
       project
@@ -960,6 +967,7 @@ export const onAutoSaveProject = (
     path.basename(fileMetadata.fileIdentifier).toLowerCase() ===
     MULTI_FILE_ENTRY_NAME
   ) {
+    normalizeProjectLocalResourceFilePaths(project);
     const autoSaveEntryPath = path.join(
       path.dirname(fileMetadata.fileIdentifier),
       '.gdevelop',

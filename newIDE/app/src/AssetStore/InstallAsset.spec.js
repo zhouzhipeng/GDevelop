@@ -209,13 +209,13 @@ describe('InstallAsset', () => {
       ).toEqual([
         ...originalResourceNames,
         'player-ship1.png',
-        'player-ship1.png2',
         'player-ship2.png',
+        'player-ship3.png',
       ]);
       expect(
         project
           .getResourcesManager()
-          .getResource('player-ship1.png2')
+          .getResource('player-ship2.png')
           .getFile()
       ).toBe('https://example.com/player-ship1.png');
 
@@ -234,8 +234,8 @@ describe('InstallAsset', () => {
       resourcesInUse.delete();
 
       expect(objectResourceNames).toEqual([
-        'player-ship1.png2',
         'player-ship2.png',
+        'player-ship3.png',
       ]);
     });
 

@@ -132,6 +132,7 @@ export class ResourcesEditorContainer extends React.Component<RenderEditorContai
         fileMetadata={this.props.fileMetadata}
         project={project}
         storageProvider={this.props.storageProvider}
+        onSave={this.props.onSave}
       />
     );
   }

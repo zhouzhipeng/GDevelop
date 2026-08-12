@@ -47,4 +47,29 @@ describe('ResourcesEditor', () => {
       'resourcesManager.removeResource(resource.getName());'
     );
   });
+
+  it('passes the project save callback to copied linked resources', () => {
+    const editorSource = getSource('index.js');
+    const containerSource = getSource(
+      '../MainFrame/EditorContainers/ResourcesEditorContainer.js'
+    );
+
+    expect(containerSource).toContain('onSave={this.props.onSave}');
+    expect(editorSource).toContain('onSaveProject={this.props.onSave}');
+  });
+
+  it('clears parsed GLB data when refreshing project files', () => {
+    const source = getSource('index.js');
+
+    expect(source).toContain(
+      "resourcesManager.getResource(resourceName).getKind() === 'model3D'"
+    );
+    expect(source).toContain(
+      'this.resourcesLoader.burstUrlsCacheForResources(\n      project,\n      modelResourceNames\n    );'
+    );
+    expect(source).toContain('PixiResourcesLoader.burst3DModelCache();');
+    expect(
+      source.indexOf('PixiResourcesLoader.burst3DModelCache();')
+    ).toBeLessThan(source.indexOf('this._removeUnusedResourcesFromProject();'));
+  });
 });

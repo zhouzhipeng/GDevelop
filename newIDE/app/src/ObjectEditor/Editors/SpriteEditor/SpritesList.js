@@ -23,7 +23,10 @@ import {
   type ResourceSource,
   type ResourceManagementProps,
 } from '../../../ResourcesList/ResourceSource';
-import { applyResourceDefaults } from '../../../ResourcesList/ResourceUtils';
+import {
+  applyResourceDefaults,
+  prepareNewResourceForRegistration,
+} from '../../../ResourcesList/ResourceUtils';
 import RaisedButtonWithSplitMenu from '../../../UI/RaisedButtonWithSplitMenu';
 import useForceUpdate from '../../../Utils/UseForceUpdate';
 import {
@@ -415,6 +418,7 @@ const SpritesList = ({
       let hasCreatedAnyResource = false;
       if (selectedResourceSource.shouldCreateResource) {
         selectedResources.forEach(resource => {
+          prepareNewResourceForRegistration(project, resource);
           applyResourceDefaults(project, resource);
           const hasCreatedResource = project
             .getResourcesManager()

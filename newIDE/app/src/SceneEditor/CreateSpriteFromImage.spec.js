@@ -45,7 +45,7 @@ describe('CreateSpriteFromImage', () => {
       imageFilePath: sourceFile,
     });
 
-    expect(resourceName).toBe('assets/Background.png');
+    expect(resourceName).toBe('Background.png');
     expect(project.getResourcesManager().hasResource(resourceName)).toBe(true);
     expect(fs.existsSync(path.join(folder, 'assets', 'Background.png'))).toBe(
       true
@@ -65,12 +65,10 @@ describe('CreateSpriteFromImage', () => {
     });
 
     expect(object.getName()).toBe('Hero_Ship');
-    expect(
-      project.getResourcesManager().hasResource('assets/Hero Ship.png')
-    ).toBe(true);
-    const resource = project
-      .getResourcesManager()
-      .getResource('assets/Hero Ship.png');
+    expect(project.getResourcesManager().hasResource('Hero Ship.png')).toBe(
+      true
+    );
+    const resource = project.getResourcesManager().getResource('Hero Ship.png');
     expect(resource.getFile()).toBe('assets/Hero Ship.png');
     expect(fs.existsSync(path.join(folder, 'assets', 'Hero Ship.png'))).toBe(
       true
@@ -83,7 +81,7 @@ describe('CreateSpriteFromImage', () => {
         .getDirection(0)
         .getSprite(0)
         .getImageName()
-    ).toBe('assets/Hero Ship.png');
+    ).toBe('Hero Ship.png');
   });
 
   test('creates unique resource and object names', async () => {
@@ -104,9 +102,7 @@ describe('CreateSpriteFromImage', () => {
     });
 
     expect(secondObject.getName()).toBe('Hero2');
-    expect(project.getResourcesManager().hasResource('assets/Hero2.png')).toBe(
-      true
-    );
+    expect(project.getResourcesManager().hasResource('Hero2.png')).toBe(true);
   });
 
   test('writes clipboard image data to a unique asset PNG', () => {

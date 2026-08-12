@@ -340,13 +340,24 @@ const getEmbedderResources = (
  * This internally uses ResourcesLoader to get the URL of the resources.
  */
 export default class PixiResourcesLoader {
+  /**
+   * Drop parsed 3D models, including their rigs and animation clips, so the
+   * next request parses the model resource again.
+   *
+   * Existing renderers can keep using the model objects they already own. We
+   * intentionally don't dispose their shared geometries or materials here.
+   */
+  static burst3DModelCache() {
+    loadedOrLoading3DModelPromises = {};
+  }
+
   static burstCache() {
     loadedBitmapFonts = {};
     loadedFontFamilies = {};
     loadedOrLoadingPixiTextures.clear();
     loadedOrLoadingThreeTextures = {};
     loadedOrLoadingThreeMaterials = {};
-    loadedOrLoading3DModelPromises = {};
+    PixiResourcesLoader.burst3DModelCache();
     spineAtlasPromises = {};
     spineDataPromises = {};
     ongoingResourceReloads = null;

@@ -7,9 +7,9 @@ import {
 } from './ResourceSource';
 import { type MessageDescriptor } from '../Utils/i18n/MessageDescriptor.flow';
 import { type StorageProvider } from '../ProjectsStorage';
-import newNameGenerator from '../Utils/NewNameGenerator';
 import {
   applyResourceDefaults,
+  getUniqueResourceNameFromFilePath,
   updateResourceJsonMetadata,
 } from './ResourceUtils';
 import { convertDataURLtoBlob } from '../Utils/BlobDownloader';
@@ -144,11 +144,14 @@ export const saveBlobUrlsFromExternalEditorBase64Resources = async ({
         // Insert a new resource.
         // Store the blob url, as well as indication
         // about which extension (for a new file) or filename to use (to overwrite existing file).
-        const name = newNameGenerator(
+        const generatedFilename = `${
           baseNameForNewResources.length === 0
             ? 'Untitled'
-            : baseNameForNewResources,
-          name => resourcesManager.hasResource(name)
+            : baseNameForNewResources
+        }${extension || ''}`;
+        const name = getUniqueResourceNameFromFilePath(
+          resourcesManager,
+          localFilePath || generatedFilename
         );
         console.info('Creating new resource ' + name + '...');
 

@@ -31,5 +31,9 @@ TEST_CASE("Resources", "[common][resources]") {
     REQUIRE(image.GetFile() == "../My/windows/style/relative/ResourceFile");
     image.SetFile("Lots\\\\Of\\\\\\..\\Backslashs");
     REQUIRE(image.GetFile() == "Lots//Of///../Backslashs");
+    image.SetFile("https://example.com/images\\player.png");
+    REQUIRE(image.GetFile() == "https://example.com/images\\player.png");
+    image.SetFile("data:image/svg+xml,a\\b");
+    REQUIRE(image.GetFile() == "data:image/svg+xml,a\\b");
   }
 }

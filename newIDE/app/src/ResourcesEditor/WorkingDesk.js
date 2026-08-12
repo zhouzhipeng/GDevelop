@@ -16,6 +16,7 @@ import { MarkdownText } from '../UI/MarkdownText';
 import ResourcesLoader from '../ResourcesLoader';
 import ResourcePreview from '../ResourcesList/ResourcePreview';
 import InteractiveModel3DPreview from '../ResourcesList/ResourcePreview/InteractiveModel3DPreview';
+import Resource3DPreviewContext from '../ResourcesList/ResourcePreview/Resource3DPreviewContext';
 import CheckeredBackground from '../ResourcesList/CheckeredBackground';
 import SoundPlayer from '../UI/SoundPlayer';
 import optionalRequire from '../Utils/OptionalRequire';
@@ -368,6 +369,7 @@ const WorkingDesk = ({
   toolTabUpdate,
 }: Props): React.Node => {
   const theme = React.useContext(GDevelopThemeContext);
+  const { previewCacheVersion } = React.useContext(Resource3DPreviewContext);
   const [tabs, setTabs] = React.useState<Array<WorkingDeskTab>>([]);
   const [activeTabId, setActiveTabId] = React.useState<?string>(null);
   const [
@@ -1162,7 +1164,10 @@ const WorkingDesk = ({
 
   const renderMediaPreview = () => {
     if (!selectedNode) return null;
-    const fileUrl = getFileUrl(selectedNode.absolutePath);
+    const fileUrl = getFileUrl(
+      selectedNode.absolutePath,
+      is3DModelFile(selectedNode) ? previewCacheVersion : undefined
+    );
     if (isImageFile(selectedNode)) return renderImagePreview();
     if (isAudioFile(selectedNode)) {
       return (

@@ -1,5 +1,6 @@
 // @flow
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import {
   buildFileDeletionBlockersMessage,
@@ -7,12 +8,15 @@ import {
   buildDuplicateMarkdownCreationErrorMessage,
   buildFolderCreationDiskErrorMessage,
   canDeleteProjectFolder,
+  canCopyLinkedFolderFileToProject,
   canRenameLinkedFolderNode,
   canMoveProjectFileToFolder,
   canRenameProjectFileNode,
   canUpdateProjectFolderFromTemplate,
   copyProjectTemplateFolderContents,
+  copyLinkedFolderFileToProject,
   findNodeById,
+  getFileUrl,
   getProjectFileNodeIdsAfterSelection,
   getLinkedFoldersFilePath,
   getExternalFileCopyDestinationPath,
@@ -32,6 +36,8 @@ import {
   shouldSelectCreatedProjectFile,
   type ProjectFileNode,
 } from './ProjectFilesPanel';
+
+const gd: libGDevelop = global.gd;
 
 describe('ProjectFilesPanel', () => {
   const getSource = () =>
@@ -179,10 +185,20 @@ describe('ProjectFilesPanel', () => {
     expect(source).toContain(
       'onProjectFilesRefreshed: ProjectFileNode => void'
     );
-    expect(source).toContain('onClick={onRefreshProjectFiles}');
+    expect(source).toContain(
+      'onClick={refreshProjectFilesAndClearModelCaches}'
+    );
+    expect(source).toContain('clearResourcePreviews();');
+    expect(source).toContain('await onRefreshProjectFiles();');
     expect(source).toContain(
       'tooltip={t`Refresh project files and remove unused resources`}'
     );
+  });
+
+  it('can cache-bust a local GLB preview URL', () => {
+    const fileUrl = getFileUrl('D:\\Project\\Hero.glb', 7);
+
+    expect(fileUrl).toContain('Hero.glb?gdevelopPreviewCache=7');
   });
 
   it('copies the project absolute path from the header toolbar', () => {
@@ -207,7 +223,7 @@ describe('ProjectFilesPanel', () => {
       toolbar.indexOf('onClick={copyProjectAbsolutePath}')
     );
     expect(toolbar.indexOf('onClick={copyProjectAbsolutePath}')).toBeLessThan(
-      toolbar.indexOf('onClick={onRefreshProjectFiles}')
+      toolbar.indexOf('onClick={refreshProjectFilesAndClearModelCaches}')
     );
   });
 
@@ -693,6 +709,92 @@ describe('ProjectFilesPanel', () => {
     expect(source).toContain("...(node.type === 'file'");
     expect(source).toContain('label: i18n._(t`Open folder`)');
     expect(source).toContain('click: () => openFolderForNode(node)');
+  });
+
+  it('copies a linked file into assets and registers it with a filename-only name', async () => {
+    const temporaryDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'gd-linked-resource-')
+    );
+    const projectFolder = path.join(temporaryDirectory, 'project');
+    const linkedFolder = path.join(temporaryDirectory, 'linked');
+    fs.mkdirSync(projectFolder);
+    fs.mkdirSync(linkedFolder);
+    const sourcePath = path.join(linkedFolder, 'model.glb');
+    fs.writeFileSync(sourcePath, 'model content');
+
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    project.setProjectFile(path.join(projectFolder, 'game.json'));
+
+    try {
+      const copiedResource = await copyLinkedFolderFileToProject({
+        project,
+        sourceAbsolutePath: sourcePath,
+      });
+
+      expect(copiedResource.resourceName).toBe('model.glb');
+      expect(copiedResource.resourceKind).toBe('model3D');
+      expect(copiedResource.destinationPath).toBe(
+        path.join(projectFolder, 'assets', 'model.glb')
+      );
+      expect(fs.readFileSync(copiedResource.destinationPath, 'utf8')).toBe(
+        'model content'
+      );
+
+      const resource = project.getResourcesManager().getResource('model.glb');
+      expect(resource.getName()).toBe('model.glb');
+      expect(resource.getFile()).toBe('assets/model.glb');
+      expect(resource.getKind()).toBe('model3D');
+    } finally {
+      project.delete();
+      fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it('uses a number suffix when the filename resource name conflicts', async () => {
+    const temporaryDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'gd-linked-resource-conflict-')
+    );
+    const projectFolder = path.join(temporaryDirectory, 'project');
+    const linkedFolder = path.join(temporaryDirectory, 'linked');
+    fs.mkdirSync(projectFolder);
+    fs.mkdirSync(linkedFolder);
+    const sourcePath = path.join(linkedFolder, 'model.glb');
+    fs.writeFileSync(sourcePath, 'new model content');
+
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    project.setProjectFile(path.join(projectFolder, 'game.json'));
+    const existingResource = new gd.Model3DResource();
+    existingResource.setName('model.glb');
+    existingResource.setFile('other/model.glb');
+    project.getResourcesManager().addResource(existingResource);
+    existingResource.delete();
+
+    try {
+      const copiedResource = await copyLinkedFolderFileToProject({
+        project,
+        sourceAbsolutePath: sourcePath,
+      });
+
+      expect(copiedResource.resourceName).toBe('model2.glb');
+      expect(copiedResource.destinationPath).toBe(
+        path.join(projectFolder, 'assets', 'model2.glb')
+      );
+      expect(project.getResourcesManager().hasResource('model2.glb')).toBe(
+        true
+      );
+    } finally {
+      project.delete();
+      fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it('shows copy to project for supported linked files', () => {
+    const source = getSource();
+
+    expect(canCopyLinkedFolderFileToProject(linkedFileNode)).toBe(true);
+    expect(source).toContain('label: i18n._(t`Copy to project`)');
+    expect(source).toContain('click: () => copyLinkedFileToProject(node)');
+    expect(source).toContain('await onSaveProject();');
   });
 
   it('can open folders and copy absolute paths from project nodes', () => {

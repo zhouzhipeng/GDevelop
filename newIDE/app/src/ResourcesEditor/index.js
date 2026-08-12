@@ -20,6 +20,7 @@ import ToolsPanel from './ToolsPanel';
 import Toolbar from './Toolbar';
 import { type WorkingDeskToolTabUpdate } from './WorkingDeskTabTypes';
 import ResourcesLoader from '../ResourcesLoader';
+import PixiResourcesLoader from '../ObjectsRendering/PixiResourcesLoader';
 import AlertContext, { type ConfirmState } from '../UI/Alert/AlertContext';
 import Dialog from '../UI/Dialog';
 import FlatButton from '../UI/FlatButton';
@@ -179,6 +180,7 @@ type Props = {|
   resourceManagementProps: ResourceManagementProps,
   fileMetadata: ?FileMetadata,
   storageProvider: StorageProvider,
+  onSave: () => Promise<?FileMetadata>,
 |};
 
 export type ResourcesEditorProjectFileSelectionSnapshot = {|
@@ -271,6 +273,21 @@ export default class ResourcesEditor extends React.Component<Props, State> {
   };
 
   refreshResourcesListAndRemoveUnusedResources = async (): Promise<void> => {
+    const { project } = this.props;
+    const resourcesManager = project.getResourcesManager();
+    const modelResourceNames = resourcesManager
+      .getAllResourceNames()
+      .toJSArray()
+      .filter(
+        resourceName =>
+          resourcesManager.getResource(resourceName).getKind() === 'model3D'
+      );
+    this.resourcesLoader.burstUrlsCacheForResources(
+      project,
+      modelResourceNames
+    );
+    PixiResourcesLoader.burst3DModelCache();
+
     this._removeUnusedResourcesFromProject();
     await this.refreshResourcesList();
   };
@@ -731,6 +748,10 @@ export default class ResourcesEditor extends React.Component<Props, State> {
               onSelectProjectFile={this._onProjectFileSelected}
               onViewProjectFileProperties={this._openPropertiesDialog}
               onUnregisterResource={this.deleteResource}
+              onNewResourcesAdded={
+                this.props.resourceManagementProps.onNewResourcesAdded
+              }
+              onSaveProject={this.props.onSave}
               onRefreshProjectFiles={
                 this.refreshResourcesListAndRemoveUnusedResources
               }

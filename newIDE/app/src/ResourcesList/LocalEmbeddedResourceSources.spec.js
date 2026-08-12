@@ -1,6 +1,7 @@
 // @flow
 import {
   copyAllEmbeddedResourcesToProjectFolder,
+  createAndMapEmbeddedResources,
   type EmbeddedResource,
   type EmbeddedResources,
 } from './LocalEmbeddedResourceSources';
@@ -11,6 +12,64 @@ const os = optionalRequire('os');
 const path = optionalRequire('path');
 
 describe('LocalEmbeddedResourceSources', () => {
+  describe('createAndMapEmbeddedResources', () => {
+    it('registers embedded resources with filename-only names', () => {
+      const createdTempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'gd-embedded-resource-map-')
+      );
+      const projectFolder = path.join(createdTempDir, 'project');
+      const embeddedFilePath = path.join(
+        projectFolder,
+        'assets',
+        'nested',
+        'tiles.png'
+      );
+      fs.mkdirSync(path.dirname(embeddedFilePath), { recursive: true });
+      fs.writeFileSync(embeddedFilePath, 'image content');
+      const project = gd.ProjectHelper.createNewGDJSProject();
+      project.setProjectFile(path.join(projectFolder, 'game.json'));
+      const embeddedResources: Map<string, EmbeddedResource> = new Map();
+      embeddedResources.set('tiles.png', {
+        resourceKind: 'image',
+        relPath: 'tiles.png',
+        fullPath: embeddedFilePath,
+        isOutsideProjectFolder: false,
+      });
+      const parentFilePath = path.join(projectFolder, 'map.json');
+      const filesWithEmbeddedResources: Map<
+        string,
+        EmbeddedResources
+      > = new Map();
+      filesWithEmbeddedResources.set(parentFilePath, {
+        hasAnyEmbeddedResourceOutsideProjectFolder: false,
+        embeddedResources,
+      });
+
+      try {
+        const mappedResources = createAndMapEmbeddedResources(
+          project,
+          filesWithEmbeddedResources
+        );
+
+        expect(mappedResources.get(parentFilePath)).toEqual({
+          mapping: { 'tiles.png': 'tiles.png' },
+        });
+        expect(project.getResourcesManager().hasResource('tiles.png')).toBe(
+          true
+        );
+        expect(
+          project
+            .getResourcesManager()
+            .getResource('tiles.png')
+            .getFile()
+        ).toBe('assets/nested/tiles.png');
+      } finally {
+        project.delete();
+        fs.rmSync(createdTempDir, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe('copyAllEmbeddedResourcesToProjectFolder', () => {
     let tempDir: ?string = null;
 

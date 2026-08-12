@@ -9,6 +9,114 @@ const gd: libGDevelop = global.gd;
 
 export const DEFAULT_IMPORTED_RESOURCES_FOLDER = 'assets';
 
+/**
+ * Normalize a local resource file path for portable project serialization.
+ * URL-backed resources are opaque and must not be rewritten.
+ */
+export const normalizeLocalResourceFilePath = (
+  resourceFilePath: string
+): string =>
+  isURL(resourceFilePath)
+    ? resourceFilePath
+    : resourceFilePath.replace(/\\/g, '/');
+
+const getResourceFilenameFromPath = (resourceFilePath: string): string => {
+  const normalizedPath = resourceFilePath.replace(/\\/g, '/');
+  return normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1);
+};
+
+/**
+ * Allocate a short resource name from a source filename or path.
+ *
+ * The directory is discarded and conflicts are resolved before the final
+ * extension: `model.glb`, `model2.glb`, `model3.glb`, and so on.
+ */
+export const getUniqueResourceNameFromFilePath = (
+  resourcesManager: gdResourcesContainer,
+  resourceFilePath: string,
+  reservedResourceNames?: Set<string>
+): string => {
+  const resourceFilename = getResourceFilenameFromPath(resourceFilePath);
+  if (!resourceFilename) {
+    throw new Error('A resource filename is required.');
+  }
+
+  const lastDotIndex = resourceFilename.lastIndexOf('.');
+  const hasExtension = lastDotIndex > 0;
+  const fileExtension = hasExtension
+    ? resourceFilename.slice(lastDotIndex)
+    : '';
+  const fileNameWithoutExtension = hasExtension
+    ? resourceFilename.slice(0, lastDotIndex)
+    : resourceFilename;
+  const uniqueFileNameWithoutExtension = newNameGenerator(
+    fileNameWithoutExtension,
+    tentativeFileNameWithoutExtension => {
+      const tentativeResourceName =
+        tentativeFileNameWithoutExtension + fileExtension;
+      return (
+        resourcesManager.hasResource(tentativeResourceName) ||
+        !!(
+          reservedResourceNames &&
+          reservedResourceNames.has(tentativeResourceName)
+        )
+      );
+    }
+  );
+
+  return uniqueFileNameWithoutExtension + fileExtension;
+};
+
+/**
+ * Apply the new-resource naming and local file path rules immediately before
+ * a file-backed resource is inserted into a project.
+ */
+export const prepareNewResourceForRegistration = (
+  project: gdProject,
+  newResource: gdResource,
+  reservedResourceNames?: Set<string>
+): string => {
+  const proposedNameOrPath = newResource.getName() || newResource.getFile();
+  const resourceName = getUniqueResourceNameFromFilePath(
+    project.getResourcesManager(),
+    proposedNameOrPath,
+    reservedResourceNames
+  );
+
+  newResource.setName(resourceName);
+  if (newResource.useFile()) {
+    newResource.setFile(normalizeLocalResourceFilePath(newResource.getFile()));
+  }
+  if (reservedResourceNames) reservedResourceNames.add(resourceName);
+  return resourceName;
+};
+
+/**
+ * Normalize local resource file paths without changing resource names.
+ * Returns whether the live project was changed.
+ */
+export const normalizeProjectLocalResourceFilePaths = (
+  project: gdProject
+): boolean => {
+  const resourcesManager = project.getResourcesManager();
+  let hasChanged = false;
+  resourcesManager
+    .getAllResourceNames()
+    .toJSArray()
+    .forEach(resourceName => {
+      const resource = resourcesManager.getResource(resourceName);
+      const resourceFile = resource.getFile();
+      const normalizedResourceFile = normalizeLocalResourceFilePath(
+        resourceFile
+      );
+      if (normalizedResourceFile === resourceFile) return;
+
+      resource.setFile(normalizedResourceFile);
+      hasChanged = true;
+    });
+  return hasChanged;
+};
+
 export const createOrUpdateResource = (
   project: gdProject,
   newlyCreatedResource: gdResource,

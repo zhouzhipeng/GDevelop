@@ -17,7 +17,10 @@ import {
 import { type FieldFocusFunction } from '../EventsSheet/ParameterFields/ParameterFieldCommons';
 import { type ResourceExternalEditor } from '../ResourcesList/ResourceExternalEditor';
 import ResourcesLoader from '../ResourcesLoader';
-import { applyResourceDefaults } from './ResourceUtils';
+import {
+  applyResourceDefaults,
+  prepareNewResourceForRegistration,
+} from './ResourceUtils';
 import { type MessageDescriptor } from '../Utils/i18n/MessageDescriptor.flow';
 import FlatButtonWithSplitMenu from '../UI/FlatButtonWithSplitMenu';
 import { LineStackLayout, ResponsiveLineStackLayout } from '../UI/Layout';
@@ -201,7 +204,8 @@ const ResourceSelector: React.ComponentType<{
             const resource = resourcesContainer.getResource(resourceName);
             if (
               resource.getKind() === resourceKind &&
-              (!resourceNameFilter || resourceNameFilter(resourceName, resource))
+              (!resourceNameFilter ||
+                resourceNameFilter(resourceName, resource))
             ) {
               allResourcesNames.add(resourceName);
             }
@@ -269,14 +273,14 @@ const ResourceSelector: React.ComponentType<{
   );
 
   const registerProjectAssetResourceName = React.useCallback(
-    (resourceNameToRegister: string): boolean => {
+    (resourceNameToRegister: string): ?string => {
       if (!includeProjectAssetsFolder || !resourceNameToRegister) {
-        return false;
+        return null;
       }
 
       const resourcesManager = project.getResourcesManager();
       if (hasMatchingResource(resourceNameToRegister)) {
-        return true;
+        return resourceNameToRegister;
       }
 
       const projectAssetResource = createProjectAssetResourceFromResourceName({
@@ -284,13 +288,17 @@ const ResourceSelector: React.ComponentType<{
         resourceKind,
         resourceName: resourceNameToRegister,
       });
-      if (!projectAssetResource) return false;
+      if (!projectAssetResource) return null;
+      const registeredResourceName = prepareNewResourceForRegistration(
+        project,
+        projectAssetResource
+      );
       if (
         resourceNameFilter &&
-        !resourceNameFilter(resourceNameToRegister, projectAssetResource)
+        !resourceNameFilter(registeredResourceName, projectAssetResource)
       ) {
         projectAssetResource.delete();
-        return false;
+        return null;
       }
 
       applyResourceDefaults(project, projectAssetResource);
@@ -304,7 +312,9 @@ const ResourceSelector: React.ComponentType<{
         triggerResourcesHaveChanged();
       }
 
-      return hasMatchingResource(resourceNameToRegister);
+      return hasMatchingResource(registeredResourceName)
+        ? registeredResourceName
+        : null;
     },
     [
       hasMatchingResource,
@@ -320,11 +330,21 @@ const ResourceSelector: React.ComponentType<{
   React.useEffect(
     () => {
       if (!initialResourceName) return;
-      if (registerProjectAssetResourceName(initialResourceName)) {
+      const registeredResourceName = registerProjectAssetResourceName(
+        initialResourceName
+      );
+      if (registeredResourceName) {
+        if (registeredResourceName !== initialResourceName) {
+          setResourceName(registeredResourceName);
+          if (autoCompleteRef.current) {
+            autoCompleteRef.current.forceInputValueTo(registeredResourceName);
+          }
+          _onChange(registeredResourceName);
+        }
         setNotFoundError(false);
       }
     },
-    [initialResourceName, registerProjectAssetResourceName]
+    [initialResourceName, registerProjectAssetResourceName, _onChange]
   );
 
   const onChangeResourceName = React.useCallback(
@@ -337,19 +357,26 @@ const ResourceSelector: React.ComponentType<{
         return;
       }
 
+      let resolvedResourceName = newResourceName;
       let isMissing =
         allResourcesNamesRef.current.indexOf(newResourceName) === -1 &&
         !hasMatchingResource(newResourceName);
-      if (isMissing && registerProjectAssetResourceName(newResourceName)) {
-        isMissing = false;
+      if (isMissing) {
+        const registeredResourceName = registerProjectAssetResourceName(
+          newResourceName
+        );
+        if (registeredResourceName) {
+          resolvedResourceName = registeredResourceName;
+          isMissing = false;
+        }
       }
 
       if (!isMissing) {
-        _onChange(newResourceName);
+        _onChange(resolvedResourceName);
       }
-      setResourceName(newResourceName);
+      setResourceName(resolvedResourceName);
       if (autoCompleteRef.current)
-        autoCompleteRef.current.forceInputValueTo(newResourceName);
+        autoCompleteRef.current.forceInputValueTo(resolvedResourceName);
       setNotFoundError(isMissing);
     },
     [
@@ -385,12 +412,12 @@ const ResourceSelector: React.ComponentType<{
         if (!selectedResourceSource) return;
 
         const resource = selectedResources[0];
+        if (selectedResourceSource.shouldCreateResource) {
+          prepareNewResourceForRegistration(project, resource);
+        }
 
         const resourceName: string = resource.getName();
-        if (
-          resourceNameFilter &&
-          !resourceNameFilter(resourceName, resource)
-        ) {
+        if (resourceNameFilter && !resourceNameFilter(resourceName, resource)) {
           showErrorBox({
             message:
               'This resource cannot be used here. Choose a resource from the expected project folder.',

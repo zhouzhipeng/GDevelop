@@ -32,7 +32,9 @@ type Props = {|
 |};
 
 const Model3DPreview = ({ modelUrl, size, expand, fullWidth }: Props) => {
-  const { getResourcePreview } = React.useContext(Resource3DPreviewContext);
+  const { getResourcePreview, previewCacheVersion } = React.useContext(
+    Resource3DPreviewContext
+  );
   const [imageDataUrl, setImageDataUrl] = React.useState(modelUrl ? null : '');
   const isMounted = useIsMounted();
 
@@ -41,8 +43,10 @@ const Model3DPreview = ({ modelUrl, size, expand, fullWidth }: Props) => {
     () => {
       (async () => {
         if (!modelUrl) {
+          setImageDataUrl('');
           return;
         }
+        setImageDataUrl(null);
         const dataUrl = await getResourcePreview(modelUrl);
         if (!isMounted.current) {
           return;
@@ -51,7 +55,7 @@ const Model3DPreview = ({ modelUrl, size, expand, fullWidth }: Props) => {
         setImageDataUrl(dataUrl);
       })();
     },
-    [modelUrl, getResourcePreview, isMounted]
+    [modelUrl, getResourcePreview, isMounted, previewCacheVersion]
   );
 
   return (
