@@ -218,7 +218,7 @@ describe('McpEditorBridge', () => {
     expect(response.tools.map(tool => tool.name)).not.toContain('create_scene');
   });
 
-  it('inspects GLB animation and canonical bone names from a project-relative path', async () => {
+  it('inspects GLB names from project-relative and absolute paths', async () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-glb-')
     );
@@ -257,6 +257,22 @@ describe('McpEditorBridge', () => {
       expect(JSON.parse(response.content[0].text)).toEqual({
         success: true,
         filePath: 'assets/models/Hero.glb',
+        resolvedFilePath: modelFile,
+        animationNames: ['Idle', 'animation_1'],
+        boneNames: ['Arm.L', 'Hips'],
+      });
+
+      const absoluteResponse = await makeBridge().handleRendererMcpRequest({
+        method: 'tools/call',
+        params: {
+          name: 'inspect_glb_model',
+          arguments: { file_path: modelFile },
+        },
+      });
+      expect(absoluteResponse.isError).not.toBe(true);
+      expect(JSON.parse(absoluteResponse.content[0].text)).toEqual({
+        success: true,
+        filePath: modelFile,
         resolvedFilePath: modelFile,
         animationNames: ['Idle', 'animation_1'],
         boneNames: ['Arm.L', 'Hips'],

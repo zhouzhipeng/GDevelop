@@ -527,12 +527,17 @@ inspect_glb_model { file_path: "assets/models/hero.glb" }
 ```
 
 `file_path` may be absolute or relative to the directory containing
-`project.gdevelop`. Use the returned `animationNames` and `boneNames` exactly,
-including case; never guess names from a filename or substitute preview-only
-labels. The returned bone names are canonical names usable by GDevelop, so the
-tool omits empty or ambiguous duplicate names. This bounded metadata inspection
-does not load meshes or textures and does not require opening the asset in
-Blender; use the Blender workflow for deeper scene inspection or any mutation.
+`project.gdevelop`. Each returned `animationNames` entry is an exact animation
+clip source name: use it as the Model3D animation `source`. A configured local
+animation `name` (the alias selected by events) may differ from that source.
+Use returned source and `boneNames` values exactly, including case; never guess
+names from a filename or substitute preview-only labels. The returned bone
+names are canonical names usable by GDevelop, so the tool omits empty or
+ambiguous duplicate names as well as runtime-generated fallback names that
+cannot be identified safely from metadata alone. This bounded metadata
+inspection does not load meshes or textures and does not require opening the
+asset in Blender; use the Blender workflow for deeper scene inspection or any
+mutation.
 
 ## MCP boundary
 
@@ -584,8 +589,8 @@ reading and editing `constants.toml` directly.
   changing editor memory by calling the no-input `validate_project_files` tool
   before `reload_project`.
 - Current editor/project/selection queries.
-- Inspecting a local `.glb` with `inspect_glb_model` to obtain the exact
-  animation and canonical bone names before authoring references to them.
+- Inspecting a local `.glb` with `inspect_glb_model` to obtain exact animation
+  clip source and canonical bone names before authoring references to them.
 - Launching or controlling a debug preview.
 - Deterministic frame stepping and input simulation.
 - Inspecting live runtime state, logs, errors, audio, and bounded targeted
@@ -718,9 +723,10 @@ Before finishing:
 - Confirm image resources used by 3D materials have the cataloged
   `three-texture` capability. SVG image resources are supported through the
   cached Pixi raster source.
-- Confirm every authored GLB animation or bone-name reference exactly matches
-  an `animationNames` or `boneNames` entry returned by `inspect_glb_model` for
-  that asset.
+- Confirm every authored Model3D animation `source` and bone-name reference
+  exactly matches an `animationNames` or `boneNames` entry returned by
+  `inspect_glb_model` for that asset. Do not require the local animation alias
+  selected by events to match its clip source.
 - Confirm Physics3D world scale is finite and positive and runtime instance
   coordinates remain finite.
 - Confirm catalog instruction types, kinds, scopes, and `dslName` arguments.

@@ -966,7 +966,7 @@ const readTools: Array<McpTool> = [
   {
     name: 'inspect_glb_model',
     description:
-      'Inspect a local binary glTF (.glb) file without loading its meshes or textures. Returns the animation names GDevelop can select and the exact case-sensitive canonical bone names GDevelop can reference. Accepts an absolute local path or a path relative to the open project folder; empty and ambiguous duplicate bone names are omitted.',
+      'Inspect a local binary glTF (.glb) file without loading its meshes or textures. Returns exact animation clip source names for Model3D animation source fields and exact case-sensitive canonical bone names GDevelop can reference. A configured Model3D animation alias/name may differ from its returned source name. Accepts an absolute local path or a path relative to the open project folder; empty, ambiguous duplicate, and runtime-generated fallback bone names are omitted.',
     inputSchema: inspectGlbModelSchema,
     annotations: {
       readOnlyHint: true,
@@ -1170,7 +1170,7 @@ const toolUsageExamples: { [string]: Array<Object> } = {
   inspect_glb_model: [
     {
       description:
-        'Inspect animation and usable canonical bone names in a project GLB asset.',
+        'Inspect animation clip source names and usable canonical bone names in a project GLB asset.',
       arguments: {
         file_path: 'assets/models/hero.glb',
       },

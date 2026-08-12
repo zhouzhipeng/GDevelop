@@ -362,6 +362,8 @@ describe('McpToolCatalog', () => {
       idempotentHint: true,
       openWorldHint: false,
     });
+    expect(tool.description).toContain('animation clip source names');
+    expect(tool.description).toContain('alias/name may differ');
     expect(
       getMcpToolUsageExamples('inspect_glb_model').inspect_glb_model
     ).toContainEqual(
@@ -503,6 +505,8 @@ describe('McpToolCatalog', () => {
     expect(skill).toContain('inspect_glb_model');
     expect(skill).toContain('animationNames');
     expect(skill).toContain('boneNames');
+    expect(skill).toContain('Model3D animation `source`');
+    expect(skill).toContain('alias selected by events');
     expect(harnessReference).toContain('.gdevelop/harness-api.d.ts');
     expect(harnessReference).toContain('await harness.stepFrames');
     expect(harnessReference).toContain('poll get_gameplay_test_results');

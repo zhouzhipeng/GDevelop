@@ -16,6 +16,9 @@ export const DEFAULT_GLB_MODEL_INSPECTION_LIMITS = Object.freeze({
   maxFileSizeBytes: 1024 * 1024 * 1024,
   // Model metadata is normally much smaller than this, including large rigs.
   maxJsonChunkSizeBytes: 32 * 1024 * 1024,
+  // GLB normally contains JSON and one BIN chunk. Keep malformed files from
+  // forcing an unbounded number of synchronous header reads in the renderer.
+  maxChunkCount: 64,
 });
 
 export type GlbModelInspection = {|
@@ -26,6 +29,7 @@ export type GlbModelInspection = {|
 export type GlbModelInspectionLimits = {|
   maxFileSizeBytes?: number,
   maxJsonChunkSizeBytes?: number,
+  maxChunkCount?: number,
 |};
 
 type GlbByteReader = (offset: number, length: number) => Uint8Array;
@@ -51,7 +55,11 @@ const inspectionError = (
 
 const resolveLimits = (
   limits?: GlbModelInspectionLimits = {}
-): {| maxFileSizeBytes: number, maxJsonChunkSizeBytes: number |} => {
+): {|
+  maxFileSizeBytes: number,
+  maxJsonChunkSizeBytes: number,
+  maxChunkCount: number,
+|} => {
   const requestedMaxFileSizeBytes = limits.maxFileSizeBytes;
   const maxFileSizeBytes =
     typeof requestedMaxFileSizeBytes === 'number' &&
@@ -66,7 +74,14 @@ const resolveLimits = (
     requestedMaxJsonChunkSizeBytes > 0
       ? Math.floor(requestedMaxJsonChunkSizeBytes)
       : DEFAULT_GLB_MODEL_INSPECTION_LIMITS.maxJsonChunkSizeBytes;
-  return { maxFileSizeBytes, maxJsonChunkSizeBytes };
+  const requestedMaxChunkCount = limits.maxChunkCount;
+  const maxChunkCount =
+    typeof requestedMaxChunkCount === 'number' &&
+    Number.isFinite(requestedMaxChunkCount) &&
+    requestedMaxChunkCount > 0
+      ? Math.floor(requestedMaxChunkCount)
+      : DEFAULT_GLB_MODEL_INSPECTION_LIMITS.maxChunkCount;
+  return { maxFileSizeBytes, maxJsonChunkSizeBytes, maxChunkCount };
 };
 
 const readUint32LittleEndian = (bytes: Uint8Array, offset: number): number =>
@@ -106,18 +121,17 @@ const decodeJsonChunk = (jsonBytes: Uint8Array): Object => {
 /**
  * Extract the public names that GDevelop can safely use from parsed glTF JSON.
  *
- * Animation fallbacks match Three.js GLTFLoader. Bone names mirror
- * getUniqueModelBoneNames: joint indexes are de-duplicated first, then empty
- * and ambiguous authored node names are omitted.
+ * Animation fallbacks match Three.js GLTFLoader. Bone names mirror the
+ * selected scene and the runtime's `userData.name || bone.name` lookup. Names
+ * that are empty, ambiguous, or depend on loader-generated fallbacks are
+ * omitted.
  */
 export const inspectGlbModelJson = (json: Object): GlbModelInspection => {
   const asset = json.asset;
   const assetVersion =
     asset && typeof asset === 'object' ? asset.version : undefined;
   const assetMajorVersion =
-    typeof assetVersion === 'string'
-      ? Number.parseInt(assetVersion.split('.')[0], 10)
-      : NaN;
+    typeof assetVersion === 'string' ? Number(assetVersion.split('.')[0]) : NaN;
   if (!Number.isFinite(assetMajorVersion) || assetMajorVersion < 2) {
     throw inspectionError(
       'GLB_UNSUPPORTED_ASSET_VERSION',
@@ -135,18 +149,23 @@ export const inspectGlbModelJson = (json: Object): GlbModelInspection => {
     );
   }
   const animationNames = animationDefinitions.map((animation, index) => {
-    const name =
-      animation && typeof animation === 'object' ? animation.name : null;
-    return typeof name === 'string' && name ? name : `animation_${index}`;
+    if (!animation || typeof animation !== 'object') {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB animation ${index} must be an object.`,
+        { animationIndex: index }
+      );
+    }
+    if (animation.name !== undefined && typeof animation.name !== 'string') {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB animation ${index} name must be a string.`,
+        { animationIndex: index }
+      );
+    }
+    return animation.name || `animation_${index}`;
   });
 
-  const skinDefinitions = json.skins === undefined ? [] : json.skins;
-  if (!Array.isArray(skinDefinitions)) {
-    throw inspectionError(
-      'GLB_STRUCTURE_INVALID',
-      'The GLB "skins" property must be an array.'
-    );
-  }
   const nodeDefinitions = json.nodes === undefined ? [] : json.nodes;
   if (!Array.isArray(nodeDefinitions)) {
     throw inspectionError(
@@ -154,20 +173,25 @@ export const inspectGlbModelJson = (json: Object): GlbModelInspection => {
       'The GLB "nodes" property must be an array.'
     );
   }
-
-  const sceneDefinitions = json.scenes === undefined ? [] : json.scenes;
-  if (!Array.isArray(sceneDefinitions)) {
+  const skinDefinitions = json.skins === undefined ? [] : json.skins;
+  if (!Array.isArray(skinDefinitions)) {
     throw inspectionError(
       'GLB_STRUCTURE_INVALID',
-      'The GLB "scenes" property must be an array.'
+      'The GLB "skins" property must be an array.'
+    );
+  }
+  const sceneDefinitions = json.scenes;
+  if (!Array.isArray(sceneDefinitions) || sceneDefinitions.length === 0) {
+    throw inspectionError(
+      'GLB_STRUCTURE_INVALID',
+      'The GLB must contain at least one scene for GDevelop to load.'
     );
   }
   const selectedSceneIndex = json.scene === undefined ? 0 : json.scene;
   if (
-    sceneDefinitions.length > 0 &&
-    (!Number.isInteger(selectedSceneIndex) ||
-      selectedSceneIndex < 0 ||
-      selectedSceneIndex >= sceneDefinitions.length)
+    !Number.isInteger(selectedSceneIndex) ||
+    selectedSceneIndex < 0 ||
+    selectedSceneIndex >= sceneDefinitions.length
   ) {
     throw inspectionError(
       'GLB_STRUCTURE_INVALID',
@@ -176,68 +200,6 @@ export const inspectGlbModelJson = (json: Object): GlbModelInspection => {
     );
   }
 
-  // GDevelop builds its bone cache by traversing GLTFLoader's selected
-  // `gltf.scene` only. Bones that exist solely in another scene are not usable
-  // runtime identifiers and must not be returned.
-  const reachableNodeIndexes = new Set<number>();
-  const pendingNodeIndexes: Array<number> = [];
-  if (sceneDefinitions.length > 0) {
-    const selectedScene = sceneDefinitions[selectedSceneIndex];
-    if (!selectedScene || typeof selectedScene !== 'object') {
-      throw inspectionError(
-        'GLB_STRUCTURE_INVALID',
-        `GLB scene ${selectedSceneIndex} must be an object.`,
-        { selectedSceneIndex }
-      );
-    }
-    const rootNodeIndexes =
-      selectedScene.nodes === undefined ? [] : selectedScene.nodes;
-    if (!Array.isArray(rootNodeIndexes)) {
-      throw inspectionError(
-        'GLB_STRUCTURE_INVALID',
-        `GLB scene ${selectedSceneIndex} must contain a nodes array when nodes are specified.`,
-        { selectedSceneIndex }
-      );
-    }
-    pendingNodeIndexes.push(...rootNodeIndexes);
-  }
-  while (pendingNodeIndexes.length > 0) {
-    const nodeIndex = pendingNodeIndexes.pop();
-    if (
-      !Number.isInteger(nodeIndex) ||
-      nodeIndex < 0 ||
-      nodeIndex >= nodeDefinitions.length
-    ) {
-      throw inspectionError(
-        'GLB_STRUCTURE_INVALID',
-        `The selected GLB scene references invalid node index ${String(
-          nodeIndex
-        )}.`,
-        { selectedSceneIndex, nodeIndex }
-      );
-    }
-    if (reachableNodeIndexes.has(nodeIndex)) continue;
-    reachableNodeIndexes.add(nodeIndex);
-    const node = nodeDefinitions[nodeIndex];
-    if (!node || typeof node !== 'object') {
-      throw inspectionError(
-        'GLB_STRUCTURE_INVALID',
-        `GLB node ${nodeIndex} must be an object.`,
-        { nodeIndex }
-      );
-    }
-    const children = node.children === undefined ? [] : node.children;
-    if (!Array.isArray(children)) {
-      throw inspectionError(
-        'GLB_STRUCTURE_INVALID',
-        `GLB node ${nodeIndex} must contain a children array when children are specified.`,
-        { nodeIndex }
-      );
-    }
-    pendingNodeIndexes.push(...children);
-  }
-
-  const jointNodeIndexes = new Set<number>();
   skinDefinitions.forEach((skin, skinIndex) => {
     if (!skin || typeof skin !== 'object' || !Array.isArray(skin.joints)) {
       throw inspectionError(
@@ -260,6 +222,128 @@ export const inspectGlbModelJson = (json: Object): GlbModelInspection => {
           { skinIndex, jointIndex, jointNodeIndex }
         );
       }
+    });
+  });
+
+  nodeDefinitions.forEach((node, nodeIndex) => {
+    if (!node || typeof node !== 'object') {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB node ${nodeIndex} must be an object.`,
+        { nodeIndex }
+      );
+    }
+    if (node.name !== undefined && typeof node.name !== 'string') {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB node ${nodeIndex} name must be a string when specified.`,
+        { nodeIndex }
+      );
+    }
+    const children = node.children === undefined ? [] : node.children;
+    if (!Array.isArray(children)) {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB node ${nodeIndex} must contain a children array when children are specified.`,
+        { nodeIndex }
+      );
+    }
+    children.forEach(childNodeIndex => {
+      if (
+        !Number.isInteger(childNodeIndex) ||
+        childNodeIndex < 0 ||
+        childNodeIndex >= nodeDefinitions.length
+      ) {
+        throw inspectionError(
+          'GLB_STRUCTURE_INVALID',
+          `GLB node ${nodeIndex} references invalid child node index ${String(
+            childNodeIndex
+          )}.`,
+          { nodeIndex, childNodeIndex }
+        );
+      }
+    });
+    const skinIndex = node.skin;
+    if (
+      skinIndex !== undefined &&
+      (!Number.isInteger(skinIndex) ||
+        skinIndex < 0 ||
+        skinIndex >= skinDefinitions.length)
+    ) {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB node ${nodeIndex} references invalid skin index ${String(
+          skinIndex
+        )}.`,
+        { nodeIndex, skinIndex }
+      );
+    }
+  });
+
+  const sceneRootNodeIndexes: Array<Array<number>> = [];
+  sceneDefinitions.forEach((scene, sceneIndex) => {
+    if (!scene || typeof scene !== 'object') {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB scene ${sceneIndex} must be an object.`,
+        { sceneIndex }
+      );
+    }
+    if (scene.name !== undefined && typeof scene.name !== 'string') {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB scene ${sceneIndex} name must be a string when specified.`,
+        { sceneIndex }
+      );
+    }
+    const rootNodeIndexes = scene.nodes === undefined ? [] : scene.nodes;
+    if (!Array.isArray(rootNodeIndexes)) {
+      throw inspectionError(
+        'GLB_STRUCTURE_INVALID',
+        `GLB scene ${sceneIndex} must contain a nodes array when nodes are specified.`,
+        { sceneIndex }
+      );
+    }
+    rootNodeIndexes.forEach(nodeIndex => {
+      if (
+        !Number.isInteger(nodeIndex) ||
+        nodeIndex < 0 ||
+        nodeIndex >= nodeDefinitions.length
+      ) {
+        throw inspectionError(
+          'GLB_STRUCTURE_INVALID',
+          `GLB scene ${sceneIndex} references invalid node index ${String(
+            nodeIndex
+          )}.`,
+          { sceneIndex, nodeIndex }
+        );
+      }
+    });
+    sceneRootNodeIndexes.push(rootNodeIndexes);
+  });
+
+  // GDevelop builds its cache by traversing GLTFLoader's selected scene only.
+  // Skin joints loaded as detached dependencies and bones in other scenes are
+  // therefore not usable runtime identifiers.
+  const reachableNodeIndexes = new Set<number>();
+  const pendingReachableNodeIndexes = [
+    ...sceneRootNodeIndexes[selectedSceneIndex],
+  ];
+  while (pendingReachableNodeIndexes.length > 0) {
+    const maybeNodeIndex = pendingReachableNodeIndexes.pop();
+    if (maybeNodeIndex === undefined) continue;
+    const nodeIndex = maybeNodeIndex;
+    if (reachableNodeIndexes.has(nodeIndex)) continue;
+    reachableNodeIndexes.add(nodeIndex);
+    const children = nodeDefinitions[nodeIndex].children || [];
+    for (let index = 0; index < children.length; index++) {
+      pendingReachableNodeIndexes.push(children[index]);
+    }
+  }
+
+  const jointNodeIndexes = new Set<number>();
+  skinDefinitions.forEach(skin => {
+    skin.joints.forEach(jointNodeIndex => {
       if (reachableNodeIndexes.has(jointNodeIndex)) {
         jointNodeIndexes.add(jointNodeIndex);
       }
@@ -269,9 +353,22 @@ export const inspectGlbModelJson = (json: Object): GlbModelInspection => {
   const countByBoneName: Map<string, number> = new Map();
   jointNodeIndexes.forEach(nodeIndex => {
     const node = nodeDefinitions[nodeIndex];
-    const name = node && typeof node === 'object' ? node.name : null;
-    if (typeof name !== 'string' || !name) return;
-    countByBoneName.set(name, (countByBoneName.get(name) || 0) + 1);
+    let canonicalName = typeof node.name === 'string' ? node.name : '';
+    const extras = node.extras;
+    if (extras && typeof extras === 'object' && extras.name !== undefined) {
+      // GLTFLoader assigns extras after preserving node.name in userData.
+      // If extras.name is not a non-empty string, GDevelop falls back to the
+      // loader-generated Object3D name. It shares a uniqueness namespace with
+      // scenes, meshes, cameras, and lights, so omit what metadata-only
+      // inspection cannot promise exactly.
+      canonicalName =
+        typeof extras.name === 'string' && extras.name ? extras.name : '';
+    }
+    if (!canonicalName) return;
+    countByBoneName.set(
+      canonicalName,
+      (countByBoneName.get(canonicalName) || 0) + 1
+    );
   });
 
   const boneNames = Array.from(countByBoneName.entries())
@@ -291,7 +388,11 @@ const inspectGlbModelWithReader = ({
   readBytes: GlbByteReader,
   limits?: GlbModelInspectionLimits,
 |}): GlbModelInspection => {
-  const { maxFileSizeBytes, maxJsonChunkSizeBytes } = resolveLimits(limits);
+  const {
+    maxFileSizeBytes,
+    maxJsonChunkSizeBytes,
+    maxChunkCount,
+  } = resolveLimits(limits);
   if (byteLength > maxFileSizeBytes) {
     throw inspectionError(
       'GLB_FILE_TOO_LARGE',
@@ -335,6 +436,13 @@ const inspectGlbModelWithReader = ({
   let chunkIndex = 0;
   let jsonBytes = null;
   while (offset < declaredLength) {
+    if (chunkIndex >= maxChunkCount) {
+      throw inspectionError(
+        'GLB_TOO_MANY_CHUNKS',
+        `The GLB contains more than the ${maxChunkCount}-chunk inspection limit.`,
+        { maxChunkCount }
+      );
+    }
     if (declaredLength - offset < GLB_CHUNK_HEADER_LENGTH) {
       throw inspectionError(
         'GLB_INVALID_CHUNK',
