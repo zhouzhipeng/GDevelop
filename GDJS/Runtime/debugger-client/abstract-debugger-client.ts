@@ -1448,6 +1448,7 @@ namespace gdjs {
      *   releaseAllKeys: { type }
      *   mouseMove: { type, x, y }   (game coordinates)
      *   mouseButtonPressed/mouseButtonReleased: { type, button }
+     *   mouseWheel: { type, deltaY, deltaX, deltaZ }
      *   touchStart/touchMove: { type, identifier, x, y }
      *   touchEnd: { type, identifier }
      * Mouse/touch coordinates are in game (scene) coordinates.
@@ -1502,6 +1503,18 @@ namespace gdjs {
         case 'mouseButtonReleased':
           inputManager.onMouseButtonReleased(input.button || 0);
           applied.push('mouseButtonReleased:' + (input.button || 0));
+          break;
+        case 'mouseWheel':
+          inputManager.onMouseWheel(
+            input.deltaY || 0,
+            input.deltaX || 0,
+            input.deltaZ || 0
+          );
+          applied.push(
+            `mouseWheel:${input.deltaY || 0},${input.deltaX || 0},${
+              input.deltaZ || 0
+            }`
+          );
           break;
         case 'touchStart':
           inputManager.onTouchStart(input.identifier || 0, input.x, input.y);

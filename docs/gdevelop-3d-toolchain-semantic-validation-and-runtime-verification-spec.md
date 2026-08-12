@@ -863,6 +863,12 @@ Existing input payloads and `applied` receipts remain. The tools add a
 `normalizedInputs` array. Unknown numeric `key_code` values remain injectable
 for backward compatibility but have null canonical metadata.
 
+Mouse-wheel input uses `{ "type": "mouseWheel", "delta_y": -120 }`, with
+optional `delta_x` and `delta_z` axes. The deltas follow GDevelop semantics:
+positive `delta_y` scrolls up and negative `delta_y` scrolls down. At least one
+axis must be a non-zero finite number. Wheel state is transient and is cleared
+at frame end like a physical wheel event.
+
 ## 7. Public API, schema, and catalog changes
 
 | Surface                       | Change                                                                     | Compatibility                                                                                             |

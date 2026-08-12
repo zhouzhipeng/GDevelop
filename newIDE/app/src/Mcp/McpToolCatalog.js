@@ -261,14 +261,14 @@ const simulatePreviewInputSchema = {
     inputs: {
       type: 'array',
       description:
-        'Ordered list of input events to inject into the running game. In the Electron editor, mouseButtonPressed also injects a native Chromium click/user gesture so pointer lock and WebAudio are unlocked before runtime input is applied. Press and release are separate events; hold a key by sending keyPressed without a matching keyReleased (the game keeps it pressed across frames until released).',
+        'Ordered list of input events to inject into the running game. In the Electron editor, mouseButtonPressed also injects a native Chromium click/user gesture so pointer lock and WebAudio are unlocked before runtime input is applied. Press and release are separate events; hold a key by sending keyPressed without a matching keyReleased (the game keeps it pressed across frames until released). mouseWheel deltas use GDevelop semantics: positive delta_y scrolls up and negative delta_y scrolls down.',
       items: {
         type: 'object',
         properties: {
           type: {
             type: 'string',
             description:
-              'One of: keyPressed, keyReleased, releaseAllKeys, mouseMove, mouseButtonPressed, mouseButtonReleased, touchStart, touchMove, touchEnd.',
+              'One of: keyPressed, keyReleased, releaseAllKeys, mouseMove, mouseButtonPressed, mouseButtonReleased, mouseWheel, touchStart, touchMove, touchEnd.',
           },
           key: {
             type: 'string',
@@ -290,6 +290,19 @@ const simulatePreviewInputSchema = {
           y: {
             type: 'number',
             description: 'Game (scene) Y coordinate for mouse/touch events.',
+          },
+          delta_x: {
+            type: 'number',
+            description: 'Horizontal wheel delta for mouseWheel (default 0).',
+          },
+          delta_y: {
+            type: 'number',
+            description:
+              'Vertical wheel delta for mouseWheel (default 0). Positive scrolls up and negative scrolls down, matching GDevelop mouse-wheel conditions.',
+          },
+          delta_z: {
+            type: 'number',
+            description: 'Z-axis wheel delta for mouseWheel (default 0).',
           },
           identifier: {
             type: 'number',
@@ -362,7 +375,7 @@ const runFramesSchema = {
     inputs: {
       type: 'array',
       description:
-        'Optional input events to inject BEFORE stepping (same shape as simulate_preview_input: [{ type, key/key_code/button/x/y, ... }]). In the Electron editor, mouse presses also inject a native Chromium click/user gesture before deterministic stepping, which unlocks pointer lock and WebAudio. Held keys (keyPressed without keyReleased) stay pressed across all stepped frames. run_frames also supports { type:"clickAndHold", x, y, button?, frames? }: it moves the cursor, presses before stepping, releases after stepping, and uses frames as the hold duration when top-level frames is omitted.',
+        'Optional input events to inject BEFORE stepping (same shape as simulate_preview_input: [{ type, key/key_code/button/x/y/delta_x/delta_y/delta_z, ... }]). In the Electron editor, mouse presses also inject a native Chromium click/user gesture before deterministic stepping, which unlocks pointer lock and WebAudio. Held keys (keyPressed without keyReleased) stay pressed across all stepped frames. run_frames also supports { type:"clickAndHold", x, y, button?, frames? }: it moves the cursor, presses before stepping, releases after stepping, and uses frames as the hold duration when top-level frames is omitted.',
       items: {
         type: 'object',
         properties: {
@@ -372,6 +385,9 @@ const runFramesSchema = {
           button: {},
           x: { type: 'number' },
           y: { type: 'number' },
+          delta_x: { type: 'number' },
+          delta_y: { type: 'number' },
+          delta_z: { type: 'number' },
           identifier: { type: 'number' },
           frames: { type: 'number' },
           hold_frames: { type: 'number' },
@@ -1203,6 +1219,13 @@ const toolUsageExamples: { [string]: Array<Object> } = {
           { type: 'mouseButtonPressed', button: 'left' },
           { type: 'mouseButtonReleased', button: 'left' },
         ],
+      },
+    },
+    {
+      description:
+        'Scroll the mouse wheel down. Positive delta_y scrolls up; negative delta_y scrolls down.',
+      arguments: {
+        inputs: [{ type: 'mouseWheel', delta_y: -120 }],
       },
     },
   ],

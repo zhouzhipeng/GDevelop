@@ -3077,6 +3077,79 @@ runtimeScene._instances.length;
     );
   });
 
+  it('simulates mouse-wheel input with normalized GDevelop deltas', async () => {
+    let captured: any = null;
+    const previewDebuggerServer = makeTargetedPreviewServer({
+      responders: {
+        simulateInput: message => {
+          captured = message;
+          return { applied: ['mouseWheel:-120,5,0'], error: null };
+        },
+      },
+    });
+    const injectPreviewClickUserGesture: any = jest.fn();
+    const bridge = makeBridge({
+      getPreviewDebuggerServer: () => previewDebuggerServer,
+      injectPreviewClickUserGesture,
+    });
+
+    const response = await bridge.handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'simulate_preview_input',
+        arguments: {
+          inputs: [{ type: 'mouseWheel', delta_y: -120, delta_x: 5 }],
+        },
+      },
+    });
+    const result = JSON.parse(response.content[0].text);
+
+    expect(response.isError).not.toBe(true);
+    expect(result.success).toBe(true);
+    expect(captured.inputs[0]).toEqual({
+      type: 'mouseWheel',
+      deltaX: 5,
+      deltaY: -120,
+      deltaZ: 0,
+    });
+    expect(result.normalizedInputs[0]).toEqual({
+      type: 'mouseWheel',
+      delta_x: 5,
+      delta_y: -120,
+      delta_z: 0,
+    });
+    expect(injectPreviewClickUserGesture).not.toHaveBeenCalled();
+  });
+
+  it('rejects mouse-wheel input without a finite non-zero delta', async () => {
+    const bridge = makeBridge({
+      getPreviewDebuggerServer: () =>
+        makeTargetedPreviewServer({ responders: {} }),
+    });
+
+    const zeroResponse = await bridge.handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'simulate_preview_input',
+        arguments: { inputs: [{ type: 'mouseWheel', delta_y: 0 }] },
+      },
+    });
+    const invalidResponse = await bridge.handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'simulate_preview_input',
+        arguments: { inputs: [{ type: 'mouseWheel', delta_y: 'down' }] },
+      },
+    });
+
+    expect(JSON.parse(zeroResponse.content[0].text).error).toContain(
+      'at least one non-zero'
+    );
+    expect(JSON.parse(invalidResponse.content[0].text).error).toContain(
+      'finite numbers'
+    );
+  });
+
   it.each(['2', 'Num2', 'Digit2'])(
     'normalizes main-keyboard digit alias %s for preview input',
     async key => {

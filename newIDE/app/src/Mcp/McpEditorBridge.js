@@ -2108,6 +2108,39 @@ const resolveSimulatedInput = (raw: any): Object => {
       normalization: { type, button: button || 0 },
     };
   }
+  if (type === 'mouseWheel') {
+    const deltaX = raw.delta_x === undefined ? 0 : raw.delta_x;
+    const deltaY = raw.delta_y === undefined ? 0 : raw.delta_y;
+    const deltaZ = raw.delta_z === undefined ? 0 : raw.delta_z;
+    if (
+      !Number.isFinite(deltaX) ||
+      !Number.isFinite(deltaY) ||
+      !Number.isFinite(deltaZ)
+    ) {
+      return {
+        ok: false,
+        error:
+          'mouseWheel delta_x, delta_y, and delta_z must be finite numbers when provided.',
+      };
+    }
+    if (deltaX === 0 && deltaY === 0 && deltaZ === 0) {
+      return {
+        ok: false,
+        error:
+          'mouseWheel needs at least one non-zero delta_x, delta_y, or delta_z.',
+      };
+    }
+    return {
+      ok: true,
+      input: { type, deltaX, deltaY, deltaZ },
+      normalization: {
+        type,
+        delta_x: deltaX,
+        delta_y: deltaY,
+        delta_z: deltaZ,
+      },
+    };
+  }
   if (type === 'touchStart' || type === 'touchMove') {
     const input = {
       type,

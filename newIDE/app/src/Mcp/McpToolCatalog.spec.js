@@ -257,6 +257,39 @@ describe('McpToolCatalog', () => {
     );
   });
 
+  it('documents mouse-wheel simulation inputs and direction semantics', () => {
+    const tool = getMcpTools({
+      allowWriteTools: false,
+      allowCommandTools: false,
+    }).find(tool => tool.name === 'simulate_preview_input');
+
+    if (!tool) throw new Error('simulate_preview_input tool is missing.');
+    const inputItemProperties =
+      tool.inputSchema.properties.inputs.items.properties;
+    expect(inputItemProperties.type.description).toContain('mouseWheel');
+    expect(inputItemProperties.delta_x).toEqual(
+      expect.objectContaining({ type: 'number' })
+    );
+    expect(inputItemProperties.delta_y).toEqual(
+      expect.objectContaining({
+        type: 'number',
+        description: expect.stringContaining('Positive scrolls up'),
+      })
+    );
+    expect(inputItemProperties.delta_z).toEqual(
+      expect.objectContaining({ type: 'number' })
+    );
+    expect(
+      getMcpToolUsageExamples('simulate_preview_input').simulate_preview_input
+    ).toContainEqual(
+      expect.objectContaining({
+        arguments: {
+          inputs: [{ type: 'mouseWheel', delta_y: -120 }],
+        },
+      })
+    );
+  });
+
   it('exposes generate-catalogs as an awaited, non-destructive catalog write', () => {
     const tool = getMcpTools({
       allowWriteTools: false,
