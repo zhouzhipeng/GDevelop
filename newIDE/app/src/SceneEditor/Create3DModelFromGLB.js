@@ -1,7 +1,10 @@
 // @flow
 import newNameGenerator from '../Utils/NewNameGenerator';
 import optionalRequire from '../Utils/OptionalRequire';
-import { applyResourceDefaults } from '../ResourcesList/ResourceUtils';
+import {
+  applyResourceDefaults,
+  prepareNewResourceForRegistration,
+} from '../ResourcesList/ResourceUtils';
 import {
   getActiveProjectFileDragPath,
   getProjectFilePathFromDataTransfer,
@@ -146,19 +149,13 @@ const add3DModelResource = ({
   const relativeResourceFile = path
     .relative(projectFolder, modelFilePath)
     .replace(/\\/g, '/');
-  const extension = path.extname(relativeResourceFile);
-  const resourceNameBase = relativeResourceFile.slice(
-    0,
-    relativeResourceFile.length - extension.length
-  );
-  const resourceName =
-    newNameGenerator(resourceNameBase, tentativeName =>
-      resourcesManager.hasResource(tentativeName + extension)
-    ) + extension;
-
   const model3DResource = new gd.Model3DResource();
   model3DResource.setFile(relativeResourceFile);
-  model3DResource.setName(resourceName);
+  model3DResource.setName(relativeResourceFile);
+  const resourceName = prepareNewResourceForRegistration(
+    project,
+    model3DResource
+  );
   applyResourceDefaults(project, model3DResource);
   resourcesManager.addResource(model3DResource);
   model3DResource.delete();

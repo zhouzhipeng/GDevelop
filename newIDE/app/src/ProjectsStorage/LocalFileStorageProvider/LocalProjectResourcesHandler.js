@@ -4,9 +4,10 @@ import {
   applyResourceDefaults,
   getLocalResourceFullPath,
   getResourceFilePathStatus,
+  normalizeLocalResourceFilePath,
+  prepareNewResourceForRegistration,
 } from '../../ResourcesList/ResourceUtils';
 import { mapVector } from '../../Utils/MapFor';
-import newNameGenerator from '../../Utils/NewNameGenerator';
 import optionalLazyRequire from '../../Utils/OptionalLazyRequire';
 import optionalRequire from '../../Utils/OptionalRequire';
 
@@ -105,13 +106,11 @@ export const scanForNewResources = async ({
     filesToCheck.delete();
 
     mapVector(filePathsNotInResources, (relativeFilePath: string) => {
-      const resourceName = newNameGenerator(relativeFilePath, name =>
-        resourcesManager.hasResource(name)
-      );
-
       const resource = createResource();
-      resource.setFile(relativeFilePath);
-      resource.setName(resourceName);
+      const resourceFile = normalizeLocalResourceFilePath(relativeFilePath);
+      resource.setFile(resourceFile);
+      resource.setName(resourceFile);
+      const resourceName = prepareNewResourceForRegistration(project, resource);
       applyResourceDefaults(project, resource);
       resourcesManager.addResource(resource);
       resource.delete();

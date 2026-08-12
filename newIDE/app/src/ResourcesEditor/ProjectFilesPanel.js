@@ -41,6 +41,11 @@ import useResourcesChangedWatcher from '../ResourcesList/UseResourcesChangedWatc
 import { findLocalProjectTemplatePath } from '../ProjectCreation/LocalProjectTemplateFinder';
 import { copyTextToClipboard } from '../Utils/Clipboard';
 import { preventGameFramePointerEvents } from '../EmbeddedGame/EmbeddedGameFramePointerEvents';
+import { allResourceKindsAndMetadata } from '../ResourcesList/ResourceSource';
+import {
+  applyResourceDefaults,
+  getUniqueResourceNameFromFilePath,
+} from '../ResourcesList/ResourceUtils';
 import {
   clearActiveProjectFileDragPath,
   projectFileDragDataMimeType,
@@ -128,6 +133,8 @@ type Props = {|
   onSelectProjectFile: (?ProjectFileSelection) => void,
   onViewProjectFileProperties: ProjectFileSelection => void,
   onUnregisterResource: (resource: gdResource) => Promise<void>,
+  onNewResourcesAdded: () => void,
+  onSaveProject: () => Promise<?FileMetadata>,
   onRefreshProjectFiles: () => void | Promise<void>,
   onProjectFilesRefreshed: ProjectFileNode => void,
 |};
@@ -633,6 +640,116 @@ export const isTextLikeFile = (node: ProjectFileNode): boolean =>
     '.layout',
     '.settings',
   ].includes(node.extension);
+
+const getResourceMetadataForFile = (filePath: string): ?any => {
+  if (!path) return null;
+
+  const extension = path
+    .extname(filePath)
+    .replace(/^\./, '')
+    .toLowerCase();
+  if (!extension) return null;
+
+  return (
+    allResourceKindsAndMetadata.find(({ fileExtensions }) =>
+      fileExtensions.includes(extension)
+    ) || null
+  );
+};
+
+export const canCopyLinkedFolderFileToProject = (
+  node: ProjectFileNode
+): boolean =>
+  isLinkedFolderNode(node) &&
+  node.type === 'file' &&
+  !!getResourceMetadataForFile(node.absolutePath);
+
+type CopiedLinkedFolderResource = {|
+  destinationPath: string,
+  resourceName: string,
+  resourceKind: string,
+|};
+
+export const copyLinkedFolderFileToProject = async ({
+  project,
+  sourceAbsolutePath,
+  fs: fsModule = fs,
+  path: pathModule = path,
+}: {|
+  project: gdProject,
+  sourceAbsolutePath: string,
+  fs?: any,
+  path?: any,
+|}): Promise<CopiedLinkedFolderResource> => {
+  if (!fsModule || !pathModule) {
+    throw new Error('Filesystem paths are not supported.');
+  }
+
+  const projectFile = project.getProjectFile();
+  if (!projectFile) {
+    throw new Error('Save the project before copying this resource.');
+  }
+
+  const resourceMetadata = getResourceMetadataForFile(sourceAbsolutePath);
+  if (!resourceMetadata) {
+    throw new Error('This file type cannot be registered as a resource.');
+  }
+
+  const projectRootPath = pathModule.dirname(projectFile);
+  const assetsFolderPath = pathModule.join(projectRootPath, 'assets');
+  const sourceFileName = pathModule.basename(sourceAbsolutePath);
+  const resourcesManager = project.getResourcesManager();
+  const reservedResourceNames = new Set<string>();
+  let resourceName = getUniqueResourceNameFromFilePath(
+    resourcesManager,
+    sourceFileName,
+    reservedResourceNames
+  );
+  while (fsModule.existsSync(pathModule.join(assetsFolderPath, resourceName))) {
+    reservedResourceNames.add(resourceName);
+    resourceName = getUniqueResourceNameFromFilePath(
+      resourcesManager,
+      sourceFileName,
+      reservedResourceNames
+    );
+  }
+  const destinationPath = pathModule.join(assetsFolderPath, resourceName);
+  const resourceFile = normalizeSlashes(
+    pathModule.relative(projectRootPath, destinationPath)
+  );
+
+  await fsModule.promises.mkdir(assetsFolderPath, { recursive: true });
+  await fsModule.promises.copyFile(
+    sourceAbsolutePath,
+    destinationPath,
+    fsModule.constants ? fsModule.constants.COPYFILE_EXCL : 0
+  );
+
+  const newResource = resourceMetadata.createNewResource();
+  try {
+    newResource.setName(resourceName);
+    newResource.setFile(resourceFile);
+    applyResourceDefaults(project, newResource);
+    if (!resourcesManager.addResource(newResource)) {
+      throw new Error(`A resource named "${resourceName}" already exists.`);
+    }
+  } catch (error) {
+    try {
+      await fsModule.promises.unlink(destinationPath);
+    } catch (cleanupError) {
+      // The resource registration error is more useful than a cleanup error.
+    }
+    throw error;
+  } finally {
+    newResource.delete();
+  }
+
+  return {
+    destinationPath,
+    resourceName,
+    resourceKind: resourceMetadata.kind,
+  };
+};
 
 const getIconForNode = (node: ProjectFileNode): React.Node => {
   if (isLinkedFoldersRootNode(node) || isLinkedFolderRootNode(node)) {
@@ -1698,6 +1815,8 @@ const ProjectFilesPanelContent: React.ComponentType<{
       onSelectProjectFile,
       onViewProjectFileProperties,
       onUnregisterResource,
+      onNewResourcesAdded,
+      onSaveProject,
       onRefreshProjectFiles,
       onProjectFilesRefreshed,
     },
@@ -2778,6 +2897,59 @@ const ProjectFilesPanelContent: React.ComponentType<{
       [showAlert]
     );
 
+    const copyLinkedFileToProject = React.useCallback(
+      async (node: ProjectFileNode) => {
+        if (!rootNode || !canCopyLinkedFolderFileToProject(node)) return;
+
+        let copiedResource;
+        try {
+          copiedResource = await copyLinkedFolderFileToProject({
+            project,
+            sourceAbsolutePath: node.absolutePath,
+          });
+        } catch (error) {
+          await showAlert({
+            title: t`Unable to copy to project`,
+            message: `The file could not be copied and registered as a resource:\n\n${
+              error.message
+            }`,
+          });
+          return;
+        }
+
+        onNewResourcesAdded();
+        await onSaveProject();
+        setOpenedNodeIds(openedNodeIds =>
+          Array.from(
+            new Set([
+              normalizeSlashes(path.dirname(copiedResource.destinationPath)),
+              ...openedNodeIds,
+            ])
+          )
+        );
+        const refreshedRoot = (await refresh()) || rootNode;
+        const copiedNode = findNodeByAbsolutePath(
+          refreshedRoot,
+          copiedResource.destinationPath
+        );
+        if (copiedNode) {
+          onSelectProjectFile({
+            node: copiedNode,
+            resource: getResourceFromNode(project, copiedNode),
+          });
+        }
+      },
+      [
+        onNewResourcesAdded,
+        onSaveProject,
+        onSelectProjectFile,
+        project,
+        refresh,
+        rootNode,
+        showAlert,
+      ]
+    );
+
     const addLinkedFolderPath = React.useCallback(
       async (folderPath: string) => {
         if (!fs || !path || !rootNode) return;
@@ -3050,6 +3222,15 @@ const ProjectFilesPanelContent: React.ComponentType<{
               label: i18n._(t`View properties`),
               click: () => viewPropertiesForNode(node),
             },
+            ...(node.type === 'file'
+              ? [
+                  {
+                    label: i18n._(t`Copy to project`),
+                    enabled: canCopyLinkedFolderFileToProject(node),
+                    click: () => copyLinkedFileToProject(node),
+                  },
+                ]
+              : []),
             {
               label:
                 node.type === 'folder'
@@ -3146,6 +3327,7 @@ const ProjectFilesPanelContent: React.ComponentType<{
       [
         deleteProjectFolder,
         deleteProjectFile,
+        copyLinkedFileToProject,
         copyNodeAbsolutePath,
         openAddLinkedFolderDialog,
         openFolderDialogForNode,

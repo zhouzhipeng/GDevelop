@@ -15,6 +15,8 @@ import { ResourceStore } from '../AssetStore/ResourceStore';
 import {
   DEFAULT_IMPORTED_RESOURCES_FOLDER,
   copyAllToProjectFolder,
+  normalizeLocalResourceFilePath,
+  prepareNewResourceForRegistration,
 } from './ResourceUtils';
 import optionalRequire from '../Utils/OptionalRequire';
 import {
@@ -179,13 +181,18 @@ const localResourceSources: Array<ResourceSource> = [
           filesWithEmbeddedResources
         );
 
+        const reservedResourceNames = new Set<string>();
         return filePaths.map(filePath => {
           const newResource = createNewResource();
-          newResource.setFile(
-            path.relative(projectPath, filePath).replace(/\\/g, '/')
+          const resourceFile = normalizeLocalResourceFilePath(
+            path.relative(projectPath, filePath)
           );
-          newResource.setName(
-            path.relative(projectPath, filePath).replace(/\\/g, '/')
+          newResource.setFile(resourceFile);
+          newResource.setName(resourceFile);
+          prepareNewResourceForRegistration(
+            project,
+            newResource,
+            reservedResourceNames
           );
 
           const filePathWithMapping = newToOldFilePaths.has(filePath)

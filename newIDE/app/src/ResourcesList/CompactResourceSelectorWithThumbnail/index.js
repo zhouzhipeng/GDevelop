@@ -17,7 +17,10 @@ import Edit from '../../UI/CustomSvgIcons/Edit';
 import ElementWithMenu from '../../UI/Menu/ElementWithMenu';
 import { t } from '@lingui/macro';
 import { ExternalEditorOpenedDialog } from '../../UI/ExternalEditorOpenedDialog';
-import { applyResourceDefaults } from '../ResourceUtils';
+import {
+  applyResourceDefaults,
+  prepareNewResourceForRegistration,
+} from '../ResourceUtils';
 import useResourcesChangedWatcher from '../UseResourcesChangedWatcher';
 import useAlertDialog from '../../UI/Alert/useAlertDialog';
 import { showErrorBox } from '../../UI/Messages/MessageBox';
@@ -108,14 +111,14 @@ export const CompactResourceSelectorWithThumbnail = ({
   );
 
   const registerProjectAssetResourceName = React.useCallback(
-    (resourceNameToRegister: string): boolean => {
+    (resourceNameToRegister: string): ?string => {
       if (!includeProjectAssetsFolder || !resourceNameToRegister) {
-        return false;
+        return null;
       }
 
       const resourcesManager = project.getResourcesManager();
       if (hasMatchingResource(resourceNameToRegister)) {
-        return true;
+        return resourceNameToRegister;
       }
 
       const projectAssetResource = createProjectAssetResourceFromResourceName({
@@ -123,13 +126,17 @@ export const CompactResourceSelectorWithThumbnail = ({
         resourceKind,
         resourceName: resourceNameToRegister,
       });
-      if (!projectAssetResource) return false;
+      if (!projectAssetResource) return null;
+      const registeredResourceName = prepareNewResourceForRegistration(
+        project,
+        projectAssetResource
+      );
       if (
         resourceNameFilter &&
-        !resourceNameFilter(resourceNameToRegister, projectAssetResource)
+        !resourceNameFilter(registeredResourceName, projectAssetResource)
       ) {
         projectAssetResource.delete();
-        return false;
+        return null;
       }
 
       applyResourceDefaults(project, projectAssetResource);
@@ -144,7 +151,9 @@ export const CompactResourceSelectorWithThumbnail = ({
         forceUpdate();
       }
 
-      return hasMatchingResource(resourceNameToRegister);
+      return hasMatchingResource(registeredResourceName)
+        ? registeredResourceName
+        : null;
     },
     [
       hasMatchingResource,
@@ -158,20 +167,14 @@ export const CompactResourceSelectorWithThumbnail = ({
     ]
   );
 
-  React.useEffect(
-    () => {
-      if (resourceName) registerProjectAssetResourceName(resourceName);
-    },
-    [resourceName, registerProjectAssetResourceName]
-  );
-
   const _onChange = React.useCallback(
     (value: string) => {
-      if (value === resourceName) {
+      const registeredResourceName = registerProjectAssetResourceName(value);
+      const resolvedResourceName = registeredResourceName || value;
+      if (resolvedResourceName === resourceName) {
         return;
       }
-      registerProjectAssetResourceName(value);
-      onChange(value);
+      onChange(resolvedResourceName);
       if (resourceManagementProps.onResourceUsageChanged) {
         resourceManagementProps.onResourceUsageChanged();
       }
@@ -182,6 +185,13 @@ export const CompactResourceSelectorWithThumbnail = ({
       onChange,
       resourceManagementProps,
     ]
+  );
+
+  React.useEffect(
+    () => {
+      if (resourceName) _onChange(resourceName);
+    },
+    [resourceName, _onChange]
   );
 
   // TODO: move in a hook?
@@ -209,6 +219,9 @@ export const CompactResourceSelectorWithThumbnail = ({
         if (!selectedResourceSource) return;
 
         const resource = selectedResources[0];
+        if (selectedResourceSource.shouldCreateResource) {
+          prepareNewResourceForRegistration(project, resource);
+        }
 
         const resourceName: string = resource.getName();
         if (resourceNameFilter && !resourceNameFilter(resourceName, resource)) {

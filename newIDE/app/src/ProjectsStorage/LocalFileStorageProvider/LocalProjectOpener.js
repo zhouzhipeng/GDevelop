@@ -7,6 +7,7 @@ import {
   serializeToJSObject,
   unserializeFromJSObject,
 } from '../../Utils/Serializer';
+import { normalizeProjectLocalResourceFilePaths } from '../../ResourcesList/ResourceUtils';
 import {
   getLegacyMigrationSourceHash,
   hashLegacySource,
@@ -221,6 +222,7 @@ const normalizeLegacyProjectWithCurrentSerializer = (
   const project = gd.ProjectHelper.createNewGDJSProject();
   try {
     unserializeFromJSObject(project, legacyProject);
+    normalizeProjectLocalResourceFilePaths(project);
     return serializeToJSObject(project);
   } finally {
     project.delete();

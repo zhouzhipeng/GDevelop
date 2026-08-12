@@ -1,7 +1,11 @@
 // @flow
 import {
   copyAllToProjectFolder,
+  getUniqueResourceNameFromFilePath,
+  normalizeLocalResourceFilePath,
+  normalizeProjectLocalResourceFilePaths,
   parseLocalFilePathOrExtensionFromMetadata,
+  prepareNewResourceForRegistration,
   removeAllUnusedResources,
   renameResourcesInProject,
   updateResourceJsonMetadata,
@@ -31,6 +35,157 @@ const addNewAnimationWithImageToSpriteObject = (
 };
 
 describe('ResourceUtils', () => {
+  describe('new resource names', () => {
+    let project = null;
+
+    beforeEach(() => {
+      project = gd.ProjectHelper.createNewGDJSProject();
+    });
+
+    afterEach(() => {
+      if (project) project.delete();
+      project = null;
+    });
+
+    const addImageResource = (name: string, file: string = name) => {
+      const resource = new gd.ImageResource();
+      resource.setName(name);
+      resource.setFile(file);
+      // $FlowFixMe[incompatible-use]
+      project.getResourcesManager().addResource(resource);
+      resource.delete();
+    };
+
+    it('uses only the cross-platform filename', () => {
+      // $FlowFixMe[incompatible-use]
+      const resourcesManager = project.getResourcesManager();
+      expect(
+        getUniqueResourceNameFromFilePath(
+          resourcesManager,
+          'assets/models/model.glb'
+        )
+      ).toBe('model.glb');
+      expect(
+        getUniqueResourceNameFromFilePath(
+          resourcesManager,
+          'assets\\models\\model.glb'
+        )
+      ).toBe('model.glb');
+    });
+
+    it('adds a numeric suffix before the extension', () => {
+      addImageResource('model.glb');
+      addImageResource('model2.glb');
+
+      expect(
+        getUniqueResourceNameFromFilePath(
+          // $FlowFixMe[incompatible-use]
+          project.getResourcesManager(),
+          'characters/model.glb'
+        )
+      ).toBe('model3.glb');
+      expect(
+        getUniqueResourceNameFromFilePath(
+          // $FlowFixMe[incompatible-use]
+          project.getResourcesManager(),
+          'characters/model2.glb'
+        )
+      ).toBe('model3.glb');
+    });
+
+    it('adds a numeric suffix to an extensionless filename', () => {
+      addImageResource('LICENSE');
+
+      expect(
+        getUniqueResourceNameFromFilePath(
+          // $FlowFixMe[incompatible-use]
+          project.getResourcesManager(),
+          'licenses/LICENSE'
+        )
+      ).toBe('LICENSE2');
+    });
+
+    it('reserves names allocated in the same batch', () => {
+      const reservedResourceNames = new Set<string>();
+      // $FlowFixMe[incompatible-use]
+      const resourcesManager = project.getResourcesManager();
+      const firstName = getUniqueResourceNameFromFilePath(
+        resourcesManager,
+        'first/model.glb',
+        reservedResourceNames
+      );
+      reservedResourceNames.add(firstName);
+      const secondName = getUniqueResourceNameFromFilePath(
+        resourcesManager,
+        'second/model.glb',
+        reservedResourceNames
+      );
+
+      expect([firstName, secondName]).toEqual(['model.glb', 'model2.glb']);
+    });
+
+    it('prepares a resource immediately before registration', () => {
+      const resource = new gd.ImageResource();
+      resource.setName('assets\\images\\player.png');
+      resource.setFile('assets\\images\\player.png');
+
+      expect(
+        prepareNewResourceForRegistration(
+          // $FlowFixMe[incompatible-use]
+          project,
+          resource
+        )
+      ).toBe('player.png');
+      expect(resource.getName()).toBe('player.png');
+      expect(resource.getFile()).toBe('assets/images/player.png');
+      resource.delete();
+    });
+
+    it('normalizes only local files and preserves all existing names', () => {
+      addImageResource(
+        'legacy\\images\\player.png',
+        'legacy\\images\\player.png'
+      );
+      addImageResource(
+        'legacy/url-player.png',
+        'https://example.com/images\\player.png'
+      );
+
+      expect(
+        normalizeProjectLocalResourceFilePaths(
+          // $FlowFixMe[incompatible-use]
+          project
+        )
+      ).toBe(false);
+      // $FlowFixMe[incompatible-use]
+      const resourcesManager = project.getResourcesManager();
+      expect(
+        resourcesManager.getResource('legacy\\images\\player.png').getFile()
+      ).toBe('legacy/images/player.png');
+      expect(
+        resourcesManager.getResource('legacy/url-player.png').getFile()
+      ).toBe('https://example.com/images\\player.png');
+      expect(resourcesManager.hasResource('legacy\\images\\player.png')).toBe(
+        true
+      );
+      expect(
+        normalizeProjectLocalResourceFilePaths(
+          // $FlowFixMe[incompatible-use]
+          project
+        )
+      ).toBe(false);
+    });
+
+    it('normalizes a local path without rewriting a URL payload', () => {
+      expect(normalizeLocalResourceFilePath('assets\\model.glb')).toBe(
+        'assets/model.glb'
+      );
+      expect(normalizeLocalResourceFilePath('data:image/svg+xml,a\\b')).toBe(
+        'data:image/svg+xml,a\\b'
+      );
+    });
+  });
+
   describe('copyAllToProjectFolder', () => {
     let tempDir: ?string = null;
 

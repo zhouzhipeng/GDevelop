@@ -27,6 +27,10 @@ import AlertMessage from '../UI/AlertMessage';
 import { getOrCreate } from '../Utils/Map';
 import { unserializeResourceFromJSObject } from '../Utils/Serializer';
 import { complyVariantsToEventsBasedObjectOf } from '../AssetStore/InstallAsset';
+import {
+  prepareNewResourceForRegistration,
+  renameResourcesInProject,
+} from '../ResourcesList/ResourceUtils';
 
 const gd: libGDevelop = global.gd;
 
@@ -686,11 +690,9 @@ const ObjectImporterDialog = ({
         }
       }
       let hasAddedAnyResource = false;
+      const resourceNewNames: { [string]: string } = {};
       const resourcesManager: gdResourcesContainer = project.getResourcesManager();
       for (const [resourceName, serializedResource] of allRequiredResources) {
-        if (resourcesManager.hasResource(resourceName)) {
-          continue;
-        }
         const resourceKindMetadata = allResourceKindsAndMetadata.find(
           resourceKind => resourceKind.kind === serializedResource.kind
         );
@@ -711,8 +713,13 @@ const ObjectImporterDialog = ({
           onProgress: () => {},
         });
         newResource.setFile(URL.createObjectURL(resourceBlob));
+        const newResourceName = prepareNewResourceForRegistration(
+          project,
+          newResource
+        );
 
         resourcesManager.addResource(newResource);
+        resourceNewNames[resourceName] = newResourceName;
         hasAddedAnyResource = true;
         newResource.delete();
       }
@@ -779,6 +786,14 @@ const ObjectImporterDialog = ({
         // The name was overwritten after unserialization.
         object.setName(newName);
         object.resetPersistentUuid();
+      }
+
+      if (
+        Object.keys(resourceNewNames).some(
+          resourceName => resourceNewNames[resourceName] !== resourceName
+        )
+      ) {
+        renameResourcesInProject(project, resourceNewNames);
       }
 
       onClose();

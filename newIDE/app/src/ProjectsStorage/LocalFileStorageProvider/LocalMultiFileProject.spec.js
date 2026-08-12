@@ -1463,6 +1463,55 @@ describe('Local multi-file project storage', () => {
     );
   });
 
+  test('legacy migration preserves resource names and normalizes only local files', async () => {
+    const legacyPath = path.join(temporaryDirectory, 'game.json');
+    const { constants, ...projectContent } = JSON.parse(
+      JSON.stringify(projectFixture)
+    );
+    const legacyResourceName = 'legacy\\models\\model.glb';
+    projectContent.resources.resources.push({
+      kind: 'model3D',
+      name: legacyResourceName,
+      file: 'assets\\models\\model.glb',
+      metadata: '',
+      userAdded: true,
+    });
+    projectContent.resources.resources.push({
+      kind: 'image',
+      name: 'legacy/url-image.png',
+      file: 'https://example.com/images\\image.png',
+      metadata: '',
+      smoothed: true,
+      userAdded: true,
+    });
+    const legacySource = `${JSON.stringify(projectContent, null, 2)}\n`;
+    fs.writeFileSync(legacyPath, legacySource, 'utf8');
+    fs.writeFileSync(
+      path.join(temporaryDirectory, 'constants.toml'),
+      '',
+      'utf8'
+    );
+
+    const result = await onOpen({ fileIdentifier: legacyPath });
+
+    expect(fs.readFileSync(legacyPath, 'utf8')).toBe(legacySource);
+    expect(result.constants).toEqual(constants);
+    const migratedLocalResource = result.content.resources.resources.find(
+      resource => resource.name === legacyResourceName
+    );
+    expect(migratedLocalResource).toMatchObject({
+      name: legacyResourceName,
+      file: 'assets/models/model.glb',
+    });
+    const migratedUrlResource = result.content.resources.resources.find(
+      resource => resource.name === 'legacy/url-image.png'
+    );
+    expect(migratedUrlResource).toMatchObject({
+      name: 'legacy/url-image.png',
+      file: 'https://example.com/images\\image.png',
+    });
+  });
+
   test('resolves managed paths inside the project root', () => {
     expect(
       resolveGameUriToPath(temporaryDirectory, 'game://scenes/Main/Main.events')
@@ -1798,6 +1847,71 @@ column = "editor only"
     expect(
       fs.existsSync(path.join(temporaryDirectory, '.gdevelop/project-api.d.ts'))
     ).toBe(true);
+    project.delete();
+  });
+
+  test('normalizes local resource files while preserving legacy resource names on save', async () => {
+    const gd: libGDevelop = global.gd;
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
+    const legacyResourceName = 'assets\\models\\model.glb';
+    const resource = new gd.Model3DResource();
+    resource.setName(legacyResourceName);
+    resource.setFile('assets\\models\\model.glb');
+    project.getResourcesManager().addResource(resource);
+    resource.delete();
+
+    await onSaveProject(
+      project,
+      ({
+        fileIdentifier: entryPath,
+        name: project.getName(),
+        gameId: project.getProjectUuid(),
+        lastModifiedDate: 0,
+      }: any),
+      undefined,
+      {
+        showAlert: jest.fn(),
+        showConfirmation: jest.fn(),
+      }
+    );
+
+    expect(project.getResourcesManager().hasResource(legacyResourceName)).toBe(
+      true
+    );
+    expect(
+      project
+        .getResourcesManager()
+        .getResource(legacyResourceName)
+        .getFile()
+    ).toBe('assets/models/model.glb');
+
+    const reopened = await openMultiFileProject(entryPath);
+    expect(reopened.resources.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: legacyResourceName,
+          file: 'assets/models/model.glb',
+        }),
+      ])
+    );
+    const generatedProject = JSON.parse(
+      fs.readFileSync(
+        path.join(
+          temporaryDirectory,
+          ...GENERATED_LEGACY_PROJECT_RELATIVE_PATH.split('/')
+        ),
+        'utf8'
+      )
+    );
+    expect(generatedProject.resources.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: legacyResourceName,
+          file: 'assets/models/model.glb',
+        }),
+      ])
+    );
     project.delete();
   });
 

@@ -39,7 +39,10 @@ import CircularProgress from '../../UI/CircularProgress';
 import SuccessFilled from '../../UI/CustomSvgIcons/SuccessFilled';
 import ErrorFilled from '../../UI/CustomSvgIcons/ErrorFilled';
 import ShieldChecked from '../../UI/CustomSvgIcons/ShieldChecked';
-import { applyResourceDefaults } from '../../ResourcesList/ResourceUtils';
+import {
+  applyResourceDefaults,
+  prepareNewResourceForRegistration,
+} from '../../ResourcesList/ResourceUtils';
 import { type ResourceSource } from '../../ResourcesList/ResourceSource';
 import {
   validateModel3DRig,
@@ -633,18 +636,21 @@ const Model3DEditor = ({
         );
         if (!selectedResourceSource) return;
 
-        const selectedResourceNames = selectedResources.map(resource =>
-          resource.getName()
-        );
         let hasCreatedAnyResource = false;
         if (selectedResourceSource.shouldCreateResource) {
           selectedResources.forEach(resource => {
+            prepareNewResourceForRegistration(project, resource);
             applyResourceDefaults(project, resource);
             const hasCreatedResource = project
               .getResourcesManager()
               .addResource(resource);
             hasCreatedAnyResource = hasCreatedAnyResource || hasCreatedResource;
           });
+        }
+        const selectedResourceNames = selectedResources.map(resource =>
+          resource.getName()
+        );
+        if (selectedResourceSource.shouldCreateResource) {
           selectedResources.forEach(resource => resource.delete());
           if (hasCreatedAnyResource) {
             await resourceManagementProps.onFetchNewlyAddedResources();

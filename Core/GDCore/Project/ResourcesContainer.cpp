@@ -19,7 +19,15 @@
 #include "GDCore/Tools/Log.h"
 
 namespace {
+bool IsOpaqueResourceUrl(const gd::String &path) {
+  return path.rfind("http://", 0) == 0 || path.rfind("https://", 0) == 0 ||
+         path.rfind("ftp://", 0) == 0 || path.rfind("blob:", 0) == 0 ||
+         path.rfind("data:", 0) == 0;
+}
+
 gd::String NormalizePathSeparator(const gd::String &path) {
+  if (IsOpaqueResourceUrl(path)) return path;
+
   gd::String normalizedPath = path;
   while (normalizedPath.find('\\') != gd::String::npos)
     normalizedPath.replace(normalizedPath.find('\\'), 1, "/");

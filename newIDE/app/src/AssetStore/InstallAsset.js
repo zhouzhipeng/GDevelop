@@ -14,6 +14,7 @@ import { unserializeFromJSObject } from '../Utils/Serializer';
 import { toNewGdMapStringString } from '../Utils/MapStringString';
 import { getInsertionParentAndPositionFromSelection } from '../Utils/ObjectFolders';
 import { allResourceKindsAndMetadata } from '../ResourcesList/ResourceSource';
+import { getUniqueResourceNameFromFilePath } from '../ResourcesList/ResourceUtils';
 import {
   getRequiredExtensions,
   checkRequiredExtensionsUpdate,
@@ -102,8 +103,9 @@ export const installResource = (
     );
   }
 
-  const newName = newNameGenerator(originalResourceName, name =>
-    resourcesManager.hasResource(name)
+  const newName = getUniqueResourceNameFromFilePath(
+    resourcesManager,
+    originalResourceName
   );
   newResource.setName(newName);
   newResource.setOrigin(resourceOriginCleanedName, resourceOriginIdentifier);

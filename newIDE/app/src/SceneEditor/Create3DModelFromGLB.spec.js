@@ -120,7 +120,7 @@ describe('Create3DModelFromGLB', () => {
       .replace(/\r\n/g, '\n');
 
   beforeAll(() => {
-    const translate = (message) => message;
+    const translate = message => message;
     const extension = scene3DExtensionModule.createExtension(translate, gd);
     gd.JsPlatform.get().addNewExtension(extension);
   });
@@ -148,7 +148,7 @@ describe('Create3DModelFromGLB', () => {
       modelFilePath: sourceFile,
     });
 
-    expect(resourceName).toBe('assets/Crate.glb');
+    expect(resourceName).toBe('Crate.glb');
     expect(project.getResourcesManager().hasResource(resourceName)).toBe(true);
     expect(fs.existsSync(path.join(folder, 'assets', 'Crate.glb'))).toBe(true);
   });
@@ -167,12 +167,10 @@ describe('Create3DModelFromGLB', () => {
 
     expect(object.getName()).toBe('Hero_Ship');
     expect(object.getType()).toBe('Scene3D::Model3DObject');
-    expect(
-      project.getResourcesManager().hasResource('assets/Hero Ship.glb')
-    ).toBe(true);
-    const resource = project
-      .getResourcesManager()
-      .getResource('assets/Hero Ship.glb');
+    expect(project.getResourcesManager().hasResource('Hero Ship.glb')).toBe(
+      true
+    );
+    const resource = project.getResourcesManager().getResource('Hero Ship.glb');
     expect(resource.getKind()).toBe('model3D');
     expect(resource.getFile()).toBe('assets/Hero Ship.glb');
     expect(fs.existsSync(path.join(folder, 'assets', 'Hero Ship.glb'))).toBe(
@@ -182,7 +180,7 @@ describe('Create3DModelFromGLB', () => {
       gd
         .asModel3DConfiguration(object.getConfiguration())
         .getModelResourceName()
-    ).toBe('assets/Hero Ship.glb');
+    ).toBe('Hero Ship.glb');
   });
 
   test('creates unique resource and object names', async () => {
@@ -203,9 +201,7 @@ describe('Create3DModelFromGLB', () => {
     });
 
     expect(secondObject.getName()).toBe('Hero2');
-    expect(project.getResourcesManager().hasResource('assets/Hero2.glb')).toBe(
-      true
-    );
+    expect(project.getResourcesManager().hasResource('Hero2.glb')).toBe(true);
   });
 
   test('extracts supported local file paths from a native drop data transfer', () => {
@@ -231,7 +227,7 @@ describe('Create3DModelFromGLB', () => {
       files: [heroFile, notesFile],
     };
     const webUtils = {
-      getPathForFile: (file) =>
+      getPathForFile: file =>
         file === heroFile ? 'C:\\project\\Hero.glb' : 'C:\\project\\notes.txt',
     };
 
@@ -243,7 +239,7 @@ describe('Create3DModelFromGLB', () => {
   test('extracts supported GLB paths from project file drag data', () => {
     const dataTransfer = {
       types: [projectFileDragDataMimeType],
-      getData: (mimeType) =>
+      getData: mimeType =>
         mimeType === projectFileDragDataMimeType
           ? JSON.stringify({
               type: 'file',
@@ -366,8 +362,9 @@ describe('Create3DModelFromGLB', () => {
     const unloadResourceStart = model3DManagerSource.indexOf(
       'unloadResource(resourceData: ResourceData): void'
     );
-    const unloadResourceSource =
-      model3DManagerSource.slice(unloadResourceStart);
+    const unloadResourceSource = model3DManagerSource.slice(
+      unloadResourceStart
+    );
 
     expect(model3DManagerSource).toContain(
       'loadedThreeModel.scene.children.length > 0'

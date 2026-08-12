@@ -33,7 +33,10 @@ import {
 } from './Utils/SpriteObjectHelper';
 import Edit from '../../../UI/CustomSvgIcons/Edit';
 import { groupResourcesByAnimations } from './AnimationImportHelper';
-import { applyResourceDefaults } from '../../../ResourcesList/ResourceUtils';
+import {
+  applyResourceDefaults,
+  prepareNewResourceForRegistration,
+} from '../../../ResourcesList/ResourceUtils';
 import { ExternalEditorOpenedDialog } from '../../../UI/ExternalEditorOpenedDialog';
 import {
   type ResourceExternalEditor,
@@ -720,6 +723,7 @@ const AnimationList: React.ComponentType<{
         if (selectedResourceSource.shouldCreateResource) {
           let hasCreatedAnyResource = false;
           selectedResources.forEach(resource => {
+            prepareNewResourceForRegistration(project, resource);
             applyResourceDefaults(project, resource);
             const hasCreatedResource = project
               .getResourcesManager()

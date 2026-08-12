@@ -48,6 +48,16 @@ describe('ResourcesEditor', () => {
     );
   });
 
+  it('passes the project save callback to copied linked resources', () => {
+    const editorSource = getSource('index.js');
+    const containerSource = getSource(
+      '../MainFrame/EditorContainers/ResourcesEditorContainer.js'
+    );
+
+    expect(containerSource).toContain('onSave={this.props.onSave}');
+    expect(editorSource).toContain('onSaveProject={this.props.onSave}');
+  });
+
   it('clears parsed GLB data when refreshing project files', () => {
     const source = getSource('index.js');
 

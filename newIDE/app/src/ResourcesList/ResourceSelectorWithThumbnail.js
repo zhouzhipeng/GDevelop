@@ -26,6 +26,7 @@ import {
   copyAllToProjectFolder,
   DEFAULT_IMPORTED_RESOURCES_FOLDER,
   isURL,
+  prepareNewResourceForRegistration,
 } from './ResourceUtils';
 import { showErrorBox } from '../UI/Messages/MessageBox';
 
@@ -207,12 +208,13 @@ export const importDroppedResourceFileAsProjectResource = async ({
     newToOldFilePaths,
     importedResourcesFolder || DEFAULT_IMPORTED_RESOURCES_FOLDER
   );
-  const resourceName = path
+  const resourceFile = path
     .relative(projectPath, resourceFilePath || filePath)
     .replace(/\\/g, '/');
   const resource = createNewResource();
-  resource.setFile(resourceName);
-  resource.setName(resourceName);
+  resource.setFile(resourceFile);
+  resource.setName(resourceFile);
+  const resourceName = prepareNewResourceForRegistration(project, resource);
   applyResourceDefaults(project, resource);
   const hasCreatedResource = resourcesManager.addResource(resource);
   resource.delete();

@@ -146,7 +146,7 @@ describe('ResourceSelectorWithThumbnail', () => {
       filePath: sourceFile,
     });
 
-    expect(resourceName).toBe('assets/Player.glb');
+    expect(resourceName).toBe('Player.glb');
     expect(hasCreatedResource).toBe(true);
     expect(project.getResourcesManager().hasResource(resourceName)).toBe(true);
     expect(
@@ -173,7 +173,7 @@ describe('ResourceSelectorWithThumbnail', () => {
       filePath: sourceFile,
     });
 
-    expect(resourceName).toBe('assets/Player.png');
+    expect(resourceName).toBe('Player.png');
     expect(hasCreatedResource).toBe(true);
     expect(
       project

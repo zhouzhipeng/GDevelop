@@ -1,7 +1,10 @@
 // @flow
 import newNameGenerator from '../Utils/NewNameGenerator';
 import optionalRequire from '../Utils/OptionalRequire';
-import { applyResourceDefaults } from '../ResourcesList/ResourceUtils';
+import {
+  applyResourceDefaults,
+  prepareNewResourceForRegistration,
+} from '../ResourcesList/ResourceUtils';
 import { getProjectFilePathFromDataTransfer } from '../Utils/ProjectFileDragData';
 
 const gd: libGDevelop = global.gd;
@@ -197,19 +200,13 @@ const addImageResource = ({
   const relativeResourceFile = path
     .relative(projectFolder, imageFilePath)
     .replace(/\\/g, '/');
-  const extension = path.extname(relativeResourceFile);
-  const resourceNameBase = relativeResourceFile.slice(
-    0,
-    relativeResourceFile.length - extension.length
-  );
-  const resourceName =
-    newNameGenerator(resourceNameBase, tentativeName =>
-      resourcesManager.hasResource(tentativeName + extension)
-    ) + extension;
-
   const imageResource = new gd.ImageResource();
   imageResource.setFile(relativeResourceFile);
-  imageResource.setName(resourceName);
+  imageResource.setName(relativeResourceFile);
+  const resourceName = prepareNewResourceForRegistration(
+    project,
+    imageResource
+  );
   applyResourceDefaults(project, imageResource);
   resourcesManager.addResource(imageResource);
   imageResource.delete();

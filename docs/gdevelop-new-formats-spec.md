@@ -841,6 +841,11 @@ Version 3 does not automatically rewrite legacy runtime asset/resource paths
 to `game://`; this rule governs managed new-format source references stored in
 settings.
 
+Local resource `file` values are the exception for path separators: the
+multi-file writer serializes them with `/` on every operating system. URL-backed
+`file` values (`http:`, `https:`, `ftp:`, `blob:`, and `data:`) remain opaque.
+This file-path normalization never changes an existing resource `name`.
+
 ---
 
 ## 6. `project.gdevelop`, `resources.settings`, and `constants.toml`
@@ -956,6 +961,18 @@ name = "Player.png"
 smoothed = true
 userAdded = true
 ```
+
+For a newly registered file-backed resource, `name` is the source filename
+only, without its directory. A conflict is resolved with the lowest available
+numeric suffix immediately before the final extension: `model.glb`,
+`model2.glb`, `model3.glb`, and so on. The physical `file` path is independent
+and can still contain directories.
+
+Resource names loaded from an existing project are opaque legacy identifiers.
+Open, Save, Save As, legacy migration, preview, and export preserve them
+byte-for-byte, including any `/` or `\` characters. Deserialization is not new
+resource registration, and the writer must not infer or enforce the new naming
+convention on loaded names.
 
 `resources.settings` is discovered through its fixed root path. Neither file
 references the other. The `kind` and `settingsFormatVersion` fields are removed

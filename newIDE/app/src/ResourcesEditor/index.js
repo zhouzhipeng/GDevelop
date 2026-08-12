@@ -180,6 +180,7 @@ type Props = {|
   resourceManagementProps: ResourceManagementProps,
   fileMetadata: ?FileMetadata,
   storageProvider: StorageProvider,
+  onSave: () => Promise<?FileMetadata>,
 |};
 
 export type ResourcesEditorProjectFileSelectionSnapshot = {|
@@ -747,6 +748,10 @@ export default class ResourcesEditor extends React.Component<Props, State> {
               onSelectProjectFile={this._onProjectFileSelected}
               onViewProjectFileProperties={this._openPropertiesDialog}
               onUnregisterResource={this.deleteResource}
+              onNewResourcesAdded={
+                this.props.resourceManagementProps.onNewResourcesAdded
+              }
+              onSaveProject={this.props.onSave}
               onRefreshProjectFiles={
                 this.refreshResourcesListAndRemoveUnusedResources
               }

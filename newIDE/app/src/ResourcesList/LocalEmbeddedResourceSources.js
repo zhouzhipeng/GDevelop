@@ -1,7 +1,11 @@
 // @flow
 import optionalRequire from '../Utils/OptionalRequire';
 import newNameGenerator from '../Utils/NewNameGenerator';
-import { isPathInFolder, isPathInProjectFolder } from './ResourceUtils';
+import {
+  isPathInFolder,
+  isPathInProjectFolder,
+  prepareNewResourceForRegistration,
+} from './ResourceUtils';
 import { createNewResource } from './ResourceSource';
 const fs = optionalRequire('fs');
 const path = optionalRequire('path');
@@ -153,6 +157,10 @@ export function createAndMapEmbeddedResources(
       if (theEmbeddedResource) {
         theEmbeddedResource.setName(resourceName);
         theEmbeddedResource.setFile(resourceName);
+        resourceName = prepareNewResourceForRegistration(
+          project,
+          theEmbeddedResource
+        );
 
         // $FlowFixMe[prop-missing]
         mapping[relPath] = resourceName;
@@ -173,6 +181,7 @@ export function createAndMapEmbeddedResources(
         }
 
         project.getResourcesManager().addResource(theEmbeddedResource);
+        theEmbeddedResource.delete();
       }
     }
 
