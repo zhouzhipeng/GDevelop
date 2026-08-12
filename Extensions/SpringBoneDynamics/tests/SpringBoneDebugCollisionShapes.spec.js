@@ -81,6 +81,9 @@ describe('Spring bone debug collision shapes', function () {
       ],
       pointCount: 2,
     };
+    unsafeBehavior._colliderRendererWorldData = new Float32Array([
+      1, 2, 3, 1, 1, 2, 3, 1, 0, 0, 0, 1, 0, 0, 10, 2,
+    ]);
     unsafeBehavior._colliderWorldData = new Float32Array([
       1, 2, 3, 1, 1, 2, 3, 1, 0, 0, 0, 1, 0, 0, 10, 2,
     ]);
@@ -109,7 +112,7 @@ describe('Spring bone debug collision shapes', function () {
     const firstMasks = behavior.get3DDebugCollisionMasks();
     const capsuleVertices = firstMasks[1].vertices;
 
-    /** @type {any} */ (behavior)._colliderWorldData.set(
+    /** @type {any} */ (behavior)._colliderRendererWorldData.set(
       [0, 0, 0, 1, 10, 0, 0, 2],
       8
     );
@@ -128,7 +131,6 @@ describe('Spring bone debug collision shapes', function () {
 
   it('converts Three.js world points back to debug-layer coordinates', function () {
     const behavior = makeBehavior();
-    const unsafeBehavior = /** @type {any} */ (behavior);
     const rendererObject = behavior.owner.getRenderer().get3DRendererObject();
     const layerGroup = new THREE.Group();
     layerGroup.scale.y = -1;
@@ -138,6 +140,27 @@ describe('Spring bone debug collision shapes', function () {
     expect(masks[0].positionX).to.be(1);
     expect(masks[0].positionY).to.be(-2);
     expect(masks[0].positionZ).to.be(3);
-    expect(unsafeBehavior._debugColliderPointA.y).to.be(-2);
+  });
+
+  it('uses GDevelop scene units for debug collider radii', function () {
+    const behavior = makeBehavior();
+    const unsafeBehavior = /** @type {any} */ (behavior);
+    unsafeBehavior._colliderRendererWorldData.set([
+      1, 2, 3, 0.1, 1, 2, 3, 0.1,
+    ]);
+    unsafeBehavior._colliderWorldData.set([
+      100, 200, 300, 10, 100, 200, 300, 10,
+    ]);
+    const rendererObject = behavior.owner.getRenderer().get3DRendererObject();
+    const layerGroup = new THREE.Group();
+    layerGroup.scale.set(0.01, -0.01, 0.01);
+    layerGroup.add(rendererObject);
+
+    const mask = behavior.get3DDebugCollisionMasks()[0];
+    expect(mask.positionX).to.be(100);
+    expect(mask.positionY).to.be(-200);
+    expect(mask.positionZ).to.be(300);
+    const sphereExtent = Math.max(...Array.from(mask.vertices));
+    expect(sphereExtent).to.be.within(9.999, 10.001);
   });
 });

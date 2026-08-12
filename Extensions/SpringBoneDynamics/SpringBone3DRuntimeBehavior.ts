@@ -9,6 +9,23 @@ namespace gdjs {
   const debugColliderHemisphereSegments = 4;
   const debugColliderEpsilon = 1e-5;
 
+  /** Convert Three.js world coordinates to GDevelop scene coordinates. @internal */
+  export const convertSpringBoneFrameToSceneCoordinates = (
+    targets: Float32Array,
+    rendererColliderWorldData: Float32Array,
+    colliderWorldData: Float32Array,
+    worldScale: number
+  ): void => {
+    const scale =
+      Number.isFinite(worldScale) && worldScale > 0 ? worldScale : 1;
+    for (let index = 0; index < targets.length; index++) {
+      targets[index] *= scale;
+    }
+    for (let index = 0; index < colliderWorldData.length; index++) {
+      colliderWorldData[index] = rendererColliderWorldData[index] * scale;
+    }
+  };
+
   /** Build a tapered capsule centered on the local Z axis. @internal */
   const makeSpringBoneDebugColliderVertices = (
     length: number,
@@ -119,6 +136,7 @@ namespace gdjs {
     private _animationLocalQuaternions = new Float32Array(0);
     private _colliderLocalData = new Float32Array(0);
     private _colliderWorldPoints = new Float32Array(0);
+    private _colliderRendererWorldData = new Float32Array(0);
     private _colliderWorldData = new Float32Array(0);
     private _debugCollisionMasks: gdjs.DebugCollisionMask3D[] = [];
     private _debugCollisionGeometryParameters = new Float32Array(0);
@@ -144,6 +162,7 @@ namespace gdjs {
     private _lastRotationX = 0;
     private _lastRotationY = 0;
     private _lastRotationZ = 0;
+    private _lastRenderer3DWorldScale = 0;
     private _hasPreviousRootTransform = false;
     private _destroyed = false;
 
@@ -318,6 +337,9 @@ namespace gdjs {
       this._colliderWorldPoints = new Float32Array(
         configuration.colliders.length * 12
       );
+      this._colliderRendererWorldData = new Float32Array(
+        configuration.colliders.length * 8
+      );
       this._colliderWorldData = new Float32Array(
         configuration.colliders.length * 8
       );
@@ -422,13 +444,13 @@ namespace gdjs {
           }
         }
         const worldOffset = index * 8;
-        this._colliderWorldData[worldOffset] =
+        this._colliderRendererWorldData[worldOffset] =
           this._colliderWorldPoints[localOffset];
-        this._colliderWorldData[worldOffset + 1] =
+        this._colliderRendererWorldData[worldOffset + 1] =
           this._colliderWorldPoints[localOffset + 1];
-        this._colliderWorldData[worldOffset + 2] =
+        this._colliderRendererWorldData[worldOffset + 2] =
           this._colliderWorldPoints[localOffset + 2];
-        this._colliderWorldData[worldOffset + 3] = Math.hypot(
+        this._colliderRendererWorldData[worldOffset + 3] = Math.hypot(
           this._colliderWorldPoints[localOffset + 6] -
             this._colliderWorldPoints[localOffset],
           this._colliderWorldPoints[localOffset + 7] -
@@ -436,13 +458,13 @@ namespace gdjs {
           this._colliderWorldPoints[localOffset + 8] -
             this._colliderWorldPoints[localOffset + 2]
         );
-        this._colliderWorldData[worldOffset + 4] =
+        this._colliderRendererWorldData[worldOffset + 4] =
           this._colliderWorldPoints[localOffset + 3];
-        this._colliderWorldData[worldOffset + 5] =
+        this._colliderRendererWorldData[worldOffset + 5] =
           this._colliderWorldPoints[localOffset + 4];
-        this._colliderWorldData[worldOffset + 6] =
+        this._colliderRendererWorldData[worldOffset + 6] =
           this._colliderWorldPoints[localOffset + 5];
-        this._colliderWorldData[worldOffset + 7] = Math.hypot(
+        this._colliderRendererWorldData[worldOffset + 7] = Math.hypot(
           this._colliderWorldPoints[localOffset + 9] -
             this._colliderWorldPoints[localOffset + 3],
           this._colliderWorldPoints[localOffset + 10] -
@@ -451,6 +473,23 @@ namespace gdjs {
             this._colliderWorldPoints[localOffset + 5]
         );
       }
+      const renderer3DWorldScale = this._runtimeScene.getRenderer3DWorldScale();
+      gdjs.convertSpringBoneFrameToSceneCoordinates(
+        this._targets,
+        this._colliderRendererWorldData,
+        this._colliderWorldData,
+        renderer3DWorldScale
+      );
+      if (
+        this._lastRenderer3DWorldScale !== 0 &&
+        renderer3DWorldScale !== this._lastRenderer3DWorldScale
+      ) {
+        // The solver stores scene-coordinate positions. Reset it when the
+        // renderer scale changes so old Three.js coordinates cannot add an
+        // artificial impulse to the next frame.
+        this._resetRequested = true;
+      }
+      this._lastRenderer3DWorldScale = renderer3DWorldScale;
       this._frameData.gravityScale = this._gravityScale;
       this._frameData.windX = this._windX;
       this._frameData.windY = this._windY;
@@ -584,6 +623,7 @@ namespace gdjs {
       this._binding = null;
       this._capturedFrame = false;
       this._activeBackend = null;
+      this._lastRenderer3DWorldScale = 0;
       this.clear3DDebugCollisionMaskCache();
     }
 
@@ -592,6 +632,8 @@ namespace gdjs {
       if (
         !configuration ||
         this._configurationStatus !== 'ready' ||
+        this._colliderRendererWorldData.length !==
+          configuration.colliders.length * 8 ||
         this._colliderWorldData.length !== configuration.colliders.length * 8
       ) {
         this._debugCollisionMasks.length = 0;
@@ -614,14 +656,14 @@ namespace gdjs {
       for (let index = 0; index < colliderCount; index++) {
         const worldOffset = index * 8;
         this._debugColliderPointA.set(
-          this._colliderWorldData[worldOffset],
-          this._colliderWorldData[worldOffset + 1],
-          this._colliderWorldData[worldOffset + 2]
+          this._colliderRendererWorldData[worldOffset],
+          this._colliderRendererWorldData[worldOffset + 1],
+          this._colliderRendererWorldData[worldOffset + 2]
         );
         this._debugColliderPointB.set(
-          this._colliderWorldData[worldOffset + 4],
-          this._colliderWorldData[worldOffset + 5],
-          this._colliderWorldData[worldOffset + 6]
+          this._colliderRendererWorldData[worldOffset + 4],
+          this._colliderRendererWorldData[worldOffset + 5],
+          this._colliderRendererWorldData[worldOffset + 6]
         );
         if (debugParent) {
           debugParent.worldToLocal(this._debugColliderPointA);
@@ -637,6 +679,10 @@ namespace gdjs {
         const deltaY = by - ay;
         const deltaZ = bz - az;
         const length = Math.hypot(deltaX, deltaY, deltaZ);
+        // The points above are converted from Three.js world coordinates to
+        // the debug layer's GDevelop coordinates by worldToLocal. Use the
+        // already converted solver radii so geometry and positions share the
+        // same coordinate scale.
         const radiusA = this._colliderWorldData[worldOffset + 3];
         const radiusB = this._colliderWorldData[worldOffset + 7];
         const geometryOffset = index * 3;

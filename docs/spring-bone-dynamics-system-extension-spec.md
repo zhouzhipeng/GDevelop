@@ -193,10 +193,13 @@ construction and hot reload.
 | `teleportAngle` | number | `90` | `0..180` degrees |
 
 Gravity and wind are expressed in GDevelop scene-coordinate distance units per
-second squared. Configuration chain gravity is multiplied by
-`gravityScale`. `blendWeight=0` preserves the mixer pose while keeping the
-solver warm; disabling freezes no elapsed-time debt and resumes from the
-current animation pose. `WebGPUPreferred` starts on the CPU backend while the
+second squared. Captured Three.js bone and collider coordinates are converted
+back to GDevelop scene units before simulation, so gravity, wind, collision
+margins, and the resulting motion are invariant to the scene's 3D renderer
+world scale. Configuration chain gravity is multiplied by `gravityScale`.
+`blendWeight=0` preserves the mixer pose while keeping the solver warm;
+disabling freezes no elapsed-time debt and resumes from the current animation
+pose. `WebGPUPreferred` starts on the CPU backend while the
 shared WebGPU device and pipelines initialize, then migrates to WebGPU at a
 frame boundary. `Auto` permits the runtime to keep very small rigs on CPU when
 measured dispatch/readback overhead would exceed their bounded CPU cost.
