@@ -20,6 +20,7 @@ import ToolsPanel from './ToolsPanel';
 import Toolbar from './Toolbar';
 import { type WorkingDeskToolTabUpdate } from './WorkingDeskTabTypes';
 import ResourcesLoader from '../ResourcesLoader';
+import PixiResourcesLoader from '../ObjectsRendering/PixiResourcesLoader';
 import AlertContext, { type ConfirmState } from '../UI/Alert/AlertContext';
 import Dialog from '../UI/Dialog';
 import FlatButton from '../UI/FlatButton';
@@ -271,6 +272,21 @@ export default class ResourcesEditor extends React.Component<Props, State> {
   };
 
   refreshResourcesListAndRemoveUnusedResources = async (): Promise<void> => {
+    const { project } = this.props;
+    const resourcesManager = project.getResourcesManager();
+    const modelResourceNames = resourcesManager
+      .getAllResourceNames()
+      .toJSArray()
+      .filter(
+        resourceName =>
+          resourcesManager.getResource(resourceName).getKind() === 'model3D'
+      );
+    this.resourcesLoader.burstUrlsCacheForResources(
+      project,
+      modelResourceNames
+    );
+    PixiResourcesLoader.burst3DModelCache();
+
     this._removeUnusedResourcesFromProject();
     await this.refreshResourcesList();
   };

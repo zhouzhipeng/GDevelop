@@ -47,4 +47,19 @@ describe('ResourcesEditor', () => {
       'resourcesManager.removeResource(resource.getName());'
     );
   });
+
+  it('clears parsed GLB data when refreshing project files', () => {
+    const source = getSource('index.js');
+
+    expect(source).toContain(
+      "resourcesManager.getResource(resourceName).getKind() === 'model3D'"
+    );
+    expect(source).toContain(
+      'this.resourcesLoader.burstUrlsCacheForResources(\n      project,\n      modelResourceNames\n    );'
+    );
+    expect(source).toContain('PixiResourcesLoader.burst3DModelCache();');
+    expect(
+      source.indexOf('PixiResourcesLoader.burst3DModelCache();')
+    ).toBeLessThan(source.indexOf('this._removeUnusedResourcesFromProject();'));
+  });
 });

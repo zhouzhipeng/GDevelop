@@ -66,4 +66,22 @@ describe('Model3DEditor', () => {
     expect(source).toContain('checked={animation.shouldUseRootMotion()}');
     expect(source).toContain('animation.setShouldUseRootMotion(checked)');
   });
+
+  test('reloads parsed rigs and animations after the GLB cache is cleared', () => {
+    const source = getSource();
+
+    expect(source).toContain(
+      'const { previewCacheVersion } = React.useContext(Resource3DPreviewContext);'
+    );
+    expect(source).toContain(
+      '[previewCacheVersion, primaryModelResourceName, project]'
+    );
+    expect(source).toContain(
+      '[previewCacheVersion, project, sharedAnimationModelResourcesKey]'
+    );
+    expect(source).toContain('setGltf(null);');
+    expect(source).toContain(
+      'PixiResourcesLoader.get3DModel(project, primaryModelResourceName)'
+    );
+  });
 });

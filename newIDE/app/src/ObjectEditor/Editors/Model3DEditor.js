@@ -45,6 +45,7 @@ import {
   validateModel3DRig,
   type Model3DRigValidationResult,
 } from '../../ResourcesList/ResourcePreview/Model3DRigUtils';
+import Resource3DPreviewContext from '../../ResourcesList/ResourcePreview/Resource3DPreviewContext';
 import { Accordion, AccordionBody, AccordionHeader } from '../../UI/Accordion';
 
 const gd: libGDevelop = global.gd;
@@ -318,10 +319,14 @@ const Model3DEditor = ({
   const draggedAnimationIndex = React.useRef<number | null>(null);
 
   const gdevelopTheme = React.useContext(GDevelopThemeContext);
+  const { previewCacheVersion } = React.useContext(Resource3DPreviewContext);
   const forceUpdate = useForceUpdate();
 
   const model3DConfiguration = gd.asModel3DConfiguration(objectConfiguration);
   const properties = objectConfiguration.getProperties();
+  const primaryModelResourceName = properties
+    .get('modelResourceName')
+    .getValue();
   const sharedAnimationModelResourceNames = mapFor(
     0,
     model3DConfiguration.getSharedAnimationModelResourcesCount(),
@@ -345,19 +350,24 @@ const Model3DEditor = ({
 
   // $FlowFixMe[value-as-type]
   const [gltf, setGltf] = React.useState<GLTF | null>(null);
-  const loadGltf = React.useCallback(
-    async (modelResourceName: string) => {
-      const newModel3d = await PixiResourcesLoader.get3DModel(
-        project,
-        modelResourceName
+  React.useEffect(
+    () => {
+      let isCancelled = false;
+      setGltf(null);
+      PixiResourcesLoader.get3DModel(project, primaryModelResourceName).then(
+        loadedGltf => {
+          if (!isCancelled) setGltf(loadedGltf);
+        },
+        () => {
+          if (!isCancelled) setGltf(null);
+        }
       );
-      setGltf(newModel3d);
+      return () => {
+        isCancelled = true;
+      };
     },
-    [project]
+    [previewCacheVersion, primaryModelResourceName, project]
   );
-  if (!gltf) {
-    loadGltf(properties.get('modelResourceName').getValue());
-  }
 
   const [
     sharedAnimationModelLoadStates,
@@ -371,10 +381,12 @@ const Model3DEditor = ({
       const resourceNames: Array<string> = JSON.parse(
         sharedAnimationModelResourcesKey
       );
-      setSharedAnimationModelLoadStates(previousStates => {
-        const nextStates = {};
+      setSharedAnimationModelLoadStates(() => {
+        const nextStates: {
+          [resourceName: string]: SharedAnimationModelLoadState,
+        } = {};
         for (const resourceName of resourceNames) {
-          nextStates[resourceName] = previousStates[resourceName] || {
+          nextStates[resourceName] = {
             gltf: null,
             isLoading: true,
             hasError: false,
@@ -413,7 +425,7 @@ const Model3DEditor = ({
         isCancelled = true;
       };
     },
-    [project, sharedAnimationModelResourcesKey]
+    [previewCacheVersion, project, sharedAnimationModelResourcesKey]
   );
 
   const sharedAnimationModelRigValidations = React.useMemo<{
@@ -946,9 +958,6 @@ const Model3DEditor = ({
   );
 
   const sourceSelectOptions = [];
-  const primaryModelResourceName = properties
-    .get('modelResourceName')
-    .getValue();
   for (const sourceModel of animationSourceModels) {
     sourceModel.gltf.animations.forEach((animation, animationIndex) => {
       const animationLabel =
@@ -1029,7 +1038,6 @@ const Model3DEditor = ({
                   animation.setSourceModelResourceName('');
                 }
               }
-              loadGltf(newValue);
               forceUpdate();
             }}
             id={`model3d-object-modelResourceName`}

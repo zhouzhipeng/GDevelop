@@ -13,6 +13,7 @@ import {
   canUpdateProjectFolderFromTemplate,
   copyProjectTemplateFolderContents,
   findNodeById,
+  getFileUrl,
   getProjectFileNodeIdsAfterSelection,
   getLinkedFoldersFilePath,
   getExternalFileCopyDestinationPath,
@@ -179,10 +180,20 @@ describe('ProjectFilesPanel', () => {
     expect(source).toContain(
       'onProjectFilesRefreshed: ProjectFileNode => void'
     );
-    expect(source).toContain('onClick={onRefreshProjectFiles}');
+    expect(source).toContain(
+      'onClick={refreshProjectFilesAndClearModelCaches}'
+    );
+    expect(source).toContain('clearResourcePreviews();');
+    expect(source).toContain('await onRefreshProjectFiles();');
     expect(source).toContain(
       'tooltip={t`Refresh project files and remove unused resources`}'
     );
+  });
+
+  it('can cache-bust a local GLB preview URL', () => {
+    const fileUrl = getFileUrl('D:\\Project\\Hero.glb', 7);
+
+    expect(fileUrl).toContain('Hero.glb?gdevelopPreviewCache=7');
   });
 
   it('copies the project absolute path from the header toolbar', () => {
@@ -207,7 +218,7 @@ describe('ProjectFilesPanel', () => {
       toolbar.indexOf('onClick={copyProjectAbsolutePath}')
     );
     expect(toolbar.indexOf('onClick={copyProjectAbsolutePath}')).toBeLessThan(
-      toolbar.indexOf('onClick={onRefreshProjectFiles}')
+      toolbar.indexOf('onClick={refreshProjectFilesAndClearModelCaches}')
     );
   });
 

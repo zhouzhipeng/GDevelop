@@ -30,6 +30,7 @@ import PictureIcon from '../UI/CustomSvgIcons/Picture';
 import RefreshIcon from '../UI/CustomSvgIcons/Refresh';
 import VideoIcon from '../UI/CustomSvgIcons/Video';
 import Model3DPreview from '../ResourcesList/ResourcePreview/Model3DPreview';
+import Resource3DPreviewContext from '../ResourcesList/ResourcePreview/Resource3DPreviewContext';
 import FolderNameDialog from './FolderNameDialog';
 import MarkdownFileNameDialog from './MarkdownFileNameDialog';
 import ProjectFileRenameDialog from './ProjectFileRenameDialog';
@@ -408,10 +409,17 @@ export const getProjectRootPath = (project: gdProject): ?string => {
 export const normalizeSlashes = (filePath: string): string =>
   filePath.replace(/\\/g, '/');
 
-export const getFileUrl = (absolutePath: string): string => {
-  if (url && url.pathToFileURL)
-    return url.pathToFileURL(absolutePath).toString();
-  return 'file://' + normalizeSlashes(absolutePath);
+export const getFileUrl = (
+  absolutePath: string,
+  previewCacheVersion?: number
+): string => {
+  const fileUrl =
+    url && url.pathToFileURL
+      ? url.pathToFileURL(absolutePath).toString()
+      : 'file://' + normalizeSlashes(absolutePath);
+  return previewCacheVersion === undefined
+    ? fileUrl
+    : `${fileUrl}?gdevelopPreviewCache=${previewCacheVersion}`;
 };
 
 const normalizeAbsolutePath = (filePath: string): string =>
@@ -1696,6 +1704,9 @@ const ProjectFilesPanelContent: React.ComponentType<{
     ref
   ) => {
     const theme = React.useContext(GDevelopThemeContext);
+    const { clearResourcePreviews } = React.useContext(
+      Resource3DPreviewContext
+    );
     const {
       showAlert,
       showConfirmation,
@@ -2745,6 +2756,14 @@ const ProjectFilesPanelContent: React.ComponentType<{
       [project, showAlert]
     );
 
+    const refreshProjectFilesAndClearModelCaches = React.useCallback(
+      async () => {
+        clearResourcePreviews();
+        await onRefreshProjectFiles();
+      },
+      [clearResourcePreviews, onRefreshProjectFiles]
+    );
+
     const copyNodeAbsolutePath = React.useCallback(
       async (node: ProjectFileNode) => {
         try {
@@ -3683,7 +3702,7 @@ const ProjectFilesPanelContent: React.ComponentType<{
             </IconButton>
             <IconButton
               size="small"
-              onClick={onRefreshProjectFiles}
+              onClick={refreshProjectFilesAndClearModelCaches}
               tooltip={t`Refresh project files and remove unused resources`}
             >
               <RefreshIcon />

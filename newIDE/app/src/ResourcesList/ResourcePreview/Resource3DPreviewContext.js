@@ -39,10 +39,14 @@ type WorkerOutMessage =
 
 export type Resource3DPreviewState = {|
   getResourcePreview: (resourceUrl: string) => Promise<?string>,
+  clearResourcePreviews: () => void,
+  previewCacheVersion: number,
 |};
 
 const initialResource3DPreviewState = {
   getResourcePreview: async (_resourceUrl: string) => null,
+  clearResourcePreviews: () => {},
+  previewCacheVersion: 0,
 };
 
 const Resource3DPreviewContext: React.Context<Resource3DPreviewState> = React.createContext<Resource3DPreviewState>(
@@ -64,6 +68,9 @@ const MESSAGE_TYPES = {
 class Resource3DPreviewWorkerManager {
   worker: Worker;
   isInitialized: boolean = false;
+  isTerminated: boolean = false;
+  initializationPromise: Promise<boolean>;
+  resolveInitialization: (success: boolean) => void = () => {};
   pendingPromises: Map<
     string,
     { resolve: (dataUrl: string) => void, reject: () => void }
@@ -71,6 +78,9 @@ class Resource3DPreviewWorkerManager {
   fallbackImagePath: string = 'JsPlatform/Extensions/3d_model.svg';
 
   constructor() {
+    this.initializationPromise = new Promise(resolve => {
+      this.resolveInitialization = resolve;
+    });
     // $FlowFixMe[incompatible-type] - worker-loader types aren't recognized by Flow
     // $FlowFixMe[invalid-constructor]
     this.worker = new Resource3DPreviewWorker();
@@ -90,6 +100,7 @@ class Resource3DPreviewWorkerManager {
             // $FlowFixMe[incompatible-type]
             (workerOutMessageData: WorkerOutInitMessage);
           this.isInitialized = success;
+          this.resolveInitialization(success);
           break;
 
         case MESSAGE_TYPES.RENDER_COMPLETE:
@@ -124,6 +135,7 @@ class Resource3DPreviewWorkerManager {
 
     this.worker.onerror = error => {
       console.error('Worker error:', error);
+      if (!this.isInitialized) this.resolveInitialization(false);
       // Resolve any pending promises with the fallback image
       this.pendingPromises.forEach(promise => {
         promise.resolve(this.fallbackImagePath);
@@ -138,17 +150,15 @@ class Resource3DPreviewWorkerManager {
     this.worker.postMessage(message);
   }
 
-  renderModel(
+  async renderModel(
     resourceUrl: string,
     resourceData: ArrayBuffer,
     basePath: string
   ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      if (!this.isInitialized) {
-        resolve(this.fallbackImagePath);
-        return;
-      }
+    const isInitialized = await this.initializationPromise;
+    if (!isInitialized || this.isTerminated) return this.fallbackImagePath;
 
+    return new Promise((resolve, reject) => {
       this.pendingPromises.set(resourceUrl, { resolve, reject });
       const message: WorkerRenderModelMessage = {
         // $FlowFixMe[incompatible-type]
@@ -164,10 +174,26 @@ class Resource3DPreviewWorkerManager {
 
   terminate() {
     if (this.worker) {
+      this.isTerminated = true;
+      if (!this.isInitialized) this.resolveInitialization(false);
+      this.pendingPromises.forEach(promise => {
+        promise.resolve(this.fallbackImagePath);
+      });
+      this.pendingPromises.clear();
       this.worker.terminate();
     }
   }
 }
+
+const revokeGeneratedPreview = (previewUrl: string) => {
+  if (
+    previewUrl.startsWith('blob:') &&
+    typeof URL !== 'undefined' &&
+    URL.revokeObjectURL
+  ) {
+    URL.revokeObjectURL(previewUrl);
+  }
+};
 
 type Props = {|
   children: React.Node,
@@ -177,6 +203,8 @@ export const Resource3DPreviewProvider = ({
   children,
 }: Props): React.MixedElement => {
   const [currentResource, setCurrentResource] = React.useState<?string>(null);
+  const [previewCacheVersion, setPreviewCacheVersion] = React.useState(0);
+  const previewCacheVersionRef = React.useRef(0);
   const queueRef = React.useRef<
     Array<{ url: string, resolve: (dataUrl: ?string) => void }>
   >([]);
@@ -189,7 +217,9 @@ export const Resource3DPreviewProvider = ({
 
     // Cleanup on unmount
     return () => {
+      queueRef.current.forEach(item => item.resolve(null));
       queueRef.current = [];
+      Object.values(previewCache.current).forEach(revokeGeneratedPreview);
       previewCache.current = {};
 
       // Terminate the worker
@@ -234,6 +264,7 @@ export const Resource3DPreviewProvider = ({
         credentials: checkIfCredentialsRequired(url)
           ? 'include'
           : 'same-origin',
+        cache: 'no-store',
       });
       if (!response.ok) throw new Error(`HTTP error ${response.status}`);
       resourceData = await response.arrayBuffer();
@@ -263,33 +294,38 @@ export const Resource3DPreviewProvider = ({
       if (!currentResource) return;
 
       const processResource = async () => {
+        const processingPreviewCacheVersion = previewCacheVersionRef.current;
         const dataUrl = await renderModel(currentResource);
 
-        // Handle the result
+        // A cache clear can happen while a fetch or worker render is pending.
+        // Ignore that old result so it can't repopulate the cleared cache.
+        if (processingPreviewCacheVersion !== previewCacheVersionRef.current) {
+          if (dataUrl) revokeGeneratedPreview(dataUrl);
+          return;
+        }
+
         if (dataUrl) {
           // Save it in the cache for future use
           previewCache.current[currentResource] = dataUrl;
+        }
 
-          // Resolve all the requests made for that URL
-          const queueItemsToResolve = queueRef.current.filter(
-            item => item.url === currentResource
-          );
-          queueItemsToResolve.forEach(item => {
-            const { resolve } = item;
-            // $FlowFixMe[constant-condition]
-            if (resolve) resolve(dataUrl);
-          });
+        // Resolve all the requests made for that URL.
+        const queueItemsToResolve = queueRef.current.filter(
+          item => item.url === currentResource
+        );
+        queueItemsToResolve.forEach(item => item.resolve(dataUrl));
 
-          // Remove the items from the queue
-          queueRef.current = queueRef.current.filter(
-            item => item.url !== currentResource
-          );
+        // Remove the items from the queue.
+        queueRef.current = queueRef.current.filter(
+          item => item.url !== currentResource
+        );
 
-          // And trigger the next item to be processed
-          const nextItemToProcess = queueRef.current[0];
-          if (nextItemToProcess) {
-            setCurrentResource(nextItemToProcess.url);
-          }
+        // And trigger the next item to be processed.
+        const nextItemToProcess = queueRef.current[0];
+        if (nextItemToProcess) {
+          setCurrentResource(nextItemToProcess.url);
+        } else {
+          setCurrentResource(null);
         }
       };
 
@@ -298,10 +334,35 @@ export const Resource3DPreviewProvider = ({
     [currentResource, renderModel]
   );
 
+  const clearResourcePreviews = React.useCallback(() => {
+    previewCacheVersionRef.current += 1;
+
+    queueRef.current.forEach(item => item.resolve(null));
+    queueRef.current = [];
+    setCurrentResource(null);
+
+    Object.values(previewCache.current).forEach(revokeGeneratedPreview);
+    previewCache.current = {};
+
+    if (workerManagerRef.current) {
+      workerManagerRef.current.terminate();
+    }
+    workerManagerRef.current = new Resource3DPreviewWorkerManager();
+
+    setPreviewCacheVersion(previewCacheVersionRef.current);
+  }, []);
+
+  const contextValue = React.useMemo(
+    () => ({
+      getResourcePreview: enqueueResource,
+      clearResourcePreviews,
+      previewCacheVersion,
+    }),
+    [clearResourcePreviews, enqueueResource, previewCacheVersion]
+  );
+
   return (
-    <Resource3DPreviewContext.Provider
-      value={{ getResourcePreview: enqueueResource }}
-    >
+    <Resource3DPreviewContext.Provider value={contextValue}>
       {children}
     </Resource3DPreviewContext.Provider>
   );
