@@ -5238,7 +5238,7 @@ const getSceneLifecyclePlacementGuidance = (
     case 'sceneLoad':
       return 'Place only initialization and one-time scene setup here. Do not add SceneJustBegins or SignalReceived.';
     case 'sceneSignal':
-      return 'This function runs once per delivered scene signal. Compare SignalName() directly and read SignalPayload(); do not add SignalReceived.';
+      return 'This function runs once per delivered scene signal. Compare the SignalName parameter directly and read the Payload parameter; do not add SignalReceived.';
     case 'sceneUnload':
       return 'Place only final synchronous cleanup here. Do not add awaited/future-frame work, signal emission, or scene transitions.';
     case 'sceneUpdate':

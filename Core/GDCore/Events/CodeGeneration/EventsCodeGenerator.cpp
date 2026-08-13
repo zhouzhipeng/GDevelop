@@ -901,7 +901,10 @@ EventsCodeGenerator::GenerateCallback(
 const gd::String EventsCodeGenerator::GenerateEventsParameters(
     const gd::EventsCodeGenerationContext& context) {
   gd::String parameters = "runtimeScene";
-  if (!HasProjectAndLayout()) parameters += ", eventsFunctionContext";
+  if (!HasProjectAndLayout() ||
+      GetSceneLifecycleFunctionRole() == "sceneSignal") {
+    parameters += ", eventsFunctionContext";
+  }
   if (context.IsInsideAsync()) parameters += ", asyncObjectsList";
   return parameters;
 };

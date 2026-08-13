@@ -935,26 +935,6 @@ namespace gdjs {
           .getSignalBus()
           .recordSceneSignalReceiver(runtimeScene, signal);
       };
-
-      export const getSignalName = function (
-        instanceContainer: gdjs.RuntimeInstanceContainer
-      ): string {
-        return (
-          getSignalRuntimeScene(instanceContainer)
-            .getSignalBus()
-            .getCurrentSceneSignal()?.name || ''
-        );
-      };
-
-      export const getSignalPayload = function (
-        instanceContainer: gdjs.RuntimeInstanceContainer
-      ): string {
-        return (
-          getSignalRuntimeScene(instanceContainer)
-            .getSignalBus()
-            .getCurrentSceneSignal()?.payload || ''
-        );
-      };
     }
   }
 

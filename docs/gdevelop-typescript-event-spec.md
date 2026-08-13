@@ -756,12 +756,9 @@ The signal runtime exposes only the two destinations defined by
 ID. TypeScript declarations must not expose object-name, group, or picked-list
 emission helpers.
 
-Scene code under a matching **Scene signal received** condition can read
-`SignalName()` and `SignalPayload()` through the corresponding runtime helpers.
-That context is still determined by event nesting at runtime; static typing
-cannot prove the nesting unless a future control-flow model is added. Prefab
-and behavior `onSignal` code reads its fixed `signalName` and `payload`
-arguments instead.
+Scene `sceneSignal` and prefab or behavior `onSignal` code read their fixed
+signal-name and payload arguments. No separate signal name or payload
+expressions are exposed.
 
 Prefab and behavior code may subscribe the current receiver to an exact scene
 signal name. A direct instance signal needs no subscription and invokes only
