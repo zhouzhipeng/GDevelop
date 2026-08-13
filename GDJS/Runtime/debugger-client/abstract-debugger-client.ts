@@ -22,6 +22,345 @@ namespace gdjs {
     error: console.error,
   };
 
+  type IssueAnnotationPoint = {
+    x: number;
+    y: number;
+  };
+
+  type IssueAnnotationStroke = {
+    points: IssueAnnotationPoint[];
+    lineWidth: number;
+  };
+
+  const issueAnnotationColor = '#ff334e';
+  const issueAnnotationCssLineWidth = 4;
+  const maxIssueAnnotationPoints = 100000;
+
+  /**
+   * A preview-only drawing layer used while an issue report is being prepared.
+   * Points are stored in the intrinsic game canvas coordinate system so the
+   * visible overlay and final PNG stay aligned after window resizing.
+   */
+  class IssueAnnotationLayer {
+    private _gameCanvas: HTMLCanvasElement;
+    private _overlayCanvas: HTMLCanvasElement;
+    private _strokes: IssueAnnotationStroke[] = [];
+    private _activeStroke: IssueAnnotationStroke | null = null;
+    private _activePointerId: number | null = null;
+    private _pointCount = 0;
+    private _limitReported = false;
+    private _resizeObserver: ResizeObserver | null = null;
+    private _onPointLimitReached: () => void;
+
+    constructor(
+      gameCanvas: HTMLCanvasElement,
+      onPointLimitReached: () => void
+    ) {
+      this._gameCanvas = gameCanvas;
+      this._onPointLimitReached = onPointLimitReached;
+      this._overlayCanvas = document.createElement('canvas');
+      this._overlayCanvas.setAttribute('aria-hidden', 'true');
+      this._overlayCanvas.dataset.gdevelopIssueAnnotation = 'true';
+      Object.assign(this._overlayCanvas.style, {
+        position: 'fixed',
+        zIndex: '2147483647',
+        cursor: 'crosshair',
+        touchAction: 'none',
+        userSelect: 'none',
+      });
+
+      this._syncOverlayBounds();
+      document.body.appendChild(this._overlayCanvas);
+      this._overlayCanvas.addEventListener(
+        'pointerdown',
+        this._handlePointerDown
+      );
+      this._overlayCanvas.addEventListener(
+        'pointermove',
+        this._handlePointerMove
+      );
+      this._overlayCanvas.addEventListener('pointerup', this._handlePointerUp);
+      this._overlayCanvas.addEventListener(
+        'pointercancel',
+        this._handlePointerUp
+      );
+      window.addEventListener('resize', this._syncOverlayBounds);
+      window.addEventListener('scroll', this._syncOverlayBounds, true);
+      if (typeof ResizeObserver !== 'undefined') {
+        this._resizeObserver = new ResizeObserver(this._syncOverlayBounds);
+        this._resizeObserver.observe(this._gameCanvas);
+      }
+    }
+
+    destroy(): void {
+      this._finishActiveStroke();
+      this._overlayCanvas.removeEventListener(
+        'pointerdown',
+        this._handlePointerDown
+      );
+      this._overlayCanvas.removeEventListener(
+        'pointermove',
+        this._handlePointerMove
+      );
+      this._overlayCanvas.removeEventListener(
+        'pointerup',
+        this._handlePointerUp
+      );
+      this._overlayCanvas.removeEventListener(
+        'pointercancel',
+        this._handlePointerUp
+      );
+      window.removeEventListener('resize', this._syncOverlayBounds);
+      window.removeEventListener('scroll', this._syncOverlayBounds, true);
+      if (this._resizeObserver) this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+      this._overlayCanvas.remove();
+    }
+
+    clear(): void {
+      this._finishActiveStroke();
+      this._strokes.length = 0;
+      this._pointCount = 0;
+      this._limitReported = false;
+      this._renderOverlay();
+    }
+
+    undo(): void {
+      this._finishActiveStroke();
+      const removedStroke = this._strokes.pop();
+      if (removedStroke) {
+        this._pointCount -= removedStroke.points.length;
+      }
+      this._limitReported = false;
+      this._renderOverlay();
+    }
+
+    getStrokeCount(): number {
+      return this._strokes.length + (this._activeStroke ? 1 : 0);
+    }
+
+    getPointCount(): number {
+      return this._pointCount;
+    }
+
+    captureAnnotatedScreenshot(): {
+      dataUrl: string;
+      width: number;
+      height: number;
+    } {
+      this._finishActiveStroke();
+      const outputCanvas = document.createElement('canvas');
+      outputCanvas.width = this._gameCanvas.width;
+      outputCanvas.height = this._gameCanvas.height;
+      const context = outputCanvas.getContext('2d');
+      if (!context) {
+        throw new Error('Unable to create a canvas for the annotated image.');
+      }
+      context.drawImage(this._gameCanvas, 0, 0);
+      this._drawStrokes(context, 1, 1);
+      return {
+        dataUrl: outputCanvas.toDataURL('image/png'),
+        width: outputCanvas.width,
+        height: outputCanvas.height,
+      };
+    }
+
+    private _syncOverlayBounds = (): void => {
+      const rect = this._gameCanvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) {
+        this._overlayCanvas.style.display = 'none';
+        return;
+      }
+
+      this._overlayCanvas.style.display = 'block';
+      this._overlayCanvas.style.left = `${rect.left}px`;
+      this._overlayCanvas.style.top = `${rect.top}px`;
+      this._overlayCanvas.style.width = `${rect.width}px`;
+      this._overlayCanvas.style.height = `${rect.height}px`;
+      const devicePixelRatio = Math.max(1, window.devicePixelRatio || 1);
+      const backingWidth = Math.max(
+        1,
+        Math.round(rect.width * devicePixelRatio)
+      );
+      const backingHeight = Math.max(
+        1,
+        Math.round(rect.height * devicePixelRatio)
+      );
+      if (
+        this._overlayCanvas.width !== backingWidth ||
+        this._overlayCanvas.height !== backingHeight
+      ) {
+        this._overlayCanvas.width = backingWidth;
+        this._overlayCanvas.height = backingHeight;
+      }
+      this._renderOverlay();
+    };
+
+    private _getIntrinsicPoint(event: PointerEvent): IssueAnnotationPoint {
+      const rect = this._gameCanvas.getBoundingClientRect();
+      const width = Math.max(1, rect.width);
+      const height = Math.max(1, rect.height);
+      return {
+        x: Math.max(
+          0,
+          Math.min(
+            this._gameCanvas.width,
+            ((event.clientX - rect.left) * this._gameCanvas.width) / width
+          )
+        ),
+        y: Math.max(
+          0,
+          Math.min(
+            this._gameCanvas.height,
+            ((event.clientY - rect.top) * this._gameCanvas.height) / height
+          )
+        ),
+      };
+    }
+
+    private _getIntrinsicLineWidth(): number {
+      const rect = this._gameCanvas.getBoundingClientRect();
+      return Math.max(
+        1,
+        (issueAnnotationCssLineWidth * this._gameCanvas.width) /
+          Math.max(1, rect.width)
+      );
+    }
+
+    private _appendPoint(point: IssueAnnotationPoint): boolean {
+      if (!this._activeStroke) return false;
+      if (this._pointCount >= maxIssueAnnotationPoints) {
+        this._finishActiveStroke();
+        if (!this._limitReported) {
+          this._limitReported = true;
+          this._onPointLimitReached();
+        }
+        return false;
+      }
+
+      const points = this._activeStroke.points;
+      const previousPoint = points.length ? points[points.length - 1] : null;
+      if (previousPoint) {
+        const dx = point.x - previousPoint.x;
+        const dy = point.y - previousPoint.y;
+        const minimumDistance = Math.max(0.5, this._activeStroke.lineWidth / 4);
+        if (dx * dx + dy * dy < minimumDistance * minimumDistance) return false;
+      }
+      points.push(point);
+      this._pointCount++;
+      return true;
+    }
+
+    private _handlePointerDown = (event: PointerEvent): void => {
+      if (!event.isPrimary) return;
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this._finishActiveStroke();
+      this._activePointerId = event.pointerId;
+      this._activeStroke = {
+        points: [],
+        lineWidth: this._getIntrinsicLineWidth(),
+      };
+      try {
+        this._overlayCanvas.setPointerCapture(event.pointerId);
+      } catch {
+        // Pointer capture is best-effort (older embedded browsers can reject it).
+      }
+      this._appendPoint(this._getIntrinsicPoint(event));
+      this._renderOverlay();
+    };
+
+    private _handlePointerMove = (event: PointerEvent): void => {
+      if (event.pointerId !== this._activePointerId || !this._activeStroke) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (this._appendPoint(this._getIntrinsicPoint(event))) {
+        this._renderOverlay();
+      }
+    };
+
+    private _handlePointerUp = (event: PointerEvent): void => {
+      if (event.pointerId !== this._activePointerId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this._appendPoint(this._getIntrinsicPoint(event));
+      try {
+        this._overlayCanvas.releasePointerCapture(event.pointerId);
+      } catch {
+        // The pointer may already have lost capture.
+      }
+      this._finishActiveStroke();
+      this._renderOverlay();
+    };
+
+    private _finishActiveStroke(): void {
+      if (this._activeStroke && this._activeStroke.points.length) {
+        this._strokes.push(this._activeStroke);
+      }
+      this._activeStroke = null;
+      this._activePointerId = null;
+    }
+
+    private _renderOverlay(): void {
+      const context = this._overlayCanvas.getContext('2d');
+      if (!context) return;
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.clearRect(
+        0,
+        0,
+        this._overlayCanvas.width,
+        this._overlayCanvas.height
+      );
+      this._drawStrokes(
+        context,
+        this._overlayCanvas.width / Math.max(1, this._gameCanvas.width),
+        this._overlayCanvas.height / Math.max(1, this._gameCanvas.height)
+      );
+    }
+
+    private _drawStrokes(
+      context: CanvasRenderingContext2D,
+      scaleX: number,
+      scaleY: number
+    ): void {
+      context.save();
+      context.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+      context.strokeStyle = issueAnnotationColor;
+      context.fillStyle = issueAnnotationColor;
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
+      const strokes = this._activeStroke
+        ? [...this._strokes, this._activeStroke]
+        : this._strokes;
+      strokes.forEach((stroke) => {
+        if (!stroke.points.length) return;
+        context.lineWidth = stroke.lineWidth;
+        if (stroke.points.length === 1) {
+          context.beginPath();
+          context.arc(
+            stroke.points[0].x,
+            stroke.points[0].y,
+            stroke.lineWidth / 2,
+            0,
+            Math.PI * 2
+          );
+          context.fill();
+          return;
+        }
+        context.beginPath();
+        context.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let index = 1; index < stroke.points.length; index++) {
+          context.lineTo(stroke.points[index].x, stroke.points[index].y);
+        }
+        context.stroke();
+      });
+      context.restore();
+    }
+  }
+
   const mergeResourcesByName = (
     currentResources: ResourceData[],
     newResources: ResourceData[]
@@ -232,6 +571,7 @@ namespace gdjs {
     _hotReloader: gdjs.HotReloader;
     _originalConsole = originalConsole;
     _inGameDebugger: gdjs.InGameDebugger;
+    private _issueAnnotationLayer: IssueAnnotationLayer | null = null;
 
     _hasLoggedUncaughtException = false;
 
@@ -353,7 +693,7 @@ namespace gdjs {
             }, 0);
           }
         } else if (data.command === 'refresh') {
-          that.sendRuntimeGameDump();
+          that.sendRuntimeGameDump(data.messageId);
         } else if (data.command === 'getStatus') {
           that.sendRuntimeGameStatus(data.messageId);
         } else if (data.command === 'set') {
@@ -702,6 +1042,16 @@ namespace gdjs {
           if (inGameEditor) {
             this.sendContentAABB(data.messageId);
           }
+        } else if (data.command === 'issueReport.startAnnotation') {
+          this.startIssueAnnotation(data.messageId);
+        } else if (data.command === 'issueReport.undoAnnotation') {
+          this.undoIssueAnnotation(data.messageId);
+        } else if (data.command === 'issueReport.clearAnnotation') {
+          this.clearIssueAnnotation(data.messageId);
+        } else if (data.command === 'issueReport.captureAnnotatedScreenshot') {
+          this.sendAnnotatedIssueScreenshot(data.messageId);
+        } else if (data.command === 'issueReport.stopAnnotation') {
+          this.stopIssueAnnotation(data.messageId);
         } else if (data.command === 'captureScreenshot') {
           this.sendScreenshot(data.messageId);
         } else if (data.command === 'simulateInput') {
@@ -990,10 +1340,11 @@ namespace gdjs {
     /**
      * Dump all the relevant data from the {@link RuntimeGame} instance and send it to the server.
      */
-    sendRuntimeGameDump(): void {
+    sendRuntimeGameDump(messageId?: number): void {
       const that = this;
       const message = {
         command: 'dump',
+        messageId,
         payload: this._runtimegame,
         rendererDiagnostics: this._getRendererDiagnostics(),
       };
@@ -1415,6 +1766,149 @@ namespace gdjs {
               : null,
           },
         })
+      );
+    }
+
+    private _sendIssueAnnotationResponse(
+      command: string,
+      messageId: number | undefined,
+      error: string | null,
+      extraPayload?: Object
+    ): void {
+      this._sendMessage(
+        circularSafeStringify({
+          command,
+          messageId,
+          payload: {
+            success: !error,
+            error,
+            strokeCount: this._issueAnnotationLayer
+              ? this._issueAnnotationLayer.getStrokeCount()
+              : 0,
+            pointCount: this._issueAnnotationLayer
+              ? this._issueAnnotationLayer.getPointCount()
+              : 0,
+            ...(extraPayload || {}),
+          },
+        })
+      );
+    }
+
+    startIssueAnnotation(messageId?: number): void {
+      let error: string | null = null;
+      try {
+        this._runtimegame.pause(true);
+        this._runtimegame.getSceneStack().renderWithoutStep();
+        const canvas = this._runtimegame.getRenderer().getCanvas();
+        if (!canvas) {
+          throw new Error('No game canvas is available for annotation.');
+        }
+        if (this._issueAnnotationLayer) {
+          this._issueAnnotationLayer.destroy();
+          this._issueAnnotationLayer = null;
+        }
+        this._issueAnnotationLayer = new IssueAnnotationLayer(canvas, () => {
+          this._sendMessage(
+            circularSafeStringify({
+              command: 'issueReport.annotationLimitReached',
+              payload: {
+                maximumPointCount: maxIssueAnnotationPoints,
+              },
+            })
+          );
+        });
+      } catch (e) {
+        error =
+          (e as Error).message || 'Unable to start the issue annotation layer.';
+      }
+      this._sendIssueAnnotationResponse(
+        'issueReport.annotationStarted',
+        messageId,
+        error
+      );
+    }
+
+    undoIssueAnnotation(messageId?: number): void {
+      let error: string | null = null;
+      if (!this._issueAnnotationLayer) {
+        error = 'No issue annotation session is active.';
+      } else {
+        try {
+          this._issueAnnotationLayer.undo();
+        } catch (e) {
+          error = (e as Error).message || 'Unable to undo the annotation.';
+        }
+      }
+      this._sendIssueAnnotationResponse(
+        'issueReport.annotationChanged',
+        messageId,
+        error
+      );
+    }
+
+    clearIssueAnnotation(messageId?: number): void {
+      let error: string | null = null;
+      if (!this._issueAnnotationLayer) {
+        error = 'No issue annotation session is active.';
+      } else {
+        try {
+          this._issueAnnotationLayer.clear();
+        } catch (e) {
+          error = (e as Error).message || 'Unable to clear the annotation.';
+        }
+      }
+      this._sendIssueAnnotationResponse(
+        'issueReport.annotationChanged',
+        messageId,
+        error
+      );
+    }
+
+    stopIssueAnnotation(messageId?: number): void {
+      let error: string | null = null;
+      try {
+        if (this._issueAnnotationLayer) {
+          this._issueAnnotationLayer.destroy();
+          this._issueAnnotationLayer = null;
+        }
+      } catch (e) {
+        error = (e as Error).message || 'Unable to stop the annotation layer.';
+      }
+      this._sendIssueAnnotationResponse(
+        'issueReport.annotationStopped',
+        messageId,
+        error
+      );
+    }
+
+    sendAnnotatedIssueScreenshot(messageId?: number): void {
+      let error: string | null = null;
+      let rendered = false;
+      let screenshot = {
+        dataUrl: null as string | null,
+        width: 0,
+        height: 0,
+      };
+      if (!this._issueAnnotationLayer) {
+        error = 'No issue annotation session is active.';
+      } else {
+        try {
+          rendered = this._runtimegame.getSceneStack().renderWithoutStep();
+          screenshot = this._issueAnnotationLayer.captureAnnotatedScreenshot();
+        } catch (e) {
+          error =
+            (e as Error).message || 'Unable to capture the annotated image.';
+        }
+      }
+      this._sendIssueAnnotationResponse(
+        'issueReport.screenshot',
+        messageId,
+        error,
+        {
+          ...screenshot,
+          rendered,
+          capturedAt: Date.now(),
+        }
       );
     }
 
