@@ -422,6 +422,16 @@ describe('Local multi-file project storage', () => {
     const sceneSettings = fs.readFileSync(sceneSettingsPath, 'utf8');
     expect(sceneSettings).not.toContain('externalEventFiles');
     expect(sceneSettings).not.toContain('externalLayoutFiles');
+    expect(sceneSettings).not.toContain('sceneLifecycleFunctions');
+    expect(
+      fs.readFileSync(
+        path.join(
+          temporaryDirectory,
+          'scenes/Main/external-events/Shared Combat/external-events.settings'
+        ),
+        'utf8'
+      )
+    ).not.toContain('sceneLifecycleFunctions');
     expect(
       fs.existsSync(
         path.join(
@@ -2331,6 +2341,9 @@ column2 = "333"
     expect(
       fs.readFileSync(path.join(sceneDirectory, 'scene.settings'), 'utf8')
     ).toContain('[layout]');
+    expect(
+      fs.readFileSync(path.join(sceneDirectory, 'scene.settings'), 'utf8')
+    ).not.toContain('sceneLifecycleFunctions');
     expect(
       fs.existsSync(path.join(sceneDirectory, 'functions/sceneUpdate.events'))
     ).toBe(true);

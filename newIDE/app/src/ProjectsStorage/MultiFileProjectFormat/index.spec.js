@@ -669,14 +669,34 @@ describe('GDevelop multi-file project format', () => {
 
   test('round-trips all scene and External Events lifecycle functions through fixed directories', () => {
     const project = JSON.parse(JSON.stringify(projectFixture));
+    project.layouts[0].sceneLifecycleFunctions = [
+      'sceneLoad',
+      'sceneSignal',
+      'sceneUpdate',
+      'sceneUnload',
+    ];
     project.layouts[0].sceneLoadEvents = [standardEvent()];
     project.layouts[0].sceneSignalEvents = [standardEvent()];
     project.layouts[0].sceneUnloadEvents = [standardEvent()];
+    project.externalEvents[0].sceneLifecycleFunctions = [
+      'sceneLoad',
+      'sceneSignal',
+      'sceneUpdate',
+      'sceneUnload',
+    ];
     project.externalEvents[0].sceneLoadEvents = [standardEvent()];
     project.externalEvents[0].sceneSignalEvents = [standardEvent()];
     project.externalEvents[0].sceneUnloadEvents = [standardEvent()];
 
     const files = decomposeLegacyProjectToFiles(project);
+    expect(files['game://scenes/Main/scene.settings']).not.toContain(
+      'sceneLifecycleFunctions'
+    );
+    expect(
+      files[
+        'game://scenes/Main/external-events/Shared%20Combat/external-events.settings'
+      ]
+    ).not.toContain('sceneLifecycleFunctions');
     for (const role of [
       'sceneLoad',
       'sceneSignal',
@@ -698,9 +718,32 @@ describe('GDevelop multi-file project format', () => {
     expect(
       files['game://scenes/Main/functions/sceneSignal.settings']
     ).toContain('name = "SignalName"');
+
+    files['game://scenes/Main/scene.settings'] = files[
+      'game://scenes/Main/scene.settings'
+    ].replace(
+      'order = 0',
+      'order = 0\nsceneLifecycleFunctions = [ "sceneUpdate" ]'
+    );
+    const externalEventsSettingsUri =
+      'game://scenes/Main/external-events/Shared%20Combat/external-events.settings';
+    files[externalEventsSettingsUri] = files[externalEventsSettingsUri].replace(
+      'order = 0',
+      'order = 0\nsceneLifecycleFunctions = [ "sceneUpdate" ]'
+    );
+    const roundTrippedProject = composeLegacyProjectFromFiles(files);
+    expect(roundTrippedProject.layouts[0].sceneLifecycleFunctions).toEqual([
+      'sceneLoad',
+      'sceneSignal',
+      'sceneUpdate',
+      'sceneUnload',
+    ]);
     expect(
-      areLegacyProjectsEquivalent(project, composeLegacyProjectFromFiles(files))
-    ).toBe(true);
+      roundTrippedProject.externalEvents[0].sceneLifecycleFunctions
+    ).toEqual(['sceneLoad', 'sceneSignal', 'sceneUpdate', 'sceneUnload']);
+    expect(areLegacyProjectsEquivalent(project, roundTrippedProject)).toBe(
+      true
+    );
 
     const baselineFiles = decomposeLegacyProjectToFiles(projectFixture);
     expect(

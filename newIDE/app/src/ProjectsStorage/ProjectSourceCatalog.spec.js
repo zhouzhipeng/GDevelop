@@ -545,8 +545,13 @@ describe('project source catalogs', () => {
       expect.objectContaining({
         path:
           'scenes/<Scene>/external-events/<ExternalEvents>/external-events.settings',
+        forbiddenFields: expect.arrayContaining(['sceneLifecycleFunctions']),
       })
     );
+    expect(
+      catalog.fileKinds.find(fileKind => fileKind.kind === 'scene')
+        .forbiddenFields
+    ).toContain('sceneLifecycleFunctions');
     expect(
       catalog.fileKinds.find(
         fileKind => fileKind.kind === 'external-lifecycle-function'

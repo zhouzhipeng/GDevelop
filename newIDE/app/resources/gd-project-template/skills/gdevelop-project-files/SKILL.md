@@ -233,9 +233,11 @@ flat same-stem `functions/<Function>.settings` and
 URI. Scene and External Events owners have exactly four fixed
 functions: `sceneLoad`, `sceneSignal`, `sceneUpdate`, and `sceneUnload`.
 `sceneUpdate` is required; empty optional lifecycle functions may be absent from
-disk. Store editable prefab/behavior grouping in the function settings `folder`
-array. Lifecycle function names, order, roles, types, and parameters are fixed
-and must not be edited.
+disk. Infer lifecycle presence only from these settings/events pairs; never add
+`sceneLifecycleFunctions` to `scene.settings` or `external-events.settings`.
+Store editable prefab/behavior grouping in the function settings `folder` array.
+Lifecycle function names, order, roles, types, and parameters are fixed and must
+not be edited.
 
 ## Project layout
 

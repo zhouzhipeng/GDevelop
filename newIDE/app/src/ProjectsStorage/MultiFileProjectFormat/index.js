@@ -166,6 +166,7 @@ const SCENE_LIFECYCLE_FUNCTION_DEFINITIONS = Object.freeze([
 const SCENE_LIFECYCLE_FUNCTION_NAMES = new Set(
   SCENE_LIFECYCLE_FUNCTION_DEFINITIONS.map(definition => definition.name)
 );
+const LEGACY_SCENE_LIFECYCLE_PRESENCE_FIELD = 'sceneLifecycleFunctions';
 
 export class MultiFileProjectError extends Error {
   code: string;
@@ -2124,6 +2125,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
                   'sceneLoadEvents',
                   'sceneSignalEvents',
                   'sceneUnloadEvents',
+                  LEGACY_SCENE_LIFECYCLE_PRESENCE_FIELD,
                 ])
               ),
               name,
@@ -2240,6 +2242,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
           'sceneLoadEvents',
           'sceneSignalEvents',
           'sceneUnloadEvents',
+          LEGACY_SCENE_LIFECYCLE_PRESENCE_FIELD,
           'objects',
           'externalEventFiles',
           'externalLayoutFiles',
@@ -3370,7 +3373,9 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
     return documentsByName;
   };
   const compileSceneLifecycleBodies = (documentsByName, label) => {
-    const legacyBodies = {};
+    const legacyBodies = {
+      [LEGACY_SCENE_LIFECYCLE_PRESENCE_FIELD]: [],
+    };
     SCENE_LIFECYCLE_FUNCTION_DEFINITIONS.forEach(definition => {
       const document = documentsByName.get(definition.name);
       if (!document) return;
@@ -3388,6 +3393,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
           document.uri
         );
       }
+      legacyBodies[LEGACY_SCENE_LIFECYCLE_PRESENCE_FIELD].push(definition.name);
       legacyBodies[definition.legacyField] = events;
     });
     if (legacyBodies.events === undefined) {
@@ -4403,6 +4409,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
           'order',
           'layout',
           'events',
+          LEGACY_SCENE_LIFECYCLE_PRESENCE_FIELD,
           'externalEventFiles',
           'externalLayoutFiles',
         ])
@@ -4482,7 +4489,13 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       return {
         ...omitFields(
           metadata,
-          new Set(['name', 'order', 'events', 'functions'])
+          new Set([
+            'name',
+            'order',
+            'events',
+            'functions',
+            LEGACY_SCENE_LIFECYCLE_PRESENCE_FIELD,
+          ])
         ),
         name: entry.name,
         associatedLayout: sceneName,
@@ -4786,6 +4799,17 @@ const normalizeLayoutFragment = (layout, editorField, hasLayers = true) => {
   }
 };
 
+const normalizeLegacySceneLifecyclePresence = owner => {
+  if (owner[LEGACY_SCENE_LIFECYCLE_PRESENCE_FIELD] !== undefined) return;
+  owner[
+    LEGACY_SCENE_LIFECYCLE_PRESENCE_FIELD
+  ] = SCENE_LIFECYCLE_FUNCTION_DEFINITIONS.filter(
+    definition =>
+      definition.name === 'sceneUpdate' ||
+      owner[definition.legacyField] !== undefined
+  ).map(definition => definition.name);
+};
+
 export const normalizeLegacyProjectForMultiFile = (
   legacyProject,
   options = {}
@@ -4799,6 +4823,7 @@ export const normalizeLegacyProjectForMultiFile = (
     project.tests = normalizeGameplayTestsForMultiFile(project.tests);
   }
   project.layouts.forEach(layout => {
+    normalizeLegacySceneLifecyclePresence(layout);
     layout.events = parseLegacyEventsJson(JSON.stringify(layout.events || []));
     ['sceneLoadEvents', 'sceneSignalEvents', 'sceneUnloadEvents'].forEach(
       field => {
@@ -4816,6 +4841,7 @@ export const normalizeLegacyProjectForMultiFile = (
     normalizeLayoutFragment(external, 'editionSettings', false)
   );
   project.externalEvents.forEach(external => {
+    normalizeLegacySceneLifecyclePresence(external);
     external.events = parseLegacyEventsJson(
       JSON.stringify(external.events || [])
     );
