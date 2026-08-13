@@ -12,6 +12,12 @@ module.exports = function (config) {
 
   config.set({
     frameworks: ['mocha', 'sinon'],
+    // Bind and advertise the same loopback address. On Windows, binding to
+    // 0.0.0.0 can succeed even when another application already owns
+    // 127.0.0.1:9876. Chrome then reaches that application through localhost
+    // instead of Karma and never attaches.
+    hostname: '127.0.0.1',
+    listenAddress: '127.0.0.1',
     browserNoActivityTimeout: 400000,
     browsers: [
       'ChromeHeadless',
@@ -128,6 +134,7 @@ module.exports = function (config) {
       './newIDE/app/resources/GDJS/Runtime/events-tools/stringtools.js',
       './newIDE/app/resources/GDJS/Runtime/events-tools/windowtools.js',
       './newIDE/app/resources/GDJS/Runtime/debugger-client/hot-reloader.js',
+      './newIDE/app/resources/GDJS/Runtime/debugger-client/abstract-debugger-client.js',
       './newIDE/app/resources/GDJS/Runtime/gameplay-tests/gameplay-test-runner.js',
       './newIDE/app/resources/GDJS/Runtime/affinetransformation.js',
 

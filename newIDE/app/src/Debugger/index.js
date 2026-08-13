@@ -17,6 +17,9 @@ import {
   type DebuggerStatus,
 } from '../ExportAndShare/PreviewLauncher.flow';
 import { type Log, LogsManager } from './DebuggerConsole';
+import IssueReportDialog from './IssueReportDialog';
+import { getLocalProjectRoot, writeIssueReport } from './IssueReportWriter';
+import { showErrorBox, showMessageBox } from '../UI/Messages/MessageBox';
 
 // Mirrors `gdjs.FrameMeasureOutput`: a plain tree (no back-references),
 // as sent by the game's profiler.
@@ -30,6 +33,13 @@ export type ProfilerOutput = {|
   stats: {
     framesCount: number,
   },
+|};
+
+type ActiveIssueReport = {|
+  debuggerId: DebuggerId,
+  wasPaused: boolean,
+  runtimeDump: Object,
+  sceneName: ?string,
 |};
 
 /**
@@ -60,6 +70,12 @@ type State = {|
   debuggerStatus: { [DebuggerId]: DebuggerStatus },
   selectedId: DebuggerId,
   logs: { [DebuggerId]: Array<Log> },
+  activeIssueReport: ?ActiveIssueReport,
+  isIssueReportStarting: boolean,
+  isIssueReportSaving: boolean,
+  issueReportDescription: string,
+  issueReportError: ?string,
+  issueReportWarning: ?string,
 |};
 
 /**
@@ -81,13 +97,25 @@ export default class Debugger extends React.Component<Props, State> {
     debuggerStatus: {},
     selectedId: '0',
     logs: {},
+    activeIssueReport: null,
+    isIssueReportStarting: false,
+    isIssueReportSaving: false,
+    issueReportDescription: '',
+    issueReportError: null,
+    issueReportWarning: null,
   };
 
   _debuggerContents: { [DebuggerId]: ?DebuggerContent } = {};
   _debuggerLogs: Map<DebuggerId, LogsManager> = new Map();
+  _isUnmounted = false;
 
   updateToolbar = () => {
-    const { selectedId, debuggerStatus } = this.state;
+    const {
+      selectedId,
+      debuggerStatus,
+      activeIssueReport,
+      isIssueReportStarting,
+    } = this.state;
 
     const selectedDebuggerContents = this._debuggerContents[
       this.state.selectedId
@@ -130,6 +158,11 @@ export default class Debugger extends React.Component<Props, State> {
           if (this._debuggerContents[this.state.selectedId])
             this._debuggerContents[this.state.selectedId].toggleSignalMonitor();
         }}
+        onReportIssue={this._startIssueReport}
+        canReportIssue={
+          this._canReportIssue() && !activeIssueReport && !isIssueReportStarting
+        }
+        isReportingIssue={!!activeIssueReport || isIssueReportStarting}
       />
     );
   };
@@ -139,6 +172,19 @@ export default class Debugger extends React.Component<Props, State> {
   }
 
   componentWillUnmount() {
+    this._isUnmounted = true;
+    const { activeIssueReport } = this.state;
+    if (activeIssueReport) {
+      const { previewDebuggerServer } = this.props;
+      previewDebuggerServer.sendMessage(activeIssueReport.debuggerId, {
+        command: 'issueReport.stopAnnotation',
+      });
+      if (!activeIssueReport.wasPaused) {
+        previewDebuggerServer.sendMessage(activeIssueReport.debuggerId, {
+          command: 'play',
+        });
+      }
+    }
     if (this.state.unregisterDebuggerServerCallbacks) {
       this.state.unregisterDebuggerServerCallbacks();
     }
@@ -175,6 +221,9 @@ export default class Debugger extends React.Component<Props, State> {
         );
       },
       onConnectionClosed: ({ id, debuggerIds }) => {
+        const didCloseActiveIssueReport =
+          !!this.state.activeIssueReport &&
+          this.state.activeIssueReport.debuggerId === id;
         this._debuggerLogs.delete(id);
         this.setState(
           ({
@@ -184,6 +233,11 @@ export default class Debugger extends React.Component<Props, State> {
             profilingInProgress,
             signalDiagnostics,
             debuggerStatus,
+            activeIssueReport,
+            isIssueReportSaving,
+            issueReportDescription,
+            issueReportError,
+            issueReportWarning,
           }) => {
             // Remove any data bound to the instance that might have been stored.
             // Otherwise this would be a memory leak.
@@ -194,6 +248,9 @@ export default class Debugger extends React.Component<Props, State> {
               delete signalDiagnostics[id];
             }
             if (debuggerStatus[id]) delete debuggerStatus[id];
+            const isClosingActiveIssueReport = !!(
+              activeIssueReport && activeIssueReport.debuggerId === id
+            );
 
             return {
               debuggerIds,
@@ -208,19 +265,46 @@ export default class Debugger extends React.Component<Props, State> {
               profilingInProgress,
               signalDiagnostics,
               debuggerStatus,
+              activeIssueReport: isClosingActiveIssueReport
+                ? null
+                : activeIssueReport,
+              isIssueReportSaving: isClosingActiveIssueReport
+                ? false
+                : isIssueReportSaving,
+              issueReportDescription: isClosingActiveIssueReport
+                ? ''
+                : issueReportDescription,
+              issueReportError: isClosingActiveIssueReport
+                ? null
+                : issueReportError,
+              issueReportWarning: isClosingActiveIssueReport
+                ? null
+                : issueReportWarning,
             };
           },
-          () => this.updateToolbar()
+          () => {
+            this.updateToolbar();
+            if (didCloseActiveIssueReport) {
+              showErrorBox({
+                message:
+                  'The game preview closed before the issue report was saved.',
+                rawError: null,
+                errorId: 'issue-report-preview-closed',
+                doNotReport: true,
+              });
+            }
+          }
         );
       },
       onConnectionOpened: ({ id, debuggerIds }) => {
-        this.setState(
-          {
+        this.setState(state => {
+          const isPreparingOrEditingIssueReport =
+            state.isIssueReportStarting || !!state.activeIssueReport;
+          return {
             debuggerIds,
-            selectedId: id,
-          },
-          () => this.updateToolbar()
-        );
+            selectedId: isPreparingOrEditingIssueReport ? state.selectedId : id,
+          };
+        }, this.updateToolbar);
       },
       onConnectionErrored: ({ id, errorMessage }) => {
         this._getLogsManager(id).addLog({
@@ -300,6 +384,18 @@ export default class Debugger extends React.Component<Props, State> {
       // Filter out unavoidable warnings that do not concern non-engine devs.
       if (isUnavoidableLibraryWarning(data.payload)) return;
       this._getLogsManager(id).addLog(data.payload);
+    } else if (data.command === 'issueReport.annotationLimitReached') {
+      if (
+        this.state.activeIssueReport &&
+        this.state.activeIssueReport.debuggerId === id
+      ) {
+        this.setState({
+          issueReportWarning:
+            'The annotation is very large. Clear some strokes or save the report.',
+        });
+      }
+    } else if (data.command.indexOf('issueReport.') === 0) {
+      // Responses are handled by the targeted request promise.
     } else {
       console.warn(
         'Unknown command received from debugger client:',
@@ -325,6 +421,290 @@ export default class Debugger extends React.Component<Props, State> {
   _refresh = (id: DebuggerId) => {
     const { previewDebuggerServer } = this.props;
     previewDebuggerServer.sendMessage(id, { command: 'refresh' });
+  };
+
+  _canReportIssue = (): boolean => {
+    const { previewDebuggerServer, project } = this.props;
+    const { selectedId, debuggerStatus } = this.state;
+    return (
+      this._hasSelectedDebugger() &&
+      !!debuggerStatus[selectedId] &&
+      previewDebuggerServer
+        .getExistingPreviewDebuggerIds()
+        .indexOf(selectedId) !== -1 &&
+      !!getLocalProjectRoot(project.getProjectFile())
+    );
+  };
+
+  _validateIssueReportResponse = (
+    response: any,
+    expectedCommand: string
+  ): any => {
+    if (!response || response.command !== expectedCommand) {
+      throw new Error(
+        `The preview returned an unexpected response while preparing the report.`
+      );
+    }
+    if (response.payload && response.payload.error) {
+      throw new Error(response.payload.error);
+    }
+    return response.payload;
+  };
+
+  _startIssueReport = async (): Promise<void> => {
+    if (
+      !this._canReportIssue() ||
+      this.state.isIssueReportStarting ||
+      this.state.activeIssueReport
+    ) {
+      return;
+    }
+    const { previewDebuggerServer } = this.props;
+    const { selectedId, debuggerStatus } = this.state;
+    const wasPaused = !!(
+      debuggerStatus[selectedId] && debuggerStatus[selectedId].isPaused
+    );
+
+    this.setState(
+      {
+        isIssueReportStarting: true,
+        issueReportError: null,
+        issueReportWarning: null,
+      },
+      this.updateToolbar
+    );
+
+    try {
+      const pauseResponse = await previewDebuggerServer.sendMessageToDebuggerWithResponse(
+        selectedId,
+        { command: 'pause' },
+        5000
+      );
+      const pauseStatus = this._validateIssueReportResponse(
+        pauseResponse,
+        'status'
+      );
+      if (!pauseStatus || !pauseStatus.isPaused) {
+        throw new Error('The game did not confirm that it was paused.');
+      }
+
+      const dumpResponse = await previewDebuggerServer.sendMessageToDebuggerWithResponse(
+        selectedId,
+        { command: 'refresh' },
+        15000
+      );
+      this._validateIssueReportResponse(dumpResponse, 'dump');
+
+      const annotationResponse = await previewDebuggerServer.sendMessageToDebuggerWithResponse(
+        selectedId,
+        { command: 'issueReport.startAnnotation' },
+        5000
+      );
+      this._validateIssueReportResponse(
+        annotationResponse,
+        'issueReport.annotationStarted'
+      );
+
+      if (
+        this._isUnmounted ||
+        this.state.selectedId !== selectedId ||
+        previewDebuggerServer.getExistingDebuggerIds().indexOf(selectedId) ===
+          -1
+      ) {
+        throw new Error(
+          'The selected preview changed while opening the report.'
+        );
+      }
+
+      this.setState(
+        {
+          activeIssueReport: {
+            debuggerId: selectedId,
+            wasPaused,
+            runtimeDump: dumpResponse.payload,
+            sceneName: pauseStatus.sceneName,
+          },
+          isIssueReportStarting: false,
+          issueReportDescription: '',
+          issueReportError: null,
+          issueReportWarning: null,
+        },
+        this.updateToolbar
+      );
+    } catch (error) {
+      previewDebuggerServer.sendMessage(selectedId, {
+        command: 'issueReport.stopAnnotation',
+      });
+      if (!wasPaused) {
+        previewDebuggerServer.sendMessage(selectedId, { command: 'play' });
+      }
+      if (!this._isUnmounted) {
+        this.setState({ isIssueReportStarting: false }, this.updateToolbar);
+        showErrorBox({
+          message: `Unable to start the issue report: ${error.message ||
+            String(error)}`,
+          rawError: error,
+          errorId: 'issue-report-start-failed',
+          doNotReport: true,
+        });
+      }
+    }
+  };
+
+  _runIssueAnnotationCommand = async (command: string): Promise<void> => {
+    const { activeIssueReport } = this.state;
+    if (!activeIssueReport) return;
+    this.setState({ issueReportError: null });
+    try {
+      const response = await this.props.previewDebuggerServer.sendMessageToDebuggerWithResponse(
+        activeIssueReport.debuggerId,
+        { command },
+        5000
+      );
+      this._validateIssueReportResponse(
+        response,
+        'issueReport.annotationChanged'
+      );
+    } catch (error) {
+      if (!this._isUnmounted) {
+        this.setState({
+          issueReportError: error.message || String(error),
+        });
+      }
+    }
+  };
+
+  _cleanupIssueReport = async (
+    issueReport: ActiveIssueReport
+  ): Promise<?string> => {
+    const warnings: Array<string> = [];
+    const { previewDebuggerServer } = this.props;
+    try {
+      const stopResponse = await previewDebuggerServer.sendMessageToDebuggerWithResponse(
+        issueReport.debuggerId,
+        { command: 'issueReport.stopAnnotation' },
+        5000
+      );
+      this._validateIssueReportResponse(
+        stopResponse,
+        'issueReport.annotationStopped'
+      );
+    } catch (error) {
+      warnings.push(`Could not remove the annotation layer: ${error.message}`);
+    }
+
+    if (!issueReport.wasPaused) {
+      try {
+        const playResponse = await previewDebuggerServer.sendMessageToDebuggerWithResponse(
+          issueReport.debuggerId,
+          { command: 'play' },
+          5000
+        );
+        this._validateIssueReportResponse(playResponse, 'status');
+      } catch (error) {
+        warnings.push(`Could not resume the game: ${error.message}`);
+      }
+    }
+    return warnings.length ? warnings.join('\n') : null;
+  };
+
+  _cancelIssueReport = async (): Promise<void> => {
+    const { activeIssueReport, isIssueReportSaving } = this.state;
+    if (!activeIssueReport || isIssueReportSaving) return;
+    this.setState({ isIssueReportSaving: true });
+    const cleanupWarning = await this._cleanupIssueReport(activeIssueReport);
+    if (this._isUnmounted) return;
+    this.setState(
+      {
+        activeIssueReport: null,
+        isIssueReportSaving: false,
+        issueReportDescription: '',
+        issueReportError: null,
+        issueReportWarning: null,
+      },
+      this.updateToolbar
+    );
+    if (cleanupWarning) {
+      showErrorBox({
+        message: cleanupWarning,
+        rawError: null,
+        errorId: 'issue-report-cleanup-failed',
+        doNotReport: true,
+      });
+    }
+  };
+
+  _saveIssueReport = async (): Promise<void> => {
+    const {
+      activeIssueReport,
+      issueReportDescription,
+      isIssueReportSaving,
+    } = this.state;
+    if (
+      !activeIssueReport ||
+      isIssueReportSaving ||
+      !issueReportDescription.trim()
+    ) {
+      return;
+    }
+
+    this.setState({
+      isIssueReportSaving: true,
+      issueReportError: null,
+    });
+    try {
+      const screenshotResponse = await this.props.previewDebuggerServer.sendMessageToDebuggerWithResponse(
+        activeIssueReport.debuggerId,
+        { command: 'issueReport.captureAnnotatedScreenshot' },
+        15000
+      );
+      const screenshot = this._validateIssueReportResponse(
+        screenshotResponse,
+        'issueReport.screenshot'
+      );
+      if (!screenshot || !screenshot.dataUrl) {
+        throw new Error('The preview did not return an annotated screenshot.');
+      }
+
+      const projectFile = this.props.project.getProjectFile();
+      const reportPath = await writeIssueReport({
+        projectFile,
+        data: {
+          createdAt: new Date(),
+          projectName: this.props.project.getName(),
+          sceneName: activeIssueReport.sceneName,
+          debuggerId: activeIssueReport.debuggerId,
+          description: issueReportDescription,
+          screenshotDataUrl: screenshot.dataUrl,
+          runtimeDump: activeIssueReport.runtimeDump,
+        },
+      });
+      const cleanupWarning = await this._cleanupIssueReport(activeIssueReport);
+      if (this._isUnmounted) return;
+      this.setState(
+        {
+          activeIssueReport: null,
+          isIssueReportSaving: false,
+          issueReportDescription: '',
+          issueReportError: null,
+          issueReportWarning: null,
+        },
+        this.updateToolbar
+      );
+      showMessageBox(
+        cleanupWarning
+          ? `Issue report saved to:\n${reportPath}\n\n${cleanupWarning}`
+          : `Issue report saved to:\n${reportPath}`
+      );
+    } catch (error) {
+      if (!this._isUnmounted) {
+        this.setState({
+          isIssueReportSaving: false,
+          issueReportError: `Unable to save the issue report: ${error.message ||
+            String(error)}`,
+        });
+      }
+    }
   };
 
   _edit = (id: DebuggerId, path: Array<string>, newValue: any): any => {
@@ -361,6 +741,20 @@ export default class Debugger extends React.Component<Props, State> {
     previewDebuggerServer.sendMessage(id, { command: 'profiler.stop' });
   };
 
+  _chooseDebugger = (id: DebuggerId): void => {
+    if (this.state.isIssueReportStarting) return;
+    if (!this.state.activeIssueReport) {
+      this.setState({ selectedId: id }, this.updateToolbar);
+      return;
+    }
+
+    this._cancelIssueReport().then(() => {
+      if (!this._isUnmounted) {
+        this.setState({ selectedId: id }, this.updateToolbar);
+      }
+    });
+  };
+
   _hasSelectedDebugger = (): any => {
     const { selectedId, debuggerIds } = this.state;
     if (debuggerIds.indexOf(selectedId) === -1) return false;
@@ -381,73 +775,91 @@ export default class Debugger extends React.Component<Props, State> {
       profilerOutputs,
       profilingInProgress,
       signalDiagnostics,
+      activeIssueReport,
+      isIssueReportSaving,
+      issueReportDescription,
+      issueReportError,
+      issueReportWarning,
     } = this.state;
 
     return (
-      <Background>
-        {debuggerServerState === 'stopped' && !debuggerServerError && (
-          <PlaceholderMessage>
-            <PlaceholderLoader />
-            <Text>
-              <Trans>Debugger is starting...</Trans>
-            </Text>
-          </PlaceholderMessage>
-        )}
-        {debuggerServerState === 'stopped' && debuggerServerError && (
-          <PlaceholderMessage>
-            <Text>
-              <Trans>
-                Unable to start the debugger server! Make sure that you are
-                authorized to run servers on this computer.
-              </Trans>
-            </Text>
-          </PlaceholderMessage>
-        )}
-        {debuggerServerState === 'started' && (
-          <Column expand noMargin>
-            <DebuggerSelector
-              selectedId={selectedId}
-              debuggerStatus={debuggerStatus}
-              onChooseDebugger={id =>
-                this.setState(
-                  {
-                    selectedId: id,
-                  },
-                  () => this.updateToolbar()
-                )
-              }
-            />
-            {this._hasSelectedDebugger() && (
-              <DebuggerContent
-                ref={debuggerContent =>
-                  (this._debuggerContents[selectedId] = debuggerContent)
-                }
-                gameData={debuggerGameData[selectedId]}
-                onPlay={() => this._play(selectedId)}
-                onPause={() => this._pause(selectedId)}
-                onRefresh={() => this._refresh(selectedId)}
-                onEdit={(path, args) => this._edit(selectedId, path, args)}
-                onCall={(path, args) => this._call(selectedId, path, args)}
-                onStartProfiler={() => this._startProfiler(selectedId)}
-                onStopProfiler={() => this._stopProfiler(selectedId)}
-                profilerOutput={profilerOutputs[selectedId]}
-                profilingInProgress={profilingInProgress[selectedId]}
-                logsManager={this._getLogsManager(selectedId)}
-                signalDiagnostics={signalDiagnostics[selectedId]}
-                onOpenedEditorsChanged={this.updateToolbar}
-              />
-            )}
-            {!this._hasSelectedDebugger() && (
-              <EmptyMessage>
+      <React.Fragment>
+        <Background>
+          {debuggerServerState === 'stopped' && !debuggerServerError && (
+            <PlaceholderMessage>
+              <PlaceholderLoader />
+              <Text>
+                <Trans>Debugger is starting...</Trans>
+              </Text>
+            </PlaceholderMessage>
+          )}
+          {debuggerServerState === 'stopped' && debuggerServerError && (
+            <PlaceholderMessage>
+              <Text>
                 <Trans>
-                  Run a preview and you will be able to inspect it with the
-                  debugger.
+                  Unable to start the debugger server! Make sure that you are
+                  authorized to run servers on this computer.
                 </Trans>
-              </EmptyMessage>
-            )}
-          </Column>
-        )}
-      </Background>
+              </Text>
+            </PlaceholderMessage>
+          )}
+          {debuggerServerState === 'started' && (
+            <Column expand noMargin>
+              <DebuggerSelector
+                selectedId={selectedId}
+                debuggerStatus={debuggerStatus}
+                onChooseDebugger={this._chooseDebugger}
+              />
+              {this._hasSelectedDebugger() && (
+                <DebuggerContent
+                  ref={debuggerContent =>
+                    (this._debuggerContents[selectedId] = debuggerContent)
+                  }
+                  gameData={debuggerGameData[selectedId]}
+                  onPlay={() => this._play(selectedId)}
+                  onPause={() => this._pause(selectedId)}
+                  onRefresh={() => this._refresh(selectedId)}
+                  onEdit={(path, args) => this._edit(selectedId, path, args)}
+                  onCall={(path, args) => this._call(selectedId, path, args)}
+                  onStartProfiler={() => this._startProfiler(selectedId)}
+                  onStopProfiler={() => this._stopProfiler(selectedId)}
+                  profilerOutput={profilerOutputs[selectedId]}
+                  profilingInProgress={profilingInProgress[selectedId]}
+                  logsManager={this._getLogsManager(selectedId)}
+                  signalDiagnostics={signalDiagnostics[selectedId]}
+                  onOpenedEditorsChanged={this.updateToolbar}
+                />
+              )}
+              {!this._hasSelectedDebugger() && (
+                <EmptyMessage>
+                  <Trans>
+                    Run a preview and you will be able to inspect it with the
+                    debugger.
+                  </Trans>
+                </EmptyMessage>
+              )}
+            </Column>
+          )}
+        </Background>
+        <IssueReportDialog
+          open={!!activeIssueReport}
+          description={issueReportDescription}
+          onDescriptionChange={description =>
+            this.setState({ issueReportDescription: description })
+          }
+          onUndo={() =>
+            this._runIssueAnnotationCommand('issueReport.undoAnnotation')
+          }
+          onClear={() =>
+            this._runIssueAnnotationCommand('issueReport.clearAnnotation')
+          }
+          onCancel={this._cancelIssueReport}
+          onSave={this._saveIssueReport}
+          isSaving={isIssueReportSaving}
+          error={issueReportError}
+          warning={issueReportWarning}
+        />
+      </React.Fragment>
     );
   }
 }

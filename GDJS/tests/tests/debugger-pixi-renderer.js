@@ -70,6 +70,148 @@ describe('gdjs.DebuggerPixiRenderer', function () {
     return { runtimeScene, object, layer: runtimeScene.getLayer('') };
   };
 
+  /**
+   * @param {gdjs.SignalDebugPoint} source
+   * @param {gdjs.SignalDebugPoint} receiver
+   * @returns {gdjs.SignalAnimationDebugRecord}
+   */
+  const makeSignalDebugRecord = (source, receiver) => ({
+    id: 1,
+    name: 'TestSignal',
+    payload: '',
+    target: 'objectInstance:#2',
+    status: 'delivered',
+    source,
+    receivers: [{ ...receiver, receiverName: receiver.objectName }],
+  });
+
+  it('exposes signal animations through the debugger overlay rendered over 3D scenes', function () {
+    const { runtimeScene, object } = make3DSceneAndObject();
+    const debuggerRenderer = runtimeScene.getDebuggerRenderer();
+    const signalDebugRecord = makeSignalDebugRecord(
+      {
+        objectName: 'scene',
+        objectId: -1,
+        x: 400,
+        y: 300,
+        z: 0,
+        layer: '',
+      },
+      {
+        objectName: 'Object',
+        objectId: object.getUniqueId(),
+        x: 100,
+        y: 200,
+        z: 0,
+        layer: '',
+      }
+    );
+
+    try {
+      debuggerRenderer.renderSignalDebugDraw([signalDebugRecord], 0);
+      const debugOverlayContainer = debuggerRenderer.getRendererObject();
+      if (!debugOverlayContainer) {
+        throw new Error('The debugger overlay should have been created.');
+      }
+      expect(debugOverlayContainer.children).to.contain(
+        debuggerRenderer._signalDebugDrawContainer
+      );
+      expect(
+        runtimeScene.getRenderer().getRendererObject().children
+      ).to.contain(debugOverlayContainer);
+
+      debuggerRenderer.renderDebugDraw([object], true, false, false, false, []);
+      expect(debuggerRenderer.getRendererObject()).to.be(debugOverlayContainer);
+      expect(debugOverlayContainer.children).to.contain(
+        debuggerRenderer._debugDrawContainer
+      );
+
+      debuggerRenderer.clearSignalDebugDraw();
+      expect(debuggerRenderer.getRendererObject()).to.be(debugOverlayContainer);
+      debuggerRenderer.clearDebugDraw();
+      expect(debuggerRenderer.getRendererObject()).to.be(null);
+    } finally {
+      runtimeScene._destroy();
+    }
+  });
+
+  it('projects signal endpoints through the active 3D camera using their Z position', function () {
+    const { runtimeScene, layer } = make3DSceneAndObject();
+    const layerRenderer = layer.getRenderer();
+    const threeObject = new THREE.Object3D();
+    layerRenderer.add3DRendererObject(threeObject);
+    layer.setCameraX(400);
+    layer.setCameraY(300);
+    layer.setCameraRotationX(25);
+    const camera = layerRenderer.getThreeCamera();
+    if (!camera) {
+      throw new Error('The 3D layer should have a Three.js camera.');
+    }
+
+    try {
+      const point = {
+        objectName: 'Object',
+        objectId: 1,
+        x: 430,
+        y: 340,
+        z: 120,
+        layer: '',
+      };
+      const projectedPosition = runtimeScene
+        .getDebuggerRenderer()
+        ._getSignalDebugPointPosition(point, [0, 0]);
+      if (!projectedPosition) {
+        throw new Error(
+          'The signal point should be inside the camera frustum.'
+        );
+      }
+
+      const inverseWorldScale = runtimeScene.getRenderer3DInverseWorldScale();
+      camera.updateMatrixWorld();
+      const expectedPoint = new THREE.Vector3(
+        point.x * inverseWorldScale,
+        -point.y * inverseWorldScale,
+        point.z * inverseWorldScale
+      ).project(camera);
+      expect(projectedPosition[0]).to.be.within(
+        ((expectedPoint.x + 1) / 2) * layer.getWidth() - 0.001,
+        ((expectedPoint.x + 1) / 2) * layer.getWidth() + 0.001
+      );
+      expect(projectedPosition[1]).to.be.within(
+        ((1 - expectedPoint.y) / 2) * layer.getHeight() - 0.001,
+        ((1 - expectedPoint.y) / 2) * layer.getHeight() + 0.001
+      );
+
+      const groundPosition = runtimeScene
+        .getDebuggerRenderer()
+        ._getSignalDebugPointPosition({ ...point, z: 0 }, [0, 0]);
+      if (!groundPosition) {
+        throw new Error(
+          'The ground signal point should be inside the frustum.'
+        );
+      }
+      expect(
+        Math.abs(projectedPosition[1] - groundPosition[1])
+      ).to.be.greaterThan(1);
+      expect(
+        runtimeScene.getDebuggerRenderer()._getSignalDebugPointPosition(
+          {
+            objectName: 'scene',
+            objectId: -1,
+            x: layer.getCameraX(),
+            y: layer.getCameraY(),
+            z: 0,
+            layer: '',
+          },
+          [0, 0]
+        )
+      ).to.eql([400, 300]);
+    } finally {
+      layerRenderer.remove3DRendererObject(threeObject);
+      runtimeScene._destroy();
+    }
+  });
+
   it('refreshes collision masks at 30 frames per second', function () {
     const { runtimeScene } = make3DSceneAndObject();
     const debuggerRenderer = runtimeScene.getDebuggerRenderer();

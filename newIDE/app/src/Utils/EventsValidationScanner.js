@@ -373,7 +373,7 @@ const createValidationWorker = (
             lifecycleFunctionName
           )}”.${
             lifecycleFunctionName === 'sceneSignal'
-              ? ' In “On scene signal”, compare SignalName() instead.'
+              ? ' In “On scene signal”, compare the SignalName parameter instead.'
               : ''
           }`
         );

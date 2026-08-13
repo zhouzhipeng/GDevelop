@@ -12,7 +12,13 @@ const maxRecentLogsPerDebugger = 200;
 
 let nextDebuggerId = 0;
 
-const responseCallbacks = new Map<number, (value: Object) => void>();
+type PendingResponse = {|
+  debuggerId: ?DebuggerId,
+  resolve: Object => void,
+  reject: Error => void,
+  timeoutId: any,
+|};
+const responseCallbacks = new Map<number, PendingResponse>();
 let nextMessageWithResponseId = 1;
 
 const existingPreviewWindows: {
@@ -66,6 +72,14 @@ const stopWindowClosedPolling = () => {
 
 const notifyConnectionClosed = (id: DebuggerId) => {
   delete recentLogsByDebuggerId[id];
+  responseCallbacks.forEach((pendingResponse, messageId) => {
+    if (pendingResponse.debuggerId !== id) return;
+    clearTimeout(pendingResponse.timeoutId);
+    pendingResponse.reject(
+      new Error(`Debugger "${id}" disconnected before responding.`)
+    );
+    responseCallbacks.delete(messageId);
+  });
   callbacksList.forEach(({ onConnectionClosed }) =>
     onConnectionClosed({
       id,
@@ -94,9 +108,13 @@ const handleParsedMessage = (
     recentLogsByDebuggerId[id] = recentLogs;
   }
 
-  const answerCallback = responseCallbacks.get(parsedMessage.messageId);
-  if (answerCallback) {
-    answerCallback(parsedMessage);
+  const pendingResponse = responseCallbacks.get(parsedMessage.messageId);
+  if (
+    pendingResponse &&
+    (!pendingResponse.debuggerId || pendingResponse.debuggerId === id)
+  ) {
+    clearTimeout(pendingResponse.timeoutId);
+    pendingResponse.resolve(parsedMessage);
     responseCallbacks.delete(parsedMessage.messageId);
   }
 
@@ -186,23 +204,56 @@ class BrowserPreviewDebuggerServer {
   sendMessageWithResponse(message: Object): Promise<Object> {
     const messageId = nextMessageWithResponseId;
     nextMessageWithResponseId++;
-    for (const id of getExistingDebuggerIds()) {
-      this.sendMessage(id, { ...message, messageId });
-    }
-
     const timeout = 1000;
-    const promise = new Promise<Object>((resolve, reject) => {
-      responseCallbacks.set(messageId, resolve);
-      setTimeout(() => {
+    return new Promise<Object>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        responseCallbacks.delete(messageId);
         reject(
           new Error(
             `Timeout while waiting for response from the debugger(s) for message with id ${messageId}.`
           )
         );
-        responseCallbacks.delete(messageId);
       }, timeout);
+      responseCallbacks.set(messageId, {
+        debuggerId: null,
+        resolve,
+        reject,
+        timeoutId,
+      });
+      for (const id of getExistingDebuggerIds()) {
+        this.sendMessage(id, { ...message, messageId });
+      }
     });
-    return promise;
+  }
+  sendMessageToDebuggerWithResponse(
+    id: DebuggerId,
+    message: Object,
+    timeoutMs: number = 5000
+  ): Promise<Object> {
+    if (getExistingDebuggerIds().indexOf(id) === -1) {
+      return Promise.reject(new Error(`Debugger "${id}" is not connected.`));
+    }
+
+    const messageId = nextMessageWithResponseId;
+    nextMessageWithResponseId++;
+    return new Promise<Object>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        responseCallbacks.delete(messageId);
+        reject(
+          new Error(
+            `Timeout while waiting for debugger "${id}" to respond to "${message.command ||
+              'unknown'}".`
+          )
+        );
+      }, Math.max(1, timeoutMs));
+      responseCallbacks.set(messageId, {
+        debuggerId: id,
+        resolve,
+        reject,
+        timeoutId,
+      });
+      this.sendMessage(id, { ...message, messageId });
+    });
   }
   getServerState(): 'started' | 'stopped' {
     return debuggerServerState;

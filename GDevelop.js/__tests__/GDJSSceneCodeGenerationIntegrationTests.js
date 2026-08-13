@@ -43,7 +43,7 @@ describe('libGD.js - GDJS Scene Code Generation integration tests', function () 
       },
     ]);
     setEvents(lifecycle.getSceneSignalFunction(), [
-      append('SignalName() + ":" + SignalPayload()'),
+      append('SignalName + ":" + Payload'),
     ]);
     setEvents(lifecycle.getSceneUpdateFunction(), [append('"U"')]);
     setEvents(lifecycle.getSceneUnloadFunction(), [append('"X"')]);
@@ -98,6 +98,63 @@ describe('libGD.js - GDJS Scene Code Generation integration tests', function () 
     project.delete();
   });
 
+  it('exposes scene signal parameters through eventsFunctionContext', function () {
+    const project = new gd.ProjectHelper.createNewGDJSProject();
+    const layout = project.insertNewLayout('Scene', 0);
+    layout.getVariables().insertNew('Log', 0).setString('');
+
+    const serializedEvents = gd.Serializer.fromJSObject([
+      {
+        type: 'BuiltinCommonInstructions::Standard',
+        conditions: [],
+        actions: [
+          {
+            type: { value: 'SetStringVariable' },
+            parameters: [
+              'Log',
+              '=',
+              'SignalName + ":" + Payload',
+            ],
+          },
+        ],
+        events: [],
+      },
+    ]);
+    layout
+      .getLifecycleEventsFunctions()
+      .getSceneSignalFunction()
+      .getEvents()
+      .unserializeFrom(project, serializedEvents);
+
+    const serializedProjectElement = new gd.SerializerElement();
+    project.serializeTo(serializedProjectElement);
+    const serializedSceneElement = new gd.SerializerElement();
+    layout.serializeTo(serializedSceneElement);
+    const { gdjs, runtimeScene } = makeMinimalGDJSMock({
+      gameData: JSON.parse(gd.Serializer.toJSON(serializedProjectElement)),
+      sceneData: JSON.parse(gd.Serializer.toJSON(serializedSceneElement)),
+    });
+    runtimeScene.setDeliveredSceneSignalsForTests([
+      { name: 'Ping', payload: 'data', target: { kind: 'scene' } },
+    ]);
+
+    const module = generateCompiledLifecycleModuleForLayout(
+      gd,
+      project,
+      layout,
+      gdjs
+    );
+    module.func(runtimeScene);
+    expect(runtimeScene.getVariables().get('Log').getAsString()).toBe(
+      'Ping:data'
+    );
+
+    serializedEvents.delete();
+    serializedProjectElement.delete();
+    serializedSceneElement.delete();
+    project.delete();
+  });
+
   it('keeps each scene signal context stable through asynchronous actions', function () {
     const project = new gd.ProjectHelper.createNewGDJSProject();
     const layout = project.insertNewLayout('Scene', 0);
@@ -113,7 +170,7 @@ describe('libGD.js - GDJS Scene Code Generation integration tests', function () 
             parameters: [
               'Log',
               '+',
-              'SignalName() + ":" + SignalPayload() + ";"',
+              'SignalName + ":" + Payload + ";"',
             ],
           },
         ],

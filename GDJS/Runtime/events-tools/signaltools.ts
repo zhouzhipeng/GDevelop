@@ -21,8 +21,7 @@ namespace gdjs {
   };
 
   export type RuntimeSignalTarget =
-    | { kind: 'scene' }
-    | { kind: 'objectInstance'; objectId: integer };
+    { kind: 'scene' } | { kind: 'objectInstance'; objectId: integer };
 
   export type RuntimeSignal = {
     id: integer;
@@ -38,6 +37,7 @@ namespace gdjs {
     objectId: integer;
     x: float;
     y: float;
+    z: float;
     layer: string;
   };
 
@@ -170,13 +170,25 @@ namespace gdjs {
 
   const getRuntimeObjectSignalDebugPoint = (
     runtimeObject: gdjs.RuntimeObject
-  ): SignalDebugPoint => ({
-    objectName: runtimeObject.getName(),
-    objectId: runtimeObject.getUniqueId(),
-    x: runtimeObject.getCenterXInScene(),
-    y: runtimeObject.getCenterYInScene(),
-    layer: runtimeObject.getLayer(),
-  });
+  ): SignalDebugPoint => {
+    const runtimeObjectWith3DPosition = runtimeObject as gdjs.RuntimeObject & {
+      getCenterZInScene?: () => float;
+      getZ?: () => float;
+    };
+    const z = runtimeObjectWith3DPosition.getCenterZInScene
+      ? runtimeObjectWith3DPosition.getCenterZInScene()
+      : runtimeObjectWith3DPosition.getZ
+        ? runtimeObjectWith3DPosition.getZ()
+        : 0;
+    return {
+      objectName: runtimeObject.getName(),
+      objectId: runtimeObject.getUniqueId(),
+      x: runtimeObject.getCenterXInScene(),
+      y: runtimeObject.getCenterYInScene(),
+      z: Number.isFinite(z) ? z : 0,
+      layer: runtimeObject.getLayer(),
+    };
+  };
 
   const getSceneSignalDebugPoint = (
     runtimeScene: gdjs.RuntimeScene
@@ -187,6 +199,7 @@ namespace gdjs {
       objectId: -1,
       x: baseLayer.getCameraX(),
       y: baseLayer.getCameraY(),
+      z: 0,
       layer: '',
     };
   };
@@ -921,26 +934,6 @@ namespace gdjs {
         runtimeScene
           .getSignalBus()
           .recordSceneSignalReceiver(runtimeScene, signal);
-      };
-
-      export const getSignalName = function (
-        instanceContainer: gdjs.RuntimeInstanceContainer
-      ): string {
-        return (
-          getSignalRuntimeScene(instanceContainer)
-            .getSignalBus()
-            .getCurrentSceneSignal()?.name || ''
-        );
-      };
-
-      export const getSignalPayload = function (
-        instanceContainer: gdjs.RuntimeInstanceContainer
-      ): string {
-        return (
-          getSignalRuntimeScene(instanceContainer)
-            .getSignalBus()
-            .getCurrentSceneSignal()?.payload || ''
-        );
       };
     }
   }

@@ -116,24 +116,6 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsSceneExtension(
       .AddParameter("string", _("Signal name"))
       .MarkAsSimple();
 
-  extension
-      .AddStrExpression("SignalName",
-                        _("Current signal name"),
-                        _("Name of the signal currently being handled."),
-                        _("Signals"),
-                        "res/actions/texte.png")
-      .AddCodeOnlyParameter("currentScene", "")
-      .SetRelevantForLayoutEventsOnly();
-
-  extension
-      .AddStrExpression("SignalPayload",
-                        _("Signal payload"),
-                        _("Read text from the current signal payload."),
-                        _("Signals"),
-                        "res/actions/texte.png")
-      .AddCodeOnlyParameter("currentScene", "")
-      .SetRelevantForLayoutEventsOnly();
-
   // Compatibility with GD <= 5.6.251
   extension.AddDuplicatedCondition("DepartScene", "SceneJustBegins").SetHidden();
   // End of compatibility code

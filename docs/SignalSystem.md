@@ -614,33 +614,20 @@ Signal name       string    Required
 The condition matches only scene signals. It is not exposed in prefab/object or
 behavior event sheets, where `onSignal` is the receiving surface.
 
-### 7.4 Scene signal expressions
+### 7.4 Signal lifecycle parameters
 
-Inside sub-events of a matching `Scene signal received` condition:
-
-```text
-SignalName()
-SignalPayload()
-```
-
-They return neutral values outside a matching signal context:
-
-```text
-SignalName()       -> ""
-SignalPayload()    -> ""
-```
-
-Prefab and behavior `onSignal` sheets use their fixed lifecycle parameters
-instead of these scene-context expressions.
+Scene `sceneSignal` and prefab or behavior `onSignal` functions expose fixed
+`SignalName` and `Payload` parameters. There are no separate signal name or
+payload expressions.
 
 ### 7.5 JavaScript code events
 
-Scene JavaScript code under a matching condition reads the current scene signal
-through runtime helpers:
+Scene JavaScript code in `sceneSignal` reads the fixed arguments through its
+events-function context:
 
 ```js
-const name = gdjs.evtTools.signal.getSignalName(runtimeScene);
-const payload = gdjs.evtTools.signal.getSignalPayload(runtimeScene);
+const name = eventsFunctionContext.getArgument('SignalName');
+const payload = eventsFunctionContext.getArgument('Payload');
 ```
 
 Inside prefab or behavior `onSignal` JavaScript code, read the fixed
@@ -1160,6 +1147,6 @@ The legacy `SignalReceived` condition remains registered only to load and run
 existing `sceneUpdate` events; it is hidden from new-authoring catalogs and
 instruction choosers. New handlers use `sceneSignal`, whose shared function
 settings UI exposes the fixed, read-only `SignalName` and `Payload` parameters.
-Inside `sceneSignal`, authors compare `SignalName()` directly.
+Inside `sceneSignal`, authors compare the fixed `SignalName` parameter directly.
 Signals emitted from load, signal, or update are queued for the next frame;
 signal emission is invalid in the terminal synchronous `sceneUnload` function.

@@ -10,6 +10,7 @@ import PlayIcon from '../UI/CustomSvgIcons/Preview';
 import PauseIcon from '../UI/CustomSvgIcons/Pause';
 import IconButton from '../UI/IconButton';
 import TimelineIcon from '@material-ui/icons/Timeline';
+import BugReportIcon from '@material-ui/icons/BugReport';
 
 type Props = {|
   onPlay: () => void,
@@ -25,6 +26,9 @@ type Props = {|
   isSignalMonitorShown: boolean,
   onToggleSignalMonitor: () => void,
   canOpenSignalMonitor: boolean,
+  onReportIssue: () => void | Promise<void>,
+  canReportIssue: boolean,
+  isReportingIssue: boolean,
 |};
 
 export class Toolbar extends React.PureComponent<Props> {
@@ -43,11 +47,26 @@ export class Toolbar extends React.PureComponent<Props> {
       isProfilerShown,
       isConsoleShown,
       isSignalMonitorShown,
+      onReportIssue,
+      canReportIssue,
+      isReportingIssue,
     } = this.props;
 
     return (
       <ToolbarGroup lastChild>
         <IconButton
+          id="report-game-issue-button"
+          size="small"
+          color="default"
+          onClick={onReportIssue}
+          disabled={!canReportIssue || isReportingIssue}
+          selected={isReportingIssue}
+          tooltip={t`Report an issue`}
+        >
+          <BugReportIcon />
+        </IconButton>
+        <IconButton
+          id="debugger-profiler-button"
           size="small"
           color="default"
           onClick={onToggleProfiler}
@@ -58,6 +77,7 @@ export class Toolbar extends React.PureComponent<Props> {
           <ProfilerIcon />
         </IconButton>
         <IconButton
+          id="debugger-console-button"
           size="small"
           color="default"
           onClick={onToggleConsole}
@@ -68,6 +88,7 @@ export class Toolbar extends React.PureComponent<Props> {
           <ConsoleIcon />
         </IconButton>
         <IconButton
+          id="debugger-signal-monitor-button"
           size="small"
           color="default"
           onClick={onToggleSignalMonitor}

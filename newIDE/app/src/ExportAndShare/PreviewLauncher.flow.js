@@ -171,6 +171,11 @@ export interface PreviewDebuggerServer {
   getLastConnectionInfo(): ?Object;
   sendMessage(id: DebuggerId, message: Object): void;
   sendMessageWithResponse(message: Object): Promise<Object>;
+  sendMessageToDebuggerWithResponse(
+    id: DebuggerId,
+    message: Object,
+    timeoutMs?: number
+  ): Promise<Object>;
   registerCallbacks(callbacks: PreviewDebuggerServerCallbacks): () => void;
   registerEmbeddedGameFrame(window: WindowProxy): void;
   unregisterEmbeddedGameFrame(window: WindowProxy): void;

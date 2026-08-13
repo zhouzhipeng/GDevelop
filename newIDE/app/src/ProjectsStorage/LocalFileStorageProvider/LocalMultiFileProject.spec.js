@@ -422,6 +422,16 @@ describe('Local multi-file project storage', () => {
     const sceneSettings = fs.readFileSync(sceneSettingsPath, 'utf8');
     expect(sceneSettings).not.toContain('externalEventFiles');
     expect(sceneSettings).not.toContain('externalLayoutFiles');
+    expect(sceneSettings).not.toContain('sceneLifecycleFunctions');
+    expect(
+      fs.readFileSync(
+        path.join(
+          temporaryDirectory,
+          'scenes/Main/external-events/Shared Combat/external-events.settings'
+        ),
+        'utf8'
+      )
+    ).not.toContain('sceneLifecycleFunctions');
     expect(
       fs.existsSync(
         path.join(
@@ -1784,6 +1794,33 @@ describe('Local multi-file project storage', () => {
     project.delete();
   });
 
+  test('regenerates project source catalogs with scene signal events', async () => {
+    const gd: libGDevelop = global.gd;
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    const legacyProject = JSON.parse(JSON.stringify(projectFixture));
+    legacyProject.properties.platforms = [{ name: 'GDevelop JS platform' }];
+    legacyProject.properties.currentPlatform = 'GDevelop JS platform';
+    legacyProject.layouts[0].sceneSignalEvents = [
+      {
+        type: 'BuiltinCommonInstructions::Standard',
+        conditions: [],
+        actions: [],
+        events: [],
+      },
+    ];
+
+    try {
+      unserializeFromJSObject(project, legacyProject);
+      const counts = await writeProjectSourceCatalogs(
+        project,
+        temporaryDirectory
+      );
+      expect(counts.javascript.counts.scenes).toBe(1);
+    } finally {
+      project.delete();
+    }
+  });
+
   test('writes the generated legacy game.json on every multi-file save', async () => {
     const gd: libGDevelop = global.gd;
     const project = gd.ProjectHelper.createNewGDJSProject();
@@ -2304,6 +2341,9 @@ column2 = "333"
     expect(
       fs.readFileSync(path.join(sceneDirectory, 'scene.settings'), 'utf8')
     ).toContain('[layout]');
+    expect(
+      fs.readFileSync(path.join(sceneDirectory, 'scene.settings'), 'utf8')
+    ).not.toContain('sceneLifecycleFunctions');
     expect(
       fs.existsSync(path.join(sceneDirectory, 'functions/sceneUpdate.events'))
     ).toBe(true);

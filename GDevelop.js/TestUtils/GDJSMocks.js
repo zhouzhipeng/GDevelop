@@ -1173,7 +1173,6 @@ class LongLivedObjectsList {
     this.callbacks = new Map();
     /** @type {LongLivedObjectsList | null} */
     this.parent = null;
-    this.sceneSignalContext = null;
   }
 
   /** @param {LongLivedObjectsList} parent */
@@ -1239,32 +1238,6 @@ class LongLivedObjectsList {
    */
   backupLocalVariablesContainers(variablesContainers) {
     copyArray(variablesContainers, this.localVariablesContainers);
-  }
-
-  /** @param {RuntimeScene} runtimeScene */
-  backupSceneSignalContext(runtimeScene) {
-    if (runtimeScene._currentSceneSignal) {
-      this.sceneSignalContext = {
-        name: runtimeScene._currentSceneSignal.name,
-        payload: runtimeScene._currentSceneSignal.payload,
-      };
-    }
-  }
-
-  getSceneSignalName() {
-    return this.sceneSignalContext
-      ? this.sceneSignalContext.name
-      : this.parent
-      ? this.parent.getSceneSignalName()
-      : '';
-  }
-
-  getSceneSignalPayload() {
-    return this.sceneSignalContext
-      ? this.sceneSignalContext.payload
-      : this.parent
-      ? this.parent.getSceneSignalPayload()
-      : '';
   }
 }
 
@@ -1336,10 +1309,6 @@ function makeMinimalGDJSMock(options) {
             runtimeScene._currentSceneSignal = null;
           },
           recordSceneSignalReceived: () => {},
-          getSignalName: (runtimeScene) =>
-            runtimeScene._currentSceneSignal?.name || '',
-          getSignalPayload: (runtimeScene) =>
-            runtimeScene._currentSceneSignal?.payload || '',
         },
       },
       registerBehavior: (behaviorTypeName, Ctor) => {

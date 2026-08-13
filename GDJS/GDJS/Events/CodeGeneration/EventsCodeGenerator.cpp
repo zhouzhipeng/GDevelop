@@ -132,10 +132,17 @@ gd::String EventsCodeGenerator::GenerateLayoutCode(
     gd::String lifecyclePrelude;
     if (role == "sceneSignal") {
       lifecyclePrelude =
-          lifecycleCodeGenerator.GetCodeNamespaceAccessor() +
-          "sceneSignalName = sceneSignalName;\n" +
-          lifecycleCodeGenerator.GetCodeNamespaceAccessor() +
-          "sceneSignalPayload = sceneSignalPayload;\n";
+          "const eventsFunctionContext = {\n"
+          "  getArgument: function(argumentName) {\n"
+          "    if (argumentName === \"SignalName\") return "
+          "sceneSignalName;\n"
+          "    if (argumentName === \"Payload\") return "
+          "sceneSignalPayload;\n"
+          "    return \"\";\n"
+          "  },\n"
+          "  getOnceTriggers: function() { return "
+          "runtimeScene.getOnceTriggers(); }\n"
+          "};\n";
     }
 
     output += GenerateEventsListCompleteFunctionCode(

@@ -232,9 +232,8 @@ ordinary private actions during loading and validation.
 
 The user cannot edit the name, role, type, order, visibility, async flag,
 folder, or parameter signature. Only the events body is editable. The
-`sceneSignal` parameter names follow Prefab `onSignal`; `SignalName()` and
-`SignalPayload()` remain convenient scene-context aliases that compile to the
-fixed parameters.
+`sceneSignal` parameter names follow Prefab `onSignal`. Authors use these fixed
+parameters directly; no separate signal name or payload expressions exist.
 
 When `sceneSignal` is selected, the shared function list exposes the same
 **Function settings** entry used by Prefab, Behavior, and Extension functions.
@@ -321,8 +320,8 @@ duplicate, reorder, signature editing, or “use as instruction” actions.
 Each Scene Events lifecycle function uses role-specific guidance:
 
 - `sceneLoad`: “Add events that initialize this scene.”
-- `sceneSignal`: “Add events that react to delivered scene signals. Use
-  `SignalName()` and `SignalPayload()` to inspect the current signal.”
+- `sceneSignal`: “Add events that react to delivered scene signals. Use the
+  `SignalName` and `Payload` parameters to inspect the current signal.”
 - `sceneUpdate`: retain the current first-event empty state.
 - `sceneUnload`: “Add synchronous cleanup events that run before this scene is
   unloaded.”
@@ -460,11 +459,11 @@ sceneSignal(C)
 sceneUpdate()
 ```
 
-Each invocation exposes:
+Each invocation exposes fixed, read-only parameters:
 
 ```text
-SignalName()     -> delivered signal name
-SignalPayload()  -> delivered immutable string payload
+SignalName     -> delivered signal name
+Payload        -> delivered immutable string payload
 ```
 
 The values are read-only. There is no user-facing emitter value. Logic needing
@@ -612,15 +611,14 @@ sceneCode.sceneSignal = function(runtimeScene, signalName, signalPayload) {
 };
 ```
 
-Within a `sceneSignal` generation context, normal `SignalName()` and
-`SignalPayload()` expressions compile against the invocation's captured
-values. Awaited event continuations must retain those values for their own
-invocation even after the synchronous signal loop has moved to another signal.
+Within a `sceneSignal` generation context, the fixed `SignalName` and `Payload`
+parameters compile against the invocation's captured values. Awaited event
+continuations must retain those values for their own invocation even after the
+synchronous signal loop has moved to another signal.
 
 The runtime's temporary current-signal helper remains for:
 
 - legacy `SignalReceived` events in `sceneUpdate`;
-- synchronous JavaScript event helpers; and
 - debugger association.
 
 Raw JavaScript that awaits must copy signal values before its first `await`, as
@@ -666,8 +664,8 @@ New signal handlers are authored in `sceneSignal` and inspect its read-only
 - `sceneUpdate`: existing serialized uses remain valid for compatibility, but
   the condition is not offered for new authoring.
 - `sceneLoad`: unavailable and a compile-time lifecycle-role diagnostic.
-- `sceneSignal`: unavailable and a compile-time lifecycle-role diagnostic. Authors use
-  `SignalName()` in an ordinary string comparison.
+- `sceneSignal`: unavailable and a compile-time lifecycle-role diagnostic.
+  Authors use the `SignalName` parameter in an ordinary string comparison.
 - `sceneUnload`: unavailable and a compile-time lifecycle-role diagnostic because signal
   delivery has finished and the bus is about to be cleared.
 
@@ -676,23 +674,15 @@ The diagnostic is:
 ```text
 SCENE_LIFECYCLE_FUNCTION_INVALID_SIGNAL_RECEIVED
 “Scene signal received” is only available in “Scene update” and cannot be used
-inside “{functionLabel}”. In “On scene signal”, compare SignalName() instead.
+inside “{functionLabel}”. In “On scene signal”, compare the SignalName parameter instead.
 ```
 
-### 10.4 Signal expressions
+### 10.4 Signal parameters
 
-- `sceneSignal`: valid throughout the function and through linked external-event
-  descendants.
-- `sceneUpdate`: valid only inside the existing temporary context established
-  by a matching `SignalReceived` event and its descendants.
-- `sceneLoad`: not meaningful; the editor warns and the runtime-compatible
-  fallback is empty text.
-- `sceneUnload`: not meaningful; the editor warns and the runtime-compatible
-  fallback is empty text.
-
-The compiler should issue a context diagnostic when it can prove an expression
-is outside a signal context. It must retain the existing neutral empty-string
-runtime fallback for dynamically reused external event sheets.
+`SignalName` and `Payload` are fixed parameters of `sceneSignal`, Prefab
+`onSignal`, and Behavior `onSignal`. They are not available in the other scene
+lifecycle functions. No separate signal expressions or neutral fallback values
+are exposed.
 
 ### 10.5 Trigger once
 
@@ -1471,10 +1461,11 @@ A later editor command may offer **Move to On scene load** or **Convert to On
 scene signal**, but it is not required for version 1.
 
 Any signal conversion must transform a top-level `SignalReceived(name)`
-iterator into a per-callback comparison against `SignalName()`, preserve other
-conditions and contiguous else chains, and prove round-trip equivalence before
-committing. If that proof is unavailable, the command leaves the event in
-`sceneUpdate`. A naive move that retains `SignalReceived` is forbidden.
+iterator into a per-callback comparison against the `SignalName` parameter,
+preserve other conditions and contiguous else chains, and prove round-trip
+equivalence before committing. If that proof is unavailable, the command leaves
+the event in `sceneUpdate`. A naive move that retains `SignalReceived` is
+forbidden.
 
 ### 19.3 Older editors
 

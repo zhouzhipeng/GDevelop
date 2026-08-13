@@ -14,6 +14,15 @@ multi-file sources, then continue by editing those generated files directly.
 There are no dedicated Constants MCP tools. Read and modify `constants.toml`
 directly.
 
+## Engine-level bugs
+
+If you encounter an engine-level issue or bug while working on a GDevelop
+project, pause the current project task immediately. Investigate and fix the
+engine bug first in the GDevelop engine source at `D:\code\GDevelop`, verify
+the engine fix, and only then resume the project task. Do not work around an
+engine bug solely in project files or continue the project task while the
+engine issue remains unresolved.
+
 Read, in order:
 
 1. `project.gdevelop` for project metadata and non-constants project data.
@@ -224,9 +233,11 @@ flat same-stem `functions/<Function>.settings` and
 URI. Scene and External Events owners have exactly four fixed
 functions: `sceneLoad`, `sceneSignal`, `sceneUpdate`, and `sceneUnload`.
 `sceneUpdate` is required; empty optional lifecycle functions may be absent from
-disk. Store editable prefab/behavior grouping in the function settings `folder`
-array. Lifecycle function names, order, roles, types, and parameters are fixed
-and must not be edited.
+disk. Infer lifecycle presence only from these settings/events pairs; never add
+`sceneLifecycleFunctions` to `scene.settings` or `external-events.settings`.
+Store editable prefab/behavior grouping in the function settings `folder` array.
+Lifecycle function names, order, roles, types, and parameters are fixed and must
+not be edited.
 
 ## Project layout
 

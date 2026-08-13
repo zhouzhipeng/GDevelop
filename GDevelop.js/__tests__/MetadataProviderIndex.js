@@ -155,4 +155,19 @@ describe('MetadataProvider index', () => {
     );
     expect(signalReceived.isHidden()).toBe(true);
   });
+
+  it('does not expose scene signal data as expressions', () => {
+    const platform = gd.JsPlatform.get();
+
+    expect(
+      gd.MetadataProvider.isBadExpressionMetadata(
+        gd.MetadataProvider.getStrExpressionMetadata(platform, 'SignalName')
+      )
+    ).toBe(true);
+    expect(
+      gd.MetadataProvider.isBadExpressionMetadata(
+        gd.MetadataProvider.getStrExpressionMetadata(platform, 'SignalPayload')
+      )
+    ).toBe(true);
+  });
 });
