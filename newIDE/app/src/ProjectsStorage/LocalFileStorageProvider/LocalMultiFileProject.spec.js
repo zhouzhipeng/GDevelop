@@ -1784,6 +1784,79 @@ describe('Local multi-file project storage', () => {
     project.delete();
   });
 
+  test('regenerates project source catalogs with scene signal events', async () => {
+    const gd: libGDevelop = global.gd;
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    const legacyProject = JSON.parse(JSON.stringify(projectFixture));
+    legacyProject.properties.platforms = [{ name: 'GDevelop JS platform' }];
+    legacyProject.properties.currentPlatform = 'GDevelop JS platform';
+    legacyProject.layouts[0].sceneSignalEvents = [
+      {
+        type: 'BuiltinCommonInstructions::Standard',
+        conditions: [],
+        actions: [],
+        events: [],
+      },
+    ];
+
+    try {
+      unserializeFromJSObject(project, legacyProject);
+      const counts = await writeProjectSourceCatalogs(
+        project,
+        temporaryDirectory
+      );
+      expect(counts.javascript.counts.scenes).toBe(1);
+    } finally {
+      project.delete();
+    }
+  });
+
+  test('diagnoses the current project scene signal catalog failure', async () => {
+    const gd: libGDevelop = global.gd;
+    const source = await openMultiFileProject(
+      'D:\\Users\\Administrator\\Documents\\GDevelop projects\\My project116\\project.gdevelop',
+      {
+        ignoreInstructionCatalog: true,
+        skipEventsCompilation: true,
+      }
+    );
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    try {
+      try {
+        unserializeFromJSObject(project, source);
+      } catch (error) {
+        console.log('Native error:', error);
+        if (typeof error === 'number') {
+          const words = Array.from(
+            gd.HEAPU32.slice((error - 24) / 4, (error + 64) / 4)
+          );
+          console.log('Exception words:', words);
+          console.log(
+            'Pointed strings:',
+            words.map(pointer => {
+              if (pointer <= 0 || pointer >= gd.HEAPU8.length) return null;
+              const end = gd.HEAPU8.indexOf(0, pointer);
+              if (end <= pointer || end - pointer > 500) return null;
+              return new TextDecoder().decode(gd.HEAPU8.slice(pointer, end));
+            })
+          );
+        }
+        console.log(
+          'Exception helpers:',
+          Object.keys(gd).filter(key => /exception|utf8|string/i.test(key))
+        );
+        throw error;
+      }
+      const counts = await writeProjectSourceCatalogs(
+        project,
+        temporaryDirectory
+      );
+      expect(counts.javascript.counts.scenes).toBe(4);
+    } finally {
+      project.delete();
+    }
+  });
+
   test('writes the generated legacy game.json on every multi-file save', async () => {
     const gd: libGDevelop = global.gd;
     const project = gd.ProjectHelper.createNewGDJSProject();
