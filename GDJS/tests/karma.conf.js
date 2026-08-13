@@ -12,6 +12,12 @@ module.exports = function (config) {
 
   config.set({
     frameworks: ['mocha', 'sinon'],
+    // Bind and advertise the same loopback address. On Windows, binding to
+    // 0.0.0.0 can succeed even when another application already owns
+    // 127.0.0.1:9876. Chrome then reaches that application through localhost
+    // instead of Karma and never attaches.
+    hostname: '127.0.0.1',
+    listenAddress: '127.0.0.1',
     browserNoActivityTimeout: 400000,
     browsers: [
       'ChromeHeadless',
