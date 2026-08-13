@@ -1,6 +1,6 @@
 # In-preview issue reporting specification
 
-Status: approved and implemented.
+Status: approved and implemented, including the linked-artifact update.
 
 ## Problem
 
@@ -14,9 +14,9 @@ to an AI model.
 The requested workflow adds a **Report issue** button at the start of the
 debugger toolbar, in the location highlighted in the supplied screenshot. It
 must freeze the selected preview, let the user draw directly over the game,
-collect a text description, and save the description, annotated screenshot,
-and runtime debugger dump in one Markdown file under the local project's
-`issues/` directory.
+collect a text description, and save a Markdown report under the local
+project's `issues/` directory. The report links a compact annotated PNG under
+`issues/images/` and a runtime debugger dump under `issues/dumps/`.
 
 In this specification, "game memory data" means the JSON-safe runtime game
 state already produced by the debugger's `dump` response. It does not mean a
@@ -32,12 +32,15 @@ raw operating-system process heap dump.
   canvas while game input is blocked.
 - Show a debugger-side dialog containing a multiline issue description and
   controls to undo or clear annotations, cancel, or save the report.
-- Capture the exact paused game canvas with the annotation composited into a
-  PNG data URL.
+- Capture the paused game canvas with the annotation composited into a compact
+  PNG no larger than 1280 by 720 pixels, preserving its aspect ratio.
 - Capture the corresponding full debugger runtime dump while the game remains
   paused.
-- Save one self-contained Markdown file under `<project-root>/issues/` with the
-  input text, PNG base64 data URL, dump JSON, and small identifying metadata.
+- Save Markdown under `<project-root>/issues/`, PNG under `issues/images/`, and
+  dump JSON under `issues/dumps/`, using relative links between them.
+- Tell an AI reader to inspect the dump only when the description and image
+  are insufficient for a difficult investigation, avoiding wasted tokens for
+  straightforward issues.
 - Restore the preview's pre-report pause state after either saving or
   cancelling.
 - Keep all report data local; nothing is uploaded or submitted automatically.
@@ -149,13 +152,14 @@ Save report performs these operations while the game is still paused:
 1. Ask the selected runtime client for
    `issueReport.captureAnnotatedScreenshot`.
 2. Force a render without stepping, copy the game canvas into a temporary 2D
-   canvas, paint the recorded strokes at intrinsic resolution, and return one
-   `data:image/png;base64,...` URL.
-3. Build the Markdown from the retained dump, returned screenshot, user text,
-   and report metadata.
-4. Create `<project-root>/issues/` if needed and atomically write a unique
-   `issue-YYYYMMDD-HHmmss-SSS.md` file. A numeric suffix resolves the unlikely
-   case of a filename collision.
+   canvas, paint the recorded strokes, and downscale the result to fit within
+   1280 by 720 while preserving aspect ratio.
+3. Decode the transported PNG data URL into a real `.png` file and serialize
+   the retained dump into a separate pretty-printed `.json` file.
+4. Create `issues/`, `issues/images/`, and `issues/dumps/` if needed. Publish
+   the image and dump first, then atomically publish a unique
+   `issue-YYYYMMDD-HHmmss-SSS.md` linking both. A numeric suffix resolves
+   filename collisions across the whole artifact bundle.
 5. Remove the annotation layer and close the dialog.
 6. Resume the game only if it was playing before the report started. A preview
    that was already paused remains paused.
@@ -170,7 +174,7 @@ writes nothing.
 
 ## Markdown format
 
-The file is UTF-8 and self-contained:
+The Markdown file is UTF-8 and uses project-relative artifact links:
 
 ````markdown
 # Game issue report
@@ -186,23 +190,25 @@ The player falls through this platform after landing.
 
 ## Annotated screenshot
 
-![Annotated paused game frame](data:image/png;base64,iVBORw0KGgo...)
+![Annotated paused game frame](images/issue-20260813-073012-123-screenshot.png)
 
 ## Runtime game memory dump
 
-```json
-{
-  "_paused": true,
-  "_sceneStack": {}
-}
-```
+[Open the game-memory dump](dumps/issue-20260813-073012-123-game-memory-dump.json)
+
+### AI investigation guidance
+
+Start with the user description and annotated screenshot. Only read the linked
+game-memory dump if the reported issue is very difficult to investigate or
+those sources are insufficient. Otherwise, do not read it, to avoid wasting
+context tokens.
 ````
 
-The screenshot data appears exactly once, as a PNG data URL in the Markdown
-image target. The runtime section contains the JSON-safe dump received from the
-selected preview, pretty-printed with two-space indentation. Metadata is
-derived from the same selected debugger and dump; missing optional metadata is
-omitted rather than guessed.
+The Markdown never embeds screenshot base64 or the full dump. The PNG is stored
+under `issues/images/`; the JSON-safe dump received from the selected preview
+is pretty-printed with two-space indentation under `issues/dumps/`. Metadata
+is derived from the same selected debugger and dump; missing optional metadata
+is omitted rather than guessed.
 
 User text is treated as content, never as a path or filename. The writer does
 not interpolate it into HTML or execute it.
@@ -273,7 +279,9 @@ Pure formatting/path selection and filesystem writing live in
 `Debugger/IssueReportWriter.js`. This keeps Node-only access out of the visual
 components and makes the output contract unit-testable. The writer validates
 that the resolved `issues` directory stays directly under the resolved project
-root before creating or renaming files.
+root before creating or publishing files. It validates the PNG signature,
+never overwrites any of the three artifacts, publishes the Markdown last, and
+uses only forward-slash relative links inside it.
 
 ## Runtime annotation design
 
@@ -286,7 +294,8 @@ Pointer points use the current canvas bounding rectangle to map CSS coordinates
 to `canvas.width`/`canvas.height`. Rendering the visible overlay maps the stored
 intrinsic points back to its device-pixel-ratio backing store. Final capture
 draws the paused game canvas first and the same intrinsic strokes second, so
-the saved image remains correct after display scaling or a window resize.
+the saved image remains correct after display scaling or a window resize. The
+capture is downscaled only when necessary to fit within 1280 by 720 pixels.
 
 Pointer-move events are sampled only after a small distance threshold, and the
 session is bounded to 100,000 points. If the cap is reached, the current stroke
@@ -362,11 +371,10 @@ files are preserved.
   report feature does not traverse a second runtime graph.
 - Normal play has no annotation allocations. During a report, stored point
   data is bounded and pointer events are distance-sampled.
-- Saving temporarily allocates one intrinsic-resolution 2D canvas plus the PNG
+- Saving temporarily allocates one 2D canvas capped at 1280 by 720 plus the PNG
   and Markdown strings. These are released when the session closes.
-- Files are intentionally self-contained and can be large because base64 adds
-  roughly one third to PNG size and the dump is embedded. No duplicate image
-  copy is stored.
+- The PNG and dump are linked rather than embedded, keeping the Markdown small
+  and preventing an AI from spending context tokens on the dump unless needed.
 
 ## Testing
 
@@ -380,18 +388,20 @@ files are preserved.
   debugger, blocks duplicate starts, and restores the original pause state on
   save/cancel.
 - Disconnect and command/write failure paths do not write partial reports.
-- Markdown formatting contains one data URL, exact description, metadata, and
-  pretty-printed dump.
-- Path generation creates `issues/`, avoids collisions, never overwrites, and
-  rejects paths outside the project root.
+- Markdown formatting contains relative image/dump links, the exact
+  description and metadata, no base64, no inline dump, and explicit AI token
+  guidance.
+- Path generation creates `issues/images/` and `issues/dumps/`, avoids bundle
+  collisions, never overwrites, and rejects paths outside the project root.
 
 ### Runtime/browser tests
 
 - Start creates one correctly positioned overlay and is idempotent.
 - Pointer mapping remains correct for CSS scaling and device pixel ratios.
 - Undo/clear update strokes; stop removes DOM nodes and listeners.
-- Capture calls render-without-step, returns original game dimensions, and
-  visibly composites a known stroke without advancing runtime time.
+- Capture calls render-without-step, visibly composites a known stroke without
+  advancing runtime time, preserves small dimensions, and caps large captures
+  at 1280 by 720.
 - The point cap is enforced without throwing.
 - Tagged refresh returns the same dump payload contract plus `messageId`;
   untagged refresh remains unchanged.
@@ -440,11 +450,12 @@ the exact game resolution.
 This is simpler but does not satisfy drawing directly on the game window and
 makes it harder to compare annotations with the live paused presentation.
 
-### Store separate PNG and JSON files
+### Embed PNG and JSON in the Markdown
 
-Separate assets are smaller and friendlier to ordinary Markdown renderers, but
-the request requires one Markdown artifact with a base64 screenshot and memory
-data. The proposed format is deliberately self-contained.
+A self-contained report is convenient to move as one file, but base64 makes
+the Markdown larger and an inline dump encourages AI readers to spend tokens
+on state that simple visual issues do not need. Linked artifacts keep the
+default AI context compact while preserving deeper evidence on demand.
 
 ### Put filesystem writes in the Electron main process
 
@@ -460,9 +471,11 @@ Implementation can begin once these first-version choices are approved:
 1. Reports are available only for external previews of local desktop projects.
 2. Drawing is a red freehand pen with undo and clear, directly over the game
    canvas.
-3. The saved image is the game canvas at intrinsic resolution, not operating
-   system window chrome.
+3. The saved image is the game canvas, not operating system window chrome, and
+   is downscaled as needed to fit within 1280 by 720 pixels.
 4. Cancel and successful save restore the preview's pause state from before
    the report started.
 5. "Memory data" is the existing JSON-safe debugger runtime dump, not a raw
-   heap snapshot.
+   heap snapshot, and AI readers open it only for difficult investigations.
+6. Markdown, PNG, and JSON are linked artifacts under `issues/`,
+   `issues/images/`, and `issues/dumps/` respectively.

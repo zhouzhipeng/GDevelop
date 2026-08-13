@@ -121,4 +121,44 @@ describe('gdjs.AbstractDebuggerClient issue report annotation', function () {
       gameCanvas.remove();
     }
   });
+
+  it('limits large captured screenshots to 1280 by 720', function () {
+    const gameCanvas = document.createElement('canvas');
+    gameCanvas.width = 2560;
+    gameCanvas.height = 1440;
+    gameCanvas.getBoundingClientRect = () => ({
+      bottom: 720,
+      height: 720,
+      left: 0,
+      right: 1280,
+      top: 0,
+      width: 1280,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    document.body.appendChild(gameCanvas);
+
+    const messages = [];
+    const client = Object.create(gdjs.AbstractDebuggerClient.prototype);
+    client._runtimegame = {
+      pause: sinon.spy(),
+      getSceneStack: () => ({ renderWithoutStep: sinon.stub().returns(true) }),
+      getRenderer: () => ({ getCanvas: () => gameCanvas }),
+    };
+    client._issueAnnotationLayer = null;
+    client._sendMessage = (message) => messages.push(JSON.parse(message));
+
+    try {
+      client.startIssueAnnotation(1);
+      client.sendAnnotatedIssueScreenshot(2);
+      const screenshotMessage = messages[messages.length - 1];
+      expect(screenshotMessage.payload.success).to.be(true);
+      expect(screenshotMessage.payload.width).to.be(1280);
+      expect(screenshotMessage.payload.height).to.be(720);
+    } finally {
+      client.stopIssueAnnotation();
+      gameCanvas.remove();
+    }
+  });
 });

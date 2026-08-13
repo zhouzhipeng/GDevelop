@@ -3,6 +3,7 @@ import optionalRequire from '../Utils/OptionalRequire';
 
 const fs = optionalRequire('fs');
 const path = optionalRequire('path');
+const nodeBuffer = optionalRequire('buffer');
 
 export type IssueReportData = {|
   createdAt: Date,
@@ -12,6 +13,11 @@ export type IssueReportData = {|
   description: string,
   screenshotDataUrl: string,
   runtimeDump: Object,
+|};
+
+type IssueReportArtifactLinks = {|
+  screenshotRelativePath: string,
+  dumpRelativePath: string,
 |};
 
 const toSingleLine = (value: string): string =>
@@ -39,12 +45,10 @@ export const getLocalProjectRoot = (projectFile: string): ?string => {
   return path.dirname(path.resolve(projectFile));
 };
 
-export const buildIssueReportMarkdown = (data: IssueReportData): string => {
-  if (
-    !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(data.screenshotDataUrl)
-  ) {
-    throw new Error('The annotated screenshot is not a valid PNG data URL.');
-  }
+export const buildIssueReportMarkdown = (
+  data: IssueReportData,
+  { screenshotRelativePath, dumpRelativePath }: IssueReportArtifactLinks
+): string => {
   if (!data.description.trim()) {
     throw new Error('An issue description is required.');
   }
@@ -55,7 +59,6 @@ export const buildIssueReportMarkdown = (data: IssueReportData): string => {
     ...(data.sceneName ? [`- Scene: ${toSingleLine(data.sceneName)}`] : []),
     `- Preview debugger ID: ${toSingleLine(data.debuggerId)}`,
   ];
-  const runtimeDumpJson = JSON.stringify(data.runtimeDump, null, 2);
 
   return [
     '# Game issue report',
@@ -68,15 +71,49 @@ export const buildIssueReportMarkdown = (data: IssueReportData): string => {
     '',
     '## Annotated screenshot',
     '',
-    `![Annotated paused game frame](${data.screenshotDataUrl})`,
+    `![Annotated paused game frame](${screenshotRelativePath})`,
     '',
     '## Runtime game memory dump',
     '',
-    '```json',
-    runtimeDumpJson,
-    '```',
+    `[Open the game-memory dump](${dumpRelativePath})`,
+    '',
+    '### AI investigation guidance',
+    '',
+    'Start with the user description and annotated screenshot. Only read the linked game-memory dump if the reported issue is very difficult to investigate or those sources are insufficient. Otherwise, do not read it, to avoid wasting context tokens.',
     '',
   ].join('\n');
+};
+
+const getScreenshotPngBytes = (screenshotDataUrl: string): any => {
+  const match = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(
+    screenshotDataUrl
+  );
+  if (!match || !nodeBuffer || !nodeBuffer.Buffer) {
+    throw new Error('The annotated screenshot is not a valid PNG data URL.');
+  }
+  const pngBytes = nodeBuffer.Buffer.from(match[1], 'base64');
+  if (
+    pngBytes.length < 8 ||
+    pngBytes[0] !== 0x89 ||
+    pngBytes[1] !== 0x50 ||
+    pngBytes[2] !== 0x4e ||
+    pngBytes[3] !== 0x47 ||
+    pngBytes[4] !== 0x0d ||
+    pngBytes[5] !== 0x0a ||
+    pngBytes[6] !== 0x1a ||
+    pngBytes[7] !== 0x0a
+  ) {
+    throw new Error('The annotated screenshot is not a valid PNG image.');
+  }
+  return pngBytes;
+};
+
+const removeFileIfCreated = async (filePath: string): Promise<void> => {
+  try {
+    await fs.promises.unlink(filePath);
+  } catch (error) {
+    if (!error || error.code !== 'ENOENT') throw error;
+  }
 };
 
 export const writeIssueReport = async ({
@@ -87,50 +124,96 @@ export const writeIssueReport = async ({
   data: IssueReportData,
 |}): Promise<string> => {
   const projectRoot = getLocalProjectRoot(projectFile);
-  if (!projectRoot || !fs || !path || !fs.promises) {
+  if (!projectRoot || !fs || !path || !fs.promises || !nodeBuffer) {
     throw new Error('Issue reports require a locally saved desktop project.');
   }
 
   const issuesDirectory = path.resolve(projectRoot, 'issues');
+  const imagesDirectory = path.resolve(issuesDirectory, 'images');
+  const dumpsDirectory = path.resolve(issuesDirectory, 'dumps');
   if (path.relative(projectRoot, issuesDirectory) !== 'issues') {
     throw new Error('The issue report directory is outside the project root.');
   }
+  if (
+    path.relative(issuesDirectory, imagesDirectory) !== 'images' ||
+    path.relative(issuesDirectory, dumpsDirectory) !== 'dumps'
+  ) {
+    throw new Error('An issue report artifact directory is outside issues.');
+  }
 
-  const markdown = buildIssueReportMarkdown(data);
-  await fs.promises.mkdir(issuesDirectory, { recursive: true });
+  const pngBytes = getScreenshotPngBytes(data.screenshotDataUrl);
+  const dumpJson = `${JSON.stringify(data.runtimeDump, null, 2)}\n`;
+  await Promise.all([
+    fs.promises.mkdir(imagesDirectory, { recursive: true }),
+    fs.promises.mkdir(dumpsDirectory, { recursive: true }),
+  ]);
 
-  const stem = getIssueReportFileStem(data.createdAt);
-  const temporaryPath = path.join(
-    issuesDirectory,
-    `.${stem}-${Math.random()
-      .toString(36)
-      .slice(2)}.tmp`
+  const baseStem = getIssueReportFileStem(data.createdAt);
+  const temporaryToken = `${baseStem}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+  const temporaryScreenshotPath = path.join(
+    imagesDirectory,
+    `.${temporaryToken}.png.tmp`
   );
-  await fs.promises.writeFile(temporaryPath, markdown, {
-    encoding: 'utf8',
-    flag: 'wx',
-  });
-
+  const temporaryDumpPath = path.join(
+    dumpsDirectory,
+    `.${temporaryToken}.json.tmp`
+  );
   try {
+    await fs.promises.writeFile(temporaryScreenshotPath, pngBytes, {
+      flag: 'wx',
+    });
+    await fs.promises.writeFile(temporaryDumpPath, dumpJson, {
+      encoding: 'utf8',
+      flag: 'wx',
+    });
+
     for (let suffix = 0; suffix < 10000; suffix++) {
-      const filename = `${stem}${suffix ? `-${suffix}` : ''}.md`;
-      const reportPath = path.join(issuesDirectory, filename);
+      const stem = `${baseStem}${suffix ? `-${suffix}` : ''}`;
+      const screenshotFilename = `${stem}-screenshot.png`;
+      const dumpFilename = `${stem}-game-memory-dump.json`;
+      const reportPath = path.join(issuesDirectory, `${stem}.md`);
+      const screenshotPath = path.join(imagesDirectory, screenshotFilename);
+      const dumpPath = path.join(dumpsDirectory, dumpFilename);
+      const temporaryMarkdownPath = path.join(
+        issuesDirectory,
+        `.${temporaryToken}-${suffix}.md.tmp`
+      );
+      let screenshotWasCreated = false;
+      let dumpWasCreated = false;
       try {
-        // Creating a hard link publishes the fully-written temporary file in
-        // one filesystem operation and fails rather than overwriting a report.
-        await fs.promises.link(temporaryPath, reportPath);
+        await fs.promises.link(temporaryScreenshotPath, screenshotPath);
+        screenshotWasCreated = true;
+        await fs.promises.link(temporaryDumpPath, dumpPath);
+        dumpWasCreated = true;
+
+        const markdown = buildIssueReportMarkdown(data, {
+          screenshotRelativePath: `images/${screenshotFilename}`,
+          dumpRelativePath: `dumps/${dumpFilename}`,
+        });
+        await fs.promises.writeFile(temporaryMarkdownPath, markdown, {
+          encoding: 'utf8',
+          flag: 'wx',
+        });
+        // Publish the Markdown last so every link points to a complete file as
+        // soon as the report becomes visible.
+        await fs.promises.link(temporaryMarkdownPath, reportPath);
+        await removeFileIfCreated(temporaryMarkdownPath);
         return reportPath;
       } catch (error) {
+        await removeFileIfCreated(temporaryMarkdownPath);
+        if (dumpWasCreated) await removeFileIfCreated(dumpPath);
+        if (screenshotWasCreated) await removeFileIfCreated(screenshotPath);
         if (error && error.code === 'EEXIST') continue;
         throw error;
       }
     }
     throw new Error('Unable to choose a unique issue report filename.');
   } finally {
-    try {
-      await fs.promises.unlink(temporaryPath);
-    } catch (error) {
-      if (!error || error.code !== 'ENOENT') throw error;
-    }
+    await Promise.all([
+      removeFileIfCreated(temporaryScreenshotPath),
+      removeFileIfCreated(temporaryDumpPath),
+    ]);
   }
 };

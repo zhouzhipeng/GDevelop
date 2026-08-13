@@ -35,6 +35,8 @@ namespace gdjs {
   const issueAnnotationColor = '#ff334e';
   const issueAnnotationCssLineWidth = 4;
   const maxIssueAnnotationPoints = 100000;
+  const maxIssueScreenshotWidth = 1280;
+  const maxIssueScreenshotHeight = 720;
 
   /**
    * A preview-only drawing layer used while an issue report is being prepared.
@@ -150,14 +152,35 @@ namespace gdjs {
     } {
       this._finishActiveStroke();
       const outputCanvas = document.createElement('canvas');
-      outputCanvas.width = this._gameCanvas.width;
-      outputCanvas.height = this._gameCanvas.height;
+      const outputScale = Math.min(
+        1,
+        maxIssueScreenshotWidth / Math.max(1, this._gameCanvas.width),
+        maxIssueScreenshotHeight / Math.max(1, this._gameCanvas.height)
+      );
+      outputCanvas.width = Math.max(
+        1,
+        Math.round(this._gameCanvas.width * outputScale)
+      );
+      outputCanvas.height = Math.max(
+        1,
+        Math.round(this._gameCanvas.height * outputScale)
+      );
       const context = outputCanvas.getContext('2d');
       if (!context) {
         throw new Error('Unable to create a canvas for the annotated image.');
       }
-      context.drawImage(this._gameCanvas, 0, 0);
-      this._drawStrokes(context, 1, 1);
+      context.drawImage(
+        this._gameCanvas,
+        0,
+        0,
+        outputCanvas.width,
+        outputCanvas.height
+      );
+      this._drawStrokes(
+        context,
+        outputCanvas.width / Math.max(1, this._gameCanvas.width),
+        outputCanvas.height / Math.max(1, this._gameCanvas.height)
+      );
       return {
         dataUrl: outputCanvas.toDataURL('image/png'),
         width: outputCanvas.width,
