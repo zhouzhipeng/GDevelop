@@ -718,6 +718,34 @@ describe('McpEditorBridge', () => {
     );
     files['game://scenes/Scene/functions/sceneUpdate.events'] =
       'if SceneJustBegins\n';
+    files['game://extensions/Local/extension.settings'] = `kind = "extension"
+settingsFormatVersion = 5
+order = 0
+name = "Local"
+description = ""
+tags = [ ]
+authorIds = [ ]
+dependencies = [ ]
+globalVariables = [ ]
+sceneVariables = [ ]
+`;
+    files[
+      'game://extensions/Local/prefabs/UnreferencedCard/prefab.settings'
+    ] = `kind = "prefab"
+settingsFormatVersion = 5
+order = 0
+name = "UnreferencedCard"
+defaultName = "UnreferencedCard"
+description = "Unreferenced prefab used to verify disk catalog generation."
+propertyDescriptors = [ ]
+objectGroups = { }
+variables = [ ]
+behaviors = [ ]
+
+[layout]
+version = 1
+bounds = { min = [0, 0, 0], max = [64, 64, 0] }
+`;
     await writeMultiFileSourceTree({
       entryPath: projectFile,
       files,
@@ -795,6 +823,14 @@ describe('McpEditorBridge', () => {
     expect(fs.existsSync(retiredLayoutCatalog)).toBe(false);
     expect(result.generatedGameJson).toBeUndefined();
     expect(result.nextAction).toContain('Read the refreshed catalogs');
+    const settingsCatalog = JSON.parse(
+      fs.readFileSync(catalogFiles.settings, 'utf8')
+    );
+    expect(
+      settingsCatalog.objectTypes.some(
+        objectType => objectType.type === 'Local::UnreferencedCard'
+      )
+    ).toBe(true);
   });
 
   it('validates multi-file disk sources without reloading the editor', async () => {

@@ -36,6 +36,10 @@ import {
   getKeyboardKeyDefinition,
 } from '../Utils/KeyboardKeyNames';
 import { type EditorCallbacks } from '../EditorFunctions';
+import {
+  generateEventsFunctionExtensionMetadata,
+  type EventsFunctionCodeWriter,
+} from '../EventsFunctionsExtensionsLoader';
 
 import { inspectSignalUsage } from './McpExtensionTools';
 import { validateSerializedProject } from './McpProjectTools';
@@ -56,6 +60,41 @@ const path = optionalRequire('path');
 const crypto = optionalRequire('crypto');
 const electron = optionalRequire('electron');
 const nativeImage = electron && electron.nativeImage;
+
+const catalogEventsFunctionCodeWriter: EventsFunctionCodeWriter = {
+  getIncludeFileFor: (functionName: string) => `${functionName}.js`,
+  writeFunctionCode: async () => {},
+  writeBehaviorCode: async () => {},
+  writeObjectCode: async () => {},
+};
+
+const catalogI18n = ({
+  _: value =>
+    typeof value === 'string' ? value : value.id || value.message || '',
+}: any);
+
+const generateProjectAdditionalExtensions = (
+  project: gdProject
+): Array<gdPlatformExtension> => {
+  const additionalExtensions = [];
+  for (
+    let index = 0;
+    index < project.getEventsFunctionsExtensionsCount();
+    index++
+  ) {
+    additionalExtensions.push(
+      generateEventsFunctionExtensionMetadata(
+        project,
+        project.getEventsFunctionsExtensionAt(index),
+        {
+          eventsFunctionCodeWriter: catalogEventsFunctionCodeWriter,
+          i18n: catalogI18n,
+        }
+      )
+    );
+  }
+  return additionalExtensions;
+};
 
 // Monotonic id used to match targeted preview request/response messages.
 let nextTargetedRequestId = 1;
@@ -367,12 +406,17 @@ const generateProjectSourceCatalogsFromDisk = async (
     skipEventsCompilation: true,
   });
   const catalogProject = new gd.ProjectHelper.createNewGDJSProject();
+  const additionalExtensions: Array<gdPlatformExtension> = [];
   try {
     try {
       unserializeFromJSObject(catalogProject, catalogSource);
+      additionalExtensions.push(
+        ...generateProjectAdditionalExtensions(catalogProject)
+      );
       const catalogs = await writeProjectSourceCatalogs(
         catalogProject,
-        projectRoot
+        projectRoot,
+        { additionalExtensions }
       );
       return { projectRoot, catalogs };
     } catch (error) {
@@ -386,6 +430,7 @@ const generateProjectSourceCatalogsFromDisk = async (
       throw catalogError;
     }
   } finally {
+    additionalExtensions.forEach(extension => extension.delete());
     catalogProject.delete();
   }
 };
