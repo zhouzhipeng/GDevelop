@@ -30,8 +30,8 @@ raw operating-system process heap dump.
 - Operate on the debugger instance currently selected in the debugger UI.
 - Pause the selected game and wait for pause acknowledgement before capturing
   state or accepting annotations.
-- Allow mouse, pen, and touch freehand drawing directly over the selected game
-  canvas while game input is blocked.
+- Allow mouse, pen, and touch freehand, rectangle, and arrow annotations
+  directly over the selected game canvas while game input is blocked.
 - Show a debugger-side dialog containing a multiline issue description and
   controls to undo or clear annotations, cancel, or save the report.
 - Capture the paused game canvas with the annotation composited into a compact
@@ -64,8 +64,8 @@ raw operating-system process heap dump.
   history beyond what is already present in the runtime dump and console log.
 - Editing, listing, or deleting previously saved reports.
 - Supporting exported production games that do not have a debugger client.
-- Adding shapes, text labels, colors, cropping, or image editing beyond a
-  high-contrast freehand pen, undo, and clear in the first version.
+- Adding text labels, colors, cropping, or image editing beyond the
+  high-contrast freehand, rectangle, and arrow tools, undo, and clear.
 - Writing into cloud projects or browser-only storage, where a native project
   directory does not exist.
 
@@ -145,8 +145,10 @@ canvas. The layer:
 The issue dialog stays in the debugger window and contains:
 
 - concise instructions to draw in the adjacent game preview;
+- **Freehand**, **Rectangle**, and **Arrow** drawing-tool selectors, with
+  freehand selected initially;
 - a required multiline **What went wrong?** field;
-- **Undo last stroke** and **Clear annotations** actions;
+- **Undo last annotation** and **Clear annotations** actions;
 - **Cancel**; and
 - **Save report** (disabled until the description contains non-whitespace
   text and setup is complete).
@@ -272,13 +274,14 @@ compatibility.
 
 Add these commands to `AbstractDebuggerClient`:
 
-| Command                                  | Response                        | Purpose                                              |
-| ---------------------------------------- | ------------------------------- | ---------------------------------------------------- |
-| `issueReport.startAnnotation`            | `issueReport.annotationStarted` | Install/reset the overlay and begin pointer capture. |
-| `issueReport.undoAnnotation`             | `issueReport.annotationChanged` | Remove the last complete stroke.                     |
-| `issueReport.clearAnnotation`            | `issueReport.annotationChanged` | Remove every stroke.                                 |
-| `issueReport.captureAnnotatedScreenshot` | `issueReport.screenshot`        | Return the composited PNG data URL and dimensions.   |
-| `issueReport.stopAnnotation`             | `issueReport.annotationStopped` | Remove listeners and the overlay canvas.             |
+| Command                                  | Response                            | Purpose                                              |
+| ---------------------------------------- | ----------------------------------- | ---------------------------------------------------- |
+| `issueReport.startAnnotation`            | `issueReport.annotationStarted`     | Install/reset the overlay and begin pointer capture. |
+| `issueReport.setAnnotationTool`          | `issueReport.annotationToolChanged` | Select freehand, rectangle, or arrow drawing.        |
+| `issueReport.undoAnnotation`             | `issueReport.annotationChanged`     | Remove the last complete stroke.                     |
+| `issueReport.clearAnnotation`            | `issueReport.annotationChanged`     | Remove every stroke.                                 |
+| `issueReport.captureAnnotatedScreenshot` | `issueReport.screenshot`            | Return the composited PNG data URL and dimensions.   |
+| `issueReport.stopAnnotation`             | `issueReport.annotationStopped`     | Remove listeners and the overlay canvas.             |
 
 Each response echoes `messageId` and contains an explicit `error` field on
 failure. Starting twice first cleans up the previous overlay, making session
@@ -322,8 +325,9 @@ the detached persistence operation without using a blocking message box.
 
 The annotation helper is private to
 `debugger-client/abstract-debugger-client.ts`, avoiding a new runtime include
-or exported game dependency. It retains strokes as arrays of intrinsic canvas
-points rather than saving pixels on every move.
+or exported game dependency. It retains annotations as intrinsic canvas points
+rather than saving pixels on every move. Freehand annotations store sampled
+point arrays; rectangles and arrows store only their start and end points.
 
 Pointer points use the current canvas bounding rectangle to map CSS coordinates
 to `canvas.width`/`canvas.height`. Rendering the visible overlay maps the stored
@@ -332,10 +336,11 @@ draws the paused game canvas first and the same intrinsic strokes second, so
 the saved image remains correct after display scaling or a window resize. The
 capture is downscaled only when necessary to fit within 1280 by 720 pixels.
 
-Pointer-move events are sampled only after a small distance threshold, and the
-session is bounded to 100,000 points. If the cap is reached, the current stroke
-ends and the response/error UI tells the user to clear or save; the game and
-editor remain responsive.
+Freehand pointer-move events are sampled only after a small distance threshold,
+and the session is bounded to 100,000 points. Rectangle and arrow previews
+replace their end point while dragging instead of accumulating points. If the
+cap is reached, the current annotation ends and the response/error UI tells the
+user to clear or save; the game and editor remain responsive.
 
 The helper removes every pointer/resize listener and DOM node on stop, hard
 reload, debugger destruction where observable, or a new start. Annotation
@@ -442,6 +447,8 @@ files are preserved.
 - Start creates one correctly positioned overlay and is idempotent.
 - Pointer mapping remains correct for CSS scaling and device pixel ratios.
 - Undo/clear update strokes; stop removes DOM nodes and listeners.
+- Tool selection draws freehand strokes, rectangle outlines, and arrows;
+  switching tools keeps earlier annotations and undo removes the latest shape.
 - Capture calls render-without-step, visibly composites a known stroke without
   advancing runtime time, preserves small dimensions, and caps large captures
   at 1280 by 720.
@@ -512,8 +519,8 @@ editor is narrower and unit-testable.
 Implementation can begin once these first-version choices are approved:
 
 1. Reports are available only for external previews of local desktop projects.
-2. Drawing is a red freehand pen with undo and clear, directly over the game
-   canvas.
+2. Drawing uses red freehand, rectangle, and arrow tools with undo and clear,
+   directly over the game canvas.
 3. The saved image is the game canvas, not operating system window chrome, and
    is downscaled as needed to fit within 1280 by 720 pixels.
 4. Cancel and successful save restore the preview's pause state from before

@@ -57,6 +57,38 @@ class StartWindowsAppScriptTest(unittest.TestCase):
         self.assertNotIn("run build", result.stdout)
         self.assertNotIn("app-build -- --skip-app-build", result.stdout)
 
+    def test_react_build_gets_larger_node_heap_and_preserves_other_options(self):
+        module = load_script_module()
+
+        with mock.patch.dict(
+            module.os.environ,
+            {"NODE_OPTIONS": "--trace-warnings --max-old-space-size=2048"},
+        ):
+            with mock.patch.object(module, "resolve_tool", return_value="npm"):
+                with mock.patch.object(module, "run_command") as run_command:
+                    module.build_react_app(ROOT_DIR, build=True, dry_run=False)
+
+        run_command.assert_called_once_with(
+            ["npm", "run", "build"],
+            cwd=ROOT_DIR,
+            dry_run=False,
+            env_updates={
+                "NODE_OPTIONS": "--trace-warnings --max-old-space-size=8192"
+            },
+        )
+
+    def test_react_build_respects_a_higher_existing_node_heap(self):
+        module = load_script_module()
+
+        node_options = module.node_options_with_minimum_heap(
+            "--max_old_space_size 12288 --trace-warnings"
+        )
+
+        self.assertEqual(
+            node_options,
+            "--trace-warnings --max-old-space-size=12288",
+        )
+
     def test_powershell_runner_handles_empty_captured_output(self):
         module = load_script_module()
 

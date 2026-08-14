@@ -87,6 +87,38 @@ class MacosAppDependencyScriptTest(unittest.TestCase):
                     ["npm", "install"], cwd=runtime_dir, dry_run=True
                 )
 
+    def test_start_script_react_build_gets_larger_node_heap(self):
+        module = load_script_module(SCRIPTS_DIR / "start-macos-app.py")
+
+        with mock.patch.dict(
+            module.os.environ,
+            {"NODE_OPTIONS": "--trace-warnings --max-old-space-size=2048"},
+        ):
+            with mock.patch.object(module, "resolve_tool", return_value="npm"):
+                with mock.patch.object(module, "run_command") as run_command:
+                    module.build_react_app(ROOT_DIR, build=True, dry_run=False)
+
+        run_command.assert_called_once_with(
+            ["npm", "run", "build"],
+            cwd=ROOT_DIR,
+            dry_run=False,
+            env_updates={
+                "NODE_OPTIONS": "--trace-warnings --max-old-space-size=8192"
+            },
+        )
+
+    def test_start_script_respects_a_higher_existing_node_heap(self):
+        module = load_script_module(SCRIPTS_DIR / "start-macos-app.py")
+
+        node_options = module.node_options_with_minimum_heap(
+            "--max_old_space_size 12288 --trace-warnings"
+        )
+
+        self.assertEqual(
+            node_options,
+            "--trace-warnings --max-old-space-size=12288",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

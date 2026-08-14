@@ -27,7 +27,10 @@ namespace gdjs {
     y: number;
   };
 
+  type IssueAnnotationTool = 'freehand' | 'rectangle' | 'arrow';
+
   type IssueAnnotationStroke = {
+    tool: IssueAnnotationTool;
     points: IssueAnnotationPoint[];
     lineWidth: number;
   };
@@ -49,6 +52,7 @@ namespace gdjs {
     private _strokes: IssueAnnotationStroke[] = [];
     private _activeStroke: IssueAnnotationStroke | null = null;
     private _activePointerId: number | null = null;
+    private _tool: IssueAnnotationTool = 'freehand';
     private _pointCount = 0;
     private _limitReported = false;
     private _resizeObserver: ResizeObserver | null = null;
@@ -125,6 +129,19 @@ namespace gdjs {
       this._pointCount = 0;
       this._limitReported = false;
       this._renderOverlay();
+    }
+
+    setTool(tool: unknown): void {
+      if (tool !== 'freehand' && tool !== 'rectangle' && tool !== 'arrow') {
+        throw new Error('Unknown issue annotation drawing tool.');
+      }
+      this._finishActiveStroke();
+      this._tool = tool;
+      this._renderOverlay();
+    }
+
+    getTool(): IssueAnnotationTool {
+      return this._tool;
     }
 
     undo(): void {
@@ -274,6 +291,30 @@ namespace gdjs {
       return true;
     }
 
+    private _updateActiveAnnotation(point: IssueAnnotationPoint): boolean {
+      if (!this._activeStroke) return false;
+      if (this._activeStroke.tool === 'freehand') {
+        return this._appendPoint(point);
+      }
+
+      const points = this._activeStroke.points;
+      if (points.length < 2) {
+        if (this._pointCount >= maxIssueAnnotationPoints) {
+          this._finishActiveStroke();
+          if (!this._limitReported) {
+            this._limitReported = true;
+            this._onPointLimitReached();
+          }
+          return false;
+        }
+        points.push(point);
+        this._pointCount++;
+      } else {
+        points[1] = point;
+      }
+      return true;
+    }
+
     private _handlePointerDown = (event: PointerEvent): void => {
       if (!event.isPrimary) return;
       if (event.pointerType === 'mouse' && event.button !== 0) return;
@@ -282,6 +323,7 @@ namespace gdjs {
       this._finishActiveStroke();
       this._activePointerId = event.pointerId;
       this._activeStroke = {
+        tool: this._tool,
         points: [],
         lineWidth: this._getIntrinsicLineWidth(),
       };
@@ -300,7 +342,7 @@ namespace gdjs {
       }
       event.preventDefault();
       event.stopPropagation();
-      if (this._appendPoint(this._getIntrinsicPoint(event))) {
+      if (this._updateActiveAnnotation(this._getIntrinsicPoint(event))) {
         this._renderOverlay();
       }
     };
@@ -309,7 +351,7 @@ namespace gdjs {
       if (event.pointerId !== this._activePointerId) return;
       event.preventDefault();
       event.stopPropagation();
-      this._appendPoint(this._getIntrinsicPoint(event));
+      this._updateActiveAnnotation(this._getIntrinsicPoint(event));
       try {
         this._overlayCanvas.releasePointerCapture(event.pointerId);
       } catch {
@@ -373,8 +415,47 @@ namespace gdjs {
           context.fill();
           return;
         }
+        const firstPoint = stroke.points[0];
+        const lastPoint = stroke.points[stroke.points.length - 1];
+        if (stroke.tool === 'rectangle') {
+          context.beginPath();
+          context.rect(
+            firstPoint.x,
+            firstPoint.y,
+            lastPoint.x - firstPoint.x,
+            lastPoint.y - firstPoint.y
+          );
+          context.stroke();
+          return;
+        }
+        if (stroke.tool === 'arrow') {
+          const dx = lastPoint.x - firstPoint.x;
+          const dy = lastPoint.y - firstPoint.y;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx);
+          const arrowHeadLength = Math.min(
+            Math.max(stroke.lineWidth * 4, 8),
+            length * 0.45
+          );
+          const arrowHeadAngle = Math.PI / 6;
+          context.beginPath();
+          context.moveTo(firstPoint.x, firstPoint.y);
+          context.lineTo(lastPoint.x, lastPoint.y);
+          context.moveTo(lastPoint.x, lastPoint.y);
+          context.lineTo(
+            lastPoint.x - arrowHeadLength * Math.cos(angle - arrowHeadAngle),
+            lastPoint.y - arrowHeadLength * Math.sin(angle - arrowHeadAngle)
+          );
+          context.moveTo(lastPoint.x, lastPoint.y);
+          context.lineTo(
+            lastPoint.x - arrowHeadLength * Math.cos(angle + arrowHeadAngle),
+            lastPoint.y - arrowHeadLength * Math.sin(angle + arrowHeadAngle)
+          );
+          context.stroke();
+          return;
+        }
         context.beginPath();
-        context.moveTo(stroke.points[0].x, stroke.points[0].y);
+        context.moveTo(firstPoint.x, firstPoint.y);
         for (let index = 1; index < stroke.points.length; index++) {
           context.lineTo(stroke.points[index].x, stroke.points[index].y);
         }
@@ -1067,6 +1148,11 @@ namespace gdjs {
           }
         } else if (data.command === 'issueReport.startAnnotation') {
           this.startIssueAnnotation(data.messageId);
+        } else if (data.command === 'issueReport.setAnnotationTool') {
+          this.setIssueAnnotationTool(
+            data.payload && data.payload.tool,
+            data.messageId
+          );
         } else if (data.command === 'issueReport.undoAnnotation') {
           this.undoIssueAnnotation(data.messageId);
         } else if (data.command === 'issueReport.clearAnnotation') {
@@ -1866,6 +1952,30 @@ namespace gdjs {
         'issueReport.annotationChanged',
         messageId,
         error
+      );
+    }
+
+    setIssueAnnotationTool(tool: unknown, messageId?: number): void {
+      let error: string | null = null;
+      if (!this._issueAnnotationLayer) {
+        error = 'No issue annotation session is active.';
+      } else {
+        try {
+          this._issueAnnotationLayer.setTool(tool);
+        } catch (e) {
+          error =
+            (e as Error).message || 'Unable to change the annotation tool.';
+        }
+      }
+      this._sendIssueAnnotationResponse(
+        'issueReport.annotationToolChanged',
+        messageId,
+        error,
+        {
+          tool: this._issueAnnotationLayer
+            ? this._issueAnnotationLayer.getTool()
+            : null,
+        }
       );
     }
 

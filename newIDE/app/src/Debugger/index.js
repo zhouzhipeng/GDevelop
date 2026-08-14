@@ -17,7 +17,9 @@ import {
   type DebuggerStatus,
 } from '../ExportAndShare/PreviewLauncher.flow';
 import { type Log, LogsManager } from './DebuggerConsole';
-import IssueReportDialog from './IssueReportDialog';
+import IssueReportDialog, {
+  type IssueAnnotationTool,
+} from './IssueReportDialog';
 import {
   getLocalProjectRoot,
   getIssueReportClipboardPath,
@@ -83,6 +85,7 @@ type State = {|
   issueReportDescription: string,
   issueReportError: ?string,
   issueReportWarning: ?string,
+  issueReportTool: IssueAnnotationTool,
   issueReportToastMessage: string,
   issueReportToastVisible: boolean,
   issueReportToastId: number,
@@ -113,6 +116,7 @@ export default class Debugger extends React.Component<Props, State> {
     issueReportDescription: '',
     issueReportError: null,
     issueReportWarning: null,
+    issueReportTool: 'freehand',
     issueReportToastMessage: '',
     issueReportToastVisible: false,
     issueReportToastId: 0,
@@ -490,6 +494,7 @@ export default class Debugger extends React.Component<Props, State> {
         isIssueReportStarting: true,
         issueReportError: null,
         issueReportWarning: null,
+        issueReportTool: 'freehand',
       },
       this.updateToolbar
     );
@@ -548,6 +553,7 @@ export default class Debugger extends React.Component<Props, State> {
           issueReportDescription: '',
           issueReportError: null,
           issueReportWarning: null,
+          issueReportTool: 'freehand',
         },
         this.updateToolbar
       );
@@ -585,6 +591,46 @@ export default class Debugger extends React.Component<Props, State> {
         response,
         'issueReport.annotationChanged'
       );
+    } catch (error) {
+      if (!this._isUnmounted) {
+        this.setState({
+          issueReportError: error.message || String(error),
+        });
+      }
+    }
+  };
+
+  _setIssueAnnotationTool = async (
+    tool: IssueAnnotationTool
+  ): Promise<void> => {
+    const {
+      activeIssueReport,
+      isIssueReportSaving,
+      issueReportTool,
+    } = this.state;
+    if (!activeIssueReport || isIssueReportSaving || tool === issueReportTool) {
+      return;
+    }
+    this.setState({ issueReportError: null });
+    try {
+      const response = await this.props.previewDebuggerServer.sendMessageToDebuggerWithResponse(
+        activeIssueReport.debuggerId,
+        {
+          command: 'issueReport.setAnnotationTool',
+          payload: { tool },
+        },
+        5000
+      );
+      const payload = this._validateIssueReportResponse(
+        response,
+        'issueReport.annotationToolChanged'
+      );
+      if (!payload || payload.tool !== tool) {
+        throw new Error('The preview did not activate the drawing tool.');
+      }
+      if (!this._isUnmounted) {
+        this.setState({ issueReportTool: tool });
+      }
     } catch (error) {
       if (!this._isUnmounted) {
         this.setState({
@@ -864,6 +910,7 @@ export default class Debugger extends React.Component<Props, State> {
       issueReportDescription,
       issueReportError,
       issueReportWarning,
+      issueReportTool,
       issueReportToastMessage,
       issueReportToastVisible,
       issueReportToastId,
@@ -940,6 +987,8 @@ export default class Debugger extends React.Component<Props, State> {
           onClear={() =>
             this._runIssueAnnotationCommand('issueReport.clearAnnotation')
           }
+          selectedTool={issueReportTool}
+          onToolChange={this._setIssueAnnotationTool}
           onCancel={this._cancelIssueReport}
           onSave={this._saveIssueReport}
           isSaving={isIssueReportSaving}

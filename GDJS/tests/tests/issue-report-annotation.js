@@ -23,6 +23,19 @@ describe('gdjs.AbstractDebuggerClient issue report annotation', function () {
       image.src = source;
     });
 
+  const hasRedPixel = (pixels) => {
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (
+        pixels[index] > 200 &&
+        pixels[index + 1] < 100 &&
+        pixels[index + 2] < 150
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   afterEach(function () {
     document.querySelectorAll(overlaySelector).forEach((canvas) => {
       canvas.remove();
@@ -97,18 +110,7 @@ describe('gdjs.AbstractDebuggerClient issue report annotation', function () {
         30,
         20
       ).data;
-      let foundRedPixel = false;
-      for (let index = 0; index < annotatedPixels.length; index += 4) {
-        if (
-          annotatedPixels[index] > 200 &&
-          annotatedPixels[index + 1] < 100 &&
-          annotatedPixels[index + 2] < 150
-        ) {
-          foundRedPixel = true;
-          break;
-        }
-      }
-      expect(foundRedPixel).to.be(true);
+      expect(hasRedPixel(annotatedPixels)).to.be(true);
 
       client.undoIssueAnnotation(4);
       expect(messages[messages.length - 1].payload.strokeCount).to.be(0);
@@ -116,6 +118,88 @@ describe('gdjs.AbstractDebuggerClient issue report annotation', function () {
       expect(messages[messages.length - 1].payload.pointCount).to.be(0);
       client.stopIssueAnnotation(6);
       expect(document.querySelector(overlaySelector)).to.be(null);
+    } finally {
+      client.stopIssueAnnotation();
+      gameCanvas.remove();
+    }
+  });
+
+  it('draws rectangles and arrows with the selected annotation tool', async function () {
+    const gameCanvas = document.createElement('canvas');
+    gameCanvas.width = 120;
+    gameCanvas.height = 80;
+    gameCanvas.getBoundingClientRect = () => ({
+      bottom: 80,
+      height: 80,
+      left: 0,
+      right: 120,
+      top: 0,
+      width: 120,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    const gameContext = gameCanvas.getContext('2d');
+    gameContext.fillStyle = '#000000';
+    gameContext.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+    document.body.appendChild(gameCanvas);
+
+    const messages = [];
+    const client = Object.create(gdjs.AbstractDebuggerClient.prototype);
+    client._runtimegame = {
+      pause: sinon.spy(),
+      getSceneStack: () => ({ renderWithoutStep: sinon.stub().returns(true) }),
+      getRenderer: () => ({ getCanvas: () => gameCanvas }),
+    };
+    client._issueAnnotationLayer = null;
+    client._sendMessage = (message) => messages.push(JSON.parse(message));
+
+    try {
+      client.startIssueAnnotation(1);
+      client.setIssueAnnotationTool('rectangle', 2);
+      expect(messages[messages.length - 1].command).to.be(
+        'issueReport.annotationToolChanged'
+      );
+      expect(messages[messages.length - 1].payload.tool).to.be('rectangle');
+
+      const overlayCanvas = document.querySelector(overlaySelector);
+      dispatchPointerEvent(overlayCanvas, 'pointerdown', 15, 10);
+      dispatchPointerEvent(overlayCanvas, 'pointermove', 65, 40);
+      dispatchPointerEvent(overlayCanvas, 'pointerup', 65, 40);
+
+      client.setIssueAnnotationTool('arrow', 3);
+      dispatchPointerEvent(overlayCanvas, 'pointerdown', 20, 65);
+      dispatchPointerEvent(overlayCanvas, 'pointermove', 100, 65);
+      dispatchPointerEvent(overlayCanvas, 'pointerup', 100, 65);
+
+      client.sendAnnotatedIssueScreenshot(4);
+      const screenshotMessage = messages[messages.length - 1];
+      expect(screenshotMessage.payload.strokeCount).to.be(2);
+      expect(screenshotMessage.payload.pointCount).to.be(4);
+
+      const image = await loadImage(screenshotMessage.payload.dataUrl);
+      const verificationCanvas = document.createElement('canvas');
+      verificationCanvas.width = 120;
+      verificationCanvas.height = 80;
+      const verificationContext = verificationCanvas.getContext('2d');
+      verificationContext.drawImage(image, 0, 0);
+      expect(
+        hasRedPixel(verificationContext.getImageData(10, 5, 12, 12).data)
+      ).to.be(true);
+      expect(
+        hasRedPixel(verificationContext.getImageData(92, 57, 16, 16).data)
+      ).to.be(true);
+      expect(
+        hasRedPixel(verificationContext.getImageData(35, 20, 10, 10).data)
+      ).to.be(false);
+
+      client.undoIssueAnnotation(5);
+      expect(messages[messages.length - 1].payload.strokeCount).to.be(1);
+      expect(messages[messages.length - 1].payload.pointCount).to.be(2);
+
+      client.setIssueAnnotationTool('ellipse', 6);
+      expect(messages[messages.length - 1].payload.success).to.be(false);
+      expect(messages[messages.length - 1].payload.tool).to.be('arrow');
     } finally {
       client.stopIssueAnnotation();
       gameCanvas.remove();

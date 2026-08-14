@@ -13,6 +13,7 @@ export type CompactToggleButton = {|
   onClick: () => void,
   isActive: boolean,
   label?: string,
+  disabled?: boolean,
 |};
 export type CompactToggleButtonsProps = {|
   id: string,
@@ -43,11 +44,13 @@ const CompactToggleButtons = ({
             placement="top"
           >
             <button
+              type="button"
               className={classNames({
                 [classes.compactToggleButton]: true,
                 [classes.active]: button.isActive,
               })}
               onClick={button.onClick}
+              disabled={button.disabled}
             >
               {button.renderIcon(classes.icon)}
               {button.label && (

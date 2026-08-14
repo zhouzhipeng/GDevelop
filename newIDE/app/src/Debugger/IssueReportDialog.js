@@ -9,6 +9,12 @@ import AlertMessage from '../UI/AlertMessage';
 import { ColumnStackLayout } from '../UI/Layout';
 import UndoIcon from '../UI/CustomSvgIcons/Undo';
 import TrashIcon from '../UI/CustomSvgIcons/Trash';
+import BrushIcon from '../UI/CustomSvgIcons/Brush';
+import RectangleIcon from '../UI/CustomSvgIcons/Rectangle';
+import ArrowIcon from '@material-ui/icons/TrendingFlat';
+import CompactToggleButtons from '../UI/CompactToggleButtons';
+
+export type IssueAnnotationTool = 'freehand' | 'rectangle' | 'arrow';
 
 type Props = {|
   open: boolean,
@@ -16,6 +22,8 @@ type Props = {|
   onDescriptionChange: string => void,
   onUndo: () => void | Promise<void>,
   onClear: () => void | Promise<void>,
+  selectedTool: IssueAnnotationTool,
+  onToolChange: IssueAnnotationTool => void | Promise<void>,
   onCancel: () => void | Promise<void>,
   onSave: () => void | Promise<void>,
   isSaving: boolean,
@@ -29,6 +37,8 @@ const IssueReportDialog = ({
   onDescriptionChange,
   onUndo,
   onClear,
+  selectedTool,
+  onToolChange,
   onCancel,
   onSave,
   isSaving,
@@ -63,7 +73,7 @@ const IssueReportDialog = ({
     secondaryActions={[
       <FlatButton
         key="undo"
-        label={<Trans>Undo last stroke</Trans>}
+        label={<Trans>Undo last annotation</Trans>}
         leftIcon={<UndoIcon />}
         onClick={onUndo}
         disabled={isSaving}
@@ -84,6 +94,45 @@ const IssueReportDialog = ({
           problem. Game input is blocked while the annotation layer is active.
         </Trans>
       </Text>
+      <CompactToggleButtons
+        id="issue-report-annotation-tools"
+        expand
+        buttons={[
+          {
+            id: 'issue-report-freehand-tool',
+            label: t`Freehand`,
+            tooltip: t`Draw freehand`,
+            renderIcon: className => <BrushIcon className={className} />,
+            onClick: () => {
+              onToolChange('freehand');
+            },
+            isActive: selectedTool === 'freehand',
+            disabled: isSaving,
+          },
+          {
+            id: 'issue-report-rectangle-tool',
+            label: t`Rectangle`,
+            tooltip: t`Draw a rectangle`,
+            renderIcon: className => <RectangleIcon className={className} />,
+            onClick: () => {
+              onToolChange('rectangle');
+            },
+            isActive: selectedTool === 'rectangle',
+            disabled: isSaving,
+          },
+          {
+            id: 'issue-report-arrow-tool',
+            label: t`Arrow`,
+            tooltip: t`Draw an arrow`,
+            renderIcon: className => <ArrowIcon className={className} />,
+            onClick: () => {
+              onToolChange('arrow');
+            },
+            isActive: selectedTool === 'arrow',
+            disabled: isSaving,
+          },
+        ]}
+      />
       {warning && <AlertMessage kind="warning">{warning}</AlertMessage>}
       {error && <AlertMessage kind="error">{error}</AlertMessage>}
       <TextField
