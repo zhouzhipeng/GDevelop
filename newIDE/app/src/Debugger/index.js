@@ -18,8 +18,13 @@ import {
 } from '../ExportAndShare/PreviewLauncher.flow';
 import { type Log, LogsManager } from './DebuggerConsole';
 import IssueReportDialog from './IssueReportDialog';
-import { getLocalProjectRoot, writeIssueReport } from './IssueReportWriter';
-import { showErrorBox, showMessageBox } from '../UI/Messages/MessageBox';
+import {
+  getLocalProjectRoot,
+  writeIssueReport,
+  type IssueReportData,
+} from './IssueReportWriter';
+import { showErrorBox } from '../UI/Messages/MessageBox';
+import InfoBar from '../UI/Messages/InfoBar';
 
 // Mirrors `gdjs.FrameMeasureOutput`: a plain tree (no back-references),
 // as sent by the game's profiler.
@@ -76,6 +81,9 @@ type State = {|
   issueReportDescription: string,
   issueReportError: ?string,
   issueReportWarning: ?string,
+  issueReportToastMessage: string,
+  issueReportToastVisible: boolean,
+  issueReportToastId: number,
 |};
 
 /**
@@ -103,6 +111,9 @@ export default class Debugger extends React.Component<Props, State> {
     issueReportDescription: '',
     issueReportError: null,
     issueReportWarning: null,
+    issueReportToastMessage: '',
+    issueReportToastVisible: false,
+    issueReportToastId: 0,
   };
 
   _debuggerContents: { [DebuggerId]: ?DebuggerContent } = {};
@@ -115,6 +126,7 @@ export default class Debugger extends React.Component<Props, State> {
       debuggerStatus,
       activeIssueReport,
       isIssueReportStarting,
+      isIssueReportSaving,
     } = this.state;
 
     const selectedDebuggerContents = this._debuggerContents[
@@ -160,9 +172,14 @@ export default class Debugger extends React.Component<Props, State> {
         }}
         onReportIssue={this._startIssueReport}
         canReportIssue={
-          this._canReportIssue() && !activeIssueReport && !isIssueReportStarting
+          this._canReportIssue() &&
+          !activeIssueReport &&
+          !isIssueReportStarting &&
+          !isIssueReportSaving
         }
-        isReportingIssue={!!activeIssueReport || isIssueReportStarting}
+        isReportingIssue={
+          !!activeIssueReport || isIssueReportStarting || isIssueReportSaving
+        }
       />
     );
   };
@@ -455,6 +472,7 @@ export default class Debugger extends React.Component<Props, State> {
     if (
       !this._canReportIssue() ||
       this.state.isIssueReportStarting ||
+      this.state.isIssueReportSaving ||
       this.state.activeIssueReport
     ) {
       return;
@@ -666,45 +684,96 @@ export default class Debugger extends React.Component<Props, State> {
         throw new Error('The preview did not return an annotated screenshot.');
       }
 
+      const reportData: IssueReportData = {
+        createdAt: new Date(),
+        projectName: this.props.project.getName(),
+        sceneName: activeIssueReport.sceneName,
+        debuggerId: activeIssueReport.debuggerId,
+        description: issueReportDescription,
+        screenshotDataUrl: screenshot.dataUrl,
+        runtimeDump: activeIssueReport.runtimeDump,
+        consoleLogs: this._getLogsManager(
+          activeIssueReport.debuggerId
+        ).getAllLogs(),
+      };
       const projectFile = this.props.project.getProjectFile();
-      const reportPath = await writeIssueReport({
-        projectFile,
-        data: {
-          createdAt: new Date(),
-          projectName: this.props.project.getName(),
-          sceneName: activeIssueReport.sceneName,
-          debuggerId: activeIssueReport.debuggerId,
-          description: issueReportDescription,
-          screenshotDataUrl: screenshot.dataUrl,
-          runtimeDump: activeIssueReport.runtimeDump,
-        },
-      });
-      const cleanupWarning = await this._cleanupIssueReport(activeIssueReport);
-      if (this._isUnmounted) return;
       this.setState(
         {
           activeIssueReport: null,
-          isIssueReportSaving: false,
+          // Keep the toolbar action disabled while the file write and preview
+          // cleanup finish, but close the modal so this work is non-blocking.
+          isIssueReportSaving: true,
           issueReportDescription: '',
           issueReportError: null,
           issueReportWarning: null,
         },
         this.updateToolbar
       );
-      showMessageBox(
-        cleanupWarning
-          ? `Issue report saved to:\n${reportPath}\n\n${cleanupWarning}`
-          : `Issue report saved to:\n${reportPath}`
-      );
+      this._persistIssueReportInBackground({
+        activeIssueReport,
+        projectFile,
+        reportData,
+      });
     } catch (error) {
       if (!this._isUnmounted) {
-        this.setState({
+        const message = `Unable to save the issue report: ${error.message ||
+          String(error)}`;
+        this.setState(state => ({
           isIssueReportSaving: false,
-          issueReportError: `Unable to save the issue report: ${error.message ||
-            String(error)}`,
-        });
+          issueReportError: message,
+          issueReportToastMessage: message,
+          issueReportToastVisible: true,
+          issueReportToastId: state.issueReportToastId + 1,
+        }));
       }
     }
+  };
+
+  _persistIssueReportInBackground = ({
+    activeIssueReport,
+    projectFile,
+    reportData,
+  }: {|
+    activeIssueReport: ActiveIssueReport,
+    projectFile: string,
+    reportData: IssueReportData,
+  |}): void => {
+    const cleanupPromise = this._cleanupIssueReport(activeIssueReport);
+    writeIssueReport({ projectFile, data: reportData })
+      .then(async reportPath => {
+        const cleanupWarning = await cleanupPromise;
+        if (this._isUnmounted) return;
+        const message = cleanupWarning
+          ? `Issue report saved to ${reportPath}. ${cleanupWarning}`
+          : `Issue report saved to ${reportPath}`;
+        this.setState(
+          state => ({
+            isIssueReportSaving: false,
+            issueReportToastMessage: message,
+            issueReportToastVisible: true,
+            issueReportToastId: state.issueReportToastId + 1,
+          }),
+          this.updateToolbar
+        );
+      })
+      .catch(async error => {
+        const cleanupWarning = await cleanupPromise;
+        const errorMessage = `Unable to save the issue report: ${error.message ||
+          String(error)}`;
+        console.error(errorMessage, error);
+        if (this._isUnmounted) return;
+        this.setState(
+          state => ({
+            isIssueReportSaving: false,
+            issueReportToastMessage: cleanupWarning
+              ? `${errorMessage} ${cleanupWarning}`
+              : errorMessage,
+            issueReportToastVisible: true,
+            issueReportToastId: state.issueReportToastId + 1,
+          }),
+          this.updateToolbar
+        );
+      });
   };
 
   _edit = (id: DebuggerId, path: Array<string>, newValue: any): any => {
@@ -780,6 +849,9 @@ export default class Debugger extends React.Component<Props, State> {
       issueReportDescription,
       issueReportError,
       issueReportWarning,
+      issueReportToastMessage,
+      issueReportToastVisible,
+      issueReportToastId,
     } = this.state;
 
     return (
@@ -858,6 +930,14 @@ export default class Debugger extends React.Component<Props, State> {
           isSaving={isIssueReportSaving}
           error={issueReportError}
           warning={issueReportWarning}
+        />
+        <InfoBar
+          key={issueReportToastId}
+          visible={issueReportToastVisible}
+          message={issueReportToastMessage}
+          hide={() => this.setState({ issueReportToastVisible: false })}
+          duration={5000}
+          closable
         />
       </React.Fragment>
     );

@@ -81,6 +81,10 @@ export class LogsManager {
     this._onNewLog.forEach(f => f());
   }
 
+  getAllLogs(): Array<Log> {
+    return [...this.logs, ...this._pendingLogs].map(log => ({ ...log }));
+  }
+
   on(event: 'group' | 'log', handler: () => void) {
     if (event === 'group') this._onNewGroup.add(handler);
     if (event === 'log') this._onNewLog.add(handler);

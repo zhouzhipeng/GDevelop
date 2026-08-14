@@ -84,12 +84,6 @@ const IssueReportDialog = ({
           problem. Game input is blocked while the annotation layer is active.
         </Trans>
       </Text>
-      <AlertMessage kind="warning">
-        <Trans>
-          The report stays on this computer, but it includes the current game
-          state and may contain player-entered values.
-        </Trans>
-      </AlertMessage>
       {warning && <AlertMessage kind="warning">{warning}</AlertMessage>}
       {error && <AlertMessage kind="error">{error}</AlertMessage>}
       <TextField

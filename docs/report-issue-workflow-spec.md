@@ -1,6 +1,7 @@
 # In-preview issue reporting specification
 
-Status: approved and implemented, including the linked-artifact update.
+Status: approved and implemented, including the linked-artifact and
+asynchronous-save updates.
 
 ## Problem
 
@@ -16,7 +17,8 @@ debugger toolbar, in the location highlighted in the supplied screenshot. It
 must freeze the selected preview, let the user draw directly over the game,
 collect a text description, and save a Markdown report under the local
 project's `issues/` directory. The report links a compact annotated PNG under
-`issues/images/` and a runtime debugger dump under `issues/dumps/`.
+`issues/images/`, a runtime debugger dump under `issues/dumps/`, and a
+searchable debugger console log under `issues/logs/`.
 
 In this specification, "game memory data" means the JSON-safe runtime game
 state already produced by the debugger's `dump` response. It does not mean a
@@ -36,11 +38,16 @@ raw operating-system process heap dump.
   PNG no larger than 1280 by 720 pixels, preserving its aspect ratio.
 - Capture the corresponding full debugger runtime dump while the game remains
   paused.
-- Save Markdown under `<project-root>/issues/`, PNG under `issues/images/`, and
-  dump JSON under `issues/dumps/`, using relative links between them.
+- Save Markdown under `<project-root>/issues/`, PNG under `issues/images/`,
+  dump JSON under `issues/dumps/`, and the debugger console log under
+  `issues/logs/`, using relative links between them.
 - Tell an AI reader to inspect the dump only when the description and image
   are insufficient for a difficult investigation, avoiding wasted tokens for
   straightforward issues.
+- Tell an AI reader to search the console log for related errors and avoid
+  loading the full log unless the search shows that more context is needed.
+- Persist the captured bundle asynchronously after closing the dialog and show
+  a toast when the background save succeeds or fails.
 - Restore the preview's pre-report pause state after either saving or
   cancelling.
 - Keep all report data local; nothing is uploaded or submitted automatically.
@@ -50,8 +57,8 @@ raw operating-system process heap dump.
 - Capturing a V8/Electron heap snapshot or native process memory.
 - Automatically sending the report to an AI service, issue tracker, or GDevelop
   telemetry.
-- Including the authoring project, source files, console logs, profiler output,
-  or signal history beyond what is already present in the runtime dump.
+- Including the authoring project, source files, profiler output, or signal
+  history beyond what is already present in the runtime dump and console log.
 - Editing, listing, or deleting previously saved reports.
 - Supporting exported production games that do not have a debugger client.
 - Adding shapes, text labels, colors, cropping, or image editing beyond a
@@ -154,20 +161,28 @@ Save report performs these operations while the game is still paused:
 2. Force a render without stepping, copy the game canvas into a temporary 2D
    canvas, paint the recorded strokes, and downscale the result to fit within
    1280 by 720 while preserving aspect ratio.
-3. Decode the transported PNG data URL into a real `.png` file and serialize
-   the retained dump into a separate pretty-printed `.json` file.
-4. Create `issues/`, `issues/images/`, and `issues/dumps/` if needed. Publish
-   the image and dump first, then atomically publish a unique
-   `issue-YYYYMMDD-HHmmss-SSS.md` linking both. A numeric suffix resolves
-   filename collisions across the whole artifact bundle.
-5. Remove the annotation layer and close the dialog.
-6. Resume the game only if it was playing before the report started. A preview
-   that was already paused remains paused.
-7. Show a success notification containing the saved path.
+3. Snapshot the selected preview's debugger console, including messages still
+   pending in the console's render batch.
+4. Close the dialog, then begin preview cleanup and artifact persistence in
+   the background so the editor UI is not blocked by filesystem I/O.
+5. Decode the transported PNG data URL into a real `.png` file, serialize the
+   retained dump into a separate pretty-printed `.json` file, and format the
+   console snapshot as a searchable `.log` file.
+6. Create `issues/`, `issues/images/`, `issues/dumps/`, and `issues/logs/` if
+   needed. Publish the image, dump, and log first, then atomically publish a
+   unique `issue-YYYYMMDD-HHmmss-SSS.md` linking all three. A numeric suffix
+   resolves filename collisions across the whole artifact bundle.
+7. Remove the annotation layer and resume the game only if it was playing
+   before the report started. A preview that was already paused remains
+   paused.
+8. Show a transient success toast containing the saved path, or a failure
+   toast containing the write error. Keep the toolbar action busy until both
+   background persistence and preview cleanup finish.
 
-The report is not considered saved until the final rename succeeds. Capture or
-write errors leave the dialog open so the user can retry without losing the
-description or strokes.
+The report is not considered saved until the final Markdown publish succeeds.
+A capture error leaves the dialog open so the user can retry without losing
+the description or strokes. Once capture succeeds, the dialog closes and a
+later background write failure is reported by toast.
 
 Cancel removes the annotation layer, restores the original pause state, and
 writes nothing.
@@ -176,7 +191,7 @@ writes nothing.
 
 The Markdown file is UTF-8 and uses project-relative artifact links:
 
-````markdown
+```markdown
 # Game issue report
 
 - Created: 2026-08-13T07:30:12.123Z
@@ -202,13 +217,26 @@ Start with the user description and annotated screenshot. Only read the linked
 game-memory dump if the reported issue is very difficult to investigate or
 those sources are insufficient. Otherwise, do not read it, to avoid wasting
 context tokens.
-````
 
-The Markdown never embeds screenshot base64 or the full dump. The PNG is stored
-under `issues/images/`; the JSON-safe dump received from the selected preview
-is pretty-printed with two-space indentation under `issues/dumps/`. Metadata
-is derived from the same selected debugger and dump; missing optional metadata
-is omitted rather than guessed.
+## Debugger console log
+
+[Search the debugger console log](logs/issue-20260813-073012-123-console.log)
+
+### AI log investigation guidance
+
+Use the linked console log as a search source for errors related to the
+reported issue. Search for relevant error messages, groups, or keywords first.
+Do not load the full log unless the search results show that more context is
+needed.
+```
+
+The Markdown never embeds screenshot base64, the full dump, or the full log.
+The PNG is stored under `issues/images/`; the JSON-safe dump received from the
+selected preview is pretty-printed with two-space indentation under
+`issues/dumps/`; and the debugger console snapshot is stored one message per
+line under `issues/logs/` so an AI or developer can search it efficiently.
+Metadata is derived from the same selected debugger and dump; missing optional
+metadata is omitted rather than guessed.
 
 User text is treated as content, never as a path or filename. The writer does
 not interpolate it into HTML or execute it.
@@ -239,13 +267,13 @@ compatibility.
 
 Add these commands to `AbstractDebuggerClient`:
 
-| Command | Response | Purpose |
-| --- | --- | --- |
-| `issueReport.startAnnotation` | `issueReport.annotationStarted` | Install/reset the overlay and begin pointer capture. |
-| `issueReport.undoAnnotation` | `issueReport.annotationChanged` | Remove the last complete stroke. |
-| `issueReport.clearAnnotation` | `issueReport.annotationChanged` | Remove every stroke. |
-| `issueReport.captureAnnotatedScreenshot` | `issueReport.screenshot` | Return the composited PNG data URL and dimensions. |
-| `issueReport.stopAnnotation` | `issueReport.annotationStopped` | Remove listeners and the overlay canvas. |
+| Command                                  | Response                        | Purpose                                              |
+| ---------------------------------------- | ------------------------------- | ---------------------------------------------------- |
+| `issueReport.startAnnotation`            | `issueReport.annotationStarted` | Install/reset the overlay and begin pointer capture. |
+| `issueReport.undoAnnotation`             | `issueReport.annotationChanged` | Remove the last complete stroke.                     |
+| `issueReport.clearAnnotation`            | `issueReport.annotationChanged` | Remove every stroke.                                 |
+| `issueReport.captureAnnotatedScreenshot` | `issueReport.screenshot`        | Return the composited PNG data URL and dimensions.   |
+| `issueReport.stopAnnotation`             | `issueReport.annotationStopped` | Remove listeners and the overlay canvas.             |
 
 Each response echoes `messageId` and contains an explicit `error` field on
 failure. Starting twice first cleans up the previous overlay, making session
@@ -268,7 +296,8 @@ contains:
 - original paused state;
 - retained runtime dump;
 - description;
-- setup/saving/error state; and
+- setup/saving/error state;
+- transient success/failure toast state; and
 - whether runtime annotation cleanup is still required.
 
 The toolbar receives `onReportIssue`, `canReportIssue`, `isReportingIssue`, and
@@ -280,8 +309,9 @@ Pure formatting/path selection and filesystem writing live in
 components and makes the output contract unit-testable. The writer validates
 that the resolved `issues` directory stays directly under the resolved project
 root before creating or publishing files. It validates the PNG signature,
-never overwrites any of the three artifacts, publishes the Markdown last, and
-uses only forward-slash relative links inside it.
+never overwrites any artifact, publishes the Markdown last, and uses only
+forward-slash relative links inside it. A local snackbar reports the result of
+the detached persistence operation without using a blocking message box.
 
 ## Runtime annotation design
 
@@ -346,17 +376,17 @@ by hand.
   stale dump for later saving, and show that the preview ended.
 - Screenshot compositing failure: keep dialog text/strokes and allow retry or
   cancel.
-- Directory creation, temporary write, or rename failure: keep the dialog open,
-  remove any temporary file best-effort, and report the exact destination and
-  filesystem error.
+- Directory creation, temporary write, or publish failure: remove any temporary
+  file best-effort and show a failure toast with the filesystem error. The
+  report dialog has already closed after capture so persistence remains
+  non-blocking.
 - Cleanup or resume failure after a successful write: do not claim the file was
   lost; show the saved path plus the cleanup warning.
 
 ## Privacy and security
 
-The dump can contain game variables and player-entered values. The dialog
-states that the report includes current game state. Data is written only to the
-local project and is never uploaded automatically.
+The dump can contain game variables and player-entered values. Data is written
+only to the local project and is never uploaded automatically.
 
 The output path is generated internally. The user description, scene name, and
 project name cannot influence directories or the filename. The writer resolves
@@ -371,10 +401,12 @@ files are preserved.
   report feature does not traverse a second runtime graph.
 - Normal play has no annotation allocations. During a report, stored point
   data is bounded and pointer events are distance-sampled.
-- Saving temporarily allocates one 2D canvas capped at 1280 by 720 plus the PNG
-  and Markdown strings. These are released when the session closes.
-- The PNG and dump are linked rather than embedded, keeping the Markdown small
-  and preventing an AI from spending context tokens on the dump unless needed.
+- Saving temporarily allocates one 2D canvas capped at 1280 by 720 plus the
+  PNG, Markdown, dump, and log strings. These are released when background
+  persistence completes.
+- The PNG, dump, and log are linked rather than embedded, keeping the Markdown
+  small and preventing an AI from spending context tokens on the dump or full
+  log unless needed.
 
 ## Testing
 
@@ -388,11 +420,15 @@ files are preserved.
   debugger, blocks duplicate starts, and restores the original pause state on
   save/cancel.
 - Disconnect and command/write failure paths do not write partial reports.
-- Markdown formatting contains relative image/dump links, the exact
-  description and metadata, no base64, no inline dump, and explicit AI token
-  guidance.
-- Path generation creates `issues/images/` and `issues/dumps/`, avoids bundle
-  collisions, never overwrites, and rejects paths outside the project root.
+- Markdown formatting contains relative image/dump/log links, the exact
+  description and metadata, no base64, no inline dump/log, and explicit AI
+  token guidance.
+- Path generation creates `issues/images/`, `issues/dumps/`, and
+  `issues/logs/`, avoids bundle collisions, never overwrites, and rejects paths
+  outside the project root.
+- Saving closes the dialog after capture, performs persistence without
+  blocking the UI, and shows a success or failure toast when finished.
+- A console snapshot includes both committed and render-batched pending logs.
 
 ### Runtime/browser tests
 
@@ -477,5 +513,7 @@ Implementation can begin once these first-version choices are approved:
    the report started.
 5. "Memory data" is the existing JSON-safe debugger runtime dump, not a raw
    heap snapshot, and AI readers open it only for difficult investigations.
-6. Markdown, PNG, and JSON are linked artifacts under `issues/`,
-   `issues/images/`, and `issues/dumps/` respectively.
+6. Markdown, PNG, JSON, and console logs are linked artifacts under `issues/`,
+   `issues/images/`, `issues/dumps/`, and `issues/logs/` respectively.
+7. Artifact persistence and preview cleanup finish asynchronously after the
+   capture dialog closes, with a toast reporting success or failure.

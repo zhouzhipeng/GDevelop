@@ -95,7 +95,11 @@ describe('McpGameplayTestOperations', () => {
       },
     ]);
     expect(runRequest.options).toEqual(
-      expect.objectContaining({ timeoutMs: 45000, screenshots: 'off' })
+      expect.objectContaining({
+        timeoutMs: 45000,
+        screenshots: 'off',
+        closeFrameWhenFinished: true,
+      })
     );
 
     runRequest.options.onRunStarted();

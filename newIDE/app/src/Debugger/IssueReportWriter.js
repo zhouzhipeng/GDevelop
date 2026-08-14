@@ -5,6 +5,14 @@ const fs = optionalRequire('fs');
 const path = optionalRequire('path');
 const nodeBuffer = optionalRequire('buffer');
 
+export type IssueReportConsoleLog = {|
+  message: string,
+  type: 'info' | 'warning' | 'error',
+  group: string,
+  internal?: boolean,
+  timestamp: number,
+|};
+
 export type IssueReportData = {|
   createdAt: Date,
   projectName: string,
@@ -13,11 +21,13 @@ export type IssueReportData = {|
   description: string,
   screenshotDataUrl: string,
   runtimeDump: Object,
+  consoleLogs: Array<IssueReportConsoleLog>,
 |};
 
 type IssueReportArtifactLinks = {|
   screenshotRelativePath: string,
   dumpRelativePath: string,
+  logRelativePath: string,
 |};
 
 const toSingleLine = (value: string): string =>
@@ -47,7 +57,11 @@ export const getLocalProjectRoot = (projectFile: string): ?string => {
 
 export const buildIssueReportMarkdown = (
   data: IssueReportData,
-  { screenshotRelativePath, dumpRelativePath }: IssueReportArtifactLinks
+  {
+    screenshotRelativePath,
+    dumpRelativePath,
+    logRelativePath,
+  }: IssueReportArtifactLinks
 ): string => {
   if (!data.description.trim()) {
     throw new Error('An issue description is required.');
@@ -81,7 +95,35 @@ export const buildIssueReportMarkdown = (
     '',
     'Start with the user description and annotated screenshot. Only read the linked game-memory dump if the reported issue is very difficult to investigate or those sources are insufficient. Otherwise, do not read it, to avoid wasting context tokens.',
     '',
+    '## Debugger console log',
+    '',
+    `[Search the debugger console log](${logRelativePath})`,
+    '',
+    '### AI log investigation guidance',
+    '',
+    'Use the linked console log as a search source for errors related to the reported issue. Search for relevant error messages, groups, or keywords first. Do not load the full log unless the search results show that more context is needed.',
+    '',
   ].join('\n');
+};
+
+const formatConsoleLogs = (
+  consoleLogs: Array<IssueReportConsoleLog>
+): string => {
+  if (!consoleLogs.length) {
+    return '# No debugger console messages were recorded.\n';
+  }
+  return `${consoleLogs
+    .map(log => {
+      const timestamp = Number.isFinite(log.timestamp)
+        ? `${log.timestamp.toFixed(3)} ms`
+        : 'unknown time';
+      const message = String(log.message).replace(/\r?\n/g, '\\n');
+      const group = String(log.group).replace(/\r?\n/g, ' ');
+      return `[${timestamp}] [${log.type.toUpperCase()}] [${group}]${
+        log.internal ? ' [internal]' : ''
+      } ${message}`;
+    })
+    .join('\n')}\n`;
 };
 
 const getScreenshotPngBytes = (screenshotDataUrl: string): any => {
@@ -131,21 +173,25 @@ export const writeIssueReport = async ({
   const issuesDirectory = path.resolve(projectRoot, 'issues');
   const imagesDirectory = path.resolve(issuesDirectory, 'images');
   const dumpsDirectory = path.resolve(issuesDirectory, 'dumps');
+  const logsDirectory = path.resolve(issuesDirectory, 'logs');
   if (path.relative(projectRoot, issuesDirectory) !== 'issues') {
     throw new Error('The issue report directory is outside the project root.');
   }
   if (
     path.relative(issuesDirectory, imagesDirectory) !== 'images' ||
-    path.relative(issuesDirectory, dumpsDirectory) !== 'dumps'
+    path.relative(issuesDirectory, dumpsDirectory) !== 'dumps' ||
+    path.relative(issuesDirectory, logsDirectory) !== 'logs'
   ) {
     throw new Error('An issue report artifact directory is outside issues.');
   }
 
   const pngBytes = getScreenshotPngBytes(data.screenshotDataUrl);
   const dumpJson = `${JSON.stringify(data.runtimeDump, null, 2)}\n`;
+  const consoleLogText = formatConsoleLogs(data.consoleLogs);
   await Promise.all([
     fs.promises.mkdir(imagesDirectory, { recursive: true }),
     fs.promises.mkdir(dumpsDirectory, { recursive: true }),
+    fs.promises.mkdir(logsDirectory, { recursive: true }),
   ]);
 
   const baseStem = getIssueReportFileStem(data.createdAt);
@@ -160,6 +206,10 @@ export const writeIssueReport = async ({
     dumpsDirectory,
     `.${temporaryToken}.json.tmp`
   );
+  const temporaryLogPath = path.join(
+    logsDirectory,
+    `.${temporaryToken}.log.tmp`
+  );
   try {
     await fs.promises.writeFile(temporaryScreenshotPath, pngBytes, {
       flag: 'wx',
@@ -168,29 +218,39 @@ export const writeIssueReport = async ({
       encoding: 'utf8',
       flag: 'wx',
     });
+    await fs.promises.writeFile(temporaryLogPath, consoleLogText, {
+      encoding: 'utf8',
+      flag: 'wx',
+    });
 
     for (let suffix = 0; suffix < 10000; suffix++) {
       const stem = `${baseStem}${suffix ? `-${suffix}` : ''}`;
       const screenshotFilename = `${stem}-screenshot.png`;
       const dumpFilename = `${stem}-game-memory-dump.json`;
+      const logFilename = `${stem}-console.log`;
       const reportPath = path.join(issuesDirectory, `${stem}.md`);
       const screenshotPath = path.join(imagesDirectory, screenshotFilename);
       const dumpPath = path.join(dumpsDirectory, dumpFilename);
+      const logPath = path.join(logsDirectory, logFilename);
       const temporaryMarkdownPath = path.join(
         issuesDirectory,
         `.${temporaryToken}-${suffix}.md.tmp`
       );
       let screenshotWasCreated = false;
       let dumpWasCreated = false;
+      let logWasCreated = false;
       try {
         await fs.promises.link(temporaryScreenshotPath, screenshotPath);
         screenshotWasCreated = true;
         await fs.promises.link(temporaryDumpPath, dumpPath);
         dumpWasCreated = true;
+        await fs.promises.link(temporaryLogPath, logPath);
+        logWasCreated = true;
 
         const markdown = buildIssueReportMarkdown(data, {
           screenshotRelativePath: `images/${screenshotFilename}`,
           dumpRelativePath: `dumps/${dumpFilename}`,
+          logRelativePath: `logs/${logFilename}`,
         });
         await fs.promises.writeFile(temporaryMarkdownPath, markdown, {
           encoding: 'utf8',
@@ -203,6 +263,7 @@ export const writeIssueReport = async ({
         return reportPath;
       } catch (error) {
         await removeFileIfCreated(temporaryMarkdownPath);
+        if (logWasCreated) await removeFileIfCreated(logPath);
         if (dumpWasCreated) await removeFileIfCreated(dumpPath);
         if (screenshotWasCreated) await removeFileIfCreated(screenshotPath);
         if (error && error.code === 'EEXIST') continue;
@@ -214,6 +275,7 @@ export const writeIssueReport = async ({
     await Promise.all([
       removeFileIfCreated(temporaryScreenshotPath),
       removeFileIfCreated(temporaryDumpPath),
+      removeFileIfCreated(temporaryLogPath),
     ]);
   }
 };

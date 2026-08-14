@@ -70,6 +70,9 @@ export type GameplayTestToRun = {|
 export type GameplayTestRunOptions = {|
   timeoutMs?: number,
   screenshots?: 'off' | 'on-failure',
+  // Automated callers do not need the frozen final game to remain visible.
+  // Close and unload the floating gameplay-test frame when the batch ends.
+  closeFrameWhenFinished?: boolean,
   // Pace the run for a human watching it: game seconds simulated per real
   // second (1 = normal speed, 4 = 4x...). Omitted: run as fast as possible.
   speedFactor?: number,
@@ -671,11 +674,10 @@ export const runGameplayTests = async ({
             error
           );
         }
-        // When at least one test ran, the frame stays open (showing the
-        // frozen game and the outcome of the run) until its close button
-        // is used or another run starts. Otherwise (the game could not
-        // boot, or the run was stopped before the first test), close it.
-        if (!anyTestRan) {
+        // Interactive editor runs keep a successfully booted frame open to
+        // show the frozen game and outcome. Automated callers such as MCP can
+        // request guaranteed cleanup once the batch is finished.
+        if (options.closeFrameWhenFinished || !anyTestRan) {
           try {
             clearGameplayTestFramePreview();
           } catch (error) {

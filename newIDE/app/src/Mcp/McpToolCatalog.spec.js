@@ -262,6 +262,12 @@ describe('McpToolCatalog', () => {
       })
     );
     expect(tool.description).toContain('display_collision_shapes');
+    expect(tool.description).toContain(
+      'Close any previous game preview and debugger windows'
+    );
+    expect(tool.inputSchema.properties.force_new.description).toContain(
+      'Deprecated compatibility flag'
+    );
     expect(
       getMcpToolUsageExamples('launch_preview').launch_preview
     ).toContainEqual(
@@ -410,6 +416,9 @@ describe('McpToolCatalog', () => {
       idempotentHint: false,
       openWorldHint: false,
     });
+    expect(runTool.description).toContain(
+      'floating game window is automatically closed and unloaded'
+    );
     expect(resultsTool.inputSchema).toEqual(
       expect.objectContaining({
         additionalProperties: false,

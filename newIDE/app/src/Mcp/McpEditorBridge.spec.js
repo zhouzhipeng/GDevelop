@@ -1270,7 +1270,7 @@ runtimeScene._instances.length;
     expect(reloadProjectAndWait).toHaveBeenCalledTimes(1);
     expect(staleLaunchPreviewForScene).not.toHaveBeenCalled();
     expect(freshLaunchPreviewForScene).toHaveBeenCalledTimes(1);
-    expect(workflowOrder).toEqual(['close', 'reload', 'launch']);
+    expect(workflowOrder).toEqual(['close', 'reload', 'close', 'launch']);
   });
 
   it('reloads project files from disk and returns a synchronization receipt', async () => {
@@ -1822,7 +1822,7 @@ runtimeScene._instances.length;
     expect(result.responsive).toBe(false);
     expect(result.previewHealth).toBe('connected-unresponsive');
     expect(result.recommendedActions).toContain(
-      'control_preview { action: "close", close_all: true }, then launch_preview { start_paused: true, force_new: true }'
+      'launch_preview { start_paused: true } (it automatically closes the previous game and debugger windows first)'
     );
   });
 
@@ -2560,44 +2560,33 @@ runtimeScene._instances.length;
     ).toBe(true);
   });
 
-  it('launch_preview attaches to an already-running preview instead of opening a new window', async () => {
-    const runCommand = jest.fn(() => true);
-    const previewDebuggerServer = makeTargetedPreviewServer({
-      debuggerIds: ['preview-ws-0'],
+  it('launch_preview closes the previous game and debugger before opening a fresh preview', async () => {
+    const operations: Array<string> = [];
+    const previewDebuggerServer: any = makeTargetedPreviewServer({
+      debuggerIds: ['preview-ws-old'],
       responders: {
         getStatus: { isPaused: false, sceneName: 'Level1' },
       },
     });
-    const bridge = makeBridge({
-      runCommand,
-      getPreviewDebuggerServer: () => previewDebuggerServer,
+    const closeDebuggerConnections = previewDebuggerServer.closeAllConnections;
+    previewDebuggerServer.closeAllConnections = jest.fn(() => {
+      operations.push('close-debugger-connections');
+      closeDebuggerConnections();
     });
-
-    const response = await bridge.handleRendererMcpRequest({
-      method: 'tools/call',
-      params: { name: 'launch_preview', arguments: {} },
+    const closeAllPreviews = jest.fn(async () => {
+      operations.push('close-game-and-debugger-windows');
     });
-    const result = JSON.parse(response.content[0].text);
-
-    expect(response.isError).not.toBe(true);
-    expect(result.attached).toBe(true);
-    expect(result.launched).toBe(false);
-    expect(result.debuggerId).toBe('preview-ws-0');
-    // No new preview window was opened.
-    expect(runCommand).not.toHaveBeenCalled();
-  });
-
-  it('launch_preview attaches and pauses an existing preview in place with start_paused', async () => {
-    const runCommand = jest.fn(() => true);
-    const previewDebuggerServer = makeTargetedPreviewServer({
-      debuggerIds: ['preview-ws-0'],
-      responders: {
-        getStatus: { isPaused: false, sceneName: 'Level1' },
-        pause: { isPaused: true, sceneName: 'Level1' },
-      },
+    const launchPreviewForScene = jest.fn(() => {
+      operations.push('launch-new-preview');
+      setTimeout(
+        () => previewDebuggerServer.connectDebugger('preview-ws-new'),
+        1
+      );
+      return { accepted: true };
     });
     const bridge = makeBridge({
-      runCommand,
+      closeAllPreviews,
+      launchPreviewForScene,
       getPreviewDebuggerServer: () => previewDebuggerServer,
     });
 
@@ -2605,17 +2594,54 @@ runtimeScene._instances.length;
       method: 'tools/call',
       params: {
         name: 'launch_preview',
-        arguments: { start_paused: true, timeout_ms: 1000 },
+        arguments: { timeout_ms: 1000 },
       },
     });
     const result = JSON.parse(response.content[0].text);
 
     expect(response.isError).not.toBe(true);
-    expect(result.attached).toBe(true);
+    expect(result.attached).not.toBe(true);
+    expect(result.launched).toBe(true);
+    expect(result.debuggerId).toBe('preview-ws-new');
+    expect(operations).toEqual([
+      'close-game-and-debugger-windows',
+      'close-debugger-connections',
+      'launch-new-preview',
+    ]);
+  });
+
+  it('launch_preview does not launch when previous preview cleanup fails', async () => {
+    const runCommand = jest.fn(() => true);
+    const previewDebuggerServer = makeTargetedPreviewServer({
+      debuggerIds: ['preview-ws-0'],
+    });
+    const closeDebuggerConnections = jest.spyOn(
+      previewDebuggerServer,
+      'closeAllConnections'
+    );
+    const bridge = makeBridge({
+      runCommand,
+      getPreviewDebuggerServer: () => previewDebuggerServer,
+      closeAllPreviews: jest.fn(async () => {
+        throw new Error('native close failed');
+      }),
+    });
+
+    const response = await bridge.handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'launch_preview',
+        arguments: {},
+      },
+    });
+    const result = JSON.parse(response.content[0].text);
+
+    expect(response.isError).not.toBe(true);
+    expect(result.success).toBe(false);
     expect(result.launched).toBe(false);
-    expect(result.startPaused).toBe(true);
-    expect(result.pauseConfirmed).toBe(true);
-    expect(result.debuggerId).toBe('preview-ws-0');
+    expect(result.failurePhase).toBe('previous-preview-cleanup');
+    expect(result.error).toContain('native close failed');
+    expect(closeDebuggerConnections).toHaveBeenCalledTimes(1);
     expect(runCommand).not.toHaveBeenCalled();
   });
 
