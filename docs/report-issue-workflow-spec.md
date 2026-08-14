@@ -48,6 +48,9 @@ raw operating-system process heap dump.
   loading the full log unless the search shows that more context is needed.
 - Persist the captured bundle asynchronously after closing the dialog and show
   a toast when the background save succeeds or fails.
+- Copy the saved Markdown path in project-relative form, such as
+  `issues/issue-20260814-055200-754.md`, to the system clipboard after a
+  successful save.
 - Restore the preview's pre-report pause state after either saving or
   cancelling.
 - Keep all report data local; nothing is uploaded or submitted automatically.
@@ -175,9 +178,11 @@ Save report performs these operations while the game is still paused:
 7. Remove the annotation layer and resume the game only if it was playing
    before the report started. A preview that was already paused remains
    paused.
-8. Show a transient success toast containing the saved path, or a failure
-   toast containing the write error. Keep the toolbar action busy until both
-   background persistence and preview cleanup finish.
+8. Copy the Markdown path in project-relative, forward-slash form (for example,
+   `issues/issue-20260814-055200-754.md`) to the system clipboard.
+9. Show a transient success toast containing the saved path and clipboard
+   result, or a failure toast containing the write error. Keep the toolbar
+   action busy until background persistence and preview cleanup finish.
 
 The report is not considered saved until the final Markdown publish succeeds.
 A capture error leaves the dialog open so the user can retry without losing
@@ -428,6 +433,8 @@ files are preserved.
   outside the project root.
 - Saving closes the dialog after capture, performs persistence without
   blocking the UI, and shows a success or failure toast when finished.
+- A successful save copies the project-relative Markdown path to the system
+  clipboard and reports clipboard failures without claiming the file was lost.
 - A console snapshot includes both committed and render-batched pending logs.
 
 ### Runtime/browser tests
@@ -517,3 +524,5 @@ Implementation can begin once these first-version choices are approved:
    `issues/images/`, `issues/dumps/`, and `issues/logs/` respectively.
 7. Artifact persistence and preview cleanup finish asynchronously after the
    capture dialog closes, with a toast reporting success or failure.
+8. A successful save copies the project-relative Markdown path to the system
+   clipboard.

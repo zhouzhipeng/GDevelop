@@ -20,11 +20,13 @@ import { type Log, LogsManager } from './DebuggerConsole';
 import IssueReportDialog from './IssueReportDialog';
 import {
   getLocalProjectRoot,
+  getIssueReportClipboardPath,
   writeIssueReport,
   type IssueReportData,
 } from './IssueReportWriter';
 import { showErrorBox } from '../UI/Messages/MessageBox';
 import InfoBar from '../UI/Messages/InfoBar';
+import { copyTextToClipboard } from '../Utils/Clipboard';
 
 // Mirrors `gdjs.FrameMeasureOutput`: a plain tree (no back-references),
 // as sent by the game's profiler.
@@ -741,11 +743,24 @@ export default class Debugger extends React.Component<Props, State> {
     const cleanupPromise = this._cleanupIssueReport(activeIssueReport);
     writeIssueReport({ projectFile, data: reportData })
       .then(async reportPath => {
-        const cleanupWarning = await cleanupPromise;
+        const clipboardPath = getIssueReportClipboardPath(reportPath);
+        const clipboardWarningPromise: Promise<?string> = copyTextToClipboard(
+          clipboardPath
+        ).then(
+          (): ?string => null,
+          (error): ?string =>
+            `Could not copy ${clipboardPath} to the clipboard: ${error.message ||
+              String(error)}`
+        );
+        const [cleanupWarning, clipboardWarning] = await Promise.all([
+          cleanupPromise,
+          clipboardWarningPromise,
+        ]);
         if (this._isUnmounted) return;
-        const message = cleanupWarning
-          ? `Issue report saved to ${reportPath}. ${cleanupWarning}`
-          : `Issue report saved to ${reportPath}`;
+        const warnings = [cleanupWarning, clipboardWarning].filter(Boolean);
+        const message = `Issue report saved to ${reportPath}. ${
+          clipboardWarning ? '' : `Copied ${clipboardPath} to the clipboard. `
+        }${warnings.join(' ')}`.trim();
         this.setState(
           state => ({
             isIssueReportSaving: false,

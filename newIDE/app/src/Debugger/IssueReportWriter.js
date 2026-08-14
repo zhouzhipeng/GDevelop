@@ -48,6 +48,17 @@ export const getIssueReportFileStem = (date: Date): string =>
     2
   )}-${padNumber(date.getUTCMilliseconds(), 3)}`;
 
+export const getIssueReportClipboardPath = (reportPath: string): string => {
+  const normalizedPath = reportPath.replace(/\\/g, '/');
+  const reportFilename = normalizedPath.substring(
+    normalizedPath.lastIndexOf('/') + 1
+  );
+  if (!reportFilename) {
+    throw new Error('The saved issue report path is invalid.');
+  }
+  return `issues/${reportFilename}`;
+};
+
 export const getLocalProjectRoot = (projectFile: string): ?string => {
   if (!fs || !path || !projectFile || !path.isAbsolute(projectFile)) {
     return null;

@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import {
   buildIssueReportMarkdown,
+  getIssueReportClipboardPath,
   getIssueReportFileStem,
   getLocalProjectRoot,
   writeIssueReport,
@@ -93,6 +94,14 @@ describe('IssueReportWriter', () => {
     expect(getLocalProjectRoot(absoluteProjectFile)).toBe(
       path.dirname(absoluteProjectFile)
     );
+  });
+
+  test('builds a project-relative clipboard path for the saved report', () => {
+    expect(
+      getIssueReportClipboardPath(
+        'C:\\Games\\Example\\issues\\issue-20260814-055200-754.md'
+      )
+    ).toBe('issues/issue-20260814-055200-754.md');
   });
 
   test('writes reports under issues without overwriting collisions', async () => {
