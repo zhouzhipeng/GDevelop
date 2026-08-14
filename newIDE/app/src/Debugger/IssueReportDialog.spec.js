@@ -49,7 +49,8 @@ jest.mock('../UI/CompactToggleButtons', () => {
             'data-active': button.isActive,
             onClick: button.onClick,
           },
-          button.id
+          React.createElement('span', null, button.label),
+          React.createElement('span', null, button.tooltip)
         )
       )
     );
@@ -115,9 +116,14 @@ describe('IssueReportDialog', () => {
     expect(findButton('issue-report-arrow-tool').props['data-active']).toBe(
       false
     );
-
     findButton('issue-report-arrow-tool').props.onClick();
     expect(props.onToolChange).toHaveBeenCalledWith('arrow');
+  });
+
+  it('renders translated tool labels and tooltips as React nodes', () => {
+    expect(() =>
+      TestRenderer.create(<IssueReportDialog {...makeProps()} />)
+    ).not.toThrow();
   });
 
   it('disables drawing tools while saving', () => {

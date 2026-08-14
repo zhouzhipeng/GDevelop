@@ -100,8 +100,8 @@ const IssueReportDialog = ({
         buttons={[
           {
             id: 'issue-report-freehand-tool',
-            label: t`Freehand`,
-            tooltip: t`Draw freehand`,
+            label: <Trans>Freehand</Trans>,
+            tooltip: <Trans>Draw freehand</Trans>,
             renderIcon: className => <BrushIcon className={className} />,
             onClick: () => {
               onToolChange('freehand');
@@ -111,8 +111,8 @@ const IssueReportDialog = ({
           },
           {
             id: 'issue-report-rectangle-tool',
-            label: t`Rectangle`,
-            tooltip: t`Draw a rectangle`,
+            label: <Trans>Rectangle</Trans>,
+            tooltip: <Trans>Draw a rectangle</Trans>,
             renderIcon: className => <RectangleIcon className={className} />,
             onClick: () => {
               onToolChange('rectangle');
@@ -122,8 +122,8 @@ const IssueReportDialog = ({
           },
           {
             id: 'issue-report-arrow-tool',
-            label: t`Arrow`,
-            tooltip: t`Draw an arrow`,
+            label: <Trans>Arrow</Trans>,
+            tooltip: <Trans>Draw an arrow</Trans>,
             renderIcon: className => <ArrowIcon className={className} />,
             onClick: () => {
               onToolChange('arrow');

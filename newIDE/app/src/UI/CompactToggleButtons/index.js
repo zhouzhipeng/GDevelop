@@ -12,7 +12,7 @@ export type CompactToggleButton = {|
   tooltip: React.Node,
   onClick: () => void,
   isActive: boolean,
-  label?: string,
+  label?: React.Node,
   disabled?: boolean,
 |};
 export type CompactToggleButtonsProps = {|
