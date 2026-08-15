@@ -11,7 +11,7 @@ export type TextFileDescriptor = {|
 type PendingUploadFileDescriptor = {|
   Key: string,
   Body: string,
-  ContentType: 'text/javascript' | 'text/html',
+  ContentType: 'text/javascript' | 'text/html' | 'application/json',
 |};
 
 type ConstructorArgs = {|
@@ -139,6 +139,8 @@ export default class BrowserS3FileSystem {
     const mime = {
       '.js': 'text/javascript',
       '.html': 'text/html',
+      '.json': 'application/json',
+      '.map': 'application/json',
     };
     const fileExtension = path.extname(fullPath);
 

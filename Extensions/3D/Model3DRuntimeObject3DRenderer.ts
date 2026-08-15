@@ -2,6 +2,23 @@ namespace gdjs {
   type FloatPoint3D = [float, float, float];
 
   /** @internal */
+  export type ThreeMaterialRootChange = {
+    previousRoot: THREE.Object3D | null;
+    nextRoot: THREE.Object3D | null;
+    generation: number;
+    reason: 'created' | 'replaced' | 'released' | 'destroyed';
+  };
+
+  /** @internal Event-driven host contract for systems that own mesh materials. */
+  export interface ThreeMaterialHost {
+    getThreeMaterialRoot(): THREE.Object3D | null;
+    getThreeMaterialGeneration(): number;
+    addThreeMaterialRootChangedListener(
+      listener: (change: gdjs.ThreeMaterialRootChange) => void
+    ): () => void;
+  }
+
+  /** @internal */
   export type Model3DBonePose = {
     positionX: float;
     positionY: float;
@@ -464,6 +481,9 @@ namespace gdjs {
     private _bonesByCanonicalName: Map<string, THREE.Bone> | null = null;
     private _ambiguousBoneNames: Set<string> | null = null;
     private _modelGeneration = 0;
+    private _threeMaterialRootChangedListeners = new Set<
+      (change: gdjs.ThreeMaterialRootChange) => void
+    >();
     private _bonePoseScratch: Model3DBonePoseScratch | null = null;
     private _modelCoordinateSystemInverseMatrix = new THREE.Matrix4();
     private _modelRotationEuler = new THREE.Euler(0, 0, 0, 'ZYX');
@@ -564,6 +584,39 @@ namespace gdjs {
         }
         bonesByCanonicalName.set(canonicalName, bone);
       });
+    }
+
+    /** @internal */
+    getThreeMaterialRoot(): THREE.Object3D | null {
+      return this._clonedModelRoot ? this._threeObject : null;
+    }
+
+    /** @internal */
+    getThreeMaterialGeneration(): number {
+      return this._modelGeneration;
+    }
+
+    /** @internal */
+    addThreeMaterialRootChangedListener(
+      listener: (change: gdjs.ThreeMaterialRootChange) => void
+    ): () => void {
+      this._threeMaterialRootChangedListeners.add(listener);
+      let isRemoved = false;
+      return () => {
+        if (isRemoved) return;
+        isRemoved = true;
+        this._threeMaterialRootChangedListeners.delete(listener);
+      };
+    }
+
+    private _notifyThreeMaterialRootChanged(
+      change: gdjs.ThreeMaterialRootChange
+    ): void {
+      for (const listener of Array.from(
+        this._threeMaterialRootChangedListeners
+      )) {
+        listener(change);
+      }
     }
 
     hasBone(boneName: string): boolean {
@@ -906,8 +959,21 @@ namespace gdjs {
       this._animationMixer.update(timeDelta);
     }
 
-    private _releaseCurrentModelInstance(): void {
+    private _releaseCurrentModelInstance(
+      reason: 'replaced' | 'released' | 'destroyed' = 'released'
+    ): boolean {
+      const previousRoot = this._clonedModelRoot ? this._threeObject : null;
       this._modelGeneration++;
+      // Destruction must always be observable by material owners, including
+      // objects destroyed while their asynchronous model is not loaded.
+      if (previousRoot || reason === 'destroyed') {
+        this._notifyThreeMaterialRootChanged({
+          previousRoot,
+          nextRoot: null,
+          generation: this._modelGeneration,
+          reason,
+        });
+      }
       this._animationMixer.stopAllAction();
       if (this._clonedModelRoot) {
         this._animationMixer.uncacheRoot(this._clonedModelRoot);
@@ -922,10 +988,12 @@ namespace gdjs {
       // with the cached GLTF. Only detach the hierarchy here; disposing shared
       // GPU resources would break other live instances.
       this._threeObject.clear();
+      return !!previousRoot;
     }
 
     onDestroyed(): void {
-      this._releaseCurrentModelInstance();
+      this._releaseCurrentModelInstance('destroyed');
+      this._threeMaterialRootChangedListeners.clear();
       this._sharedAnimationModelCompatibility.clear();
     }
 
@@ -1172,7 +1240,8 @@ namespace gdjs {
       // Release the old mixer bindings and clone hierarchy before creating the
       // replacement. This keeps model rebuilds from retaining two animated
       // skeletons at once longer than necessary.
-      this._releaseCurrentModelInstance();
+      const didReplaceExistingRoot =
+        this._releaseCurrentModelInstance('replaced');
 
       // This group hold the rotation defined by properties.
       const threeObject = new THREE.Group();
@@ -1199,6 +1268,12 @@ namespace gdjs {
       this._threeObject = threeObject;
       this.updatePosition();
       this._updateShadow();
+      this._notifyThreeMaterialRootChanged({
+        previousRoot: null,
+        nextRoot: threeObject,
+        generation: this._modelGeneration,
+        reason: didReplaceExistingRoot ? 'replaced' : 'created',
+      });
 
       // Start the current animation on the new 3D object.
       this._animationMixer = new THREE.AnimationMixer(root);

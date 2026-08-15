@@ -84,6 +84,12 @@ const jsExtensions = [
     objectsRenderingServiceModules: {},
   },
   {
+    name: 'TSLMaterial',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/TSLMaterial/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
     name: 'ExampleJsExtension',
     // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/ExampleJsExtension/JsExtension.js'),

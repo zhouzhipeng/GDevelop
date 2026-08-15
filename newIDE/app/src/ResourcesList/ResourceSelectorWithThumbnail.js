@@ -330,7 +330,9 @@ const ResourceSelectorWithThumbnail = ({
           showErrorBox({
             message:
               'This resource cannot be used here. Choose a resource from the expected project folder.',
+            rawError: null,
             errorId: 'resource-folder-mismatch',
+            doNotReport: true,
           });
           return;
         }

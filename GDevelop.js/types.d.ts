@@ -1321,6 +1321,10 @@ export class JavaScriptResource extends Resource {
   constructor();
 }
 
+export class TSLMaterialResource extends Resource {
+  constructor();
+}
+
 export class InitialInstance extends EmscriptenObject {
   constructor();
   setObjectName(name: string): void;

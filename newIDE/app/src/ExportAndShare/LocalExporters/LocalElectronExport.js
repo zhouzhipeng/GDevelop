@@ -21,6 +21,7 @@ import {
 } from '../GenericExporters/ElectronExport';
 import { downloadUrlsToLocalFiles } from '../../Utils/LocalFileDownloader';
 import { runNpmScript } from '../../Utils/NpmScriptExecutor';
+import { exportWholePixiProjectWithTSL } from '../../TSLMaterial/TSLMaterialProjectCompiler';
 // It's important to use remote and not electron for folder actions,
 // otherwise they will be opened in the background.
 // See https://github.com/electron/electron/issues/4349#issuecomment-777475765
@@ -132,9 +133,20 @@ export const localElectronExportPipeline: ExportPipeline<
         fallbackAuthor.username
       );
     }
-    const exportSucceeded = exporter.exportWholePixiProject(exportOptions);
-    exportOptions.delete();
-    exporter.delete();
+    let exportSucceeded = false;
+    try {
+      exportSucceeded = await exportWholePixiProjectWithTSL({
+        project: context.project,
+        exporter,
+        exportOptions,
+        fileSystem: localFileSystem,
+        outputDirectory: context.exportState.outputDir,
+        target: 'electron',
+      });
+    } finally {
+      exportOptions.delete();
+      exporter.delete();
+    }
 
     if (!exportSucceeded) {
       throw new Error(

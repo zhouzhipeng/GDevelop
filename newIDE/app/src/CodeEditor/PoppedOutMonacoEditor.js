@@ -27,11 +27,15 @@ type Props = {|
     cursorColumn: number,
     cursorLine: number,
   }) => void,
-  onEditorMounted?: () => void,
+  onEditorMounted?: (editor: any, monaco: any) => void,
   onFocus: () => void,
   onBlur: () => void,
   /** See `CodeEditor`. */
   suppressedDiagnosticsMessages?: Array<string>,
+  language?: 'javascript' | 'typescript',
+  modelPath?: string,
+  extraLibraries?: Array<{| filePath: string, content: string |}>,
+  markers?: Array<Object>,
 |};
 
 type State = {|
@@ -139,6 +143,8 @@ class PoppedOutMonacoEditor extends React.Component<Props, State> {
   _monaco: any = null;
   _isChangingValue: boolean = false;
   _unmounted: boolean = false;
+  _extraLibraryDisposables: Array<any> = [];
+  _ownedModel: any = null;
 
   componentDidMount() {
     this._loadAndCreateEditor();
@@ -176,6 +182,19 @@ class PoppedOutMonacoEditor extends React.Component<Props, State> {
     if (prevProps.fontSize !== this.props.fontSize) {
       this._editor.updateOptions({ fontSize: this.props.fontSize });
     }
+
+    if (
+      prevProps.language !== this.props.language ||
+      prevProps.extraLibraries !== this.props.extraLibraries
+    ) {
+      this._installExtraLibraries();
+    }
+    if (
+      prevProps.language !== this.props.language ||
+      prevProps.markers !== this.props.markers
+    ) {
+      this._updateMarkers();
+    }
   }
 
   componentWillUnmount() {
@@ -199,6 +218,12 @@ class PoppedOutMonacoEditor extends React.Component<Props, State> {
       this._editor.dispose();
       this._editor = null;
     }
+    if (this._ownedModel) {
+      this._ownedModel.dispose();
+      this._ownedModel = null;
+    }
+    this._extraLibraryDisposables.forEach(disposable => disposable.dispose());
+    this._extraLibraryDisposables = [];
     this._monaco = null;
   }
 
@@ -220,6 +245,43 @@ class PoppedOutMonacoEditor extends React.Component<Props, State> {
       });
   };
 
+  _installExtraLibraries = () => {
+    this._extraLibraryDisposables.forEach(disposable => disposable.dispose());
+    this._extraLibraryDisposables = [];
+    if (!this._monaco || this.props.language !== 'typescript') return;
+    this._extraLibraryDisposables = (this.props.extraLibraries || []).map(
+      library =>
+        this._monaco.languages.typescript.typescriptDefaults.addExtraLib(
+          library.content,
+          library.filePath
+        )
+    );
+  };
+
+  _updateMarkers = () => {
+    if (!this._monaco || !this._editor || !this._editor.getModel()) return;
+    const markers =
+      this.props.language === 'typescript' ? this.props.markers || [] : [];
+    this._monaco.editor.setModelMarkers(
+      this._editor.getModel(),
+      'gdevelop-tsl-material',
+      markers.map(marker => ({
+        code: marker.code,
+        message: marker.message,
+        severity:
+          marker.severity === 'warning'
+            ? this._monaco.MarkerSeverity.Warning
+            : marker.severity === 'info'
+            ? this._monaco.MarkerSeverity.Info
+            : this._monaco.MarkerSeverity.Error,
+        startLineNumber: marker.line,
+        startColumn: marker.column,
+        endLineNumber: marker.endLine || marker.line,
+        endColumn: marker.endColumn || marker.column + 1,
+      }))
+    );
+  };
+
   _createEditor = (monaco: any, container: HTMLDivElement) => {
     this._monaco = monaco;
 
@@ -230,15 +292,31 @@ class PoppedOutMonacoEditor extends React.Component<Props, State> {
       enableJsTypeDiagnostics(monaco);
     }
 
+    this._installExtraLibraries();
+
+    const model = this.props.modelPath
+      ? monaco.editor.createModel(
+          this.props.value,
+          this.props.language || 'javascript',
+          monaco.Uri.parse(this.props.modelPath)
+        )
+      : null;
+    this._ownedModel = model;
     this._editor = monaco.editor.create(container, {
       ...baseEditorOptions,
-      value: this.props.value,
-      language: 'javascript',
+      ...(model
+        ? { model }
+        : {
+            value: this.props.value,
+            language: this.props.language || 'javascript',
+          }),
       theme: this.props.theme,
       fontSize: this.props.fontSize,
     });
 
     applyElectronClipboardPatch(this._editor, monaco);
+
+    this._updateMarkers();
 
     const { suppressedDiagnosticsMessages } = this.props;
     if (suppressedDiagnosticsMessages) {
@@ -274,7 +352,7 @@ class PoppedOutMonacoEditor extends React.Component<Props, State> {
     this.setState({ loading: false });
 
     if (this.props.onEditorMounted) {
-      this.props.onEditorMounted();
+      this.props.onEditorMounted(this._editor, monaco);
     }
   };
 

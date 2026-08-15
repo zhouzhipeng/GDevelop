@@ -507,6 +507,9 @@ class ExporterHelper {
    */
   const gd::String &GetLastError() const { return lastError; };
 
+  /** Return whether the project dependency graph references a TSL material. */
+  static bool ProjectUsesTSLMaterials(gd::Project &project);
+
   /**
    * \brief Export a project without its events and options to 2 JS variables
    *
@@ -578,6 +581,7 @@ class ExporterHelper {
    */
   void AddLibsInclude(bool pixiRenderers,
                       bool pixiInThreeRenderers,
+                      bool includeTSLMaterialRuntime,
                       bool isInGameEdition,
                       bool includeWebsocketDebuggerClient,
                       bool includeWindowMessageDebuggerClient,

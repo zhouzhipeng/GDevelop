@@ -147,6 +147,7 @@ declare class libGDevelop {
   Model3DResource: Class<gdModel3DResource>;
   AtlasResource: Class<gdAtlasResource>;
   JavaScriptResource: Class<gdJavaScriptResource>;
+  TSLMaterialResource: Class<gdTSLMaterialResource>;
   InitialInstance: Class<gdInitialInstance>;
   InitialInstancesContainer: Class<gdInitialInstancesContainer>;
   HighestZOrderFinder: Class<gdHighestZOrderFinder>;

@@ -65,6 +65,12 @@ import {
   buildJavaScriptAuthoringArtifacts,
   validateProjectJavaScriptAuthoring,
 } from '../JavaScriptAuthoringApi';
+import {
+  PROJECT_TSL_API_RELATIVE_PATH,
+  PROJECT_TSL_CATALOG_RELATIVE_PATH,
+  buildTSLMaterialAuthoringArtifacts,
+  registerVirtualTSLMaterialAuthoringArtifacts,
+} from '../TSLMaterialAuthoring';
 import { normalizeProjectLocalResourceFilePaths } from '../../ResourcesList/ResourceUtils';
 
 const fs = optionalRequire('fs-extra');
@@ -492,6 +498,8 @@ export const writeProjectJavaScriptAuthoringApi = async (
     artifacts.hashes.harnessApi,
     () => reportCatalogProgress(options, 'catalog-harness-api-verifying')
   );
+  reportCatalogProgress(options, 'catalog-harness-api-verified');
+  reportCatalogProgress(options, 'catalog-harness-api-written');
   return {
     counts: artifacts.counts,
     hashes: artifacts.hashes,
@@ -499,6 +507,56 @@ export const writeProjectJavaScriptAuthoringApi = async (
       runtimeApi: runtimeApiPath,
       projectApi: projectApiPath,
       harnessApi: harnessApiPath,
+    },
+  };
+};
+
+export const writeProjectTSLMaterialAuthoringCatalogs = async (
+  projectPath: string,
+  projectApiDeclaration: string,
+  options?: ProjectSourceCatalogWriteOptions
+): Promise<Object> => {
+  reportCatalogProgress(options, 'catalog-tsl-api-building');
+  const artifacts = buildTSLMaterialAuthoringArtifacts(projectApiDeclaration);
+  reportCatalogProgress(options, 'catalog-tsl-api-built');
+  const tslApiPath = path.join(
+    projectPath,
+    ...PROJECT_TSL_API_RELATIVE_PATH.split('/')
+  );
+  const tslCatalogPath = path.join(
+    projectPath,
+    ...PROJECT_TSL_CATALOG_RELATIVE_PATH.split('/')
+  );
+  reportCatalogProgress(options, 'catalog-tsl-api-writing');
+  writeAndCheckGeneratedFileSync(
+    artifacts.tslApi,
+    tslApiPath,
+    artifacts.hashes.tslApiFile,
+    () => reportCatalogProgress(options, 'catalog-tsl-api-verifying')
+  );
+  reportCatalogProgress(options, 'catalog-tsl-api-verified');
+  reportCatalogProgress(options, 'catalog-tsl-api-written');
+  reportCatalogProgress(options, 'catalog-tsl-catalog-writing');
+  writeAndCheckGeneratedFileSync(
+    artifacts.tslCatalog,
+    tslCatalogPath,
+    artifacts.hashes.tslCatalogFile,
+    () => reportCatalogProgress(options, 'catalog-tsl-catalog-verifying')
+  );
+  reportCatalogProgress(options, 'catalog-tsl-catalog-verified');
+  reportCatalogProgress(options, 'catalog-tsl-catalog-written');
+  registerVirtualTSLMaterialAuthoringArtifacts({
+    projectRoot: projectPath,
+    projectApiDeclaration,
+    artifacts,
+  });
+  return {
+    counts: artifacts.counts,
+    hashes: artifacts.hashes,
+    identity: artifacts.catalog.identity,
+    paths: {
+      tslApi: tslApiPath,
+      tslCatalog: tslCatalogPath,
     },
   };
 };
@@ -578,11 +636,17 @@ export const writeProjectSourceCatalogs = async (
       serializedProject,
       trackedOptions
     );
+    const tslMaterial = await writeProjectTSLMaterialAuthoringCatalogs(
+      projectPath,
+      buildJavaScriptAuthoringArtifacts(serializedProject).projectApi,
+      trackedOptions
+    );
 
     return {
       instructions: instructionCatalog.counts,
       settings: settingsCatalog.counts,
       javascript: javascriptApi,
+      tslMaterial,
     };
   } catch (error) {
     if (error instanceof ProjectSourceCatalogGenerationError) throw error;
@@ -667,6 +731,9 @@ const writeProjectFiles = async ({
     const javascriptArtifacts = buildJavaScriptAuthoringArtifacts(
       authoringSerializedProjectObject
     );
+    const tslMaterialArtifacts = buildTSLMaterialAuthoringArtifacts(
+      javascriptArtifacts.projectApi
+    );
     const javascriptValidation = validateProjectJavaScriptAuthoring({
       serializedProject: authoringSerializedProjectObject,
       runtimeApiDeclaration: javascriptArtifacts.runtimeApi,
@@ -742,6 +809,21 @@ const writeProjectFiles = async ({
       path.join(projectPath, ...PROJECT_HARNESS_API_RELATIVE_PATH.split('/')),
       javascriptArtifacts.hashes.harnessApi
     );
+    await writeAndCheckFile(
+      tslMaterialArtifacts.tslApi,
+      path.join(projectPath, ...PROJECT_TSL_API_RELATIVE_PATH.split('/')),
+      tslMaterialArtifacts.hashes.tslApiFile
+    );
+    await writeAndCheckFile(
+      tslMaterialArtifacts.tslCatalog,
+      path.join(projectPath, ...PROJECT_TSL_CATALOG_RELATIVE_PATH.split('/')),
+      tslMaterialArtifacts.hashes.tslCatalogFile
+    );
+    registerVirtualTSLMaterialAuthoringArtifacts({
+      projectRoot: projectPath,
+      projectApiDeclaration: javascriptArtifacts.projectApi,
+      artifacts: tslMaterialArtifacts,
+    });
     const generatedLegacyProject = stripGameplayTestResultsFromLegacyProject(
       removeLegacyFolderStructuresFromProject(authoringSerializedProjectObject)
     );

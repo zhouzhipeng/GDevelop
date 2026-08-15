@@ -25,6 +25,8 @@ import {
 import { ExplanationHeader } from '../GenericExporters/OnlineWebExport';
 import OnlineWebExportFlow from '../GenericExporters/OnlineWebExport/OnlineWebExportFlow';
 
+import { exportWholePixiProjectWithTSL } from '../../TSLMaterial/TSLMaterialProjectCompiler';
+
 const gd: libGDevelop = global.gd;
 
 type ExportState = null;
@@ -99,7 +101,7 @@ export const browserOnlineWebExportPipeline: ExportPipeline<
     });
   },
 
-  launchExport: (
+  launchExport: async (
     context: ExportPipelineContext<ExportState>,
     { exporter, outputDir, abstractFileSystem }: PreparedExporter,
     fallbackAuthor: ?{ id: string, username: string }
@@ -112,9 +114,20 @@ export const browserOnlineWebExportPipeline: ExportPipeline<
         fallbackAuthor.username
       );
     }
-    exporter.exportWholePixiProject(exportOptions);
-    exportOptions.delete();
-    exporter.delete();
+    let exportSucceeded = false;
+    try {
+      exportSucceeded = await exportWholePixiProjectWithTSL({
+        project,
+        exporter,
+        exportOptions,
+        fileSystem: abstractFileSystem,
+        outputDirectory: outputDir,
+      });
+    } finally {
+      exportOptions.delete();
+      exporter.delete();
+    }
+    if (!exportSucceeded) throw new Error('Export failed.');
 
     return Promise.resolve({
       textFiles: abstractFileSystem.getAllTextFilesIn(outputDir),

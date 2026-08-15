@@ -19,6 +19,13 @@ namespace gdjs {
           private _near: float = 1;
           private _far: float = 1000;
 
+          private _invalidateTSLMaterials(): void {
+            const tslMaterialSystem = (gdjs as any).TSLMaterialSystem;
+            if (tslMaterialSystem) {
+              tslMaterialSystem.invalidateSceneInputs(target.getRuntimeScene());
+            }
+          }
+
           constructor() {
             this.fog = new THREE.Fog(0xffffff);
             this._applyWorldScale();
@@ -56,6 +63,7 @@ namespace gdjs {
               return false;
             }
             scene.fog = this.fog;
+            this._invalidateTSLMaterials();
             return true;
           }
           removeEffect(target: EffectsTarget): boolean {
@@ -67,6 +75,7 @@ namespace gdjs {
               return false;
             }
             scene.fog = null;
+            this._invalidateTSLMaterials();
             return true;
           }
           updatePreRender(target: gdjs.EffectsTarget): any {
@@ -79,6 +88,12 @@ namespace gdjs {
             } else if (parameterName === 'far') {
               this._far = value;
               this._applyWorldScale();
+            }
+            if (
+              (parameterName === 'near' || parameterName === 'far') &&
+              this.isEnabled(target)
+            ) {
+              this._invalidateTSLMaterials();
             }
           }
           getDoubleParameter(parameterName: string): number {
@@ -94,11 +109,13 @@ namespace gdjs {
               this.fog.color = new THREE.Color(
                 gdjs.rgbOrHexStringToNumber(value)
               );
+              if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
           }
           updateColorParameter(parameterName: string, value: number): void {
             if (parameterName === 'color') {
               this.fog.color.setHex(value);
+              if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
           }
           getColorParameter(parameterName: string): number {
@@ -122,6 +139,7 @@ namespace gdjs {
             this._far = data.f;
             this._applyWorldScale();
             this.fog.color.setHex(data.c);
+            if (this.isEnabled(target)) this._invalidateTSLMaterials();
           }
         })();
       }

@@ -12,6 +12,7 @@ import MiniToolbar, { MiniToolbarText } from '../UI/MiniToolbar';
 import PlaceholderLoader from '../UI/PlaceholderLoader';
 import PlaceholderMessage from '../UI/PlaceholderMessage';
 import GDevelopThemeContext from '../UI/Theme/GDevelopThemeContext';
+import PreferencesContext from '../MainFrame/Preferences/PreferencesContext';
 import optionalRequire from '../Utils/OptionalRequire';
 import { serializeToJSObject } from '../Utils/Serializer';
 import { type FileMetadata } from '../ProjectsStorage';
@@ -33,6 +34,7 @@ import Model3DPreview from '../ResourcesList/ResourcePreview/Model3DPreview';
 import Resource3DPreviewContext from '../ResourcesList/ResourcePreview/Resource3DPreviewContext';
 import FolderNameDialog from './FolderNameDialog';
 import MarkdownFileNameDialog from './MarkdownFileNameDialog';
+import TSLMaterialFileNameDialog from './TSLMaterialFileNameDialog';
 import ProjectFileRenameDialog from './ProjectFileRenameDialog';
 import ContextMenu, { type ContextMenuInterface } from '../UI/Menu/ContextMenu';
 import { type MenuItemTemplate } from '../UI/Menu/Menu.flow';
@@ -46,6 +48,7 @@ import {
   applyResourceDefaults,
   getUniqueResourceNameFromFilePath,
 } from '../ResourcesList/ResourceUtils';
+import { getTSLMaterialTemplateSource } from '../ProjectsStorage/TSLMaterialAuthoring';
 import {
   clearActiveProjectFileDragPath,
   projectFileDragDataMimeType,
@@ -490,8 +493,8 @@ export const normalizeLinkedFolders = (
 ): Array<LinkedFolder> => {
   if (!path || !Array.isArray(serializedLinkedFolders)) return [];
 
-  const linkedFolders = [];
-  const seenNormalizedPaths = new Set();
+  const linkedFolders: Array<LinkedFolder> = [];
+  const seenNormalizedPaths: Set<string> = new Set();
   serializedLinkedFolders.forEach(serializedLinkedFolder => {
     const serializedPath =
       serializedLinkedFolder &&
@@ -617,6 +620,9 @@ export const is3DModelFile = (node: ProjectFileNode): boolean =>
 export const isMarkdownFile = (node: ProjectFileNode): boolean =>
   node.type === 'file' && ['.md', '.markdown'].includes(node.extension);
 
+export const isTSLMaterialFile = (node: ProjectFileNode): boolean =>
+  node.type === 'file' && node.name.toLowerCase().endsWith('.tsl.ts');
+
 export const isTextLikeFile = (node: ProjectFileNode): boolean =>
   node.type === 'file' &&
   [
@@ -643,16 +649,12 @@ export const isTextLikeFile = (node: ProjectFileNode): boolean =>
 
 const getResourceMetadataForFile = (filePath: string): ?any => {
   if (!path) return null;
-
-  const extension = path
-    .extname(filePath)
-    .replace(/^\./, '')
-    .toLowerCase();
-  if (!extension) return null;
-
+  const lowerCaseFilePath = filePath.toLowerCase();
   return (
     allResourceKindsAndMetadata.find(({ fileExtensions }) =>
-      fileExtensions.includes(extension)
+      fileExtensions.some(extension =>
+        lowerCaseFilePath.endsWith(`.${extension.toLowerCase()}`)
+      )
     ) || null
   );
 };
@@ -809,12 +811,12 @@ const readDirectory = async ({
         extension: '',
         error: error.message,
         source,
-        linkedFolderId,
+        ...(linkedFolderId ? { linkedFolderId } : {}),
       },
     ];
   }
 
-  const nodes = [];
+  const nodes: Array<ProjectFileNode> = [];
   for (const dirent of dirents) {
     if (counter.count >= MAX_SCANNED_FILES) {
       counter.truncated = true;
@@ -846,7 +848,7 @@ const readDirectory = async ({
       resourceName: resourceReference ? resourceReference.resourceName : null,
       resourceKind: resourceReference ? resourceReference.resourceKind : null,
       source,
-      linkedFolderId,
+      ...(linkedFolderId ? { linkedFolderId } : {}),
     };
 
     if (type === 'folder') {
@@ -929,7 +931,7 @@ const buildLinkedFoldersRootNode = async ({
   resourcesByPath: Map<string, ResourceReference>,
   counter: {| count: number, truncated: boolean |},
 |}): Promise<ProjectFileNode> => {
-  const children = [];
+  const children: Array<ProjectFileNode> = [];
 
   for (const linkedFolder of linkedFolders) {
     const linkedFolderChildren = await readDirectory({
@@ -1823,6 +1825,20 @@ const ProjectFilesPanelContent: React.ComponentType<{
     ref
   ) => {
     const theme = React.useContext(GDevelopThemeContext);
+    const preferences = React.useContext(PreferencesContext);
+    const isTSLMaterialExperimentEnabled =
+      preferences.values.showExperimentalExtensions ||
+      project
+        .getResourcesManager()
+        .getAllResourceNames()
+        .toJSArray()
+        .some(
+          resourceName =>
+            project
+              .getResourcesManager()
+              .getResource(resourceName)
+              .getKind() === 'tslMaterial'
+        );
     const { clearResourcePreviews } = React.useContext(
       Resource3DPreviewContext
     );
@@ -1863,6 +1879,18 @@ const ProjectFilesPanelContent: React.ComponentType<{
     const [
       markdownCreationError,
       setMarkdownCreationError,
+    ] = React.useState<?string>(null);
+    const [
+      isTSLMaterialDialogOpen,
+      setIsTSLMaterialDialogOpen,
+    ] = React.useState(false);
+    const [
+      tslMaterialCreationTargetNode,
+      setTSLMaterialCreationTargetNode,
+    ] = React.useState<?ProjectFileNode>(null);
+    const [
+      tslMaterialCreationError,
+      setTSLMaterialCreationError,
     ] = React.useState<?string>(null);
     const [isFolderDialogOpen, setIsFolderDialogOpen] = React.useState(false);
     const [
@@ -2092,6 +2120,122 @@ const ProjectFilesPanelContent: React.ComponentType<{
         setMarkdownCreationTargetNode(node);
         setMarkdownCreationError(null);
         setIsMarkdownDialogOpen(true);
+      },
+      []
+    );
+
+    const createTSLMaterialFile = React.useCallback(
+      async (fileName: string, template: string) => {
+        if (!fs || !path || !rootNode) return;
+        const selectedNode =
+          tslMaterialCreationTargetNode ||
+          (selectedItem ? selectedItem.node : null);
+        const folderPath =
+          selectedNode && selectedNode.type === 'folder'
+            ? selectedNode.absolutePath
+            : selectedNode
+            ? path.dirname(selectedNode.absolutePath)
+            : rootNode.absolutePath;
+        const materialPath = path.join(folderPath, fileName);
+        const relativeMaterialPath = normalizeSlashes(
+          path.relative(rootNode.absolutePath, materialPath)
+        );
+        const resourcesManager = project.getResourcesManager();
+        const resourceName = getUniqueResourceNameFromFilePath(
+          resourcesManager,
+          fileName,
+          new Set()
+        );
+        let sourceWasWritten = false;
+        let resourceWasAdded = false;
+        try {
+          await fs.promises.writeFile(
+            materialPath,
+            getTSLMaterialTemplateSource(template),
+            { encoding: 'utf8', flag: 'wx' }
+          );
+          sourceWasWritten = true;
+          const newResource = new gd.TSLMaterialResource();
+          try {
+            newResource.setName(resourceName);
+            newResource.setFile(relativeMaterialPath);
+            newResource.setUserAdded(true);
+            applyResourceDefaults(project, newResource);
+            if (!resourcesManager.addResource(newResource)) {
+              throw new Error(
+                `A resource named "${resourceName}" already exists.`
+              );
+            }
+            resourceWasAdded = true;
+          } finally {
+            newResource.delete();
+          }
+          // Persist while both sides of the file/resource pair are still
+          // covered by the rollback below.
+          await onSaveProject();
+        } catch (error) {
+          if (resourceWasAdded) resourcesManager.removeResource(resourceName);
+          if (sourceWasWritten) {
+            try {
+              await fs.promises.unlink(materialPath);
+            } catch (cleanupError) {}
+          }
+          if (resourceWasAdded) {
+            try {
+              await onSaveProject();
+            } catch (rollbackSaveError) {}
+          }
+          setTSLMaterialCreationError(
+            error && error.code === 'EEXIST'
+              ? 'A file with this name already exists.'
+              : error.message
+          );
+          return;
+        }
+
+        setTSLMaterialCreationError(null);
+        setTSLMaterialCreationTargetNode(null);
+        setIsTSLMaterialDialogOpen(false);
+        onNewResourcesAdded();
+        const refreshedRoot = (await refresh()) || rootNode;
+        const createdNode: ProjectFileNode = findNodeByAbsolutePath(
+          refreshedRoot,
+          materialPath
+        ) || {
+          id: normalizeSlashes(materialPath),
+          name: path.basename(materialPath),
+          absolutePath: materialPath,
+          relativePath: relativeMaterialPath,
+          type: 'file',
+          extension: '.ts',
+          resourceName,
+          resourceKind: 'tslMaterial',
+        };
+        setOpenedNodeIds(openedNodeIds =>
+          Array.from(new Set([normalizeSlashes(folderPath), ...openedNodeIds]))
+        );
+        onSelectProjectFile({
+          node: createdNode,
+          resource: getResourceFromNode(project, createdNode),
+        });
+      },
+      [
+        onNewResourcesAdded,
+        onSaveProject,
+        onSelectProjectFile,
+        project,
+        refresh,
+        rootNode,
+        selectedItem,
+        tslMaterialCreationTargetNode,
+      ]
+    );
+
+    const openTSLMaterialDialogForNode = React.useCallback(
+      (node: ProjectFileNode) => {
+        setTSLMaterialCreationTargetNode(node);
+        setTSLMaterialCreationError(null);
+        setIsTSLMaterialDialogOpen(true);
       },
       []
     );
@@ -3280,6 +3424,14 @@ const ProjectFilesPanelContent: React.ComponentType<{
             label: i18n._(t`New Markdown`),
             click: () => openMarkdownDialogForNode(node),
           },
+          ...(isTSLMaterialExperimentEnabled
+            ? [
+                {
+                  label: i18n._(t`New TSL material (experimental)`),
+                  click: () => openTSLMaterialDialogForNode(node),
+                },
+              ]
+            : []),
         ];
 
         if (canUpdateProjectFolderFromTemplate(node)) {
@@ -3333,6 +3485,8 @@ const ProjectFilesPanelContent: React.ComponentType<{
         openFolderDialogForNode,
         openFolderForNode,
         openMarkdownDialogForNode,
+        openTSLMaterialDialogForNode,
+        isTSLMaterialExperimentEnabled,
         openRenameDialogForNode,
         openNodePath,
         onUnregisterResource,
@@ -4022,6 +4176,16 @@ const ProjectFilesPanelContent: React.ComponentType<{
             setIsMarkdownDialogOpen(false);
           }}
           onCreate={createMarkdownFile}
+        />
+        <TSLMaterialFileNameDialog
+          open={isTSLMaterialDialogOpen}
+          error={tslMaterialCreationError}
+          onCancel={() => {
+            setTSLMaterialCreationError(null);
+            setTSLMaterialCreationTargetNode(null);
+            setIsTSLMaterialDialogOpen(false);
+          }}
+          onCreate={createTSLMaterialFile}
         />
         <FolderNameDialog
           open={isFolderDialogOpen}

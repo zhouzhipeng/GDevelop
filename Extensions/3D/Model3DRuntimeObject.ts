@@ -84,7 +84,7 @@ namespace gdjs {
    */
   export class Model3DRuntimeObject
     extends gdjs.RuntimeObject3D
-    implements gdjs.Animatable
+    implements gdjs.Animatable, gdjs.ThreeMaterialHost
   {
     _renderer: gdjs.Model3DRuntimeObjectRenderer;
 
@@ -354,6 +354,23 @@ namespace gdjs {
 
     getRenderer(): gdjs.Model3DRuntimeObjectRenderer {
       return this._renderer;
+    }
+
+    /** @internal */
+    getThreeMaterialRoot(): THREE.Object3D | null {
+      return this._renderer.getThreeMaterialRoot();
+    }
+
+    /** @internal */
+    getThreeMaterialGeneration(): number {
+      return this._renderer.getThreeMaterialGeneration();
+    }
+
+    /** @internal */
+    addThreeMaterialRootChangedListener(
+      listener: (change: gdjs.ThreeMaterialRootChange) => void
+    ): () => void {
+      return this._renderer.addThreeMaterialRootChangedListener(listener);
     }
 
     override onDestroyed(): void {

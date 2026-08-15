@@ -23,6 +23,12 @@ import {
 } from '../../PreviewGlobalObjectGroupsPatch';
 import { hasConstantPlaceholderDiagnostic } from '../../../Utils/ConstantPlaceholderDiagnostics';
 import { setGameplayTestFramePreviewLocation } from '../../../GameplayTests/GameplayTestFrame';
+import {
+  TSL_MATERIAL_REGISTRY_RELATIVE_PATH,
+  compileReferencedTSLMaterials,
+  planTSLMaterialPreviewReload,
+  writePreparedTSLMaterials,
+} from '../../../TSLMaterial/TSLMaterialProjectCompiler';
 const electron = optionalRequire('electron');
 const path = optionalRequire('path');
 const ipcRenderer = electron ? electron.ipcRenderer : null;
@@ -92,6 +98,11 @@ export default class LocalPreviewLauncher extends React.Component<
 > {
   canDoNetworkPreview = (): any => true;
   _onPreviewWindowClosed: ?(event: any) => Promise<void>;
+  _previewTSLRuntimeModes: { [string]: boolean } = {
+    regular: false,
+    embedded: false,
+    gameplayTest: false,
+  };
 
   // $FlowFixMe[missing-local-annot]
   state = {
@@ -452,6 +463,40 @@ export default class LocalPreviewLauncher extends React.Component<
       return;
     }
 
+    let preparedTSLMaterials;
+    try {
+      preparedTSLMaterials = await compileReferencedTSLMaterials({
+        project,
+        includeSourceMap: true,
+        validationLevel: 'backend',
+      });
+    } catch (error) {
+      exporter.delete();
+      previewExportOptions.delete();
+      throw error;
+    }
+
+    const currentUsesTSLMaterials =
+      preparedTSLMaterials.resourceNames.length > 0;
+    const previewRuntimeModeKey = previewOptions.isForGameplayTest
+      ? 'gameplayTest'
+      : previewOptions.isForInGameEdition
+      ? 'embedded'
+      : 'regular';
+    const tslReloadPlan = planTSLMaterialPreviewReload({
+      shouldHotReload,
+      requestedHardReload: previewOptions.shouldHardReload,
+      previousUsesTSLMaterials: this._previewTSLRuntimeModes[
+        previewRuntimeModeKey
+      ],
+      currentUsesTSLMaterials,
+    });
+    if (shouldHotReload) {
+      previewExportOptions.setShouldClearExportFolder(
+        tslReloadPlan.shouldHardReload
+      );
+    }
+
     const exportSuccessful = exporter.exportProjectForPixiPreview(
       previewExportOptions
     );
@@ -469,6 +514,13 @@ export default class LocalPreviewLauncher extends React.Component<
       exporter.delete();
       previewExportOptions.delete();
       throw new Error('Unable to export the project for preview.');
+    }
+    if (tslReloadPlan.shouldWriteRegistry) {
+      writePreparedTSLMaterials({
+        prepared: preparedTSLMaterials,
+        outputDirectory: outputDir,
+        fileSystem,
+      });
     }
 
     const dataJsPath = path.join(outputDir, 'data.js');
@@ -500,7 +552,7 @@ export default class LocalPreviewLauncher extends React.Component<
       );
       runtimeGameOptionsElement.delete();
 
-      if (previewOptions.shouldHardReload) {
+      if (tslReloadPlan.shouldHardReload) {
         console.log(
           `[LocalPreviewLauncher] Triggering hard reload for preview #${previewId}...`
         );
@@ -520,6 +572,15 @@ export default class LocalPreviewLauncher extends React.Component<
               shouldReloadResources: previewOptions.shouldReloadResources,
               projectData,
               runtimeGameOptions,
+              ...(tslReloadPlan.shouldSendRegistryDescriptor
+                ? {
+                    tslMaterialRegistry: {
+                      path: TSL_MATERIAL_REGISTRY_RELATIVE_PATH,
+                      bundleSha256: preparedTSLMaterials.bundleSha256,
+                      resources: preparedTSLMaterials.manifest.resources,
+                    },
+                  }
+                : {}),
             },
           });
         });
@@ -542,6 +603,10 @@ export default class LocalPreviewLauncher extends React.Component<
         this._openPreviewWindow(project, outputDir, previewOptions);
       }
     }
+
+    this._previewTSLRuntimeModes[
+      previewRuntimeModeKey
+    ] = currentUsesTSLMaterials;
 
     exporter.delete();
     previewExportOptions.delete();

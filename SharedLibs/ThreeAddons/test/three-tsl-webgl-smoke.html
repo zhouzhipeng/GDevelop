@@ -31,12 +31,26 @@
           renderer.setClearColor(0x000000, 1);
           renderer.setNodesHandler(new THREE.WebGLNodesHandler());
 
+          if (
+            !(new THREE.MeshStandardNodeMaterial() instanceof THREE.Material) ||
+            !(new THREE.MeshBasicNodeMaterial() instanceof THREE.Material) ||
+            !(new THREE.MeshPhysicalNodeMaterial() instanceof THREE.Material)
+          ) {
+            throw new Error("TSL bundle contains more than one Three core identity.");
+          }
+
           const scene = new THREE.Scene();
           const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10);
           camera.position.z = 3;
           const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
           const material = new THREE.MeshStandardNodeMaterial();
-          material.colorNode = THREE.GDevelopTSL.color(0x00ff00);
+          material.color.set(0x00ff00);
+          material.colorNode = THREE.GDevelopTSL.materialColor;
+          material.opacityNode = THREE.GDevelopTSL.materialOpacity;
+          material.emissiveNode = THREE.GDevelopTSL.materialEmissive;
+          material.roughnessNode = THREE.GDevelopTSL.materialRoughness;
+          material.metalnessNode = THREE.GDevelopTSL.materialMetalness;
+          material.normalNode = THREE.GDevelopTSL.materialNormal;
           const mesh = new THREE.Mesh(geometry, material);
           scene.add(mesh);
           scene.add(new THREE.AmbientLight(0xffffff, 2));

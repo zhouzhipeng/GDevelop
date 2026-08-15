@@ -25,6 +25,10 @@ const expectedAlwaysAvailableTools = [
   'gdevelop_get_project_summary',
   'gdevelop_inspect_signal_usage',
   'inspect_glb_model',
+  'get_tsl_authoring_context',
+  'inspect_model_materials',
+  'validate_tsl_file',
+  'render_tsl_material_preview',
   'gdevelop_list_scenes',
   'gdevelop_list_objects',
   'generate-catalogs',
@@ -332,10 +336,12 @@ describe('McpToolCatalog', () => {
         }),
       })
     );
-    expect(tool.description).toContain('all six generated authoring files');
+    expect(tool.description).toContain('all eight generated authoring files');
     expect(tool.description).toContain('runtime-api.d.ts');
     expect(tool.description).toContain('project-api.d.ts');
     expect(tool.description).toContain('harness-api.d.ts');
+    expect(tool.description).toContain('tsl-api.d.ts');
+    expect(tool.description).toContain('tsl-catalog.json');
     expect(
       canCallMcpTool('generate-catalogs', {
         allowWriteTools: false,
@@ -343,6 +349,91 @@ describe('McpToolCatalog', () => {
       })
     ).toEqual({ canCall: true });
   });
+
+  it('publishes validate_tsl_file as a closed-world read-only tool', () => {
+    const tool = getMcpTools({
+      allowWriteTools: false,
+      allowCommandTools: false,
+    }).find(tool => tool.name === 'validate_tsl_file');
+    if (!tool) throw new Error('validate_tsl_file tool is missing.');
+
+    expect(tool.annotations).toEqual({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    });
+    expect(tool.inputSchema).toMatchObject({
+      type: 'object',
+      required: ['file_path'],
+      additionalProperties: false,
+      properties: {
+        file_path: { type: 'string', minLength: 1, maxLength: 4096 },
+        target: {
+          enum: ['current', 'webgl2-node-compat', 'webgpu'],
+        },
+        validation_level: {
+          enum: ['static', 'graph', 'backend', 'model'],
+        },
+      },
+    });
+    expect(tool.outputSchema).toMatchObject({
+      type: 'object',
+      additionalProperties: false,
+      required: expect.arrayContaining([
+        'valid',
+        'activation_ready',
+        'validation_id',
+        'diagnostics',
+      ]),
+    });
+    expect(
+      getMcpToolUsageExamples('validate_tsl_file').validate_tsl_file
+    ).toHaveLength(3);
+    expect(
+      canCallMcpTool('validate_tsl_file', {
+        allowWriteTools: false,
+        allowCommandTools: false,
+      })
+    ).toEqual({ canCall: true });
+  });
+
+  it.each([
+    ['get_tsl_authoring_context', false],
+    ['inspect_model_materials', false],
+    ['render_tsl_material_preview', true],
+  ])(
+    'publishes %s as a closed-world read-only tool',
+    (toolName, fileRequired) => {
+      const tool = getMcpTools({
+        allowWriteTools: false,
+        allowCommandTools: false,
+      }).find(tool => tool.name === toolName);
+      if (!tool) throw new Error(`${toolName} tool is missing.`);
+      expect(tool.annotations).toEqual({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
+      expect(tool.inputSchema).toMatchObject({
+        type: 'object',
+        additionalProperties: false,
+      });
+      if (fileRequired) {
+        expect(tool.inputSchema.required).toContain('file_path');
+      }
+      expect(
+        getMcpToolUsageExamples(toolName)[toolName].length
+      ).toBeGreaterThan(0);
+      expect(
+        canCallMcpTool(toolName, {
+          allowWriteTools: false,
+          allowCommandTools: false,
+        })
+      ).toEqual({ canCall: true });
+    }
+  );
 
   it('publishes read-only GLB model inspection with a project-relative path', () => {
     const tool = getMcpTools({

@@ -17,6 +17,13 @@ namespace gdjs {
           fog: THREE.FogExp2;
           private _density: float = 0.00025;
 
+          private _invalidateTSLMaterials(): void {
+            const tslMaterialSystem = (gdjs as any).TSLMaterialSystem;
+            if (tslMaterialSystem) {
+              tslMaterialSystem.invalidateSceneInputs(target.getRuntimeScene());
+            }
+          }
+
           constructor() {
             this.fog = new THREE.FogExp2(0xffffff);
             this._applyWorldScale();
@@ -53,6 +60,7 @@ namespace gdjs {
               return false;
             }
             scene.fog = this.fog;
+            this._invalidateTSLMaterials();
             return true;
           }
           removeEffect(target: EffectsTarget): boolean {
@@ -64,6 +72,7 @@ namespace gdjs {
               return false;
             }
             scene.fog = null;
+            this._invalidateTSLMaterials();
             return true;
           }
           updatePreRender(target: gdjs.EffectsTarget): any {
@@ -73,6 +82,7 @@ namespace gdjs {
             if (parameterName === 'density') {
               this._density = value;
               this._applyWorldScale();
+              if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
           }
           getDoubleParameter(parameterName: string): number {
@@ -86,11 +96,13 @@ namespace gdjs {
               this.fog.color = new THREE.Color(
                 gdjs.rgbOrHexStringToNumber(value)
               );
+              if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
           }
           updateColorParameter(parameterName: string, value: number): void {
             if (parameterName === 'color') {
               this.fog.color.setHex(value);
+              if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
           }
           getColorParameter(parameterName: string): number {
@@ -112,6 +124,7 @@ namespace gdjs {
             this._density = syncData.d;
             this._applyWorldScale();
             this.fog.color.setHex(syncData.c);
+            if (this.isEnabled(target)) this._invalidateTSLMaterials();
           }
         })();
       }

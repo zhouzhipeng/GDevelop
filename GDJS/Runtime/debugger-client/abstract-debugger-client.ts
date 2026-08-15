@@ -872,6 +872,7 @@ namespace gdjs {
                 runtimeGameOptions,
                 shouldReloadResources:
                   data.payload.shouldReloadResources || false,
+                tslMaterialRegistry: data.payload.tslMaterialRegistry,
               })
               .then((logs) => {
                 that.sendHotReloaderLogs(logs);
@@ -1617,9 +1618,29 @@ namespace gdjs {
             });
           }
         }
+        const tslMaterialSystemClass = (gdjs as any).TSLMaterialSystem;
+        const tslMaterialSystem =
+          tslMaterialSystemClass &&
+          typeof tslMaterialSystemClass.getForScene === 'function'
+            ? tslMaterialSystemClass.getForScene(scene)
+            : null;
+        const allTSLMaterialDiagnostics = tslMaterialSystem
+          ? Array.from(tslMaterialSystem.getDiagnostics())
+          : [];
         sceneDiagnostics.push({
           sceneName: scene.getName(),
           layers,
+          tslMaterials: {
+            extensionAvailable: !!tslMaterialSystemClass,
+            active: !!tslMaterialSystem,
+            diagnostics: allTSLMaterialDiagnostics.slice(0, 128),
+            totalDiagnosticCount: allTSLMaterialDiagnostics.length,
+            returnedDiagnosticCount: Math.min(
+              allTSLMaterialDiagnostics.length,
+              128
+            ),
+            truncated: allTSLMaterialDiagnostics.length > 128,
+          },
           totalLayerCount: layerNames.length,
           returnedLayerCount: layers.length,
           truncated: layers.length < layerNames.length,

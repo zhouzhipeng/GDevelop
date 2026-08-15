@@ -1,5 +1,6 @@
 // This file customizes webpack configuration for react-app-rewired.
 const ModuleScopePlugin = require('react-dev-utils/ModuleScopePlugin');
+const path = require('path');
 
 module.exports = {
   webpack: function override(config, env) {
@@ -18,8 +19,23 @@ module.exports = {
     config.ignoreWarnings = [/Failed to parse source map/];
 
     config.resolve.plugins = config.resolve.plugins.filter(
-      (plugin) => !(plugin instanceof ModuleScopePlugin)
+      plugin => !(plugin instanceof ModuleScopePlugin)
     );
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      // Keep editor-side TSL validation on one Three source graph. The package
+      // exports for three, three/tsl and three/webgpu are separate pre-bundled
+      // entry files and cannot be mixed without duplicating core constructors.
+      three$: path.resolve(__dirname, 'node_modules/three/src/Three.js'),
+      'three/tsl$': path.resolve(
+        __dirname,
+        'node_modules/three/src/nodes/TSL.js'
+      ),
+      'three/webgpu$': path.resolve(
+        __dirname,
+        'node_modules/three/src/Three.WebGPU.js'
+      ),
+    };
 
     return config;
   },

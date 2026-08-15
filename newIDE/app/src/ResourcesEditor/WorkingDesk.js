@@ -37,9 +37,11 @@ import {
   isImageFile,
   isMarkdownFile,
   isTextLikeFile,
+  isTSLMaterialFile,
   isVideoFile,
   type ProjectFileSelection,
 } from './ProjectFilesPanel';
+import TSLMaterialEditor from './TSLMaterialEditor';
 import {
   formatImageZoomFactor,
   getNextImageZoomFactor,
@@ -367,6 +369,7 @@ const WorkingDesk = ({
   resourcesLoader,
   selectedItem,
   toolTabUpdate,
+  onProjectFilesChanged,
 }: Props): React.Node => {
   const theme = React.useContext(GDevelopThemeContext);
   const { previewCacheVersion } = React.useContext(Resource3DPreviewContext);
@@ -484,6 +487,8 @@ const WorkingDesk = ({
     ? markdownTabStates[activeMarkdownPath] || getInitialMarkdownTabState()
     : null;
   const activeFileIsMarkdown = !!selectedNode && isMarkdownFile(selectedNode);
+  const activeFileIsTSLMaterial =
+    !!selectedNode && isTSLMaterialFile(selectedNode);
   const activeFileIsTextLike = !!selectedNode && isTextLikeFile(selectedNode);
 
   const renderDeskMessage = (children: React.Node) => (
@@ -571,7 +576,7 @@ const WorkingDesk = ({
           .finally(() => {
             delete markdownLoadingPathsRef.current[activeFilePath];
           });
-      } else if (activeFileIsTextLike) {
+      } else if (activeFileIsTextLike && !activeFileIsTSLMaterial) {
         readTextFile(activeFilePath)
           .then(content => {
             if (!isMounted) return;
@@ -587,7 +592,12 @@ const WorkingDesk = ({
         isMounted = false;
       };
     },
-    [activeFileIsMarkdown, activeFileIsTextLike, activeFilePath]
+    [
+      activeFileIsMarkdown,
+      activeFileIsTSLMaterial,
+      activeFileIsTextLike,
+      activeFilePath,
+    ]
   );
 
   const updateImageScrollable = React.useCallback(() => {
@@ -1199,6 +1209,17 @@ const WorkingDesk = ({
     }
     if (is3DModelFile(selectedNode)) {
       return <InteractiveModel3DPreview modelUrl={fileUrl} />;
+    }
+    if (isTSLMaterialFile(selectedNode)) {
+      return (
+        <TSLMaterialEditor
+          project={project}
+          resource={selectedResource}
+          absolutePath={selectedNode.absolutePath}
+          relativePath={selectedNode.relativePath}
+          onProjectFilesChanged={onProjectFilesChanged}
+        />
+      );
     }
     if (isMarkdownFile(selectedNode)) return renderMarkdownEditor();
     if (isTextLikeFile(selectedNode)) return renderTextPreview();

@@ -29,6 +29,7 @@ import {
 } from '../GenericExporters/HTML5Export';
 import { packResourcesInBlobFiles } from '../ResourcePacking/BrowserResourcePacker';
 import { Column, Line } from '../../UI/Grid';
+import { exportWholePixiProjectWithTSL } from '../../TSLMaterial/TSLMaterialProjectCompiler';
 
 const gd: libGDevelop = global.gd;
 
@@ -117,7 +118,7 @@ export const browserHTML5ExportPipeline: ExportPipeline<
     });
   },
 
-  launchExport: (
+  launchExport: async (
     context: ExportPipelineContext<ExportState>,
     { exporter, outputDir, abstractFileSystem }: PreparedExporter,
     fallbackAuthor: ?{ id: string, username: string }
@@ -130,9 +131,20 @@ export const browserHTML5ExportPipeline: ExportPipeline<
         fallbackAuthor.username
       );
     }
-    exporter.exportWholePixiProject(exportOptions);
-    exportOptions.delete();
-    exporter.delete();
+    let exportSucceeded = false;
+    try {
+      exportSucceeded = await exportWholePixiProjectWithTSL({
+        project,
+        exporter,
+        exportOptions,
+        fileSystem: abstractFileSystem,
+        outputDirectory: outputDir,
+      });
+    } finally {
+      exportOptions.delete();
+      exporter.delete();
+    }
+    if (!exportSucceeded) throw new Error('Export failed.');
 
     return Promise.resolve({
       textFiles: abstractFileSystem.getAllTextFilesIn(outputDir),

@@ -22,6 +22,19 @@ export type State = {|
   MonacoEditor: ?any,
   error: ?Error,
 |};
+export type CodeEditorExtraLibrary = {|
+  filePath: string,
+  content: string,
+|};
+export type CodeEditorMarker = {|
+  code?: string,
+  message: string,
+  severity?: 'error' | 'warning' | 'info',
+  line: number,
+  column: number,
+  endLine?: number,
+  endColumn?: number,
+|};
 export type Props = {|
   value: string,
   onChange: string => void,
@@ -35,7 +48,7 @@ export type Props = {|
   }) => void,
   width?: number,
   height?: number,
-  onEditorMounted?: () => void,
+  onEditorMounted?: (editor: any, monaco: any) => void,
   onFocus: () => void,
   onBlur: () => void,
   /**
@@ -45,6 +58,10 @@ export type Props = {|
    * run inside an async function, so top-level `await` is allowed).
    */
   suppressedDiagnosticsMessages?: Array<string>,
+  language?: 'javascript' | 'typescript',
+  modelPath?: string,
+  extraLibraries?: Array<CodeEditorExtraLibrary>,
+  markers?: Array<CodeEditorMarker>,
 |};
 
 export const CodeEditor = ({
@@ -60,16 +77,45 @@ export const CodeEditor = ({
   onFocus,
   onBlur,
   suppressedDiagnosticsMessages,
+  language = 'javascript',
+  modelPath,
+  extraLibraries = [],
+  markers = [],
 }: Props): React.Node => {
   const [MonacoEditor, setMonacoEditor] = React.useState<any>(null);
   const [error, setError] = React.useState<Error | null>(null);
+  const editorRef = React.useRef<any>(null);
+  const monacoRef = React.useRef<any>(null);
+  const extraLibraryDisposablesRef = React.useRef<Array<any>>([]);
 
   const { values: preferences } = React.useContext(PreferencesContext);
   const portalContainer = React.useContext(PortalContainerContext);
 
-  const setupEditorThemes = React.useCallback((monaco: any) => {
-    registerThemes(monaco);
-  }, []);
+  const installExtraLibraries = React.useCallback(
+    (monaco: any) => {
+      extraLibraryDisposablesRef.current.forEach(disposable =>
+        disposable.dispose()
+      );
+      extraLibraryDisposablesRef.current = [];
+      if (language === 'typescript') {
+        extraLibraryDisposablesRef.current = extraLibraries.map(library =>
+          monaco.languages.typescript.typescriptDefaults.addExtraLib(
+            library.content,
+            library.filePath
+          )
+        );
+      }
+    },
+    [extraLibraries, language]
+  );
+
+  const setupEditorThemes = React.useCallback(
+    (monaco: any) => {
+      registerThemes(monaco);
+      installExtraLibraries(monaco);
+    },
+    [installExtraLibraries]
+  );
 
   const setUpSaveOnEditorBlur = React.useCallback(
     (editor: any) => {
@@ -86,6 +132,8 @@ export const CodeEditor = ({
 
   const setupEditorCompletions = React.useCallback(
     (editor: any, monaco: any) => {
+      editorRef.current = editor;
+      monacoRef.current = monaco;
       setUpEditorFocus(editor);
       setUpSaveOnEditorBlur(editor);
       initializeCompletions(monaco);
@@ -108,7 +156,7 @@ export const CodeEditor = ({
         lineNumber: initialCursorLine,
       });
 
-      if (onEditorMounted) onEditorMounted();
+      if (onEditorMounted) onEditorMounted(editor, monaco);
     },
     [
       initialCursorColumn,
@@ -121,6 +169,62 @@ export const CodeEditor = ({
       suppressedDiagnosticsMessages,
     ]
   );
+
+  React.useEffect(
+    () => {
+      const editor = editorRef.current;
+      const monaco = monacoRef.current;
+      const model = editor && editor.getModel();
+      if (!monaco || !model) return;
+      const currentMarkers = language === 'typescript' ? markers : [];
+      monaco.editor.setModelMarkers(
+        model,
+        'gdevelop-tsl-material',
+        currentMarkers.map(marker => ({
+          code: marker.code,
+          message: marker.message,
+          severity:
+            marker.severity === 'warning'
+              ? monaco.MarkerSeverity.Warning
+              : marker.severity === 'info'
+              ? monaco.MarkerSeverity.Info
+              : monaco.MarkerSeverity.Error,
+          startLineNumber: marker.line,
+          startColumn: marker.column,
+          endLineNumber: marker.endLine || marker.line,
+          endColumn: marker.endColumn || marker.column + 1,
+        }))
+      );
+    },
+    [language, markers]
+  );
+
+  React.useEffect(
+    () => {
+      if (monacoRef.current) installExtraLibraries(monacoRef.current);
+    },
+    [installExtraLibraries]
+  );
+
+  React.useEffect(() => {
+    return () => {
+      extraLibraryDisposablesRef.current.forEach(disposable =>
+        disposable.dispose()
+      );
+      extraLibraryDisposablesRef.current = [];
+      const editor = editorRef.current;
+      const monaco = monacoRef.current;
+      if (editor && monaco && editor.getModel()) {
+        monaco.editor.setModelMarkers(
+          editor.getModel(),
+          'gdevelop-tsl-material',
+          []
+        );
+      }
+      editorRef.current = null;
+      monacoRef.current = null;
+    };
+  }, []);
 
   const handleLoadError = React.useCallback((error: Error) => {
     setError(error);
@@ -196,6 +300,10 @@ export const CodeEditor = ({
         onFocus={onFocus}
         onBlur={onBlur}
         suppressedDiagnosticsMessages={suppressedDiagnosticsMessages}
+        language={language}
+        modelPath={modelPath}
+        extraLibraries={extraLibraries}
+        markers={markers}
       />
     );
   }
@@ -229,7 +337,8 @@ export const CodeEditor = ({
       <MonacoEditor
         width={width || 600}
         height={height || 200}
-        language="javascript"
+        language={language}
+        path={modelPath}
         theme={preferences.codeEditorThemeName}
         value={value}
         onChange={onChange}

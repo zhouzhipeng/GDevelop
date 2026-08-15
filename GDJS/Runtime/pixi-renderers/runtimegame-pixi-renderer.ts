@@ -145,6 +145,23 @@ namespace gdjs {
           this._game.getGameResolutionWidth(),
           this._game.getGameResolutionHeight()
         );
+        const tslRuntimeIdentity = (THREE as any).GDEVELOP_TSL_RUNTIME;
+        if (
+          tslRuntimeIdentity &&
+          typeof this._threeRenderer.setNodesHandler === 'function'
+        ) {
+          const renderer = this._threeRenderer as any;
+          const setNodesHandler = renderer.setNodesHandler;
+          renderer.setNodesHandler = function (handler: any) {
+            renderer.__gdevelopNodesHandler = handler;
+            return setNodesHandler.call(renderer, handler);
+          };
+        }
+        console.info(
+          `Three runtime: ${
+            tslRuntimeIdentity ? 'TSL-enabled' : 'standard'
+          } r${THREE.REVISION}`
+        );
 
         // Create a PixiJS renderer that use the same GL context as Three.js
         // so that both can render to the canvas and even have PixiJS rendering

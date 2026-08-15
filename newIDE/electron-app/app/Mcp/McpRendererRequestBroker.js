@@ -19,6 +19,9 @@ const CATALOG_ARTIFACT_NAMES = [
   'javascript-api',
   'runtime-api',
   'project-api',
+  'harness-api',
+  'tsl-api',
+  'tsl-catalog',
   'modification-time-acknowledgement',
 ];
 
@@ -43,7 +46,7 @@ const getCatalogPhaseDetails = phase => {
       completed: exactPhases[phase][1] === 'completed',
     };
   }
-  const match = /^catalog-(instruction-signature|instructions|deprecated-instructions|settings|layout|javascript-api|runtime-api|project-api)-(cache-hit|building|built|writing|written)$/.exec(
+  const match = /^catalog-(instruction-signature|instructions|deprecated-instructions|settings|layout|javascript-api|runtime-api|project-api|harness-api|tsl-api|tsl-catalog)-(cache-hit|building|built|writing|written|verifying|verified)$/.exec(
     phase
   );
   if (!match) return null;
@@ -78,6 +81,8 @@ const PROJECT_FILES_OPERATION_TOOL_NAMES = new Set([
   'open_project',
   'generate-catalogs',
   'validate_project_files',
+  'validate_tsl_file',
+  'render_tsl_material_preview',
 ]);
 
 const PREVIEW_OPERATION_TOOL_NAMES = new Set(['launch_preview']);
