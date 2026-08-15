@@ -36,6 +36,10 @@ import {
   getKeyboardKeyDefinition,
 } from '../Utils/KeyboardKeyNames';
 import { type EditorCallbacks } from '../EditorFunctions';
+import {
+  generateEventsFunctionExtensionMetadata,
+  type EventsFunctionCodeWriter,
+} from '../EventsFunctionsExtensionsLoader';
 
 import { inspectSignalUsage } from './McpExtensionTools';
 import { validateSerializedProject } from './McpProjectTools';
@@ -57,11 +61,46 @@ const crypto = optionalRequire('crypto');
 const electron = optionalRequire('electron');
 const nativeImage = electron && electron.nativeImage;
 
+const catalogEventsFunctionCodeWriter: EventsFunctionCodeWriter = {
+  getIncludeFileFor: (functionName: string) => `${functionName}.js`,
+  writeFunctionCode: async () => {},
+  writeBehaviorCode: async () => {},
+  writeObjectCode: async () => {},
+};
+
+const catalogI18n = ({
+  _: value =>
+    typeof value === 'string' ? value : value.id || value.message || '',
+}: any);
+
+const generateProjectAdditionalExtensions = (
+  project: gdProject
+): Array<gdPlatformExtension> => {
+  const additionalExtensions = [];
+  for (
+    let index = 0;
+    index < project.getEventsFunctionsExtensionsCount();
+    index++
+  ) {
+    additionalExtensions.push(
+      generateEventsFunctionExtensionMetadata(
+        project,
+        project.getEventsFunctionsExtensionAt(index),
+        {
+          eventsFunctionCodeWriter: catalogEventsFunctionCodeWriter,
+          i18n: catalogI18n,
+        }
+      )
+    );
+  }
+  return additionalExtensions;
+};
+
 // Monotonic id used to match targeted preview request/response messages.
 let nextTargetedRequestId = 1;
 
 const PREVIEW_CLEANUP_RELAUNCH_ACTION =
-  'control_preview { action: "close", close_all: true }, then launch_preview { start_paused: true, force_new: true }';
+  'launch_preview { start_paused: true } (it automatically closes the previous game and debugger windows first)';
 
 type McpRequestProgress = {|
   phase: string,
@@ -367,12 +406,17 @@ const generateProjectSourceCatalogsFromDisk = async (
     skipEventsCompilation: true,
   });
   const catalogProject = new gd.ProjectHelper.createNewGDJSProject();
+  const additionalExtensions: Array<gdPlatformExtension> = [];
   try {
     try {
       unserializeFromJSObject(catalogProject, catalogSource);
+      additionalExtensions.push(
+        ...generateProjectAdditionalExtensions(catalogProject)
+      );
       const catalogs = await writeProjectSourceCatalogs(
         catalogProject,
-        projectRoot
+        projectRoot,
+        { additionalExtensions }
       );
       return { projectRoot, catalogs };
     } catch (error) {
@@ -386,6 +430,7 @@ const generateProjectSourceCatalogsFromDisk = async (
       throw catalogError;
     }
   } finally {
+    additionalExtensions.forEach(extension => extension.delete());
     catalogProject.delete();
   }
 };
@@ -2481,7 +2526,7 @@ const runPreviewFrames = async (
       failurePhase: 'renderer-response',
       debuggerId: targetId,
       error:
-        'run_frames timed out: the targeted preview did not reply. The window may still be loading; retry, or close all previews with control_preview and relaunch with launch_preview using start_paused=true and force_new=true.',
+        'run_frames timed out: the targeted preview did not reply. The window may still be loading; retry, or call launch_preview with start_paused=true to close the stale game/debugger windows and launch a fresh pair.',
       requestedFrames: frames,
       steppedFrames: 0,
       stoppedEarly: true,
@@ -2836,7 +2881,7 @@ const previewHealthCheck = async (
           ],
     note: responsive
       ? 'The selected preview replied to a debugger status ping.'
-      : 'Use this before screenshots/runtime tests when the debugger channel looks stale. For a connected-but-unresponsive preview, close all previews with control_preview, then relaunch with launch_preview using start_paused=true and force_new=true.',
+      : 'Use this before screenshots/runtime tests when the debugger channel looks stale. For a connected-but-unresponsive preview, call launch_preview with start_paused=true; it closes the stale game/debugger windows before launching a fresh pair.',
   };
 };
 
@@ -3399,7 +3444,7 @@ const resolveExpectedPreviewScene = (
 const getStatusSceneName = (status: ?Object): ?string =>
   status && typeof status.sceneName === 'string' ? status.sceneName : null;
 
-// Annotate a successful launch/attach result with scene-selection facts so a
+// Annotate a successful launch result with scene-selection facts so a
 // caller can detect when the running scene is NOT the one it expected (the core
 // bug this fixes: launch_preview used to silently report success while running
 // whatever scene the editor tab was focused on).
@@ -3464,9 +3509,58 @@ const launchPreview = async (
       sceneName: ?string,
       options?: {| displayCollisionShapes?: boolean |}
     ) => mixed,
+    closeAllPreviews?: ?() => mixed,
     cancelPreviewLaunch?: ?(reason: string) => mixed,
   |}
 ): Promise<Object> => {
+  const closeAllPreviews =
+    options && typeof options.closeAllPreviews === 'function'
+      ? options.closeAllPreviews
+      : null;
+  let previousPreviewCleanupError: ?string = null;
+  try {
+    // Every MCP launch owns a fresh game/debugger pair. Wait for the previous
+    // native windows to close before resolving scenes or starting an export.
+    if (closeAllPreviews) {
+      const closeResult = await closeAllPreviews();
+      if (
+        closeResult &&
+        typeof closeResult === 'object' &&
+        (closeResult.previewCloseTimedOut || closeResult.debuggerCloseTimedOut)
+      ) {
+        previousPreviewCleanupError =
+          'timed out while waiting for the previous native windows to close';
+      }
+    }
+  } catch (error) {
+    previousPreviewCleanupError =
+      error && error.message ? error.message : String(error);
+  }
+  try {
+    // Clear any debugger channels that survived the native window lifecycle,
+    // even if closing one of the windows failed.
+    if (
+      previewDebuggerServer &&
+      typeof previewDebuggerServer.closeAllConnections === 'function'
+    ) {
+      previewDebuggerServer.closeAllConnections();
+    }
+  } catch (error) {
+    if (!previousPreviewCleanupError) {
+      previousPreviewCleanupError =
+        error && error.message ? error.message : String(error);
+    }
+  }
+  if (previousPreviewCleanupError) {
+    return {
+      success: false,
+      launched: false,
+      ready: false,
+      failurePhase: 'previous-preview-cleanup',
+      error: `Could not close the previous preview and debugger windows: ${previousPreviewCleanupError}`,
+    };
+  }
+
   if (typeof runCommand !== 'function') {
     return {
       success: false,
@@ -3483,11 +3577,6 @@ const launchPreview = async (
       : args && typeof args.displayCollisionShapes === 'boolean'
       ? args.displayCollisionShapes
       : undefined;
-  // Collision-shape display is an export-time preview option. An attached
-  // preview cannot be reconfigured, so an explicit value requires a new one.
-  const forceNew =
-    !!(args && (args.force_new || args.forceNew)) ||
-    displayCollisionShapes !== undefined;
   const timeoutMs = getPreviewReadinessTimeoutMs(args, 15000);
 
   const getProject =
@@ -3621,95 +3710,6 @@ const launchPreview = async (
     return false;
   };
 
-  if (!forceNew && previewDebuggerServer) {
-    const connectedIds = getPreviewDebuggerIds(previewDebuggerServer);
-    if (connectedIds.length) {
-      const attachId = connectedIds[connectedIds.length - 1];
-      const readiness = await waitForPreviewRuntimeReady(
-        (previewDebuggerServer: any),
-        attachId,
-        { timeoutMs, operation: 'launch_preview.attach' }
-      );
-      if (readiness.ready) {
-        // If an explicit scene_name was requested and we can target scenes, but
-        // the already-running preview is on a different scene, don't silently
-        // attach to the wrong scene — fall through to launch a fresh preview on
-        // the requested scene instead.
-        const attachedScene = getStatusSceneName(readiness.status);
-        const needsSceneRelaunch =
-          !!requestedScene &&
-          sceneSelectionSupported &&
-          !!attachedScene &&
-          attachedScene !== requestedScene;
-
-        if (!needsSceneRelaunch) {
-          if (!startPaused) {
-            return annotate({
-              success: true,
-              ready: true,
-              runtimeReady: true,
-              launched: false,
-              attached: true,
-              debuggerId: attachId,
-              availableDebuggerIds: connectedIds,
-              status: readiness.status,
-              startPaused: false,
-              note:
-                'Attached to the already-running preview (no new window opened). The runtime answered getStatus. It keeps running in real time; for deterministic tests use run_frames, or pass start_paused:true to pause it now, or force_new:true to open a fresh window.',
-            });
-          }
-
-          const pause = await pausePreviewAndConfirm(
-            (previewDebuggerServer: any),
-            attachId,
-            timeoutMs,
-            'launch_preview.attach.pause'
-          );
-          if (!pause.pauseConfirmed) {
-            return makeLaunchPreviewNotReadyResult({
-              launched: false,
-              attached: true,
-              debuggerId: attachId,
-              availableDebuggerIds: connectedIds,
-              readiness: pause,
-              startPaused: true,
-              note:
-                'Attached to the already-running preview, but start_paused was requested and the pause was not confirmed. The preview may already be running in real time.',
-            });
-          }
-
-          return annotate({
-            success: true,
-            ready: true,
-            runtimeReady: true,
-            launched: false,
-            attached: true,
-            debuggerId: attachId,
-            availableDebuggerIds: connectedIds,
-            startPaused: true,
-            pauseRequested: true,
-            pauseConfirmed: true,
-            status: pause.status,
-            note:
-              'Attached to the already-running preview and paused it (no new window opened). Use run_frames / control_preview { action:"step" } to advance, or control_preview { action:"play" } to resume. Pass force_new:true to open a fresh window instead.',
-          });
-        }
-        // else: fall through to a fresh launch on the requested scene.
-      } else {
-        return makeLaunchPreviewNotReadyResult({
-          launched: false,
-          attached: true,
-          debuggerId: attachId,
-          availableDebuggerIds: connectedIds,
-          readiness,
-          startPaused,
-          note:
-            'Attached to an already-connected preview window, but its runtime debugger did not answer getStatus. Close all previews with control_preview, then call launch_preview with start_paused=true and force_new=true.',
-        });
-      }
-    }
-  }
-
   const existingIds = new Set(
     previewDebuggerServer ? getPreviewDebuggerIds(previewDebuggerServer) : []
   );
@@ -3788,7 +3788,7 @@ const launchPreview = async (
       readiness,
       startPaused,
       note:
-        'Preview window/debugger id connected, but the runtime did not answer getStatus before the timeout. Treat this preview as not ready; close all previews with control_preview, then call launch_preview with start_paused=true and force_new=true.',
+        'Preview window/debugger id connected, but the runtime did not answer getStatus before the timeout. Treat this preview as not ready; call launch_preview with start_paused=true to close it and launch a fresh pair.',
     });
   }
 
@@ -4444,7 +4444,6 @@ const callMcpTool = async ({
             ? args.scene_name
             : undefined,
         start_paused: true,
-        force_new: true,
         timeout_ms:
           args && typeof args.timeout_ms === 'number'
             ? args.timeout_ms
@@ -5542,6 +5541,7 @@ const callMcpTool = async ({
         {
           getProject: context.getProject,
           launchPreviewForScene,
+          closeAllPreviews: context.closeAllPreviews,
           cancelPreviewLaunch: context.cancelPreviewLaunch,
         }
       );

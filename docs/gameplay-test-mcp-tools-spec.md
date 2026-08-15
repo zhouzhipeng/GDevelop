@@ -149,8 +149,10 @@ Its input schema is:
 - `timeout_ms` is the wall-clock budget for each test, not for the whole batch.
 - Runs are unpaced and screenshots are disabled for this MCP surface. Tests
   still return assertion, log, event, final-state, profile, and performance
-  data. Callers can use `capture_preview_screenshot` on the frozen final frame
-  when visual evidence is needed.
+  data.
+- The dedicated floating gameplay-test frame is closed and unloaded when the
+  MCP batch reaches a terminal outcome. Interactive editor runs may still
+  retain the frozen final frame for inspection.
 
 A successful start returns a response shaped as follows:
 
@@ -520,8 +522,12 @@ tools. The exact public allowlist grows from 23 to 25 tools.
   - Add the optional batch-start and per-test-finished callbacks.
   - Invoke per-test completion consistently for stored, synthetic error, and
     stopped results.
+  - Add an automated-run option that closes and unloads the floating test frame
+    during guaranteed batch finalization; MCP enables it while interactive
+    editor runs keep their retained-result behavior.
 - `newIDE/app/src/GameplayTests/GameplayTestRunner.spec.js`
   - Cover callback order and exactly-once behavior.
+  - Cover retained interactive frames and automatic MCP-style cleanup.
 
 ### Generated JavaScript authoring artifacts
 

@@ -10,6 +10,13 @@ const createDebuggerPopOutCloseCoordinator = () => {
   };
 };
 
+const getParentWindowIdsWithPreviewOrDebugger = (
+  previewParentWindowIds,
+  debuggerParentWindowIds
+) =>
+  Array.from(new Set([...previewParentWindowIds, ...debuggerParentWindowIds]));
+
 module.exports = {
   createDebuggerPopOutCloseCoordinator,
+  getParentWindowIdsWithPreviewOrDebugger,
 };

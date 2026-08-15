@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import {
   buildIssueReportMarkdown,
+  getIssueReportClipboardPath,
   getIssueReportFileStem,
   getLocalProjectRoot,
   writeIssueReport,
@@ -21,6 +22,20 @@ const makeReportData = () => ({
   description: 'The player falls through this platform.',
   screenshotDataUrl,
   runtimeDump: { paused: true, score: 42 },
+  consoleLogs: [
+    {
+      timestamp: 125.25,
+      type: 'error',
+      group: 'JavaScript',
+      message: 'Unable to load player state',
+    },
+    {
+      timestamp: 130,
+      type: 'info',
+      group: 'Game',
+      message: 'Player entered level 2',
+    },
+  ],
 });
 
 describe('IssueReportWriter', () => {
@@ -36,6 +51,7 @@ describe('IssueReportWriter', () => {
     const markdown = buildIssueReportMarkdown(makeReportData(), {
       screenshotRelativePath: 'images/issue-screenshot.png',
       dumpRelativePath: 'dumps/issue-game-memory-dump.json',
+      logRelativePath: 'logs/issue-console.log',
     });
 
     expect(markdown).toContain('# Game issue report');
@@ -50,6 +66,11 @@ describe('IssueReportWriter', () => {
     );
     expect(markdown).toContain('Only read the linked game-memory dump');
     expect(markdown).toContain('avoid wasting context tokens');
+    expect(markdown).toContain(
+      '[Search the debugger console log](logs/issue-console.log)'
+    );
+    expect(markdown).toContain('Use the linked console log as a search source');
+    expect(markdown).toContain('Do not load the full log');
     expect(markdown).not.toContain('data:image/png;base64');
     expect(markdown).not.toContain('"score": 42');
   });
@@ -61,6 +82,7 @@ describe('IssueReportWriter', () => {
         {
           screenshotRelativePath: 'images/screenshot.png',
           dumpRelativePath: 'dumps/dump.json',
+          logRelativePath: 'logs/console.log',
         }
       )
     ).toThrow('description');
@@ -72,6 +94,14 @@ describe('IssueReportWriter', () => {
     expect(getLocalProjectRoot(absoluteProjectFile)).toBe(
       path.dirname(absoluteProjectFile)
     );
+  });
+
+  test('builds a project-relative clipboard path for the saved report', () => {
+    expect(
+      getIssueReportClipboardPath(
+        'C:\\Games\\Example\\issues\\issue-20260814-055200-754.md'
+      )
+    ).toBe('issues/issue-20260814-055200-754.md');
   });
 
   test('writes reports under issues without overwriting collisions', async () => {
@@ -114,6 +144,12 @@ describe('IssueReportWriter', () => {
       'dumps',
       `${firstStem}-game-memory-dump.json`
     );
+    const firstLogPath = path.join(
+      projectRoot,
+      'issues',
+      'logs',
+      `${firstStem}-console.log`
+    );
     expect(fs.readFileSync(firstScreenshotPath).slice(0, 8)).toEqual(
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
     );
@@ -121,11 +157,17 @@ describe('IssueReportWriter', () => {
       paused: true,
       score: 42,
     });
+    expect(fs.readFileSync(firstLogPath, 'utf8')).toContain(
+      '[125.250 ms] [ERROR] [JavaScript] Unable to load player state'
+    );
     expect(firstMarkdown).toContain(
       `![Annotated paused game frame](images/${firstStem}-screenshot.png)`
     );
     expect(firstMarkdown).toContain(
       `[Open the game-memory dump](dumps/${firstStem}-game-memory-dump.json)`
+    );
+    expect(firstMarkdown).toContain(
+      `[Search the debugger console log](logs/${firstStem}-console.log)`
     );
     expect(firstMarkdown).not.toContain(screenshotDataUrl);
     const secondStem = `${firstStem}-1`;
@@ -137,6 +179,11 @@ describe('IssueReportWriter', () => {
           'images',
           `${secondStem}-screenshot.png`
         )
+      )
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(projectRoot, 'issues', 'logs', `${secondStem}-console.log`)
       )
     ).toBe(true);
     expect(

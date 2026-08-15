@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,10 @@ from libgd_build import LIBGD_VARIANTS, build_libgd, is_libgd_stale, npm_install
 
 
 DEV_PORTS = (3000, 5002)
+REACT_BUILD_MINIMUM_HEAP_MB = 8192
+NODE_MAX_OLD_SPACE_SIZE_PATTERN = re.compile(
+    r"(?<!\S)--max[-_]old[-_]space[-_]size(?:=|\s+)(\d+)(?!\S)"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,6 +84,20 @@ def resolve_tool(name: str) -> str:
 
 def command_line(command: list[str]) -> str:
     return " ".join(command)
+
+
+def node_options_with_minimum_heap(current_options: str) -> str:
+    """Keep existing Node options while guaranteeing enough heap for React."""
+    configured_heap_sizes = [
+        int(match.group(1))
+        for match in NODE_MAX_OLD_SPACE_SIZE_PATTERN.finditer(current_options)
+    ]
+    heap_size_mb = max([REACT_BUILD_MINIMUM_HEAP_MB, *configured_heap_sizes])
+    options_without_heap = NODE_MAX_OLD_SPACE_SIZE_PATTERN.sub(
+        "", current_options
+    ).strip()
+    heap_option = f"--max-old-space-size={heap_size_mb}"
+    return " ".join(option for option in (options_without_heap, heap_option) if option)
 
 
 def run_command(
@@ -311,7 +330,17 @@ def build_react_app(app_dir: Path, build: bool, dry_run: bool) -> None:
         )
         return
 
-    run_command([resolve_tool("npm"), "run", "build"], cwd=app_dir, dry_run=dry_run)
+    node_options = node_options_with_minimum_heap(os.environ.get("NODE_OPTIONS", ""))
+    print(
+        f"React build Node heap limit: at least {REACT_BUILD_MINIMUM_HEAP_MB} MB",
+        flush=True,
+    )
+    run_command(
+        [resolve_tool("npm"), "run", "build"],
+        cwd=app_dir,
+        dry_run=dry_run,
+        env_updates={"NODE_OPTIONS": node_options},
+    )
 
 
 def sync_electron_www(electron_app_dir: Path, build: bool, dry_run: bool) -> None:

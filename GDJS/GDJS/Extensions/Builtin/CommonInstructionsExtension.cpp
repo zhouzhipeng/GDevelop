@@ -52,6 +52,7 @@ gd::String GenerateUnsafeExternalLayoutCreationValidationCodeIfNeeded(
     gd::EventsCodeGenerator& codeGenerator) {
   gd::String runtimeValidationCode;
   if (!codeGenerator.HasProjectAndLayout() ||
+      codeGenerator.GetSceneLifecycleFunctionRole() == "sceneLoad" ||
       HasEnabledInstructions(event.GetConditions())) {
     return runtimeValidationCode;
   }

@@ -5,7 +5,10 @@ import {
   stopRunningGameplayTest,
   type GameplayTestToRun,
 } from './GameplayTestRunner';
-import { setGameplayTestFrameRunStatus } from './GameplayTestFrame';
+import {
+  clearGameplayTestFramePreview,
+  setGameplayTestFrameRunStatus,
+} from './GameplayTestFrame';
 
 jest.mock('./GameplayTestStateInspectors', () => ({
   enumerateGameplayTestStateInspectors: () => ({}),
@@ -62,6 +65,7 @@ const makeSuccessfulPreviewDebuggerServer = (): any => {
 
 describe('runGameplayTests', () => {
   beforeEach(() => {
+    ((clearGameplayTestFramePreview: any): JestMockFn<any, any>).mockReset();
     ((setGameplayTestFrameRunStatus: any): JestMockFn<any, any>).mockReset();
   });
 
@@ -127,6 +131,30 @@ describe('runGameplayTests', () => {
     expect(storedTest.getSource).toHaveBeenCalledTimes(1);
     expect(finishedCalls[0]).toEqual({ test: tests[0], result: results[0] });
     expect(finishedCalls[1]).toEqual({ test: tests[1], result: results[1] });
+    // Interactive runs retain the completed floating frame by default. The
+    // only clear is the stale-frame cleanup before launching this run.
+    expect(clearGameplayTestFramePreview).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the floating game frame after a completed automated run', async () => {
+    const results = await runGameplayTests({
+      project: makeProject(),
+      tests: [
+        {
+          scope: { type: 'project' },
+          testName: 'Automated test',
+          source: 'await harness.stepFrames(1);',
+        },
+      ],
+      previewLauncher: ({ launchPreview: async () => {} }: any),
+      previewDebuggerServer: makeSuccessfulPreviewDebuggerServer(),
+      options: { closeFrameWhenFinished: true },
+    });
+
+    expect(results[0].status).toBe('passed');
+    // Once before launch to remove stale content, once in finalization to
+    // unload and hide the floating frame opened by this run.
+    expect(clearGameplayTestFramePreview).toHaveBeenCalledTimes(2);
   });
 
   it('reports one synthetic result per test when preview launch fails', async () => {

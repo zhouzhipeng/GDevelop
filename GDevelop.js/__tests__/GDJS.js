@@ -327,6 +327,43 @@ describe('libGD.js - GDJS related tests', function () {
       layoutCodeGenerator.delete();
       project.delete();
     });
+    it('allows external layout creation without conditions on scene load', function () {
+      const project = gd.ProjectHelper.createNewGDJSProject();
+      const layout = project.insertNewLayout('Scene', 0);
+      const evt = layout
+        .getLifecycleEventsFunctions()
+        .getSceneLoadFunction()
+        .getEvents()
+        .insertNewEvent(project, 'BuiltinCommonInstructions::Standard', 0);
+
+      const action = new gd.Instruction();
+      action.setType('BuiltinExternalLayouts::CreateObjectsFromExternalLayout');
+      action.setParametersCount(5);
+      action.setParameter(1, '"Main_HUD"');
+      action.setParameter(2, '0');
+      action.setParameter(3, '0');
+      action.setParameter(4, '0');
+      gd.asStandardEvent(evt).getActions().insert(action, 0);
+      action.delete();
+
+      const layoutCodeGenerator = new gd.LayoutCodeGenerator(project);
+      const diagnosticReport = new gd.DiagnosticReport();
+      const code = layoutCodeGenerator.generateLayoutCompleteCode(
+        layout,
+        new gd.SetString(),
+        diagnosticReport,
+        true
+      );
+
+      expect(diagnosticReport.count()).toBe(0);
+      expect(code).not.toMatch(
+        'gdjs.assertExternalLayoutCreationHasCondition'
+      );
+
+      diagnosticReport.delete();
+      layoutCodeGenerator.delete();
+      project.delete();
+    });
     it('reports missing constants placeholders in action strings', function () {
       const project = gd.ProjectHelper.createNewGDJSProject();
       project.setConstantsJson(JSON.stringify({ labels: {} }));

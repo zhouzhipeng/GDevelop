@@ -510,6 +510,7 @@ export class McpGameplayTestOperations {
         options: {
           timeoutMs,
           screenshots: 'off',
+          closeFrameWhenFinished: true,
           onRunStarted: () => {
             operation.status = 'launching';
             const startedAtMs = this._now();

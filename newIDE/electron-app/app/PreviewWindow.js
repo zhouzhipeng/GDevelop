@@ -15,6 +15,7 @@ const {
 const { injectPreviewClickUserGesture } = require('./PreviewWindowUserInput');
 const {
   createDebuggerPopOutCloseCoordinator,
+  getParentWindowIdsWithPreviewOrDebugger,
 } = require('./PreviewWindowLifecycle');
 
 // Keep a global reference of the window object, if you don't, the window will
@@ -619,15 +620,19 @@ const closePreviewWindowsForParent = async parentWindowId => {
 const waitForDebuggerPopOutClosedForParents = async parentWindowIds => {
   const closePromises = parentWindowIds.map(parentWindowId => {
     const debuggerWindow = debuggerPopOutWindows.get(parentWindowId);
-    return waitForWindowClosed(debuggerWindow);
+    return waitForWindowClosed(
+      debuggerWindow,
+      DEBUGGER_POP_OUT_FORCE_CLOSE_DELAY_MS + 1000
+    );
   });
   return Promise.all(closePromises);
 };
 
 const closeAllPreviewWindows = async () => {
   const entriesToClose = previewWindows.slice();
-  const parentWindowIds = Array.from(
-    new Set(entriesToClose.map(entry => entry.parentWindowId))
+  const parentWindowIds = getParentWindowIdsWithPreviewOrDebugger(
+    entriesToClose.map(entry => entry.parentWindowId),
+    Array.from(debuggerPopOutWindows.keys())
   );
 
   const closePromises = entriesToClose.map(entry => {
@@ -644,6 +649,20 @@ const closeAllPreviewWindows = async () => {
   });
 
   const previewCloseResults = await Promise.all(closePromises);
+  // A debugger pop-out can remain after its game window was already closed,
+  // or it can exist before a preview window is created. Close those standalone
+  // windows too and wait for their renderer-owned portal (or native fallback)
+  // to finish before a fresh MCP launch opens its replacement.
+  parentWindowIds.forEach(parentWindowId => {
+    const debuggerWindow = debuggerPopOutWindows.get(parentWindowId);
+    if (
+      debuggerWindow &&
+      !debuggerWindow.isDestroyed() &&
+      !closingDebuggerPopOutWindowIds.has(debuggerWindow.id)
+    ) {
+      closeDebuggerPopOutWindow(parentWindowId);
+    }
+  });
   const debuggerCloseResults = await waitForDebuggerPopOutClosedForParents(
     parentWindowIds
   );

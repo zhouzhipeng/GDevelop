@@ -7,6 +7,7 @@ import {
   canReleaseCancelledPreviewPreparation,
   type PreviewLaunchPhase,
 } from './PreviewLaunchCancellation';
+import { autoSaveProjectForPreviewIfNeeded } from './PreviewProjectAutoSave';
 import './MainFrame.css';
 import Snackbar from '@material-ui/core/Snackbar';
 import HomeIcon from '../UI/CustomSvgIcons/Home';
@@ -3821,36 +3822,23 @@ const MainFrame = (props: Props): React.MixedElement => {
 
   const autosaveProjectIfNeeded = React.useCallback(
     async (): Promise<?FileMetadata> => {
-      if (!currentProject || !currentFileMetadata) return null;
-
-      if (!hasUnsavedChanges) {
-        return currentFileMetadata;
-      }
-
-      if (saveProjectRef.current) {
-        // Use the normal save path so preview persists the project file.
-        return (await saveProjectRef.current()) || null;
-      }
-
       const storageProviderOperations = getStorageProviderOperations();
-      if (storageProviderOperations.onAutoSaveProject) {
-        try {
-          await storageProviderOperations.onAutoSaveProject(
-            currentProject,
-            currentFileMetadata
-          );
-          return currentFileMetadata;
-        } catch (err) {
+      return autoSaveProjectForPreviewIfNeeded({
+        project: currentProject,
+        fileMetadata: currentFileMetadata,
+        hasUnsavedChanges,
+        // Use the normal save path so preview persists unsaved project edits.
+        saveProject: saveProjectRef.current,
+        autoSaveProject: storageProviderOperations.onAutoSaveProject,
+        onAutoSaveError: err => {
           console.error('Error while auto-saving the project: ', err);
           _showSnackMessage(
             i18n._(
               t`There was an error while making an auto-save of the project. Verify that you have permissions to write in the project folder.`
             )
           );
-        }
-      }
-
-      return null;
+        },
+      });
     },
     [
       i18n,

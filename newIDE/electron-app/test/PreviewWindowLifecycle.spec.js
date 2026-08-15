@@ -2,6 +2,7 @@ const assert = require('assert');
 
 const {
   createDebuggerPopOutCloseCoordinator,
+  getParentWindowIdsWithPreviewOrDebugger,
 } = require('../app/PreviewWindowLifecycle');
 
 const coordinator = createDebuggerPopOutCloseCoordinator();
@@ -21,3 +22,10 @@ assert.strictEqual(coordinator.consumeClosingAfterLastPreview(10), false);
 coordinator.markClosingAfterLastPreview(11);
 assert.strictEqual(coordinator.consumeClosingAfterLastPreview(12), false);
 assert.strictEqual(coordinator.consumeClosingAfterLastPreview(11), true);
+
+// Close-all must also target a debugger pop-out whose game preview has already
+// gone away, while de-duplicating parents that still own both windows.
+assert.deepStrictEqual(
+  getParentWindowIdsWithPreviewOrDebugger([1, 2, 2], [2, 3]),
+  [1, 2, 3]
+);

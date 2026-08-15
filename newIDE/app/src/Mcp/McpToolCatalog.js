@@ -398,7 +398,7 @@ const controlPreviewSchema = {
     action: {
       type: 'string',
       description:
-        'pause (freeze the game loop), play (resume), step (advance exactly N frames while paused for deterministic testing), close (stop previews directly), or focus (bring all preview windows to front - fixes timed-out inspect/screenshot when a backgrounded preview is throttled). Defaults to step. For stale-preview cleanup before verification, close all previews here, then call launch_preview with start_paused=true and force_new=true.',
+        'pause (freeze the game loop), play (resume), step (advance exactly N frames while paused for deterministic testing), close (stop previews directly), or focus (bring all preview windows to front - fixes timed-out inspect/screenshot when a backgrounded preview is throttled). Defaults to step. launch_preview automatically closes stale game and debugger windows before opening a fresh pair.',
     },
     frames: {
       type: 'number',
@@ -412,7 +412,7 @@ const controlPreviewSchema = {
     close_all: {
       type: 'boolean',
       description:
-        'For action=close: close ALL running previews instead of just the targeted one. Then call launch_preview with start_paused=true and force_new=true for a fresh paused preview.',
+        'For action=close: close ALL running previews instead of just the targeted one. A later launch_preview also performs this cleanup automatically before opening a fresh paused or running preview.',
     },
     debugger_id: {
       type: 'string',
@@ -624,17 +624,17 @@ const launchPreviewSchema = {
     start_paused: {
       type: 'boolean',
       description:
-        'When true, pause the preview as soon as it connects to the debugger, so you can run a deterministic test near frame 0 (the game otherwise runs in real time immediately and may end before your next call). Then use run_frames / control_preview step to advance, or control_preview play to run normally. When attaching to an already-running preview, it is paused in place instead.',
+        'When true, pause the fresh preview as soon as it connects to the debugger, so you can run a deterministic test near frame 0 (the game otherwise runs in real time immediately and may end before your next call). Then use run_frames / control_preview step to advance, or control_preview play to run normally.',
     },
     force_new: {
       type: 'boolean',
       description:
-        'When true, always open a NEW preview window. By default (false) this attaches to an already-running preview (the editor shares one debugger channel), avoiding duplicate windows and stale game-over windows; set this only when you specifically need a fresh window.',
+        'Deprecated compatibility flag. launch_preview now always closes the previous game and debugger windows and opens a fresh pair, regardless of this value.',
     },
     display_collision_shapes: {
       type: 'boolean',
       description:
-        'Show object collision shapes in the preview. When omitted, the editor toolbar setting is used. Passing either true or false opens a new preview window because an already-running preview cannot be reconfigured.',
+        'Show object collision shapes in the fresh preview. When omitted, the editor toolbar setting is used.',
     },
     timeout_ms: {
       type: 'number',
@@ -1002,7 +1002,7 @@ const readTools: Array<McpTool> = [
   {
     name: 'run_gameplay_tests',
     description:
-      'Start one authored gameplay test selected by its exact canonical tests.settings file value, or all project and extension gameplay tests when file is omitted. Returns a stable operation_id immediately while the shared dedicated gameplay-test preview runs in the background. Uses current in-memory test sources, an unpaced deterministic harness, the requested per-test timeout, and no screenshot capture. Poll get_gameplay_test_results until status is completed or failed.',
+      'Start one authored gameplay test selected by its exact canonical tests.settings file value, or all project and extension gameplay tests when file is omitted. Returns a stable operation_id immediately while the shared dedicated gameplay-test preview runs in the background. Uses current in-memory test sources, an unpaced deterministic harness, the requested per-test timeout, and no screenshot capture. When the batch finishes for any reason, its floating game window is automatically closed and unloaded. Poll get_gameplay_test_results until status is completed or failed.',
     inputSchema: runGameplayTestsSchema,
     annotations: {
       readOnlyHint: false,
@@ -1092,7 +1092,7 @@ const readTools: Array<McpTool> = [
   {
     name: 'launch_preview',
     description:
-      'Launch or attach to a game preview and confirm the runtime debugger is ready by waiting for getStatus. By DEFAULT it previews the project\'s FIRST scene (firstLayout), independent of which scene tab is open in the editor; pass scene_name to preview a specific layout. Set display_collision_shapes to show or hide object collision shapes; an explicit value opens a new preview so the setting is applied. New preview windows are opened through the same "Start Preview and Debugger" command used by the UI. With start_paused:true, success also requires the pause to be confirmed. The result reports requestedScene/expectedScene/actualScene and sets sceneMismatch:true when the running scene differs from what was requested. Returns success:false with failurePhase details if the window/debugger connects but the runtime stays unresponsive. By default it attaches to an already-running preview; pass force_new:true to always open a fresh window (when scene_name is given and the running preview is on another scene, a fresh one is launched on the requested scene).',
+      'Close any previous game preview and debugger windows, launch a fresh preview/debugger pair, and confirm the runtime debugger is ready by waiting for getStatus. By DEFAULT it previews the project\'s FIRST scene (firstLayout), independent of which scene tab is open in the editor; pass scene_name to preview a specific layout. Set display_collision_shapes to show or hide object collision shapes. New preview windows are opened through the same "Start Preview and Debugger" command used by the UI. With start_paused:true, success also requires the pause to be confirmed. The result reports requestedScene/expectedScene/actualScene and sets sceneMismatch:true when the running scene differs from what was requested. Returns success:false with failurePhase details if cleanup fails or the window/debugger connects but the runtime stays unresponsive. force_new is retained as a deprecated compatibility argument but no longer changes behavior.',
     inputSchema: launchPreviewSchema,
   },
   {
