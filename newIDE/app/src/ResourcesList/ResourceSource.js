@@ -32,9 +32,20 @@ export type ResourceKind =
   | 'model3D'
   | 'atlas'
   | 'spine'
-  | 'javascript';
+  | 'javascript'
+  | 'tslMaterial';
 
 export const resourcesKindSupportedByResourceStore = ['audio', 'font'];
+
+export const doesResourceFileNameMatchExtensions = (
+  fileName: string,
+  extensions: Array<string>
+): boolean => {
+  const lowerCaseFileName = fileName.toLowerCase();
+  return extensions.some(extension =>
+    lowerCaseFileName.endsWith(`.${extension.toLowerCase()}`)
+  );
+};
 
 export const allResourceKindsAndMetadata = [
   {
@@ -113,6 +124,14 @@ export const allResourceKindsAndMetadata = [
     fileExtensions: ['js'],
     createNewResource: (): gdJavaScriptResource => {
       return new gd.JavaScriptResource();
+    },
+  },
+  {
+    kind: 'tslMaterial',
+    displayName: (t`TSL material`: any),
+    fileExtensions: ['tsl.ts'],
+    createNewResource: (): gdTSLMaterialResource => {
+      return new gd.TSLMaterialResource();
     },
   },
 ];

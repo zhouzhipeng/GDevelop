@@ -4,6 +4,7 @@ import ResourcesLoader from '../ResourcesLoader';
 import ResourceSelector from './ResourceSelector';
 import {
   allResourceKindsAndMetadata,
+  doesResourceFileNameMatchExtensions,
   type ResourceManagementProps,
   type ResourceKind,
 } from './ResourceSource';
@@ -108,11 +109,10 @@ export const isSupportedDroppedResourceFilePath = ({
 |}): boolean => {
   if (!path || !filePath) return false;
 
-  const extension = path
-    .extname(filePath)
-    .replace('.', '')
-    .toLowerCase();
-  return getResourceKindFileExtensions(resourceKind).includes(extension);
+  return doesResourceFileNameMatchExtensions(
+    filePath,
+    getResourceKindFileExtensions(resourceKind)
+  );
 };
 
 export const getDroppedResourceFilePathsFromDataTransfer = (

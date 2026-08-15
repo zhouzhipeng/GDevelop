@@ -1,5 +1,9 @@
 # 3D model bone attachments
 
+Status: implemented using the optional `Model3DBoneAttachment` behavior
+extension. The placement described here incorporates the approved breaking
+refactor in `3d-model-bone-attachment-extension-refactor-spec.md`.
+
 ## Summary
 
 GDevelop should provide a native way to attach any 3D object to a named bone of
@@ -20,13 +24,19 @@ and shear, and writes the resulting position and rotation to the attached
 object. The attached object keeps its own width, height, depth, scale, flips,
 visibility, behaviors, variables, and lifecycle.
 
+The constraint is opt-in. The attached object must own
+`Model3DBoneAttachment::Model3DBoneAttachmentBehavior`; ordinary 3D objects do
+not load the attachment manager or carry attachment state. The target model
+keeps only a small, renderer-owned bone-pose query boundary.
+
 ## Decision
 
 Implement bone attachment as a **same-container transform constraint**, not as
 Three.js scene-graph reparenting.
 
 - The target is a `Scene3D::Model3DObject` instance.
-- The attachment is any object with `Scene3D::Base3DBehavior`.
+- The attachment is any rendered object with `Scene3D::Base3DBehavior` and the
+  optional `Model3DBoneAttachmentBehavior`.
 - Both instances must belong to the same `RuntimeInstanceContainer` and the
   same 3D layer.
 - One attachment can follow one target bone. A target can have any number of
@@ -111,8 +121,12 @@ The relevant implementation is currently split across these areas:
   scene events.
 - `Extensions/3D/A_RuntimeObject3DRenderer.ts` applies ordinary 3D object
   position, rotation, size, flip, and visibility to a layer-owned root.
-- `Extensions/3D/Base3DBehavior.ts` is the hidden capability already present on
-  3D objects and is the appropriate child-facing public API.
+- `Extensions/3D/Base3DBehavior.ts` is the generic hidden 3D capability. It has
+  no bone-attachment state or attachment-facing event API.
+- `Extensions/Model3DBoneAttachment/Model3DBoneAttachmentRuntimeBehavior.ts`
+  owns the optional relationship and attachment-facing event API.
+- `Extensions/Model3DBoneAttachment/Model3DBoneAttachmentManager.ts` owns the
+  scene manager, graph ordering, lifecycle callbacks, and synchronization.
 - `GDJS/Runtime/runtimeinstancecontainer.ts` updates objects and behaviors
   before events, then gives objects a pre-render update.
 - `GDJS/Runtime/CustomRuntimeObjectInstanceContainer.ts` has equivalent loops
@@ -137,9 +151,11 @@ correct both in scenes and inside custom objects:
    `_updateObjectsPreRender`, after events and post-event behaviors, but before
    custom object renderers call `ensureUpToDate`.
 
-The 3D extension registers its attachment manager on these hooks. The hooks are
-container-scoped rather than scene-only because custom-object events execute
-during the parent scene's object update.
+The optional attachment extension registers its manager on these hooks when
+its runtime module is included. The hooks are container-scoped rather than
+scene-only because custom-object events execute during the parent scene's
+object update. Projects without the behavior never load that module and never
+register its callbacks.
 
 ## Goals
 
@@ -154,7 +170,10 @@ during the parent scene's object update.
 - Handle deletion, reattachment, model rebuild, hot reload, and invalid bones
   without leaking renderers or crashing.
 - Avoid traversing the GLTF scene every frame.
-- Keep existing project files backward compatible.
+- Add no live relationship data to project, instance, save-state, or network
+  schemas.
+- Add no attachment runtime cost to projects that do not use the optional
+  behavior.
 
 ## Non-goals
 
@@ -185,8 +204,11 @@ during the parent scene's object update.
 
 ## Event API
 
-The attachment-facing API belongs to `Scene3D::Base3DBehavior`, so it is
-available for 3D models, boxes, custom 3D objects, and future 3D object types.
+The attachment-facing API belongs to
+`Model3DBoneAttachment::Model3DBoneAttachmentBehavior`. The behavior declares a
+required `Scene3D::Base3DBehavior` capability, so it can be added to 3D models,
+boxes, custom 3D objects, and future rendered 3D object types without adding
+specialized state to every 3D object.
 
 ### Actions
 
@@ -283,6 +305,9 @@ Knight
   WeaponModel   (Model3DObject or Weapon custom 3D object)
 ```
 
+`WeaponModel` owns `Model3DBoneAttachmentBehavior`; `KnightModel` needs no
+attachment behavior merely because it provides the target bone.
+
 Its creation events perform:
 
 ```text
@@ -299,8 +324,8 @@ the weapon object or weapon custom object rather than in the knight GLB.
 
 ## Bone identity contract
 
-At model clone/rebuild time, the renderer traverses the cloned GLTF scene once
-and creates:
+The renderer initially leaves the public bone index absent. The first bone
+query for a model generation traverses the cloned GLTF scene once and creates:
 
 ```ts
 Map<string, THREE.Bone>
@@ -332,9 +357,10 @@ attachment code may not. This keeps the preview, event editor, and runtime
 consistent without changing Three.js animation-track binding behavior.
 
 The cache is built from the cloned runtime scene, not `Model3DManager`'s shared
-source GLTF, because the animation mixer poses the clone. It is rebuilt whenever
-`_updateModel` replaces the cloned scene. Bone objects are never exposed in the
-public event API.
+source GLTF, because the animation mixer poses the clone. `_updateModel`
+invalidates the cache without traversing the replacement clone; the next model
+expression, attachment query, or spring-bone binding rebuilds it once. Bone
+objects are never exposed in the public event API.
 
 `Model3DRuntimeObject3DRenderer` exposes an internal typed query that writes a
 pose into caller-provided reusable values rather than allocating or returning a
@@ -401,7 +427,7 @@ entire attachment lifetime. A test should enforce this invariant.
 
 ## Runtime state and manager
 
-`Base3DBehavior` owns one optional runtime state:
+`Model3DBoneAttachmentRuntimeBehavior` owns one optional runtime state:
 
 ```ts
 type Model3DBoneAttachment = {
@@ -410,13 +436,19 @@ type Model3DBoneAttachment = {
   positionOffset: [number, number, number];
   rotationOffset: [number, number, number];
   isResolved: boolean;
-  lastFailure: BoneAttachmentFailure | null;
+  lastFailure: Model3DBoneAttachmentFailure | null;
 };
 ```
 
-The behavior registers and unregisters itself with a scene-owned
+The optional behavior registers and unregisters itself with a scene-owned
 `Model3DBoneAttachmentManager`. The manager indexes attachments by instance
 container so a pass never scans every scene object.
+
+Deactivating the behavior retains the relationship and offsets, freezes the
+last synchronized transform, and marks it unresolved without warning.
+Reactivating it immediately attempts synchronization. Destroying or removing
+the behavior detaches and releases manager and target references while keeping
+the object's last transform.
 
 The manager also registers destroy callbacks on both instances:
 
@@ -460,6 +492,7 @@ attachment offset, or relationship in events.
 
 The attach action succeeds only when:
 
+- the attachment owns `Model3DBoneAttachmentBehavior`;
 - the attachment implements `Base3DHandler` and has a 3D renderer root;
 - the target is a live `Model3DRuntimeObject`;
 - attachment and target are different instances;
@@ -525,21 +558,29 @@ The new parameter type is registered in
 names are serialized into the object configuration, so replacing the GLB does
 not leave an editor-maintained cache in the project file.
 
-## Serialization and backward compatibility
+## Serialization and compatibility
 
 This feature adds no fields to `Model3DObjectConfiguration`, object data,
 instance data, or custom-object child configuration. Relationships are created
 by event actions and exist only between live instances. The events themselves
 serialize through the existing instruction format.
 
-Old projects contain no attachment actions and behave exactly as before. A GLB
-does not need a skeleton unless an attachment action targets one of its bones.
-Existing shared-animation resource and rig compatibility data are unchanged.
+Objects that opt in serialize only the normal behavior entry and its hidden
+required-Base3D reference. Target pointers, bone names, offsets, resolution,
+and manager records are not serialized. A GLB does not need a skeleton unless a
+bone query or attachment targets one of its bones. Existing shared-animation
+resource and rig compatibility data are unchanged.
 
-Hot reload retains `Base3DBehavior` runtime state when the owning instance is
-retained. Rebuilding a target model invalidates only the cached `THREE.Bone`
-references; the manager keeps the target instance and bone name and resolves
-the new clone.
+This implementation intentionally does not preserve the earlier unreleased
+`Scene3D::Base3DBehavior` attachment instruction identifiers. Projects made
+against that implementation must add `Model3DBoneAttachmentBehavior` to each
+attachment object and replace those events with the new behavior-scoped API.
+There are no aliases or automatic migration.
+
+Hot reload retains `Model3DBoneAttachmentRuntimeBehavior` state when the
+behavior and owning instance are retained. Rebuilding a target model
+invalidates only the cached `THREE.Bone` references; the manager keeps the
+target instance and bone name and resolves the new clone.
 
 ## Multiplayer and network synchronization
 
@@ -553,7 +594,9 @@ events must run on every peer, or the game must send an equipment identifier and
 run the attach action after both instances exist. This limitation must be in the
 action documentation.
 
-A later multiplayer phase may synchronize `{targetNetworkId, boneName, offsets}` through `Base3DBehavior` data when both instances have network IDs.
+A later multiplayer phase may synchronize
+`{targetNetworkId, boneName, offsets}` through the dedicated attachment
+behavior when both instances have network IDs.
 It must support pending resolution when the target creation message arrives
 after the attachment and must not generate network IDs solely because an object
 is attached.
@@ -565,25 +608,28 @@ is attached.
 `Extensions/3D/Model3DRuntimeObject3DRenderer.ts`
 
 - Keep a reference to the current cloned GLTF root.
-- Build and invalidate the unique-bone cache in `_updateModel`.
-- Add allocation-free `hasBone` and `getBonePose` internal methods.
+- Invalidate the unique-bone cache in `_updateModel` and build it lazily on the
+  first query in each model generation.
+- Provide allocation-reusing `hasBone` and `getBonePose` internal methods, with
+  pose scratch allocated only on first use.
 - Add and test the scale/shear removal utility.
 
 `Extensions/3D/Model3DRuntimeObject.ts`
 
 - Expose typed runtime wrappers used by event conditions, expressions, and the
   manager without exposing Three.js bones.
+- Allocate public bone-expression pose and rotation scratch only on first use.
 - Preserve existing animation and network behavior.
 
 ### Attachment capability and manager
 
-`Extensions/3D/Base3DBehavior.ts`
+`Extensions/Model3DBoneAttachment/Model3DBoneAttachmentRuntimeBehavior.ts`
 
 - Store the optional relationship and offsets.
 - Implement actions, conditions, expressions, immediate synchronization, and
-  destruction cleanup.
+  activation/destruction cleanup.
 
-`Extensions/3D/Model3DBoneAttachmentManager.ts` (new)
+`Extensions/Model3DBoneAttachment/Model3DBoneAttachmentManager.ts`
 
 - Index relationships by container and target.
 - Validate same-container/same-layer eligibility.
@@ -591,10 +637,16 @@ is attached.
 - Perform the pre-events and pre-render synchronization passes.
 - Rate-limit runtime warnings.
 
-`Extensions/3D/JsExtension.js`
+`Extensions/Model3DBoneAttachment/JsExtension.js`
 
-- Register the actions, conditions, expressions, parameter types, help text,
-  and new runtime include.
+- Register the required-Base3D behavior, actions, conditions, expressions,
+  help text, and optional runtime includes.
+
+`Extensions/3D/Base3DBehavior.ts` and `Extensions/3D/JsExtension.js`
+
+- Keep generic 3D capability and model-owned bone queries only.
+- Contain no attachment relationship, manager include, or attachment event
+  metadata.
 
 ### Container hooks
 
@@ -640,6 +692,9 @@ allocate per frame.
 - Synthetic preview fallback names are not accepted by attachment actions.
 - A model rebuild replaces cached bone references and retains attachment by
   name.
+- A model with no bone query has no canonical-name index or pose-expression
+  scratch; repeated queries traverse only once per model generation.
+- A rigid 3D box can opt in as an attachment without exposing model-bone APIs.
 - Animated bone translation and rotation update the child's logical transform.
 - Position and rotation offsets use bone-local axes and `ZYX` order.
 - Non-uniform target dimensions and model normalization do not change the
@@ -662,6 +717,8 @@ allocate per frame.
 - A target can own several attachments.
 - Attachment chains update target-first; self-links and longer cycles fail.
 - Repeated unresolved frames emit at most one warning per failure state.
+- Behavior deactivation freezes silently and reactivation resolves
+  immediately; behavior destruction removes manager records.
 - Pre-event synchronization occurs after all target mixers update, independent
   of object creation/list order.
 - Pre-render synchronization applies event changes in the same rendered frame.
@@ -673,6 +730,8 @@ allocate per frame.
 - A model group returns the intersection of bone names.
 - Loading, missing-resource, and failed-GLB states retain free-form editing.
 - Changing the target object or its model resource invalidates completions.
+- The new behavior requires `Scene3D::Base3DBehavior`, its target parameter is
+  restricted to `Scene3D::Model3DObject`, and Base3D exposes no attachment API.
 
 ### Integration acceptance case
 
@@ -686,17 +745,12 @@ manager state after deletion.
 
 ## Rollout
 
-1. Implement the cached runtime bone resolver and transform decomposition with
-   isolated Three.js tests.
-2. Implement `Base3DBehavior` state, the attachment manager, container hooks,
-   lifecycle cleanup, chains, and runtime tests.
-3. Add event metadata, documentation, the bone-name completion field, and editor
-   tests.
-4. Add a 3D custom-object example demonstrating a knight with swappable weapon
-   child objects.
-5. Consider named non-bone socket nodes, debug bone/socket visualization,
-   optional target-scale inheritance modes, and relationship network sync only
-   after the core contract is stable.
+The feature ships atomically with the optional behavior extension and without
+the previous Base3D attachment API. Repository examples must explicitly add the
+behavior to attachment objects. Future work may add a 3D custom-object example,
+named non-bone sockets, debug visualization, target-scale inheritance modes, or
+relationship network synchronization without moving the constraint back into
+the generic 3D capability.
 
 ## Acceptance criteria
 
@@ -712,3 +766,7 @@ manager state after deletion.
   and deterministic.
 - No existing project serialization changes and no direct Three.js object is
   exposed to events.
+- `Base3DBehavior` contains no attachment state or API, and projects without
+  `Model3DBoneAttachmentBehavior` do not include or register its manager.
+- Bone indexes and bone-expression scratch are allocated only after a model is
+  actually queried.

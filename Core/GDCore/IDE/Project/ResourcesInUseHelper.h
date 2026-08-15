@@ -46,6 +46,7 @@ public:
   std::set<gd::String>& GetAllVideos() { return GetAll("video"); };
   std::set<gd::String>& GetAllBitmapFonts() { return GetAll("bitmapFont"); };
   std::set<gd::String>& GetAll3DModels() { return GetAll("model3D"); };
+  std::set<gd::String>& GetAllTSLMaterials() { return GetAll("tslMaterial"); };
   std::set<gd::String>& GetAllAtlases() { return GetAll("atlas"); };
   std::set<gd::String>& GetAllSpines() { return GetAll("spine"); };
   std::set<gd::String>& GetAll(const gd::String& resourceType) {
@@ -61,6 +62,7 @@ public:
     if (resourceType == "video") return allVideos;
     if (resourceType == "bitmapFont") return allBitmapFonts;
     if (resourceType == "model3D") return allModel3Ds;
+    if (resourceType == "tslMaterial") return allTSLMaterials;
     if (resourceType == "atlas") return allAtlases;
     if (resourceType == "spine") return allSpines;
     if (resourceType == "javascript") return allJavaScripts;
@@ -101,6 +103,9 @@ public:
   virtual void ExposeModel3D(gd::String& resourceName) override {
     allModel3Ds.insert(resourceName);
   };
+  virtual void ExposeTSLMaterial(gd::String& resourceName) override {
+    allTSLMaterials.insert(resourceName);
+  };
   virtual void ExposeAtlas(gd::String& resourceName) override {
     allAtlases.insert(resourceName);
   };
@@ -119,6 +124,7 @@ public:
   std::set<gd::String> allVideos;
   std::set<gd::String> allBitmapFonts;
   std::set<gd::String> allModel3Ds;
+  std::set<gd::String> allTSLMaterials;
   std::set<gd::String> allAtlases;
   std::set<gd::String> allSpines;
   std::set<gd::String> allJavaScripts;

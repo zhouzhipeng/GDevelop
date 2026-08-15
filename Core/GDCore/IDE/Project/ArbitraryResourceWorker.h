@@ -98,6 +98,11 @@ public:
   virtual void ExposeModel3D(gd::String &resourceName);
 
   /**
+   * \brief Expose a TSL material resource.
+   */
+  virtual void ExposeTSLMaterial(gd::String &resourceName);
+
+  /**
    * \brief Expose an atlas, which is always a reference to a "atlas" resource.
    */
   virtual void ExposeAtlas(gd::String &resourceName);

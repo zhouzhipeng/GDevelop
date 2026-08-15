@@ -38,6 +38,7 @@ public:
   static const gd::String atlasType;
   static const gd::String spineType;
   static const gd::String javaScriptType;
+  static const gd::String tslMaterialType;
   static const gd::String internalInGameEditorOnlySvgType;
 
   Resource(){};
@@ -578,6 +579,36 @@ public:
   virtual ~JavaScriptResource(){};
   virtual JavaScriptResource *Clone() const override {
     return new JavaScriptResource(*this);
+  }
+
+  virtual const gd::String &GetFile() const override { return file; };
+  virtual void SetFile(const gd::String &newFile) override;
+
+  virtual bool UseFile() const override { return true; }
+  void SerializeTo(SerializerElement &element) const override;
+
+  void UnserializeFrom(const SerializerElement &element) override;
+
+private:
+  gd::String file;
+};
+
+/**
+ * \brief Describe a TypeScript source defining a Three.js TSL material.
+ *
+ * The source is authoritative project data. Compiled registry code and
+ * backend-generated shaders are derived artifacts and are never serialized by
+ * this resource.
+ *
+ * \see Resource
+ * \ingroup ResourcesManagement
+ */
+class GD_CORE_API TSLMaterialResource : public Resource {
+public:
+  TSLMaterialResource() : Resource() { SetKind("tslMaterial"); };
+  virtual ~TSLMaterialResource(){};
+  virtual TSLMaterialResource *Clone() const override {
+    return new TSLMaterialResource(*this);
   }
 
   virtual const gd::String &GetFile() const override { return file; };

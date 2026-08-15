@@ -52,6 +52,11 @@ void ArbitraryResourceWorker::ExposeModel3D(gd::String& resourceName){
     // do.
 };
 
+void ArbitraryResourceWorker::ExposeTSLMaterial(gd::String& resourceName){
+    // Nothing to do by default - each child class can define here the action to
+    // do.
+};
+
 void ArbitraryResourceWorker::ExposeAtlas(gd::String& resourceName){
     // Nothing to do by default - each child class can define here the action to
     // do.
@@ -159,6 +164,10 @@ void ArbitraryResourceWorker::ExposeResourceWithType(
   }
   if (resourceType == "model3D") {
     ExposeModel3D(resourceName);
+    return;
+  }
+  if (resourceType == "tslMaterial") {
+    ExposeTSLMaterial(resourceName);
     return;
   }
   if (resourceType == "audio") {
@@ -289,6 +298,10 @@ bool ResourceWorkerInEventsWorker::DoVisitInstruction(gd::Instruction& instructi
         } else if (parameterMetadata.GetType() == "model3DResource") {
           gd::String updatedParameterValue = parameterValue;
           worker.ExposeModel3D(updatedParameterValue);
+          instruction.SetParameter(parameterIndex, updatedParameterValue);
+        } else if (parameterMetadata.GetType() == "tslMaterialResource") {
+          gd::String updatedParameterValue = parameterValue;
+          worker.ExposeTSLMaterial(updatedParameterValue);
           instruction.SetParameter(parameterIndex, updatedParameterValue);
         } else if (parameterMetadata.GetType() == "atlasResource") {
           gd::String updatedParameterValue = parameterValue;

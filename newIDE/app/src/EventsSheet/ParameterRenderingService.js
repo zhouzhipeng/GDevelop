@@ -87,6 +87,7 @@ import IdentifierField from './ParameterFields/IdentifierField';
 import TilemapResourceField from './ParameterFields/TilemapResourceField';
 import TilesetResourceField from './ParameterFields/TilesetResourceField';
 import Model3DResourceField from './ParameterFields/Model3DResourceField';
+import TSLMaterialResourceField from './ParameterFields/TSLMaterialResourceField';
 import AtlasResourceField from './ParameterFields/AtlasResourceField';
 import {
   type ParameterFieldProps,
@@ -137,6 +138,7 @@ const components: {
   bitmapFontResource: BitmapFontResourceField,
   fontResource: FontResourceField,
   model3DResource: Model3DResourceField,
+  tslMaterialResource: TSLMaterialResourceField,
   atlasResource: AtlasResourceField,
   spineResource: SpineResourceField,
   color: ColorExpressionField,
@@ -212,6 +214,8 @@ const userFriendlyTypeName: { [string]: MessageDescriptor } = {
   fontResource: t`Font resource`,
   jsonResource: t`JSON resource`,
   tilemapResource: t`Tile map resource`,
+  model3DResource: t`3D model resource`,
+  tslMaterialResource: t`TSL material resource`,
   atlasResource: t`Atlas resource`,
   spineResource: t`Spine skeleton resource`,
   color: t`Color`,

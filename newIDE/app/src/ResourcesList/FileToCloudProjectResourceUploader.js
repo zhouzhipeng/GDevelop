@@ -1,9 +1,9 @@
 // @flow
 import { Trans } from '@lingui/macro';
 import * as React from 'react';
-import path from 'path-browserify';
 import {
   allResourceKindsAndMetadata,
+  doesResourceFileNameMatchExtensions,
   type ChooseResourceOptions,
   type ResourceKind,
 } from './ResourceSource';
@@ -62,6 +62,10 @@ const resourceKindToInputAcceptedMimes = {
     // with application/json. Validation happens post-picking (json and skel).
   ],
   javascript: ['text/javascript'],
+  tslMaterial: [
+    'file',
+    // .tsl.ts is a compound extension, so validation happens post-picking.
+  ],
 };
 
 const getAcceptedExtensions = (
@@ -233,9 +237,7 @@ export const FileToCloudProjectResourceUploader = ({
         options.resourceKind,
         false
       );
-      return acceptedExtensions.includes(
-        path.extname(file.name).replace(/^\./, '')
-      );
+      return doesResourceFileNameMatchExtensions(file.name, acceptedExtensions);
     },
     [options.resourceKind]
   );

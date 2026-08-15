@@ -1567,6 +1567,11 @@ interface JavaScriptResource {
 };
 JavaScriptResource implements Resource;
 
+interface TSLMaterialResource {
+    void TSLMaterialResource();
+};
+TSLMaterialResource implements Resource;
+
 interface InitialInstance {
     void InitialInstance();
 

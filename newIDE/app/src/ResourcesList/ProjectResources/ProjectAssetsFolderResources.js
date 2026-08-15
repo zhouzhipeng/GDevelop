@@ -1,6 +1,7 @@
 // @flow
 import {
   allResourceKindsAndMetadata,
+  doesResourceFileNameMatchExtensions,
   type ResourceKind,
 } from '../ResourceSource';
 import optionalRequire from '../../Utils/OptionalRequire';
@@ -44,11 +45,10 @@ export const isSupportedProjectAssetResourceFile = ({
 |}): boolean => {
   if (!path) return false;
 
-  const extension = path
-    .extname(filePath)
-    .replace('.', '')
-    .toLowerCase();
-  return getFileExtensionsForResourceKind(resourceKind).includes(extension);
+  return doesResourceFileNameMatchExtensions(
+    filePath,
+    getFileExtensionsForResourceKind(resourceKind)
+  );
 };
 
 const getResourceCreatorForKind = (resourceKind: ResourceKind) => {

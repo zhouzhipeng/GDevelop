@@ -26,6 +26,13 @@ namespace gdjs {
     bindMatrix: number[];
   };
 
+  type Model3DBonePoseScratch = {
+    relativeInverseMatrix: THREE.Matrix4;
+    boneRelativeMatrix: THREE.Matrix4;
+    boneQuaternion: THREE.Quaternion;
+    scaleFreeRotationExtractor: gdjs.Model3DScaleFreeRotationExtractor;
+  };
+
   const epsilon = 1 / (1 << 16);
   const rigTransformEpsilon = 1 / (1 << 12);
 
@@ -454,12 +461,10 @@ namespace gdjs {
     private _threeObject: THREE.Object3D;
     /** The current cloned GLTF scene posed by the animation mixer. */
     private _clonedModelRoot: THREE.Object3D | null = null;
-    private _bonesByCanonicalName = new Map<string, THREE.Bone>();
-    private _ambiguousBoneNames = new Set<string>();
+    private _bonesByCanonicalName: Map<string, THREE.Bone> | null = null;
+    private _ambiguousBoneNames: Set<string> | null = null;
     private _modelGeneration = 0;
-    private _relativeInverseMatrix = new THREE.Matrix4();
-    private _boneRelativeMatrix = new THREE.Matrix4();
-    private _boneQuaternion = new THREE.Quaternion();
+    private _bonePoseScratch: Model3DBonePoseScratch | null = null;
     private _modelCoordinateSystemInverseMatrix = new THREE.Matrix4();
     private _modelRotationEuler = new THREE.Euler(0, 0, 0, 'ZYX');
     private _modelYAxisReflectionMatrix = new THREE.Matrix4().makeScale(
@@ -467,8 +472,6 @@ namespace gdjs {
       -1,
       1
     );
-    private _scaleFreeRotationExtractor =
-      new gdjs.Model3DScaleFreeRotationExtractor();
     private _springBonePosition = new THREE.Vector3();
     private _springBoneChildPosition = new THREE.Vector3();
     private _springBoneCurrentDirection = new THREE.Vector3();
@@ -533,10 +536,16 @@ namespace gdjs {
       this._action = null;
     }
 
-    private _rebuildBoneCache(root: THREE.Object3D): void {
-      this._clonedModelRoot = root;
-      this._bonesByCanonicalName.clear();
-      this._ambiguousBoneNames.clear();
+    private _ensureBoneCache(): void {
+      if (this._bonesByCanonicalName && this._ambiguousBoneNames) return;
+
+      const bonesByCanonicalName = new Map<string, THREE.Bone>();
+      const ambiguousBoneNames = new Set<string>();
+      this._bonesByCanonicalName = bonesByCanonicalName;
+      this._ambiguousBoneNames = ambiguousBoneNames;
+      const root = this._clonedModelRoot;
+      if (!root) return;
+
       root.traverse((node) => {
         const bone = node as THREE.Bone;
         if (!bone.isBone) return;
@@ -545,24 +554,26 @@ namespace gdjs {
             ? bone.userData.name
             : '';
         const canonicalName = authoredName || bone.name;
-        if (!canonicalName || this._ambiguousBoneNames.has(canonicalName)) {
+        if (!canonicalName || ambiguousBoneNames.has(canonicalName)) {
           return;
         }
-        if (this._bonesByCanonicalName.has(canonicalName)) {
-          this._bonesByCanonicalName.delete(canonicalName);
-          this._ambiguousBoneNames.add(canonicalName);
+        if (bonesByCanonicalName.has(canonicalName)) {
+          bonesByCanonicalName.delete(canonicalName);
+          ambiguousBoneNames.add(canonicalName);
           return;
         }
-        this._bonesByCanonicalName.set(canonicalName, bone);
+        bonesByCanonicalName.set(canonicalName, bone);
       });
     }
 
     hasBone(boneName: string): boolean {
-      return this._bonesByCanonicalName.has(boneName);
+      this._ensureBoneCache();
+      return this._bonesByCanonicalName!.has(boneName);
     }
 
     isBoneNameAmbiguous(boneName: string): boolean {
-      return this._ambiguousBoneNames.has(boneName);
+      this._ensureBoneCache();
+      return this._ambiguousBoneNames!.has(boneName);
     }
 
     getBonePose(
@@ -570,9 +581,22 @@ namespace gdjs {
       relativeTo: THREE.Object3D,
       result: gdjs.Model3DBonePose
     ): boolean {
-      const bone = this._bonesByCanonicalName.get(boneName);
+      this._ensureBoneCache();
+      const bone = this._bonesByCanonicalName!.get(boneName);
       if (!bone || !this._clonedModelRoot || !relativeTo) {
         return false;
+      }
+
+      let scratch = this._bonePoseScratch;
+      if (!scratch) {
+        scratch = {
+          relativeInverseMatrix: new THREE.Matrix4(),
+          boneRelativeMatrix: new THREE.Matrix4(),
+          boneQuaternion: new THREE.Quaternion(),
+          scaleFreeRotationExtractor:
+            new gdjs.Model3DScaleFreeRotationExtractor(),
+        };
+        this._bonePoseScratch = scratch;
       }
 
       let ancestor: THREE.Object3D | null = bone;
@@ -585,9 +609,9 @@ namespace gdjs {
 
       relativeTo.updateWorldMatrix(true, false);
       bone.updateWorldMatrix(true, false);
-      this._relativeInverseMatrix.copy(relativeTo.matrixWorld).invert();
-      this._boneRelativeMatrix.multiplyMatrices(
-        this._relativeInverseMatrix,
+      scratch.relativeInverseMatrix.copy(relativeTo.matrixWorld).invert();
+      scratch.boneRelativeMatrix.multiplyMatrices(
+        scratch.relativeInverseMatrix,
         bone.matrixWorld
       );
 
@@ -599,26 +623,26 @@ namespace gdjs {
       // removing scale and shear. This also makes a zero rotation offset match
       // a mesh authored directly below the bone when both models use the same
       // configured default rotation.
-      this._boneRelativeMatrix.multiply(
+      scratch.boneRelativeMatrix.multiply(
         this._modelCoordinateSystemInverseMatrix
       );
       if (
-        !this._scaleFreeRotationExtractor.setQuaternionFromMatrix(
-          this._boneRelativeMatrix,
-          this._boneQuaternion
+        !scratch.scaleFreeRotationExtractor.setQuaternionFromMatrix(
+          scratch.boneRelativeMatrix,
+          scratch.boneQuaternion
         )
       ) {
         return false;
       }
 
-      const elements = this._boneRelativeMatrix.elements;
+      const elements = scratch.boneRelativeMatrix.elements;
       result.positionX = elements[12];
       result.positionY = elements[13];
       result.positionZ = elements[14];
-      result.quaternionX = this._boneQuaternion.x;
-      result.quaternionY = this._boneQuaternion.y;
-      result.quaternionZ = this._boneQuaternion.z;
-      result.quaternionW = this._boneQuaternion.w;
+      result.quaternionX = scratch.boneQuaternion.x;
+      result.quaternionY = scratch.boneQuaternion.y;
+      result.quaternionZ = scratch.boneQuaternion.z;
+      result.quaternionW = scratch.boneQuaternion.w;
       return true;
     }
 
@@ -633,17 +657,22 @@ namespace gdjs {
       additionalBoneNames: readonly string[]
     ): gdjs.Model3DSpringBoneDynamicsBinding | null {
       if (!this._clonedModelRoot) return null;
+      this._ensureBoneCache();
       const chains: THREE.Bone[][] = [];
       const flatBones: THREE.Bone[] = [];
       const bonesByCanonicalName = new Map<string, THREE.Bone>();
       const ownedBones = new Set<THREE.Bone>();
 
-      for (let chainIndex = 0; chainIndex < chainBoneNames.length; chainIndex++) {
+      for (
+        let chainIndex = 0;
+        chainIndex < chainBoneNames.length;
+        chainIndex++
+      ) {
         const names = chainBoneNames[chainIndex];
         const chain: THREE.Bone[] = [];
         for (let boneIndex = 0; boneIndex < names.length; boneIndex++) {
           const name = names[boneIndex];
-          const bone = this._bonesByCanonicalName.get(name);
+          const bone = this._bonesByCanonicalName!.get(name);
           if (!bone || ownedBones.has(bone)) return null;
           if (
             boneIndex > 0 &&
@@ -660,7 +689,7 @@ namespace gdjs {
       }
       for (let index = 0; index < additionalBoneNames.length; index++) {
         const name = additionalBoneNames[index];
-        const bone = this._bonesByCanonicalName.get(name);
+        const bone = this._bonesByCanonicalName!.get(name);
         if (!bone) return null;
         bonesByCanonicalName.set(name, bone);
       }
@@ -742,7 +771,11 @@ namespace gdjs {
       }
       const weight = Math.min(1, Math.max(0, blendWeight));
       let flatIndex = 0;
-      for (let chainIndex = 0; chainIndex < binding.chains.length; chainIndex++) {
+      for (
+        let chainIndex = 0;
+        chainIndex < binding.chains.length;
+        chainIndex++
+      ) {
         const chain = binding.chains[chainIndex];
         for (let boneIndex = 0; boneIndex < chain.length - 1; boneIndex++) {
           const bone = chain[boneIndex];
@@ -755,9 +788,13 @@ namespace gdjs {
           bone.quaternion.copy(this._springBoneAnimationQuaternion);
           this._clonedModelRoot.updateMatrixWorld(true);
           this._springBonePosition.setFromMatrixPosition(bone.matrixWorld);
-          this._springBoneChildPosition.setFromMatrixPosition(child.matrixWorld);
-          this._springBoneCurrentDirection
-            .subVectors(this._springBoneChildPosition, this._springBonePosition);
+          this._springBoneChildPosition.setFromMatrixPosition(
+            child.matrixWorld
+          );
+          this._springBoneCurrentDirection.subVectors(
+            this._springBoneChildPosition,
+            this._springBonePosition
+          );
           const positionOffset = flatIndex * 3;
           const childPositionOffset = (flatIndex + 1) * 3;
           this._springBoneTargetDirection.set(
@@ -877,8 +914,9 @@ namespace gdjs {
       }
       this._action = null;
       this._clonedModelRoot = null;
-      this._bonesByCanonicalName.clear();
-      this._ambiguousBoneNames.clear();
+      this._bonesByCanonicalName = null;
+      this._ambiguousBoneNames = null;
+      this._bonePoseScratch = null;
       this.get3DRendererObject().remove(this._threeObject);
       // SkeletonUtils clones share geometry, material and texture resources
       // with the cached GLTF. Only detach the hierarchy here; disposing shared
@@ -1141,7 +1179,7 @@ namespace gdjs {
       threeObject.rotation.order = 'ZYX';
       const root = THREE_ADDONS.SkeletonUtils.clone(this._originalModel.scene);
       threeObject.add(root);
-      this._rebuildBoneCache(root);
+      this._clonedModelRoot = root;
 
       this._replaceMaterials(threeObject);
 

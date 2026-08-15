@@ -76,6 +76,67 @@ describe('3D model bone attachments', function () {
     },
   });
 
+  /** @returns {any} */
+  const makeAttachmentData = (name, width = 100, height = 100, depth = 100) => {
+    const data = makeModelData(name, width, height, depth);
+    data.behaviors.push({
+      type: 'Model3DBoneAttachment::Model3DBoneAttachmentBehavior',
+      name: 'Model3DBoneAttachment',
+      object3D: 'Base3D',
+    });
+    return data;
+  };
+
+  /** @returns {any} */
+  const makeCubeAttachmentData = (name) => ({
+    name,
+    type: 'Scene3D::Cube3DObject',
+    effects: [],
+    variables: [],
+    behaviors: [
+      {
+        type: 'Scene3D::Base3DBehavior',
+        name: 'Base3D',
+      },
+      {
+        type: 'Model3DBoneAttachment::Model3DBoneAttachmentBehavior',
+        name: 'Model3DBoneAttachment',
+        object3D: 'Base3D',
+      },
+    ],
+    content: {
+      width: 100,
+      height: 100,
+      depth: 100,
+      enableTextureTransparency: false,
+      facesOrientation: 'Y',
+      frontFaceResourceName: '',
+      backFaceResourceName: '',
+      backFaceUpThroughWhichAxisRotation: 'X',
+      leftFaceResourceName: '',
+      rightFaceResourceName: '',
+      topFaceResourceName: '',
+      bottomFaceResourceName: '',
+      frontFaceVisible: true,
+      backFaceVisible: true,
+      leftFaceVisible: true,
+      rightFaceVisible: true,
+      topFaceVisible: true,
+      bottomFaceVisible: true,
+      frontFaceResourceRepeat: false,
+      backFaceResourceRepeat: false,
+      leftFaceResourceRepeat: false,
+      rightFaceResourceRepeat: false,
+      topFaceResourceRepeat: false,
+      bottomFaceResourceRepeat: false,
+      tileScale: 1,
+      materialType: 'StandardWithoutMetalness',
+      tint: '255;255;255',
+      isCastingShadow: false,
+      isReceivingShadow: false,
+    },
+  });
+
   const makeScene = (gltf) => {
     const runtimeGame = gdjs.getPixiRuntimeGame();
     sinon.stub(runtimeGame.getModel3DManager(), 'getModel').returns(gltf);
@@ -91,7 +152,21 @@ describe('3D model bone attachments', function () {
     return model;
   };
 
-  const getBase3D = (object) => object.getBehavior('Base3D');
+  const addCube = (container, data) => {
+    const cube = new gdjs.Cube3DRuntimeObject(container, data);
+    container.addObject(cube);
+    return cube;
+  };
+
+  const getBoneAttachmentBehavior = (object) =>
+    object.getBehavior('Model3DBoneAttachment');
+
+  const getClonedBone = (model, boneName) => {
+    expect(model.hasBone(boneName)).to.be(true);
+    return /** @type {any} */ (model.getRenderer())._bonesByCanonicalName.get(
+      boneName
+    );
+  };
 
   const addCustomObject3D = (container) => {
     const customObject = new gdjs.CustomRuntimeObject3D(container, {
@@ -178,6 +253,86 @@ describe('3D model bone attachments', function () {
     expect(model.hasBone('Bone 4')).to.be(false);
   });
 
+  it('lets an opted-in rigid 3D object follow a model bone', function () {
+    const runtimeScene = makeScene(makeGltf([makeBone('Hand')]));
+    sinon
+      .stub(runtimeScene.getGame().getImageManager(), 'getThreeMaterial')
+      .callsFake(() => new THREE.MeshBasicMaterial());
+    const target = addModel(runtimeScene, makeModelData('Target'));
+    const attachment = addCube(
+      runtimeScene,
+      makeCubeAttachmentData('Attachment')
+    );
+    const behavior = getBoneAttachmentBehavior(attachment);
+
+    expect(attachment.hasBone).to.be(undefined);
+    behavior.attachToModelBone(target, 'Hand');
+
+    expect(behavior.isBoneAttachmentResolved()).to.be(true);
+  });
+
+  it('builds bone indexes and expression scratch only when queried', function () {
+    const runtimeScene = makeScene(makeGltf([makeBone('Hand')]));
+    const modelData = makeModelData('Model');
+    const model = addModel(runtimeScene, modelData);
+    const modelInternals = /** @type {any} */ (model);
+    const renderer = /** @type {any} */ (model.getRenderer());
+    const firstRoot = renderer._clonedModelRoot;
+    sinon.spy(firstRoot, 'traverse');
+
+    expect(model.hasBehavior('Model3DBoneAttachment')).to.be(false);
+    expect(renderer._bonesByCanonicalName).to.be(null);
+    expect(renderer._ambiguousBoneNames).to.be(null);
+    expect(renderer._bonePoseScratch).to.be(null);
+    expect(modelInternals._boneExpressionPose).to.be(null);
+    expect(modelInternals._boneExpressionQuaternion).to.be(null);
+    expect(modelInternals._boneExpressionEuler).to.be(null);
+    expect(firstRoot.traverse.callCount).to.be(0);
+
+    expect(model.hasBone('Hand')).to.be(true);
+    expect(firstRoot.traverse.callCount).to.be(1);
+    expect(renderer._bonesByCanonicalName).not.to.be(null);
+    expect(renderer._bonePoseScratch).to.be(null);
+    expect(model.hasBone('Hand')).to.be(true);
+    expect(model.isBoneNameAmbiguous('Hand')).to.be(false);
+    expect(firstRoot.traverse.callCount).to.be(1);
+
+    model.getBoneX('Hand');
+    const firstPose = modelInternals._boneExpressionPose;
+    const firstRendererScratch = renderer._bonePoseScratch;
+    expect(firstPose).not.to.be(null);
+    expect(firstRendererScratch).not.to.be(null);
+    expect(modelInternals._boneExpressionQuaternion).to.be(null);
+    expect(modelInternals._boneExpressionEuler).to.be(null);
+
+    model.getBoneRotationX('Hand');
+    const firstQuaternion = modelInternals._boneExpressionQuaternion;
+    const firstEuler = modelInternals._boneExpressionEuler;
+    expect(firstQuaternion).not.to.be(null);
+    expect(firstEuler).not.to.be(null);
+    model.getBoneRotationY('Hand');
+    expect(modelInternals._boneExpressionPose).to.be(firstPose);
+    expect(modelInternals._boneExpressionQuaternion).to.be(firstQuaternion);
+    expect(modelInternals._boneExpressionEuler).to.be(firstEuler);
+    expect(renderer._bonePoseScratch).to.be(firstRendererScratch);
+    expect(firstRoot.traverse.callCount).to.be(1);
+
+    renderer._updateModel(0, 0, 0, 100, 100, 100, false);
+    const secondRoot = renderer._clonedModelRoot;
+    sinon.spy(secondRoot, 'traverse');
+    expect(secondRoot).not.to.be(firstRoot);
+    expect(renderer._bonesByCanonicalName).to.be(null);
+    expect(renderer._ambiguousBoneNames).to.be(null);
+    expect(renderer._bonePoseScratch).to.be(null);
+    expect(secondRoot.traverse.callCount).to.be(0);
+
+    model.getBoneX('Hand');
+    expect(secondRoot.traverse.callCount).to.be(1);
+    expect(renderer._bonesByCanonicalName).not.to.be(null);
+    expect(renderer._bonePoseScratch).not.to.be(firstRendererScratch);
+    expect(modelInternals._boneExpressionPose).to.be(firstPose);
+  });
+
   it('binds, captures and generation-checks spring bone chains', function () {
     const rootBone = makeBone('HairRoot');
     const endBone = makeBone('HairEnd');
@@ -196,30 +351,19 @@ describe('3D model bone attachments', function () {
     const positions = new Float32Array(6);
     const quaternions = new Float32Array(8);
     expect(
-      renderer.captureSpringBoneDynamicsPose(
-        binding,
-        positions,
-        quaternions
-      )
+      renderer.captureSpringBoneDynamicsPose(binding, positions, quaternions)
     ).to.be(true);
     const simulated = positions.slice();
     simulated[3] = positions[0] + 1;
     simulated[4] = positions[1];
     simulated[5] = positions[2];
     expect(
-      renderer.applySpringBoneDynamicsPose(
-        binding,
-        simulated,
-        quaternions,
-        1
-      )
+      renderer.applySpringBoneDynamicsPose(binding, simulated, quaternions, 1)
     ).to.be(true);
-    const clonedRoot = /** @type {any} */ (renderer)._bonesByCanonicalName.get(
-      'HairRoot'
-    );
-    expect(clonedRoot.quaternion.angleTo(new THREE.Quaternion())).to.be.greaterThan(
-      0.1
-    );
+    const clonedRoot = getClonedBone(model, 'HairRoot');
+    expect(
+      clonedRoot.quaternion.angleTo(new THREE.Quaternion())
+    ).to.be.greaterThan(0.1);
     expect(
       renderer.restoreSpringBoneDynamicsAnimationPose(binding, quaternions)
     ).to.be(true);
@@ -229,11 +373,7 @@ describe('3D model bone attachments', function () {
 
     renderer._updateModel(0, 0, 0, 100, 100, 100, false);
     expect(
-      renderer.captureSpringBoneDynamicsPose(
-        binding,
-        positions,
-        quaternions
-      )
+      renderer.captureSpringBoneDynamicsPose(binding, positions, quaternions)
     ).to.be(false);
   });
 
@@ -279,19 +419,15 @@ describe('3D model bone attachments', function () {
       )
     ).to.be(true);
 
-    const clonedMarker = /** @type {any} */ (renderer)._clonedModelRoot.getObjectByName(
-      'AuthoredColliderPoint'
-    );
+    const clonedMarker = /** @type {any} */ (
+      renderer
+    )._clonedModelRoot.getObjectByName('AuthoredColliderPoint');
     clonedMarker.updateWorldMatrix(true, false);
     const expectedPoint = new THREE.Vector3().setFromMatrixPosition(
       clonedMarker.matrixWorld
     );
     expectVectorClose(
-      new THREE.Vector3(
-        resolvedPoint[0],
-        resolvedPoint[1],
-        resolvedPoint[2]
-      ),
+      new THREE.Vector3(resolvedPoint[0], resolvedPoint[1], resolvedPoint[2]),
       expectedPoint
     );
   });
@@ -302,7 +438,7 @@ describe('3D model bone attachments', function () {
     const target = addModel(runtimeScene, makeModelData('Target', 240, 90, 35));
     const attachment = addModel(
       runtimeScene,
-      makeModelData('Attachment', 13, 17, 19)
+      makeAttachmentData('Attachment', 13, 17, 19)
     );
     target.setPosition(120, 230);
     target.setZ(340);
@@ -311,9 +447,7 @@ describe('3D model bone attachments', function () {
     target.setAngle(35);
     target.flipX(true);
 
-    const clonedBone = /** @type {any} */ (
-      target.getRenderer()
-    )._bonesByCanonicalName.get('Hand.Socket');
+    const clonedBone = getClonedBone(target, 'Hand.Socket');
     clonedBone.position.set(0.5, 0.75, -0.25);
     clonedBone.rotation.set(0.2, -0.4, 0.6, 'ZYX');
 
@@ -338,7 +472,7 @@ describe('3D model bone attachments', function () {
     const width = attachment.getWidth();
     const height = attachment.getHeight();
     const depth = attachment.getDepth();
-    const behavior = getBase3D(attachment);
+    const behavior = getBoneAttachmentBehavior(attachment);
     behavior.attachToModelBone(target, 'Hand.Socket');
 
     expect(behavior.isAttachedToModelBone()).to.be(true);
@@ -404,8 +538,8 @@ describe('3D model bone attachments', function () {
       { name: 'Equip', source: 'Equip', loop: false },
     ];
     const target = addModel(runtimeScene, targetData);
-    const attachment = addModel(runtimeScene, makeModelData('Attachment'));
-    const behavior = getBase3D(attachment);
+    const attachment = addModel(runtimeScene, makeAttachmentData('Attachment'));
+    const behavior = getBoneAttachmentBehavior(attachment);
     behavior.attachToModelBone(target, 'Hand');
 
     target.getRenderer().updateAnimation(0.5);
@@ -456,8 +590,8 @@ describe('3D model bone attachments', function () {
 
     renderer.updateAnimation(0.5);
 
-    const clonedRootBone = renderer._bonesByCanonicalName.get('Root');
-    const clonedChildBone = renderer._bonesByCanonicalName.get('Hand');
+    const clonedRootBone = getClonedBone(model, 'Root');
+    const clonedChildBone = getClonedBone(model, 'Hand');
     expectVectorClose(clonedRootBone.position, new THREE.Vector3(0, 0, 0));
     expect(clonedRootBone.quaternion.equals(new THREE.Quaternion())).to.be(
       true
@@ -484,7 +618,7 @@ describe('3D model bone attachments', function () {
 
     renderer.updateAnimation(0.5);
 
-    const clonedRootBone = renderer._bonesByCanonicalName.get('Root');
+    const clonedRootBone = getClonedBone(model, 'Root');
     expectVectorClose(clonedRootBone.position, new THREE.Vector3(5, 0, 0));
   });
 
@@ -493,7 +627,7 @@ describe('3D model bone attachments', function () {
     const runtimeScene = makeScene(makeGltf([bone]));
     const targetData = makeModelData('Target', 20, 60, 40);
     targetData.content.rotationX = 90;
-    const attachmentData = makeModelData('Attachment', 20, 60, 40);
+    const attachmentData = makeAttachmentData('Attachment', 20, 60, 40);
     attachmentData.content.rotationX = 90;
     const target = addModel(runtimeScene, targetData);
     const attachment = addModel(runtimeScene, attachmentData);
@@ -503,13 +637,11 @@ describe('3D model bone attachments', function () {
     target.setRotationY(-25);
     target.setAngle(35);
 
-    const clonedBone = /** @type {any} */ (
-      target.getRenderer()
-    )._bonesByCanonicalName.get('Hand');
+    const clonedBone = getClonedBone(target, 'Hand');
     clonedBone.position.set(0.5, 0.75, -0.25);
     clonedBone.rotation.set(0.2, -0.4, 0.6, 'ZYX');
 
-    const behavior = getBase3D(attachment);
+    const behavior = getBoneAttachmentBehavior(attachment);
     behavior.attachToModelBone(target, 'Hand');
     const layerGroup = /** @type {THREE.Object3D} */ (
       runtimeScene.getLayer('').getRenderer().getThreeGroup()
@@ -544,8 +676,8 @@ describe('3D model bone attachments', function () {
   it('suspends on layer mismatch, resumes, detaches transactionally and cleans up target deletion', function () {
     const runtimeScene = makeScene(makeGltf([makeBone('Hand')]));
     const target = addModel(runtimeScene, makeModelData('Target'));
-    const attachment = addModel(runtimeScene, makeModelData('Attachment'));
-    const behavior = getBase3D(attachment);
+    const attachment = addModel(runtimeScene, makeAttachmentData('Attachment'));
+    const behavior = getBoneAttachmentBehavior(attachment);
     behavior.attachToModelBone(target, 'Hand');
     expect(behavior.isBoneAttachmentResolved()).to.be(true);
 
@@ -580,14 +712,72 @@ describe('3D model bone attachments', function () {
     expect(attachment.getX()).to.be(detachedX);
   });
 
+  it('silently freezes while deactivated and resolves immediately on reactivation', function () {
+    const runtimeScene = makeScene(makeGltf([makeBone('Hand')]));
+    const target = addModel(runtimeScene, makeModelData('Target'));
+    const attachment = addModel(runtimeScene, makeAttachmentData('Attachment'));
+    const behavior = getBoneAttachmentBehavior(attachment);
+    const previousOutput = gdjs.Logger.getLoggerOutput();
+    const warnings = [];
+    gdjs.Logger.setLoggerOutput({
+      log: (group, message, type) => {
+        if (group === '3D bone attachments' && type === 'warning') {
+          warnings.push(message);
+        }
+      },
+    });
+
+    try {
+      behavior.attachToModelBone(target, 'Hand');
+      behavior.setBoneAttachmentPositionOffset(3, 4, 5);
+      const frozenX = attachment.getX();
+
+      behavior.activate(false);
+      expect(behavior.isAttachedToModelBone()).to.be(true);
+      expect(behavior.isBoneAttachmentResolved()).to.be(false);
+      expect(behavior.getBoneAttachmentOffsetX()).to.be(3);
+
+      target.setX(target.getX() + 100);
+      gdjs.Model3DBoneAttachmentManager.synchronizeContainer(runtimeScene);
+      expect(attachment.getX()).to.be(frozenX);
+      expect(warnings.length).to.be(0);
+
+      behavior.activate(true);
+      expect(behavior.isAttachedToModelBone()).to.be(true);
+      expect(behavior.isBoneAttachmentResolved()).to.be(true);
+      expect(attachment.getX()).not.to.be(frozenX);
+      expect(warnings.length).to.be(0);
+    } finally {
+      gdjs.Logger.setLoggerOutput(previousOutput);
+    }
+  });
+
+  it('detaches manager state when the behavior is destroyed', function () {
+    const runtimeScene = makeScene(makeGltf([makeBone('Hand')]));
+    const target = addModel(runtimeScene, makeModelData('Target'));
+    const attachment = addModel(runtimeScene, makeAttachmentData('Attachment'));
+    const behavior = getBoneAttachmentBehavior(attachment);
+    behavior.attachToModelBone(target, 'Hand');
+    const lastX = attachment.getX();
+    const manager = gdjs.Model3DBoneAttachmentManager.getForScene(runtimeScene);
+
+    behavior.onDestroy();
+
+    expect(behavior.isAttachedToModelBone()).to.be(false);
+    expect(attachment.getX()).to.be(lastX);
+    expect(
+      /** @type {any} */ (manager)._containerStates.has(runtimeScene)
+    ).to.be(false);
+  });
+
   it('updates chains target-first and rejects self-links and cycles', function () {
     const runtimeScene = makeScene(makeGltf([makeBone('Bone')]));
-    const first = addModel(runtimeScene, makeModelData('First'));
-    const second = addModel(runtimeScene, makeModelData('Second'));
-    const third = addModel(runtimeScene, makeModelData('Third'));
-    const firstBehavior = getBase3D(first);
-    const secondBehavior = getBase3D(second);
-    const thirdBehavior = getBase3D(third);
+    const first = addModel(runtimeScene, makeAttachmentData('First'));
+    const second = addModel(runtimeScene, makeAttachmentData('Second'));
+    const third = addModel(runtimeScene, makeAttachmentData('Third'));
+    const firstBehavior = getBoneAttachmentBehavior(first);
+    const secondBehavior = getBoneAttachmentBehavior(second);
+    const thirdBehavior = getBoneAttachmentBehavior(third);
 
     secondBehavior.attachToModelBone(first, 'Bone');
     thirdBehavior.attachToModelBone(second, 'Bone');
@@ -608,14 +798,14 @@ describe('3D model bone attachments', function () {
     const secondTarget = addModel(runtimeScene, makeModelData('SecondTarget'));
     const firstAttachment = addModel(
       runtimeScene,
-      makeModelData('FirstAttachment')
+      makeAttachmentData('FirstAttachment')
     );
     const secondAttachment = addModel(
       runtimeScene,
-      makeModelData('SecondAttachment')
+      makeAttachmentData('SecondAttachment')
     );
-    const firstBehavior = getBase3D(firstAttachment);
-    const secondBehavior = getBase3D(secondAttachment);
+    const firstBehavior = getBoneAttachmentBehavior(firstAttachment);
+    const secondBehavior = getBoneAttachmentBehavior(secondAttachment);
 
     firstBehavior.attachToModelBone(firstTarget, 'Bone');
     secondBehavior.attachToModelBone(firstTarget, 'Bone');
@@ -638,13 +828,13 @@ describe('3D model bone attachments', function () {
   it('rejects cross-container replacement transactionally', function () {
     const runtimeScene = makeScene(makeGltf([makeBone('Bone')]));
     const otherRuntimeScene = makeScene(makeGltf([makeBone('Bone')]));
-    const attachment = addModel(runtimeScene, makeModelData('Attachment'));
+    const attachment = addModel(runtimeScene, makeAttachmentData('Attachment'));
     const originalTarget = addModel(runtimeScene, makeModelData('Target'));
     const otherTarget = addModel(
       otherRuntimeScene,
       makeModelData('OtherTarget')
     );
-    const behavior = getBase3D(attachment);
+    const behavior = getBoneAttachmentBehavior(attachment);
 
     behavior.attachToModelBone(originalTarget, 'Bone');
     behavior.setBoneAttachmentPositionOffset(5, 6, 7);
@@ -665,8 +855,11 @@ describe('3D model bone attachments', function () {
     const customObject = addCustomObject3D(runtimeScene);
     const childrenContainer = customObject.getChildrenContainer();
     const target = addModel(childrenContainer, makeModelData('Target'));
-    const attachment = addModel(childrenContainer, makeModelData('Attachment'));
-    const behavior = getBase3D(attachment);
+    const attachment = addModel(
+      childrenContainer,
+      makeAttachmentData('Attachment')
+    );
+    const behavior = getBoneAttachmentBehavior(attachment);
 
     behavior.attachToModelBone(target, 'Hand');
     target.setPosition(41, 73);
@@ -693,8 +886,8 @@ describe('3D model bone attachments', function () {
   it('removes attachment entries on child deletion', function () {
     const runtimeScene = makeScene(makeGltf([makeBone('Bone')]));
     const target = addModel(runtimeScene, makeModelData('Target'));
-    const attachment = addModel(runtimeScene, makeModelData('Attachment'));
-    const behavior = getBase3D(attachment);
+    const attachment = addModel(runtimeScene, makeAttachmentData('Attachment'));
+    const behavior = getBoneAttachmentBehavior(attachment);
     behavior.attachToModelBone(target, 'Bone');
     const manager = gdjs.Model3DBoneAttachmentManager.getForScene(runtimeScene);
 
@@ -710,8 +903,8 @@ describe('3D model bone attachments', function () {
   it('rate-limits repeated unresolved warnings until resolution', function () {
     const runtimeScene = makeScene(makeGltf([makeBone('Bone')]));
     const target = addModel(runtimeScene, makeModelData('Target'));
-    const attachment = addModel(runtimeScene, makeModelData('Attachment'));
-    const behavior = getBase3D(attachment);
+    const attachment = addModel(runtimeScene, makeAttachmentData('Attachment'));
+    const behavior = getBoneAttachmentBehavior(attachment);
     const previousOutput = gdjs.Logger.getLoggerOutput();
     const warnings = [];
     gdjs.Logger.setLoggerOutput({
@@ -741,9 +934,9 @@ describe('3D model bone attachments', function () {
 
   it('runs synchronization after object updates and before object pre-render updates', function () {
     const runtimeScene = makeScene(makeGltf([makeBone('Bone')]));
-    const attachment = addModel(runtimeScene, makeModelData('Attachment'));
+    const attachment = addModel(runtimeScene, makeAttachmentData('Attachment'));
     const target = addModel(runtimeScene, makeModelData('Target'));
-    const behavior = getBase3D(attachment);
+    const behavior = getBoneAttachmentBehavior(attachment);
     behavior.attachToModelBone(target, 'Bone');
 
     const originalTargetUpdate = target.update.bind(target);
@@ -767,12 +960,10 @@ describe('3D model bone attachments', function () {
     const modelManager = runtimeScene.getGame().getModel3DManager();
     const targetData = makeModelData('Target');
     const target = addModel(runtimeScene, targetData);
-    const attachment = addModel(runtimeScene, makeModelData('Attachment'));
-    const behavior = getBase3D(attachment);
+    const attachment = addModel(runtimeScene, makeAttachmentData('Attachment'));
+    const behavior = getBoneAttachmentBehavior(attachment);
     behavior.attachToModelBone(target, 'Hand.Socket');
-    const oldBone = /** @type {any} */ (
-      target.getRenderer()
-    )._bonesByCanonicalName.get('Hand.Socket');
+    const oldBone = getClonedBone(target, 'Hand.Socket');
     const targetRenderer = /** @type {any} */ (target.getRenderer());
     const oldRoot = targetRenderer._clonedModelRoot;
     const oldMixer = targetRenderer._animationMixer;
@@ -782,9 +973,7 @@ describe('3D model bone attachments', function () {
     const secondGltf = makeGltf([makeBone('SanitizedAgain', 'Hand.Socket')]);
     /** @type {any} */ (modelManager.getModel).returns(secondGltf);
     target._reloadModel(targetData);
-    const newBone = /** @type {any} */ (
-      target.getRenderer()
-    )._bonesByCanonicalName.get('Hand.Socket');
+    const newBone = getClonedBone(target, 'Hand.Socket');
     expect(newBone).not.to.be(oldBone);
     expect(oldMixer.stopAllAction.calledOnce).to.be(true);
     expect(oldMixer.uncacheRoot.calledOnceWith(oldRoot)).to.be(true);
@@ -809,6 +998,7 @@ describe('3D model bone attachments', function () {
     expect(mixer.uncacheRoot.calledOnceWith(root)).to.be(true);
     expect(root.parent).to.be(null);
     expect(renderer._clonedModelRoot).to.be(null);
-    expect(renderer._bonesByCanonicalName.size).to.be(0);
+    expect(renderer._bonesByCanonicalName).to.be(null);
+    expect(renderer._bonePoseScratch).to.be(null);
   });
 });

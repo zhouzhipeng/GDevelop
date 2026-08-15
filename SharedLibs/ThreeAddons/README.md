@@ -6,6 +6,10 @@ globals - as expected by the engine scripts, which are not ES modules:
   exposing the global `THREE` namespace. Three.js stopped providing such a
   build after r160 (it's now published as ES modules only), so it's built here
   from the `three` npm package.
+- `three-tsl.js`: a mutually exclusive superset of `three.js` containing the
+  reviewed GDevelop TSL adapter, node-material classes and the version-matched
+  WebGL nodes handler. It is generated from the same dependency graph so it
+  never creates a second Three core identity.
 - `ThreeAddons.js`: a bundle of the Three.js "addons" used by GDevelop
   (loaders, controls, post-processing...), exposing the global `THREE_ADDONS`
   namespace. Its sources under `src/examples` are copied from the Three.js

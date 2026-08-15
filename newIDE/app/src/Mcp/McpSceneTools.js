@@ -138,6 +138,8 @@ const createResourceForKind = (kind: string): gdResource | null => {
       return new gd.SpineResource();
     case 'javascript':
       return new gd.JavaScriptResource();
+    case 'tslMaterial':
+      return new gd.TSLMaterialResource();
     default:
       return null;
   }

@@ -104,6 +104,9 @@ ValueTypeMetadata::GetResourceType(const gd::String &parameterType) {
   if (parameterType == "model3DResource") {
     return gd::Resource::model3DType;
   }
+  if (parameterType == "tslMaterialResource") {
+    return gd::Resource::tslMaterialType;
+  }
   if (parameterType == "atlasResource") {
     return gd::Resource::atlasType;
   }

@@ -1523,11 +1523,13 @@ const SETTINGS_FILE_SCHEMAS = Object.freeze({
               'atlas',
               'spine',
               'javascript',
+              'tslMaterial',
               'internal-in-game-editor-only-svg',
             ],
             capabilitiesByValue: {
               image: ['image-2d', 'three-texture'],
               model3D: ['model-3d'],
+              tslMaterial: ['tsl-material'],
             },
             capabilityNotes: {
               'three-texture':
