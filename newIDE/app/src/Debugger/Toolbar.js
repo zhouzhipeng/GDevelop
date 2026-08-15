@@ -61,7 +61,7 @@ export class Toolbar extends React.PureComponent<Props> {
           onClick={onReportIssue}
           disabled={!canReportIssue || isReportingIssue}
           selected={isReportingIssue}
-          tooltip={t`Report an issue`}
+          tooltip={t`Report an issue (R R)`}
         >
           <BugReportIcon />
         </IconButton>

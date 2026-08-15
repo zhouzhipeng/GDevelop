@@ -12,6 +12,7 @@ jest.mock('../UI/IconButton', () => {
         id: props.id,
         onClick: props.onClick,
         disabled: props.disabled,
+        title: props.tooltip,
       },
       props.children
     );
@@ -63,6 +64,7 @@ describe('Debugger Toolbar', () => {
     );
     act(() => reportButton.props.onClick());
     expect(props.onReportIssue).toHaveBeenCalledTimes(1);
+    expect(reportButton.props.title.id).toBe('Report an issue (R R)');
   });
 
   it('disables the report action when reporting is unavailable or active', () => {

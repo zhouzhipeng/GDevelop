@@ -29,6 +29,9 @@ import {
 import { showErrorBox } from '../UI/Messages/MessageBox';
 import InfoBar from '../UI/Messages/InfoBar';
 import { copyTextToClipboard } from '../Utils/Clipboard';
+import isDialogOpen from '../UI/OpenedDialogChecker';
+import isUserTyping from '../KeyboardShortcuts/IsUserTyping';
+import { updateReportIssueShortcut } from './ReportIssueShortcut';
 
 // Mirrors `gdjs.FrameMeasureOutput`: a plain tree (no back-references),
 // as sent by the game's profiler.
@@ -125,6 +128,7 @@ export default class Debugger extends React.Component<Props, State> {
   _debuggerContents: { [DebuggerId]: ?DebuggerContent } = {};
   _debuggerLogs: Map<DebuggerId, LogsManager> = new Map();
   _isUnmounted = false;
+  _lastReportIssueShortcutPressTime: ?number = null;
 
   updateToolbar = () => {
     const {
@@ -191,11 +195,19 @@ export default class Debugger extends React.Component<Props, State> {
   };
 
   componentDidMount() {
+    document.addEventListener(
+      'keydown',
+      this._handleReportIssueShortcutKeyDown
+    );
     this._registerServerCallbacks();
   }
 
   componentWillUnmount() {
     this._isUnmounted = true;
+    document.removeEventListener(
+      'keydown',
+      this._handleReportIssueShortcutKeyDown
+    );
     const { activeIssueReport } = this.state;
     if (activeIssueReport) {
       const { previewDebuggerServer } = this.props;
@@ -407,6 +419,10 @@ export default class Debugger extends React.Component<Props, State> {
       // Filter out unavoidable warnings that do not concern non-engine devs.
       if (isUnavoidableLibraryWarning(data.payload)) return;
       this._getLogsManager(id).addLog(data.payload);
+    } else if (data.command === 'issueReport.shortcut') {
+      if (id === this.state.selectedId) {
+        this._startIssueReportFromShortcut();
+      }
     } else if (data.command === 'issueReport.annotationLimitReached') {
       if (
         this.state.activeIssueReport &&
@@ -575,6 +591,28 @@ export default class Debugger extends React.Component<Props, State> {
         });
       }
     }
+  };
+
+  _startIssueReportFromShortcut = (): void => {
+    if (isUserTyping() || isDialogOpen(document)) return;
+    this._startIssueReport();
+  };
+
+  _handleReportIssueShortcutKeyDown = (event: KeyboardEvent): void => {
+    if (isUserTyping() || isDialogOpen(document)) {
+      this._lastReportIssueShortcutPressTime = null;
+      return;
+    }
+
+    const shortcutUpdate = updateReportIssueShortcut({
+      event,
+      previousPressTime: this._lastReportIssueShortcutPressTime,
+    });
+    this._lastReportIssueShortcutPressTime = shortcutUpdate.nextPressTime;
+    if (!shortcutUpdate.shouldTrigger) return;
+
+    event.preventDefault();
+    this._startIssueReportFromShortcut();
   };
 
   _runIssueAnnotationCommand = async (command: string): Promise<void> => {

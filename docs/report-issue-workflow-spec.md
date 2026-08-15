@@ -101,7 +101,11 @@ The relevant existing paths are:
 ### Availability
 
 The Report issue icon is the first debugger toolbar item, before the profiler
-icon. It uses a bug/report glyph and the tooltip **Report an issue**.
+icon. It uses a bug/report glyph and the tooltip **Report an issue (R R)**.
+Pressing the unmodified **R** key twice within 500 milliseconds performs the
+same action while either the debugger UI or game preview has keyboard focus.
+The sequence is ignored while typing text, while another dialog is open, for
+held-key repeats, and when a modifier key is pressed.
 
 The control is enabled only when:
 
@@ -115,7 +119,8 @@ local preview to report an issue** or **Save this project locally first**.
 
 ### Start
 
-Clicking the icon performs these operations in order:
+Clicking the icon or using the **R R** shortcut performs these operations in
+order:
 
 1. Record whether the selected preview was already paused.
 2. Send a targeted `pause` command and wait for the status response.

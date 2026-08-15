@@ -40,6 +40,7 @@ namespace gdjs {
   const maxIssueAnnotationPoints = 100000;
   const maxIssueScreenshotWidth = 1280;
   const maxIssueScreenshotHeight = 720;
+  const reportIssueShortcutMaxDelay = 500;
 
   /**
    * A preview-only drawing layer used while an issue report is being prepared.
@@ -676,6 +677,7 @@ namespace gdjs {
     _originalConsole = originalConsole;
     _inGameDebugger: gdjs.InGameDebugger;
     private _issueAnnotationLayer: IssueAnnotationLayer | null = null;
+    private _lastReportIssueShortcutPressTime: number | null = null;
 
     _hasLoggedUncaughtException = false;
 
@@ -683,6 +685,11 @@ namespace gdjs {
       this._runtimegame = runtimeGame;
       this._hotReloader = new gdjs.HotReloader(runtimeGame);
       this._inGameDebugger = new gdjs.InGameDebugger(runtimeGame);
+      if (runtimeGame.isPreview()) {
+        window.addEventListener('keydown', (event) => {
+          this._handleReportIssueShortcutKeyDown(event);
+        });
+      }
 
       const redirectJsLog = (
         type: 'info' | 'warning' | 'error',
@@ -737,6 +744,42 @@ namespace gdjs {
           this.log(group, message, type, internal);
         },
       });
+    }
+
+    private _handleReportIssueShortcutKeyDown(event: KeyboardEvent): void {
+      const target = event.target;
+      const isTyping =
+        target instanceof Element &&
+        !!target.closest('textarea, input, [contenteditable="true"]');
+      if (
+        event.code !== 'KeyR' ||
+        event.repeat ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.shiftKey ||
+        isTyping
+      ) {
+        this._lastReportIssueShortcutPressTime = null;
+        return;
+      }
+
+      const previousPressTime = this._lastReportIssueShortcutPressTime;
+      const shouldTrigger =
+        previousPressTime !== null &&
+        event.timeStamp >= previousPressTime &&
+        event.timeStamp - previousPressTime <= reportIssueShortcutMaxDelay;
+      this._lastReportIssueShortcutPressTime = shouldTrigger
+        ? null
+        : event.timeStamp;
+      if (!shouldTrigger) return;
+
+      this._sendMessage(
+        circularSafeStringify({
+          command: 'issueReport.shortcut',
+          payload: {},
+        })
+      );
     }
 
     /**
