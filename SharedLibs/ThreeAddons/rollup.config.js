@@ -9,7 +9,7 @@ const expectedWebGLNodesHandlerSha256 =
   "0e7e1a4161793982748359e910434b304d3bfa518e8feafa6c6fe7f5b50c95a1";
 const expectedThreeVersion = "0.185.1";
 const expectedTSLRuntimeSha256 =
-  "3b692dc6218fccf65db994205231f6108e47c0407abb8b3c5d9a5f5c9344eb2e";
+  "af489c44b5167a2b7755c91b06578ccac2016bdffc892264c4946021806379a8";
 const tslRuntimeBanner =
   "/*! three.js v0.185.1 | Copyright 2010-2026 three.js authors | MIT License */";
 const requiredTSLRuntimeExports = [

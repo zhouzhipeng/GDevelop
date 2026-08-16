@@ -371,6 +371,14 @@ describe('TSL material runtime', function () {
       expect(replaced.code).to.be('TSL-PKG-002');
     });
 
+    it('refuses a TSL bundle without inherited material nodes', function () {
+      const { runtimeScene } = makeRuntimeScene();
+      delete TSLThree.GDevelopTSL.materialColor;
+      const unavailable = gdjs.ensureTSLMaterialBackend(runtimeScene);
+      expect(unavailable.available).to.be(false);
+      expect(unavailable.code).to.be('TSL-PKG-001');
+    });
+
     it('isolates shared GLB materials per object and restores originals on removal', function () {
       const shared = new THREE.MeshStandardMaterial({ color: 0x336699 });
       shared.name = 'Shared';

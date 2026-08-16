@@ -17,6 +17,14 @@ namespace gdjs {
   });
 
   const installedHandlerByRenderer = new WeakMap<Object, Object>();
+  const requiredInheritedMaterialNodes = [
+    'materialColor',
+    'materialOpacity',
+    'materialEmissive',
+    'materialRoughness',
+    'materialMetalness',
+    'materialNormal',
+  ];
 
   type TSLRendererLifecycleListener = {
     onContextLost: () => void;
@@ -185,6 +193,9 @@ namespace gdjs {
       identity.portableProfileVersion !== '1' ||
       identity.backend !== 'webgl2-node-compat' ||
       !three.GDevelopTSL ||
+      requiredInheritedMaterialNodes.some(
+        (name) => !three.GDevelopTSL[name] || !three.GDevelopTSL[name].isNode
+      ) ||
       !three.WebGLNodesHandler ||
       !three.MeshStandardNodeMaterial
     ) {

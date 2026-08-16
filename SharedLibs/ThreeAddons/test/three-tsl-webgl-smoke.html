@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en" data-result="pending">
   <head>
     <meta charset="utf-8" />
@@ -12,17 +12,17 @@
         const root = document.documentElement;
         const finish = (result, detail) => {
           root.dataset.result = result;
-          root.dataset.detail = String(detail || '');
+          root.dataset.detail = String(detail || "");
         };
 
         try {
-          const canvas = document.getElementById('canvas');
-          const context = canvas.getContext('webgl2', {
+          const canvas = document.getElementById("canvas");
+          const context = canvas.getContext("webgl2", {
             alpha: true,
             preserveDrawingBuffer: true,
           });
           if (!context) {
-            finish('failed', 'webgl2-unavailable');
+            finish("failed", "webgl2-unavailable");
             return;
           }
 
@@ -36,7 +36,21 @@
             !(new THREE.MeshBasicNodeMaterial() instanceof THREE.Material) ||
             !(new THREE.MeshPhysicalNodeMaterial() instanceof THREE.Material)
           ) {
-            throw new Error("TSL bundle contains more than one Three core identity.");
+            throw new Error(
+              "TSL bundle contains more than one Three core identity."
+            );
+          }
+          for (const name of [
+            "materialColor",
+            "materialOpacity",
+            "materialEmissive",
+            "materialRoughness",
+            "materialMetalness",
+            "materialNormal",
+          ]) {
+            if (!THREE.GDevelopTSL[name] || !THREE.GDevelopTSL[name].isNode) {
+              throw new Error(`TSL bundle is missing inherited node ${name}.`);
+            }
           }
 
           const scene = new THREE.Scene();
@@ -45,7 +59,11 @@
           const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
           const material = new THREE.MeshStandardNodeMaterial();
           material.color.set(0x00ff00);
-          material.colorNode = THREE.GDevelopTSL.materialColor;
+          material.colorNode = THREE.GDevelopTSL.mix(
+            THREE.GDevelopTSL.materialColor,
+            THREE.GDevelopTSL.color(0xff0000),
+            THREE.GDevelopTSL.float(0.25)
+          );
           material.opacityNode = THREE.GDevelopTSL.materialOpacity;
           material.emissiveNode = THREE.GDevelopTSL.materialEmissive;
           material.roughnessNode = THREE.GDevelopTSL.materialRoughness;
@@ -68,13 +86,13 @@
           );
 
           const passed = pixel[1] > pixel[0] && pixel[1] > pixel[2];
-          finish(passed ? 'passed' : 'failed', Array.from(pixel).join(','));
+          finish(passed ? "passed" : "failed", Array.from(pixel).join(","));
 
           material.dispose();
           geometry.dispose();
           renderer.dispose();
         } catch (error) {
-          finish('failed', error && error.message ? error.message : error);
+          finish("failed", error && error.message ? error.message : error);
         }
       })();
     </script>
