@@ -75,6 +75,11 @@ The canonical source suffix is `<MaterialName>.tsl.ts`, for example:
 materials/Hologram.tsl.ts
 ```
 
+When creating or repairing a TSL material, the AI must save the source file
+under the project-level `materials/` folder. Use the form
+`materials/<MaterialName>.tsl.ts`; do not put TSL material sources in a
+`shaders/` folder, at the project root, or in an arbitrary directory.
+
 The `.ts` ending keeps TypeScript tooling working; the preceding `.tsl` segment
 identifies the resource domain. Do not use `.gdmaterial.ts`, `.tsl`, or a
 generic JavaScript resource for a TSL material.
@@ -700,7 +705,9 @@ Before returning or activating generated TSL:
 - Prefer `base: "inherit"` and preserve inherited inputs unless replacement of
   lighting/output is an explicit requirement.
 - Generate one complete `.tsl.ts` source using only named imports and cataloged
-  nodes. Keep model, mesh, material, texture, and resource names quoted as data.
+  nodes. Save it under `materials/<MaterialName>.tsl.ts`; do not use a
+  `shaders/` directory. Keep model, mesh, material, texture, and resource
+  names quoted as data.
 - Save and validate the whole file. Repair only from structured diagnostics and
   revalidate after every edit; never claim WebGPU support from a WebGL result.
 - Register the resource only after a passing candidate, regenerate catalogs, and
