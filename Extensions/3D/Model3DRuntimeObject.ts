@@ -1,5 +1,5 @@
 namespace gdjs {
-  const model3DBoneLogger = new gdjs.Logger('3D bone attachments');
+  const model3DBoneLogger = new gdjs.Logger('3D model bones');
 
   type Model3DAnimation = {
     name: string;
@@ -84,7 +84,7 @@ namespace gdjs {
    */
   export class Model3DRuntimeObject
     extends gdjs.RuntimeObject3D
-    implements gdjs.Animatable
+    implements gdjs.Animatable, gdjs.ThreeMaterialHost
   {
     _renderer: gdjs.Model3DRuntimeObjectRenderer;
 
@@ -123,17 +123,9 @@ namespace gdjs {
     _isCastingShadow: boolean = true;
     _isReceivingShadow: boolean = true;
     _data: Model3DObjectData;
-    private _boneExpressionPose: gdjs.Model3DBonePose = {
-      positionX: 0,
-      positionY: 0,
-      positionZ: 0,
-      quaternionX: 0,
-      quaternionY: 0,
-      quaternionZ: 0,
-      quaternionW: 1,
-    };
-    private _boneExpressionQuaternion = new THREE.Quaternion();
-    private _boneExpressionEuler = new THREE.Euler(0, 0, 0, 'ZYX');
+    private _boneExpressionPose: gdjs.Model3DBonePose | null = null;
+    private _boneExpressionQuaternion: THREE.Quaternion | null = null;
+    private _boneExpressionEuler: THREE.Euler | null = null;
     private _lastBoneExpressionFailure: string | null = null;
 
     constructor(
@@ -364,6 +356,23 @@ namespace gdjs {
       return this._renderer;
     }
 
+    /** @internal */
+    getThreeMaterialRoot(): THREE.Object3D | null {
+      return this._renderer.getThreeMaterialRoot();
+    }
+
+    /** @internal */
+    getThreeMaterialGeneration(): number {
+      return this._renderer.getThreeMaterialGeneration();
+    }
+
+    /** @internal */
+    addThreeMaterialRootChangedListener(
+      listener: (change: gdjs.ThreeMaterialRootChange) => void
+    ): () => void {
+      return this._renderer.addThreeMaterialRootChangedListener(listener);
+    }
+
     override onDestroyed(): void {
       super.onDestroyed();
       this._renderer.onDestroyed();
@@ -389,13 +398,25 @@ namespace gdjs {
     }
 
     private _getBonePoseForExpression(boneName: string): boolean {
+      let pose = this._boneExpressionPose;
+      if (!pose) {
+        pose = {
+          positionX: 0,
+          positionY: 0,
+          positionZ: 0,
+          quaternionX: 0,
+          quaternionY: 0,
+          quaternionZ: 0,
+          quaternionW: 1,
+        };
+        this._boneExpressionPose = pose;
+      }
       const layerGroup = this.getInstanceContainer()
         .getLayer(this.getLayer())
         .getRenderer()
         .getThreeGroup();
       const isResolved =
-        !!layerGroup &&
-        this.getBonePose(boneName, layerGroup, this._boneExpressionPose);
+        !!layerGroup && this.getBonePose(boneName, layerGroup, pose);
       if (isResolved) {
         this._lastBoneExpressionFailure = null;
         return true;
@@ -417,7 +438,13 @@ namespace gdjs {
 
     private _updateBoneExpressionRotation(boneName: string): boolean {
       if (!this._getBonePoseForExpression(boneName)) return false;
-      const pose = this._boneExpressionPose;
+      const pose = this._boneExpressionPose!;
+      if (!this._boneExpressionQuaternion) {
+        this._boneExpressionQuaternion = new THREE.Quaternion();
+      }
+      if (!this._boneExpressionEuler) {
+        this._boneExpressionEuler = new THREE.Euler(0, 0, 0, 'ZYX');
+      }
       this._boneExpressionQuaternion.set(
         pose.quaternionX,
         pose.quaternionY,
@@ -433,37 +460,37 @@ namespace gdjs {
 
     getBoneX(boneName: string): float {
       return this._getBonePoseForExpression(boneName)
-        ? this._boneExpressionPose.positionX
+        ? this._boneExpressionPose!.positionX
         : 0;
     }
 
     getBoneY(boneName: string): float {
       return this._getBonePoseForExpression(boneName)
-        ? this._boneExpressionPose.positionY
+        ? this._boneExpressionPose!.positionY
         : 0;
     }
 
     getBoneZ(boneName: string): float {
       return this._getBonePoseForExpression(boneName)
-        ? this._boneExpressionPose.positionZ
+        ? this._boneExpressionPose!.positionZ
         : 0;
     }
 
     getBoneRotationX(boneName: string): float {
       return this._updateBoneExpressionRotation(boneName)
-        ? gdjs.toDegrees(this._boneExpressionEuler.x)
+        ? gdjs.toDegrees(this._boneExpressionEuler!.x)
         : 0;
     }
 
     getBoneRotationY(boneName: string): float {
       return this._updateBoneExpressionRotation(boneName)
-        ? gdjs.toDegrees(this._boneExpressionEuler.y)
+        ? gdjs.toDegrees(this._boneExpressionEuler!.y)
         : 0;
     }
 
     getBoneRotationZ(boneName: string): float {
       return this._updateBoneExpressionRotation(boneName)
-        ? gdjs.toDegrees(this._boneExpressionEuler.z)
+        ? gdjs.toDegrees(this._boneExpressionEuler!.z)
         : 0;
     }
 

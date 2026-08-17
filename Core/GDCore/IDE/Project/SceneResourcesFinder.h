@@ -98,6 +98,9 @@ private:
   void ExposeModel3D(gd::String &resourceName) override {
     AddUsedResource(resourceName);
   };
+  void ExposeTSLMaterial(gd::String &resourceName) override {
+    AddUsedResource(resourceName);
+  };
   void ExposeAtlas(gd::String &resourceName) override {
     AddUsedResource(resourceName);
   };

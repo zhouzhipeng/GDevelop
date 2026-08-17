@@ -48,6 +48,9 @@ module.exports = function (config) {
       require('karma-sinon'),
     ],
     client: {
+      args: process.env.KARMA_TEST_GREP
+        ? ['--grep', process.env.KARMA_TEST_GREP]
+        : [],
       mocha: {
         reporter: 'html',
         timeout: 10000, // Give a bit more time for CIs (the default 2s can be too low sometimes, as a real browser is involved).
@@ -220,7 +223,15 @@ module.exports = function (config) {
       './newIDE/app/resources/GDJS/Runtime/Extensions/3D/Base3DBehavior.js',
       './newIDE/app/resources/GDJS/Runtime/Extensions/3D/Model3DRuntimeObject3DRenderer.js',
       './newIDE/app/resources/GDJS/Runtime/Extensions/3D/Model3DRuntimeObject.js',
-      './newIDE/app/resources/GDJS/Runtime/Extensions/3D/Model3DBoneAttachmentManager.js',
+      './newIDE/app/resources/GDJS/Runtime/Extensions/TSLMaterial/TSLMaterialTypes.js',
+      './newIDE/app/resources/GDJS/Runtime/Extensions/TSLMaterial/TSLMaterialRegistry.js',
+      './newIDE/app/resources/GDJS/Runtime/Extensions/TSLMaterial/TSLMaterialRuntimeAdapter.js',
+      './newIDE/app/resources/GDJS/Runtime/Extensions/TSLMaterial/TSLMaterialSystem.js',
+      './newIDE/app/resources/GDJS/Runtime/Extensions/TSLMaterial/TSLMaterialRuntimeTools.js',
+      './newIDE/app/resources/GDJS/Runtime/Extensions/TSLMaterial/TSLMaterialRuntimeBehavior.js',
+      './newIDE/app/resources/GDJS/Runtime/Extensions/Model3DBoneAttachment/Model3DBoneAttachmentTypes.js',
+      './newIDE/app/resources/GDJS/Runtime/Extensions/Model3DBoneAttachment/Model3DBoneAttachmentManager.js',
+      './newIDE/app/resources/GDJS/Runtime/Extensions/Model3DBoneAttachment/Model3DBoneAttachmentRuntimeBehavior.js',
       './newIDE/app/resources/GDJS/Runtime/Extensions/3D/Cube3DRuntimeObject.js',
       './newIDE/app/resources/GDJS/Runtime/Extensions/3D/Cube3DRuntimeObjectPixiRenderer.js',
       './newIDE/app/resources/GDJS/Runtime/Extensions/3D/CustomRuntimeObject3D.js',

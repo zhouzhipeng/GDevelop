@@ -110,6 +110,18 @@ namespace gdjs {
     }
 
     /**
+     * Return whether an image/video resource has a usable loaded PIXI texture.
+     * This does not start I/O and is intended for systems that must expose an
+     * explicit pending-resource state before borrowing a Three.js texture.
+     */
+    isResourceLoaded(resourceName: string): boolean {
+      const resource = this._getImageResource(resourceName);
+      if (!resource) return false;
+      const texture = this._loadedTextures.get(resource);
+      return !!texture && !texture.destroyed && texture.valid;
+    }
+
+    /**
      * Return the PIXI texture associated to the specified resource name.
      * Returns a placeholder texture if not found.
      * @param resourceName The name of the resource
@@ -272,7 +284,7 @@ namespace gdjs {
             ? 'use-credentials'
             : 'anonymous',
         },
-      }).on('error', error => {
+      }).on('error', (error) => {
         logFileLoadingError(file, error);
       });
       if (!texture) {
@@ -744,7 +756,7 @@ namespace gdjs {
                 applyTextureSettings(texture, resource);
                 resolve();
               })
-              .on('error', error => {
+              .on('error', (error) => {
                 reject(error);
               });
           });
@@ -973,9 +985,10 @@ namespace gdjs {
 
       this._loadedThreeMaterials.dispose(resourceName);
 
-      const cubeTextureKeys = this._loadedThreeCubeTextureKeysByResourceName.getValuesFor(
-        resourceName
-      );
+      const cubeTextureKeys =
+        this._loadedThreeCubeTextureKeysByResourceName.getValuesFor(
+          resourceName
+        );
       if (cubeTextureKeys) {
         for (const cubeTextureKey of cubeTextureKeys) {
           const cubeTexture = this._loadedThreeCubeTextures.get(cubeTextureKey);

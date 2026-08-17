@@ -260,6 +260,7 @@ class GD_CORE_API ValueTypeMetadata {
              parameterType == "tilemapResource" ||
              parameterType == "tilesetResource" ||
              parameterType == "model3DResource" ||
+             parameterType == "tslMaterialResource" ||
              parameterType == "atlasResource" ||
              parameterType == "spineResource" ||
              // Deprecated, old parameter types:

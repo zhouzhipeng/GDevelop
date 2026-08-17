@@ -78,6 +78,18 @@ const jsExtensions = [
     objectsRenderingServiceModules: {},
   },
   {
+    name: 'Model3DBoneAttachment',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Model3DBoneAttachment/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'TSLMaterial',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/TSLMaterial/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
     name: 'ExampleJsExtension',
     // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/ExampleJsExtension/JsExtension.js'),

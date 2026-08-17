@@ -4,7 +4,7 @@ namespace gdjs {
   type BoneAttachmentOwner = gdjs.RuntimeObject & gdjs.Base3DHandler;
 
   type BoneAttachmentRecord = {
-    behavior: gdjs.Base3DBehavior;
+    behavior: gdjs.Model3DBoneAttachmentRuntimeBehavior;
     owner: BoneAttachmentOwner;
     state: gdjs.Model3DBoneAttachment;
     container: gdjs.RuntimeInstanceContainer;
@@ -14,7 +14,10 @@ namespace gdjs {
   };
 
   type ContainerAttachmentState = {
-    records: Map<gdjs.Base3DBehavior, BoneAttachmentRecord>;
+    records: Map<
+      gdjs.Model3DBoneAttachmentRuntimeBehavior,
+      BoneAttachmentRecord
+    >;
     recordsByOwner: Map<gdjs.RuntimeObject, BoneAttachmentRecord>;
     sortedRecords: BoneAttachmentRecord[];
     isSortDirty: boolean;
@@ -37,10 +40,13 @@ namespace gdjs {
       ContainerAttachmentState
     >();
     private _recordsByBehavior = new WeakMap<
-      gdjs.Base3DBehavior,
+      gdjs.Model3DBoneAttachmentRuntimeBehavior,
       BoneAttachmentRecord
     >();
-    private _initialFailures = new WeakMap<gdjs.Base3DBehavior, string>();
+    private _initialFailures = new WeakMap<
+      gdjs.Model3DBoneAttachmentRuntimeBehavior,
+      string
+    >();
 
     private _boneQuaternion = new THREE.Quaternion();
     private _offsetQuaternion = new THREE.Quaternion();
@@ -78,7 +84,7 @@ namespace gdjs {
     }
 
     attach(
-      behavior: gdjs.Base3DBehavior,
+      behavior: gdjs.Model3DBoneAttachmentRuntimeBehavior,
       target: gdjs.Model3DRuntimeObject | null | undefined,
       boneName: string
     ): boolean {
@@ -176,12 +182,14 @@ namespace gdjs {
       return true;
     }
 
-    detach(behavior: gdjs.Base3DBehavior): void {
+    detach(behavior: gdjs.Model3DBoneAttachmentRuntimeBehavior): void {
       const record = this._findRecord(behavior);
       if (record) this._removeRecord(record, true);
     }
 
-    synchronizeBehavior(behavior: gdjs.Base3DBehavior): void {
+    synchronizeBehavior(
+      behavior: gdjs.Model3DBoneAttachmentRuntimeBehavior
+    ): void {
       const record = this._findRecord(behavior);
       if (record) this._synchronizeRecord(record);
     }
@@ -215,7 +223,7 @@ namespace gdjs {
     }
 
     private _findRecord(
-      behavior: gdjs.Base3DBehavior
+      behavior: gdjs.Model3DBoneAttachmentRuntimeBehavior
     ): BoneAttachmentRecord | null {
       return this._recordsByBehavior.get(behavior) || null;
     }
@@ -253,7 +261,7 @@ namespace gdjs {
     }
 
     private _validateNewAttachment(
-      behavior: gdjs.Base3DBehavior,
+      behavior: gdjs.Model3DBoneAttachmentRuntimeBehavior,
       owner: BoneAttachmentOwner,
       target: gdjs.Model3DRuntimeObject | null | undefined,
       boneName: string,
@@ -312,7 +320,7 @@ namespace gdjs {
     }
 
     private _wouldCreateCycle(
-      behavior: gdjs.Base3DBehavior,
+      behavior: gdjs.Model3DBoneAttachmentRuntimeBehavior,
       owner: gdjs.RuntimeObject,
       target: gdjs.RuntimeObject,
       container: gdjs.RuntimeInstanceContainer
@@ -395,6 +403,11 @@ namespace gdjs {
     }
 
     private _synchronizeRecord(record: BoneAttachmentRecord): void {
+      if (!record.behavior.activated()) {
+        record.state.isResolved = false;
+        record.state.lastFailure = null;
+        return;
+      }
       const failure = this._getSynchronizationFailure(record);
       if (failure) {
         this._setFailure(record, failure);
@@ -459,7 +472,7 @@ namespace gdjs {
 
     private _getSynchronizationFailure(
       record: BoneAttachmentRecord
-    ): gdjs.BoneAttachmentFailure | null {
+    ): gdjs.Model3DBoneAttachmentFailure | null {
       const owner = record.owner;
       const target = record.state.target;
       if (
@@ -507,7 +520,7 @@ namespace gdjs {
 
     private _setFailure(
       record: BoneAttachmentRecord,
-      failure: gdjs.BoneAttachmentFailure
+      failure: gdjs.Model3DBoneAttachmentFailure
     ): void {
       const state = record.state;
       state.isResolved = false;
@@ -519,7 +532,7 @@ namespace gdjs {
     }
 
     private _warnInitialFailure(
-      behavior: gdjs.Base3DBehavior,
+      behavior: gdjs.Model3DBoneAttachmentRuntimeBehavior,
       owner: gdjs.RuntimeObject,
       target: gdjs.RuntimeObject | null | undefined,
       boneName: string,

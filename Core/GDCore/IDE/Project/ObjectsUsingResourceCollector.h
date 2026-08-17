@@ -82,6 +82,9 @@ public:
   virtual void ExposeModel3D(gd::String& otherResourceName) override {
     MatchResourceName(otherResourceName);
   };
+  virtual void ExposeTSLMaterial(gd::String& otherResourceName) override {
+    MatchResourceName(otherResourceName);
+  };
   virtual void ExposeAtlas(gd::String& otherResourceName) override {
     MatchResourceName(otherResourceName);
   };

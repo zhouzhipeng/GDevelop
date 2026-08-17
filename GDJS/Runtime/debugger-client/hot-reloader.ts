@@ -25,6 +25,14 @@ namespace gdjs {
     shouldReloadResources: boolean;
     projectData: ProjectData;
     runtimeGameOptions: RuntimeGameOptions;
+    tslMaterialRegistry?: {
+      path: string;
+      bundleSha256: string;
+      resources: Array<{
+        resourceName: string;
+        sourceSha256: string;
+      }>;
+    };
   };
 
   const cloneHotReloadOptions = (
@@ -40,6 +48,8 @@ namespace gdjs {
       shouldGenerateScenesEventsCode:
         options.runtimeGameOptions.shouldGenerateScenesEventsCode,
       newScriptFilesCount: options.runtimeGameOptions.scriptFiles?.length,
+      tslMaterialRegistrySha256:
+        options.tslMaterialRegistry?.bundleSha256 || null,
     });
   };
 
@@ -55,6 +65,8 @@ namespace gdjs {
     _alreadyLoadedScriptFiles: Record<string, boolean> = {};
     _existingScriptFiles: RuntimeGameOptionsScriptFile[] | null = null;
     _isHotReloadingSince: number | null = null;
+    _lastTSLMaterialRegistrySha256: string | null = null;
+    _tslMaterialRegistryScriptElement: HTMLScriptElement | null = null;
 
     _hotReloadsQueue: Array<{
       hotReloadId: number;
@@ -190,6 +202,140 @@ namespace gdjs {
       });
     }
 
+    private _reloadTSLMaterialRegistry(
+      descriptor: NonNullable<HotReloadOptions['tslMaterialRegistry']>
+    ): Promise<void> {
+      if (descriptor.bundleSha256 === this._lastTSLMaterialRegistrySha256) {
+        this._logs.push({
+          kind: 'info',
+          message: 'The validated TSL material registry is already active.',
+        });
+        return Promise.resolve();
+      }
+      if (
+        descriptor.path !== 'tsl-material-registry.js' ||
+        !/^[a-f0-9]{64}$/.test(descriptor.bundleSha256) ||
+        !Array.isArray(descriptor.resources) ||
+        descriptor.resources.some(
+          (resource) =>
+            !resource ||
+            typeof resource.resourceName !== 'string' ||
+            !resource.resourceName ||
+            !/^[a-f0-9]{64}$/.test(resource.sourceSha256)
+        ) ||
+        new Set(descriptor.resources.map((resource) => resource.resourceName))
+          .size !== descriptor.resources.length
+      ) {
+        return Promise.reject(
+          new Error(
+            'The TSL material hot-reload descriptor is invalid (TSL-PKG-001).'
+          )
+        );
+      }
+      if (typeof document === 'undefined' || !gdjs.__tslMaterialRegistry) {
+        return Promise.reject(
+          new Error('The TSL material runtime is unavailable (TSL-RUN-001).')
+        );
+      }
+      const head = document.head || document.getElementsByTagName('head')[0];
+      if (!head) {
+        return Promise.reject(
+          new Error('No head element is available for TSL material hot reload.')
+        );
+      }
+
+      gdjs.__tslMaterialRegistry.abortBundle();
+      try {
+        gdjs.__tslMaterialRegistry.expectNextBundle(descriptor.resources);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      const previousReceipt = gdjs.__tslMaterialBundleReceipt;
+      gdjs.__tslMaterialBundleReceipt = undefined;
+
+      return new Promise((resolve, reject) => {
+        const scriptElement = document.createElement('script');
+        scriptElement.async = false;
+        scriptElement.src = `${descriptor.path}?tslBundle=${descriptor.bundleSha256}`;
+        const fail = (error: Error) => {
+          gdjs.__tslMaterialRegistry.abortBundle();
+          gdjs.__tslMaterialBundleReceipt = previousReceipt;
+          if (scriptElement.parentNode) {
+            scriptElement.parentNode.removeChild(scriptElement);
+          }
+          reject(error);
+        };
+        scriptElement.onerror = () => {
+          fail(
+            new Error(
+              'Unable to load the validated TSL material registry (TSL-PKG-001).'
+            )
+          );
+        };
+        scriptElement.onload = () => {
+          const receipt = gdjs.__tslMaterialBundleReceipt;
+          if (
+            gdjs.__tslMaterialRegistry.isBundleRegistrationPending() ||
+            !receipt ||
+            receipt.definitionCount !== descriptor.resources.length ||
+            receipt.receipts.length !== descriptor.resources.length
+          ) {
+            fail(
+              new Error(
+                'The loaded TSL material registry has an invalid receipt (TSL-PKG-001).'
+              )
+            );
+            return;
+          }
+          const receiptByResourceName = new Map<string, any>();
+          receipt.receipts.forEach((definitionReceipt: any) => {
+            receiptByResourceName.set(
+              definitionReceipt.resourceName,
+              definitionReceipt
+            );
+          });
+          const hasMismatch = descriptor.resources.some((resource) => {
+            const definition = gdjs.__tslMaterialRegistry.get(
+              resource.resourceName
+            );
+            const definitionReceipt = receiptByResourceName.get(
+              resource.resourceName
+            );
+            return !(
+              definition &&
+              definitionReceipt &&
+              definition.sourceHash === resource.sourceSha256 &&
+              definitionReceipt.sourceSha256 === resource.sourceSha256
+            );
+          });
+          if (hasMismatch) {
+            fail(
+              new Error(
+                'The loaded TSL material registry does not match the preview descriptor (TSL-PKG-001).'
+              )
+            );
+            return;
+          }
+          if (
+            this._tslMaterialRegistryScriptElement &&
+            this._tslMaterialRegistryScriptElement.parentNode
+          ) {
+            this._tslMaterialRegistryScriptElement.parentNode.removeChild(
+              this._tslMaterialRegistryScriptElement
+            );
+          }
+          this._tslMaterialRegistryScriptElement = scriptElement;
+          this._lastTSLMaterialRegistrySha256 = descriptor.bundleSha256;
+          this._logs.push({
+            kind: 'info',
+            message: `Activated ${descriptor.resources.length} validated TSL material definition(s).`,
+          });
+          resolve();
+        };
+        head.appendChild(scriptElement);
+      });
+    }
+
     /**
      * Trigger a hot-reload of the game.
      * The hot-reload is added to a queue and processed in order.
@@ -235,6 +381,7 @@ namespace gdjs {
         shouldReloadResources,
         projectData: newProjectData,
         runtimeGameOptions: newRuntimeGameOptions,
+        tslMaterialRegistry,
       } = options;
 
       logger.info(
@@ -281,6 +428,9 @@ namespace gdjs {
       // extensions (which is fine) and registering updated behaviors (which will
       // need to be re-instantiated in runtime objects).
       try {
+        if (tslMaterialRegistry) {
+          await this._reloadTSLMaterialRegistry(tslMaterialRegistry);
+        }
         if (shouldReloadLibraries) {
           await this.reloadScriptFiles(
             newProjectData,

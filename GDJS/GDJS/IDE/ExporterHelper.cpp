@@ -31,6 +31,7 @@
 #include "GDCore/IDE/Events/UsedExtensionsFinder.h"
 #include "GDCore/IDE/ExportedDependencyResolver.h"
 #include "GDCore/IDE/Project/ProjectResourcesCopier.h"
+#include "GDCore/IDE/Project/ResourcesInUseHelper.h"
 #include "GDCore/IDE/Project/ResourcesMergingHelper.h"
 #include "GDCore/IDE/Project/SceneResourcesFinder.h"
 #include "GDCore/IDE/ProjectStripper.h"
@@ -154,6 +155,12 @@ ExporterHelper::ExporterHelper(gd::AbstractFileSystem &fileSystem,
                                gd::String codeOutputDir_)
     : fs(fileSystem), gdjsRoot(gdjsRoot_), codeOutputDir(codeOutputDir_) {};
 
+bool ExporterHelper::ProjectUsesTSLMaterials(gd::Project &project) {
+  gd::ResourcesInUseHelper resourcesInUse(project.GetResourcesManager());
+  gd::ResourceExposer::ExposeWholeProjectResources(project, resourcesInUse);
+  return !resourcesInUse.GetAllTSLMaterials().empty();
+}
+
 bool ExporterHelper::ExportProjectForPixiPreview(
     const PreviewExportOptions &options,
     std::vector<gd::String> &includesFiles) {
@@ -179,6 +186,8 @@ bool ExporterHelper::ExportProjectForPixiPreview(
   // that destroys the AST in cache.
   gd::Project exportedProject = options.project;
   const gd::Project &immutableProject = options.project;
+  const bool projectUsesTSLMaterials =
+      ProjectUsesTSLMaterials(exportedProject);
   previousTime = LogTimeSpent("Project cloning", previousTime);
 
   if (options.isInGameEdition) {
@@ -226,6 +235,8 @@ bool ExporterHelper::ExportProjectForPixiPreview(
     AddLibsInclude(/*pixiRenderers=*/true,
                   /*pixiInThreeRenderers=*/
                   usedExtensionsResult.Has3DObjects(),
+                  /*includeTSLMaterialRuntime=*/
+                  projectUsesTSLMaterials,
                   /*isInGameEdition=*/
                   options.isInGameEdition,
                   /*includeWebsocketDebuggerClient=*/
@@ -244,6 +255,13 @@ bool ExporterHelper::ExportProjectForPixiPreview(
     // Export files for free function, object and behaviors
     for (const auto &includeFile : usedExtensionsResult.GetUsedIncludeFiles()) {
       InsertUnique(includesFiles, includeFile);
+    }
+    if (projectUsesTSLMaterials) {
+      // The editor writes this validated artifact after the synchronous C++
+      // export returns. Keep it after the extension runtime and before event
+      // code in the generated index.
+      InsertUnique(includesFiles,
+                   options.exportPath + "/tsl-material-registry.js");
     }
     for (const auto &requiredFile : usedExtensionsResult.GetUsedRequiredFiles()) {
       InsertUnique(resourcesFiles, requiredFile);
@@ -1204,7 +1222,10 @@ bool ExporterHelper::CompleteIndexFile(
     // including it in the list of scripts.
     gd::String absoluteFilename = scriptSrc;
     fs.MakeAbsolute(absoluteFilename, exportDir);
-    if (!fs.FileExists(absoluteFilename)) {
+    const bool isPendingTSLMaterialRegistry =
+        fs.FileNameFrom(include) == "tsl-material-registry.js";
+    if (!fs.FileExists(absoluteFilename) &&
+        !isPendingTSLMaterialRegistry) {
       std::cout << "Warning: Unable to find " << absoluteFilename << "."
                 << std::endl;
       continue;
@@ -1224,6 +1245,7 @@ bool ExporterHelper::CompleteIndexFile(
 
 void ExporterHelper::AddLibsInclude(bool pixiRenderers,
                                     bool pixiInThreeRenderers,
+                                    bool includeTSLMaterialRuntime,
                                     bool isInGameEdition,
                                     bool includeWebsocketDebuggerClient,
                                     bool includeWindowMessageDebuggerClient,
@@ -1320,8 +1342,10 @@ void ExporterHelper::AddLibsInclude(bool pixiRenderers,
     InsertUnique(includesFiles, "debugger-client/minimal-debugger-client.js");
   }
 
-  if (pixiInThreeRenderers || isInGameEdition) {
-    InsertUnique(includesFiles, "pixi-renderers/three.js");
+  if (pixiInThreeRenderers || includeTSLMaterialRuntime || isInGameEdition) {
+    InsertUnique(includesFiles,
+                 includeTSLMaterialRuntime ? "pixi-renderers/three-tsl.js"
+                                           : "pixi-renderers/three.js");
     InsertUnique(includesFiles, "pixi-renderers/ThreeAddons.js");
     InsertUnique(includesFiles, "pixi-renderers/draco/gltf/draco_decoder.wasm");
     InsertUnique(includesFiles,
@@ -1333,6 +1357,20 @@ void ExporterHelper::AddLibsInclude(bool pixiRenderers,
     InsertUnique(includesFiles, "Extensions/3D/CustomRuntimeObject3D.js");
     InsertUnique(includesFiles,
                  "Extensions/3D/CustomRuntimeObject3DRenderer.js");
+  }
+  if (includeTSLMaterialRuntime) {
+    InsertUnique(includesFiles,
+                 "Extensions/TSLMaterial/TSLMaterialTypes.js");
+    InsertUnique(includesFiles,
+                 "Extensions/TSLMaterial/TSLMaterialRegistry.js");
+    InsertUnique(includesFiles,
+                 "Extensions/TSLMaterial/TSLMaterialRuntimeAdapter.js");
+    InsertUnique(includesFiles,
+                 "Extensions/TSLMaterial/TSLMaterialSystem.js");
+    InsertUnique(includesFiles,
+                 "Extensions/TSLMaterial/TSLMaterialRuntimeTools.js");
+    InsertUnique(includesFiles,
+                 "Extensions/TSLMaterial/TSLMaterialRuntimeBehavior.js");
   }
   if (pixiRenderers || isInGameEdition) {
     InsertUnique(includesFiles, "pixi-renderers/pixi.js");
@@ -1508,6 +1546,12 @@ bool ExporterHelper::ExportIncludesAndLibs(
     gd::String exportDir,
     bool exportSourceMaps) {
   for (auto &include : includesFiles) {
+    if (fs.FileNameFrom(include) == "tsl-material-registry.js" &&
+        !fs.FileExists(include)) {
+      // This validated editor-generated artifact is written immediately after
+      // the synchronous exporter returns. The index entry is already emitted.
+      continue;
+    }
     if (!fs.IsAbsolute(include)) {
       // By convention, an include file that is relative is relative to
       // the "<GDJS Root>/Runtime" folder, and will have the same relative
@@ -1545,6 +1589,17 @@ bool ExporterHelper::ExportIncludesAndLibs(
 void ExporterHelper::ExportResources(gd::AbstractFileSystem &fs,
                                      gd::Project &project,
                                      gd::String exportDir) {
+  // TSL source is authoritative editor input, not a runtime asset. Generated
+  // registry code is written separately by the editor compiler service.
+  auto &resourcesManager = project.GetResourcesManager();
+  const auto resourceNames = resourcesManager.GetAllResourceNames();
+  for (const auto &resourceName : resourceNames) {
+    if (resourcesManager.HasResource(resourceName) &&
+        resourcesManager.GetResource(resourceName).GetKind() ==
+            gd::Resource::tslMaterialType) {
+      resourcesManager.RemoveResource(resourceName);
+    }
+  }
   gd::ProjectResourcesCopier::CopyAllResourcesTo(
       project, fs, exportDir, true, false, false);
 }

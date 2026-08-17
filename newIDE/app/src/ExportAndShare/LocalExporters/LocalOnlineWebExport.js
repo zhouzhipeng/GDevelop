@@ -21,6 +21,7 @@ import {
 import { ExplanationHeader } from '../GenericExporters/OnlineWebExport';
 import { downloadUrlsToLocalFiles } from '../../Utils/LocalFileDownloader';
 import OnlineWebExportFlow from '../GenericExporters/OnlineWebExport/OnlineWebExportFlow';
+import { exportWholePixiProjectWithTSL } from '../../TSLMaterial/TSLMaterialProjectCompiler';
 
 const path = optionalRequire('path');
 const os = optionalRequire('os');
@@ -117,9 +118,19 @@ export const localOnlineWebExportPipeline: ExportPipeline<
         fallbackAuthor.username
       );
     }
-    const exportSucceeded = exporter.exportWholePixiProject(exportOptions);
-    exportOptions.delete();
-    exporter.delete();
+    let exportSucceeded = false;
+    try {
+      exportSucceeded = await exportWholePixiProjectWithTSL({
+        project: context.project,
+        exporter,
+        exportOptions,
+        fileSystem: localFileSystem,
+        outputDirectory: temporaryOutputDir,
+      });
+    } finally {
+      exportOptions.delete();
+      exporter.delete();
+    }
 
     if (!exportSucceeded) {
       throw new Error(

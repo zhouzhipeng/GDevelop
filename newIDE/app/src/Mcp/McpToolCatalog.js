@@ -130,6 +130,551 @@ const inspectGlbModelSchema = {
   additionalProperties: false,
 };
 
+const validateTSLFileSchema = {
+  type: 'object',
+  properties: {
+    file_path: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 4096,
+      description:
+        'Scheme-free path to exactly one .tsl.ts source, relative to the open project root.',
+    },
+    target: {
+      type: 'string',
+      enum: ['current', 'webgl2-node-compat', 'webgpu'],
+      default: 'current',
+    },
+    validation_level: {
+      type: 'string',
+      enum: ['static', 'graph', 'backend', 'model'],
+      default: 'backend',
+    },
+    model_file_path: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 4096,
+      description:
+        'Required only for model validation: a contained project-relative .glb file.',
+    },
+    fixture_base_material: {
+      type: 'string',
+      enum: ['basic', 'standard', 'physical'],
+      default: 'standard',
+    },
+    geometry_features: {
+      type: 'array',
+      items: {
+        type: 'string',
+        enum: ['skinning', 'morph_targets', 'material_array', 'instancing'],
+      },
+      uniqueItems: true,
+      maxItems: 4,
+      default: [],
+    },
+    timeout_ms: {
+      type: 'integer',
+      minimum: 1000,
+      maximum: 120000,
+      default: 30000,
+    },
+    diagnostic_limit: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 500,
+      default: 100,
+    },
+  },
+  required: ['file_path'],
+  additionalProperties: false,
+};
+
+const getTSLAuthoringContextSchema = {
+  type: 'object',
+  properties: {
+    concepts: {
+      type: 'array',
+      items: { type: 'string', minLength: 1, maxLength: 80 },
+      uniqueItems: true,
+      maxItems: 12,
+      description:
+        'Optional material concepts such as tint, fresnel, dissolve, texture, vertex wave, transparency, or unlit.',
+    },
+    include_declarations: { type: 'boolean', default: true },
+    example_limit: { type: 'integer', minimum: 0, maximum: 6, default: 3 },
+  },
+  additionalProperties: false,
+};
+
+const inspectModelMaterialsSchema = {
+  type: 'object',
+  properties: {
+    model_resource_name: {
+      type: 'string',
+      minLength: 1,
+      description: 'Exact name of one registered model3D resource.',
+    },
+    file_path: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 4096,
+      description:
+        'Alternatively, a contained project-relative .glb file path.',
+    },
+  },
+  additionalProperties: false,
+};
+
+const renderTSLMaterialPreviewSchema = {
+  type: 'object',
+  properties: {
+    file_path: validateTSLFileSchema.properties.file_path,
+    model_file_path: validateTSLFileSchema.properties.model_file_path,
+    fixture: {
+      type: 'string',
+      enum: ['sphere', 'plane', 'skinned'],
+      default: 'sphere',
+    },
+    fixture_base_material:
+      validateTSLFileSchema.properties.fixture_base_material,
+    background: {
+      type: 'string',
+      enum: ['dark', 'light', 'transparent'],
+      default: 'dark',
+    },
+    light: {
+      type: 'string',
+      enum: ['studio', 'soft', 'bright'],
+      default: 'studio',
+    },
+    parameter_values: {
+      type: 'object',
+      additionalProperties: true,
+      description:
+        'Literal parameter values keyed by the extracted parameter name.',
+    },
+    timeout_ms: validateTSLFileSchema.properties.timeout_ms,
+  },
+  required: ['file_path'],
+  additionalProperties: false,
+};
+
+const nullableStringSchema = {
+  oneOf: [{ type: 'string' }, { type: 'null' }],
+};
+
+const validateTSLFileOutputSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', enum: [true] },
+    valid: { type: 'boolean' },
+    activation_ready: { type: 'boolean' },
+    source_mode: { type: 'string', enum: ['disk'] },
+    file_path: { type: 'string' },
+    registered_resource_name: nullableStringSchema,
+    editor_memory_may_differ: { type: 'boolean' },
+    source_sha256: { type: 'string' },
+    requested_target: {
+      type: 'string',
+      enum: ['current', 'webgl2-node-compat', 'webgpu'],
+    },
+    target: {
+      type: 'string',
+      enum: ['webgl2-node-compat', 'webgpu'],
+    },
+    validation_level: {
+      type: 'string',
+      enum: ['static', 'graph', 'backend', 'model'],
+    },
+    completed_stages: {
+      type: 'array',
+      items: {
+        type: 'string',
+        enum: [
+          'parse',
+          'policy',
+          'types',
+          'manifest',
+          'graph',
+          'nodeBuilder',
+          'gpu',
+          'model',
+        ],
+      },
+    },
+    structurally_valid: { type: 'boolean' },
+    graph_validated: { type: 'boolean' },
+    node_builder_validated: { type: 'boolean' },
+    gpu_validated: { type: 'boolean' },
+    model_validated: { type: 'boolean' },
+    validation_id: { type: 'string' },
+    catalogs: {
+      type: 'object',
+      properties: {
+        source: { type: 'string', enum: ['disk', 'memory'] },
+        project_api_sha256: { type: 'string' },
+        tsl_api_sha256: { type: 'string' },
+        tsl_catalog_sha256: { type: 'string' },
+        authoring_api_version: { type: 'string' },
+        portable_profile_version: { type: 'string' },
+        three_revision: { type: 'string' },
+      },
+      required: [
+        'source',
+        'project_api_sha256',
+        'tsl_api_sha256',
+        'tsl_catalog_sha256',
+        'authoring_api_version',
+        'portable_profile_version',
+        'three_revision',
+      ],
+      additionalProperties: false,
+    },
+    fixture: {
+      type: 'object',
+      properties: {
+        base_material: {
+          type: 'string',
+          enum: ['basic', 'standard', 'physical'],
+        },
+        geometry_features: { type: 'array', items: { type: 'string' } },
+        model_file_path: nullableStringSchema,
+        model_sha256: nullableStringSchema,
+      },
+      required: [
+        'base_material',
+        'geometry_features',
+        'model_file_path',
+        'model_sha256',
+      ],
+      additionalProperties: false,
+    },
+    manifest: { type: 'object', additionalProperties: true },
+    capabilities: { type: 'array', items: { type: 'string' } },
+    metrics: { type: 'object', additionalProperties: true },
+    diagnostics: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          code: { type: 'string' },
+          severity: {
+            type: 'string',
+            enum: ['error', 'warning', 'info'],
+          },
+          stage: { type: 'string' },
+          message: { type: 'string' },
+          file_path: { type: 'string' },
+          line: { type: 'integer', minimum: 1 },
+          column: { type: 'integer', minimum: 1 },
+          end_line: { type: 'integer', minimum: 1 },
+          end_column: { type: 'integer', minimum: 1 },
+          source_excerpt: { type: 'string' },
+          suggestion: { type: 'string' },
+        },
+        required: ['code', 'severity', 'stage', 'message', 'file_path'],
+        additionalProperties: false,
+      },
+    },
+    diagnostics_truncated: { type: 'boolean' },
+    next_action: { type: 'string' },
+  },
+  required: [
+    'success',
+    'valid',
+    'activation_ready',
+    'source_mode',
+    'file_path',
+    'registered_resource_name',
+    'editor_memory_may_differ',
+    'source_sha256',
+    'requested_target',
+    'target',
+    'validation_level',
+    'completed_stages',
+    'structurally_valid',
+    'graph_validated',
+    'node_builder_validated',
+    'gpu_validated',
+    'model_validated',
+    'validation_id',
+    'catalogs',
+    'fixture',
+    'metrics',
+    'diagnostics',
+    'diagnostics_truncated',
+    'next_action',
+  ],
+  additionalProperties: false,
+};
+
+const getTSLAuthoringContextOutputSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', enum: [true] },
+    authoritative: { type: 'boolean', enum: [true] },
+    target: { type: 'string', enum: ['webgl2-node-compat'] },
+    identity: { type: 'object', additionalProperties: true },
+    concepts: { type: 'array', items: { type: 'string' } },
+    declarations: {
+      type: 'object',
+      properties: {
+        project_api_d_ts: { type: 'string' },
+        tsl_api_d_ts: { type: 'string' },
+      },
+      required: ['project_api_d_ts', 'tsl_api_d_ts'],
+      additionalProperties: false,
+    },
+    allowedModules: { type: 'array', items: { type: 'string' } },
+    materialBases: { type: 'array', items: { type: 'string' } },
+    parameterTypes: { type: 'array', items: { type: 'string' } },
+    materialManifestSchema: { type: 'object', additionalProperties: true },
+    parameterSchema: { type: 'object', additionalProperties: true },
+    materialFacade: { type: 'object', additionalProperties: true },
+    capabilities: { type: 'object', additionalProperties: true },
+    limits: { type: 'object', additionalProperties: true },
+    symbols: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: true },
+    },
+    examples: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: true },
+    },
+    negativeExamples: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: true },
+    },
+    diagnostics: { type: 'object', additionalProperties: true },
+    bindingContext: { type: 'object', additionalProperties: true },
+    untrustedMetadataRules: { type: 'object', additionalProperties: true },
+    qualification: { type: 'object', additionalProperties: true },
+    instructions: { type: 'array', items: { type: 'string' } },
+  },
+  required: [
+    'success',
+    'authoritative',
+    'target',
+    'identity',
+    'concepts',
+    'allowedModules',
+    'materialBases',
+    'parameterTypes',
+    'materialManifestSchema',
+    'parameterSchema',
+    'materialFacade',
+    'capabilities',
+    'limits',
+    'symbols',
+    'examples',
+    'negativeExamples',
+    'diagnostics',
+    'bindingContext',
+    'untrustedMetadataRules',
+    'qualification',
+    'instructions',
+  ],
+  additionalProperties: false,
+};
+
+const inspectModelMaterialsOutputSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', enum: [true] },
+    authoritative: { type: 'boolean', enum: [true] },
+    model_resource_name: nullableStringSchema,
+    file_path: { type: 'string' },
+    source_sha256: { type: 'string' },
+    three_revision: { type: 'string', enum: ['185'] },
+    meshCount: { type: 'integer', minimum: 0 },
+    materialSlotCount: { type: 'integer', minimum: 0 },
+    meshes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          skinned: { type: 'boolean' },
+          morphTargets: { type: 'boolean' },
+          materialArray: { type: 'boolean' },
+          materials: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                slot: { type: 'integer', minimum: 0 },
+                name: { type: 'string' },
+                kind: {
+                  type: 'string',
+                  enum: ['basic', 'standard', 'physical', 'unsupported'],
+                },
+                transparent: { type: 'boolean' },
+                alphaTest: { type: 'number' },
+                transmission: { type: 'number' },
+                textureChannels: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+              },
+              required: [
+                'slot',
+                'name',
+                'kind',
+                'transparent',
+                'alphaTest',
+                'transmission',
+                'textureChannels',
+              ],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: [
+          'name',
+          'skinned',
+          'morphTargets',
+          'materialArray',
+          'materials',
+        ],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: [
+    'success',
+    'authoritative',
+    'model_resource_name',
+    'file_path',
+    'source_sha256',
+    'three_revision',
+    'meshCount',
+    'materialSlotCount',
+    'meshes',
+  ],
+  additionalProperties: false,
+};
+
+const renderTSLMaterialPreviewOutputSchema = {
+  ...validateTSLFileOutputSchema,
+  properties: {
+    ...validateTSLFileOutputSchema.properties,
+    preview: {
+      oneOf: [
+        { type: 'null' },
+        {
+          type: 'object',
+          properties: {
+            mime_type: { type: 'string', enum: ['image/png'] },
+            width: { type: 'integer', minimum: 320, maximum: 2048 },
+            height: { type: 'integer', minimum: 320, maximum: 2048 },
+            columns: { type: 'integer', minimum: 1, maximum: 3 },
+            rows: { type: 'integer', minimum: 1, maximum: 8 },
+            data_url: { type: 'string' },
+            png_sha256: { type: 'string' },
+          },
+          required: [
+            'mime_type',
+            'width',
+            'height',
+            'columns',
+            'rows',
+            'data_url',
+            'png_sha256',
+          ],
+          additionalProperties: false,
+        },
+      ],
+    },
+    frames: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          source: {
+            type: 'string',
+            enum: ['standard-fixture', 'selected-glb', 'original-glb'],
+          },
+          camera_angle: {
+            type: 'string',
+            enum: ['front', 'three-quarter', 'side'],
+          },
+          animation_time: { type: 'number' },
+          background: {
+            type: 'string',
+            enum: ['dark', 'light', 'transparent'],
+          },
+          parameter_state: {
+            type: 'string',
+            enum: [
+              'default',
+              'minimum-boundary',
+              'maximum-boundary',
+              'requested',
+              'original-material',
+            ],
+          },
+          png_sha256: { type: 'string' },
+          render_stats: {
+            type: 'object',
+            properties: {
+              totalPixelCount: { type: 'integer', minimum: 1 },
+              coveredPixelCount: { type: 'integer', minimum: 1 },
+              nonTransparentPixelCount: { type: 'integer', minimum: 1 },
+              coverageRatio: { type: 'number', minimum: 0, maximum: 1 },
+              alphaCoverageRatio: {
+                type: 'number',
+                minimum: 0,
+                maximum: 1,
+              },
+              minimumColorChannel: {
+                type: 'integer',
+                minimum: 0,
+                maximum: 255,
+              },
+              maximumColorChannel: {
+                type: 'integer',
+                minimum: 0,
+                maximum: 255,
+              },
+              finite: { type: 'boolean', enum: [true] },
+            },
+            required: [
+              'totalPixelCount',
+              'coveredPixelCount',
+              'nonTransparentPixelCount',
+              'coverageRatio',
+              'alphaCoverageRatio',
+              'minimumColorChannel',
+              'maximumColorChannel',
+              'finite',
+            ],
+            additionalProperties: false,
+          },
+        },
+        required: [
+          'id',
+          'source',
+          'camera_angle',
+          'animation_time',
+          'background',
+          'parameter_state',
+          'png_sha256',
+          'render_stats',
+        ],
+        additionalProperties: false,
+      },
+    },
+    visual_intent_verified: { type: 'boolean', enum: [false] },
+  },
+  required: [
+    ...validateTSLFileOutputSchema.required,
+    'preview',
+    'frames',
+    'visual_intent_verified',
+  ],
+};
+
 const runGameplayTestsSchema = {
   type: 'object',
   properties: {
@@ -976,9 +1521,65 @@ const readTools: Array<McpTool> = [
     },
   },
   {
+    name: 'validate_tsl_file',
+    title: 'Validate one TSL material file',
+    description:
+      'Read and validate exactly one saved project-relative .tsl.ts file against the pinned GDevelop TSL catalogs. Runs static, graph, WebGL backend, or selected-GLB validation without changing project files, generated catalogs, editor memory, bindings, or preview state. Invalid material source is returned as success:true with structured diagnostics; path, catalog, target, timeout, and validator infrastructure failures are MCP errors.',
+    inputSchema: validateTSLFileSchema,
+    outputSchema: validateTSLFileOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'get_tsl_authoring_context',
+    title: 'Get pinned TSL authoring context',
+    description:
+      'Return the exact installed TSL declarations, matching portable symbol cards, capability rules, repair guidance, and validated examples for requested material concepts. The returned cross-hashed identity is authoritative for this GDevelop release and works for saved or virtual projects.',
+    inputSchema: getTSLAuthoringContextSchema,
+    outputSchema: getTSLAuthoringContextOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'inspect_model_materials',
+    title: 'Inspect GLB materials for TSL binding',
+    description:
+      'Load one selected project GLB with the pinned Three GLTFLoader and return escaped runtime mesh names, material names/classes, slots, texture channels, skinning, morph-target, array, transparency, and transmission metadata for selector authoring.',
+    inputSchema: inspectModelMaterialsSchema,
+    outputSchema: inspectModelMaterialsOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'render_tsl_material_preview',
+    title: 'Render a validated TSL material preview',
+    description:
+      'Validate one saved TSL material through the exact pinned WebGL2 node backend, then render a deterministic contact sheet covering three camera angles, representative times, default/boundary parameters, opaque/alpha backgrounds, the standard fixture, and (when selected) the GLB plus its original material reference. Returns PNG evidence and validation identity; visual output is evidence, not proof of user intent.',
+    inputSchema: renderTSLMaterialPreviewSchema,
+    outputSchema: renderTSLMaterialPreviewOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
     name: 'generate-catalogs',
     description:
-      'Regenerate .gdevelop/instructions-catalog.json, .gdevelop/deprecated-instructions-catalog.json, .gdevelop/settings-catalog.json, .gdevelop/runtime-api.d.ts, .gdevelop/project-api.d.ts, and .gdevelop/harness-api.d.ts from the current local multi-file project sources. The settings catalog includes the embedded-layout schema and contexts. The call waits for all six generated authoring files (three catalogs and three JavaScript declarations) to be written and verified before returning. Accepts no inputs, writes only generated authoring files, removes the retired layout-catalog.json, and does not validate sources or reload editor memory. Call this after structural project-file changes, then read the refreshed catalogs and declarations before making dependent edits.',
+      'Regenerate .gdevelop/instructions-catalog.json, .gdevelop/deprecated-instructions-catalog.json, .gdevelop/settings-catalog.json, .gdevelop/runtime-api.d.ts, .gdevelop/project-api.d.ts, .gdevelop/harness-api.d.ts, .gdevelop/tsl-api.d.ts, and .gdevelop/tsl-catalog.json from the current local multi-file project sources. The call waits for all eight generated authoring files to be written and verified before returning. Accepts no inputs, writes only generated authoring files, removes the retired layout-catalog.json, and does not validate sources or reload editor memory.',
     inputSchema: noInputSchema,
     annotations: {
       readOnlyHint: false,
@@ -1165,6 +1766,53 @@ const toolUsageExamples: { [string]: Array<Object> } = {
       description:
         'Regenerate and verify the three project-source catalogs and three JavaScript declaration files after structural file changes.',
       arguments: {},
+    },
+  ],
+  validate_tsl_file: [
+    {
+      description: 'Validate one material with the current backend.',
+      arguments: { file_path: 'materials/Hologram.tsl.ts' },
+    },
+    {
+      description: 'Run a fast structural check during an edit.',
+      arguments: {
+        file_path: 'materials/Hologram.tsl.ts',
+        validation_level: 'static',
+      },
+    },
+    {
+      description: 'Validate a vertex material against a selected GLB.',
+      arguments: {
+        file_path: 'materials/CharacterEnergy.tsl.ts',
+        validation_level: 'model',
+        model_file_path: 'assets/models/Character.glb',
+        geometry_features: ['skinning', 'morph_targets'],
+        timeout_ms: 60000,
+      },
+    },
+  ],
+  get_tsl_authoring_context: [
+    {
+      description: 'Retrieve the smallest useful pack for a dissolve effect.',
+      arguments: { concepts: ['dissolve', 'transparency'], example_limit: 2 },
+    },
+  ],
+  inspect_model_materials: [
+    {
+      description:
+        'Inspect exact selector names on a registered character GLB.',
+      arguments: { model_resource_name: 'Character.glb' },
+    },
+  ],
+  render_tsl_material_preview: [
+    {
+      description: 'Render a canonical sphere with edited parameter values.',
+      arguments: {
+        file_path: 'materials/Hologram.tsl.ts',
+        fixture: 'sphere',
+        parameter_values: { intensity: 1.25 },
+        background: 'transparent',
+      },
     },
   ],
   inspect_glb_model: [
@@ -1608,6 +2256,10 @@ export const getCapabilitiesSummary = (
       'gdevelop_list_objects',
       'gdevelop_inspect_signal_usage',
       'inspect_glb_model',
+      'get_tsl_authoring_context',
+      'inspect_model_materials',
+      'validate_tsl_file',
+      'render_tsl_material_preview',
     ],
     'Project-file validation': [
       'generate-catalogs',

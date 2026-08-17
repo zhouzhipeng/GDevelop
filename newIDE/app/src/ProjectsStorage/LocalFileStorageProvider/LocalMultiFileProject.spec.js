@@ -1704,10 +1704,18 @@ describe('Local multi-file project storage', () => {
     expect(counts.javascript.hashes.runtimeApi).toMatch(/^[0-9a-f]{64}$/);
     expect(counts.javascript.hashes.projectApi).toMatch(/^[0-9a-f]{64}$/);
     expect(counts.javascript.hashes.harnessApi).toMatch(/^[0-9a-f]{64}$/);
+    expect(counts.tslMaterial.counts.symbols).toBeGreaterThan(20);
+    expect(counts.tslMaterial.counts.examples).toBeGreaterThanOrEqual(6);
+    expect(counts.tslMaterial.hashes.tslApi).toMatch(/^[0-9a-f]{64}$/);
+    expect(counts.tslMaterial.hashes.tslCatalog).toMatch(/^[0-9a-f]{64}$/);
     expect(counts.javascript.paths).toEqual({
       runtimeApi: path.join(temporaryDirectory, '.gdevelop/runtime-api.d.ts'),
       projectApi: path.join(temporaryDirectory, '.gdevelop/project-api.d.ts'),
       harnessApi: path.join(temporaryDirectory, '.gdevelop/harness-api.d.ts'),
+    });
+    expect(counts.tslMaterial.paths).toEqual({
+      tslApi: path.join(temporaryDirectory, '.gdevelop/tsl-api.d.ts'),
+      tslCatalog: path.join(temporaryDirectory, '.gdevelop/tsl-catalog.json'),
     });
     expect(
       fs.existsSync(
@@ -1740,6 +1748,12 @@ describe('Local multi-file project storage', () => {
     ).toBe(true);
     expect(
       fs.existsSync(path.join(temporaryDirectory, '.gdevelop/harness-api.d.ts'))
+    ).toBe(true);
+    expect(
+      fs.existsSync(path.join(temporaryDirectory, '.gdevelop/tsl-api.d.ts'))
+    ).toBe(true);
+    expect(
+      fs.existsSync(path.join(temporaryDirectory, '.gdevelop/tsl-catalog.json'))
     ).toBe(true);
     expect(
       fs.readFileSync(
@@ -1782,6 +1796,18 @@ describe('Local multi-file project storage', () => {
       'catalog-project-api-written',
       'catalog-harness-api-writing',
       'catalog-harness-api-verifying',
+      'catalog-harness-api-verified',
+      'catalog-harness-api-written',
+      'catalog-tsl-api-building',
+      'catalog-tsl-api-built',
+      'catalog-tsl-api-writing',
+      'catalog-tsl-api-verifying',
+      'catalog-tsl-api-verified',
+      'catalog-tsl-api-written',
+      'catalog-tsl-catalog-writing',
+      'catalog-tsl-catalog-verifying',
+      'catalog-tsl-catalog-verified',
+      'catalog-tsl-catalog-written',
     ]);
     expect(cachedProgressPhases).toContain('catalog-instructions-cache-hit');
     expect(cachedProgressPhases).toContain(

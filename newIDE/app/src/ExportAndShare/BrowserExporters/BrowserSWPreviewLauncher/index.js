@@ -30,6 +30,12 @@ import {
   addGlobalObjectGroupsToProjectData,
 } from '../../PreviewGlobalObjectGroupsPatch';
 import { hasConstantPlaceholderDiagnostic } from '../../../Utils/ConstantPlaceholderDiagnostics';
+import {
+  TSL_MATERIAL_REGISTRY_RELATIVE_PATH,
+  compileReferencedTSLMaterials,
+  planTSLMaterialPreviewReload,
+  writePreparedTSLMaterials,
+} from '../../../TSLMaterial/TSLMaterialProjectCompiler';
 const gd: libGDevelop = global.gd;
 
 let nextPreviewId = 1;
@@ -90,6 +96,11 @@ export default class BrowserSWPreviewLauncher extends React.Component<
   State
 > {
   canDoNetworkPreview = (): any => false;
+  _previewTSLRuntimeModes: { [string]: boolean } = {
+    regular: false,
+    embedded: false,
+    gameplayTest: false,
+  };
 
   // $FlowFixMe[missing-local-annot]
   state = {
@@ -323,6 +334,39 @@ export default class BrowserSWPreviewLauncher extends React.Component<
         exporter.delete();
         return;
       }
+      let preparedTSLMaterials;
+      try {
+        preparedTSLMaterials = await compileReferencedTSLMaterials({
+          project,
+          includeSourceMap: true,
+          validationLevel: 'backend',
+        });
+      } catch (error) {
+        closePreparedPreviewWindows();
+        previewExportOptions.delete();
+        exporter.delete();
+        throw error;
+      }
+      const currentUsesTSLMaterials =
+        preparedTSLMaterials.resourceNames.length > 0;
+      const previewRuntimeModeKey = previewOptions.isForGameplayTest
+        ? 'gameplayTest'
+        : previewOptions.isForInGameEdition
+        ? 'embedded'
+        : 'regular';
+      const tslReloadPlan = planTSLMaterialPreviewReload({
+        shouldHotReload,
+        requestedHardReload: previewOptions.shouldHardReload,
+        previousUsesTSLMaterials: this._previewTSLRuntimeModes[
+          previewRuntimeModeKey
+        ],
+        currentUsesTSLMaterials,
+      });
+      if (shouldHotReload) {
+        previewExportOptions.setShouldClearExportFolder(
+          tslReloadPlan.shouldHardReload
+        );
+      }
       const exportSuccessful = exporter.exportProjectForPixiPreview(
         previewExportOptions
       );
@@ -341,6 +385,14 @@ export default class BrowserSWPreviewLauncher extends React.Component<
         previewExportOptions.delete();
         exporter.delete();
         throw new Error('Unable to export the project for preview.');
+      }
+
+      if (tslReloadPlan.shouldWriteRegistry) {
+        writePreparedTSLMaterials({
+          prepared: preparedTSLMaterials,
+          outputDirectory: outputDir,
+          fileSystem: browserSWFileSystem,
+        });
       }
 
       browserSWFileSystem.patchPendingTextFile('data.js', contents =>
@@ -394,7 +446,7 @@ export default class BrowserSWPreviewLauncher extends React.Component<
         );
         runtimeGameOptionsElement.delete();
 
-        if (previewOptions.shouldHardReload) {
+        if (tslReloadPlan.shouldHardReload) {
           console.log(
             `[BrowserSWPreviewLauncher] Triggering hard reload for preview #${previewId}...`
           );
@@ -414,6 +466,15 @@ export default class BrowserSWPreviewLauncher extends React.Component<
                 shouldReloadResources: previewOptions.shouldReloadResources,
                 projectData,
                 runtimeGameOptions,
+                ...(tslReloadPlan.shouldSendRegistryDescriptor
+                  ? {
+                      tslMaterialRegistry: {
+                        path: TSL_MATERIAL_REGISTRY_RELATIVE_PATH,
+                        bundleSha256: preparedTSLMaterials.bundleSha256,
+                        resources: preparedTSLMaterials.manifest.resources,
+                      },
+                    }
+                  : {}),
               },
             });
           });
@@ -477,6 +538,9 @@ export default class BrowserSWPreviewLauncher extends React.Component<
         );
       }
 
+      this._previewTSLRuntimeModes[
+        previewRuntimeModeKey
+      ] = currentUsesTSLMaterials;
       previewExportOptions.delete();
       exporter.delete();
 

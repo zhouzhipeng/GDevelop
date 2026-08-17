@@ -23,6 +23,10 @@ import { setEmbeddedGameFramePreviewLocation } from '../../../EmbeddedGame/Embed
 import { immediatelyOpenNewPreviewWindow } from '../BrowserPreview/BrowserPreviewWindow';
 import { addGlobalObjectGroupsToDataJs } from '../../PreviewGlobalObjectGroupsPatch';
 import { hasConstantPlaceholderDiagnostic } from '../../../Utils/ConstantPlaceholderDiagnostics';
+import {
+  compileReferencedTSLMaterials,
+  writePreparedTSLMaterials,
+} from '../../../TSLMaterial/TSLMaterialProjectCompiler';
 const gd: libGDevelop = global.gd;
 
 type State = {|
@@ -263,6 +267,20 @@ export default class BrowserS3PreviewLauncher extends React.Component<
         return;
       }
 
+      let preparedTSLMaterials;
+      try {
+        preparedTSLMaterials = await compileReferencedTSLMaterials({
+          project,
+          includeSourceMap: true,
+          validationLevel: 'backend',
+        });
+      } catch (error) {
+        closePreparedPreviewWindows();
+        previewExportOptions.delete();
+        exporter.delete();
+        throw error;
+      }
+
       const exportSuccessful = exporter.exportProjectForPixiPreview(
         previewExportOptions
       );
@@ -281,6 +299,14 @@ export default class BrowserS3PreviewLauncher extends React.Component<
         previewExportOptions.delete();
         exporter.delete();
         throw new Error('Unable to export the project for preview.');
+      }
+
+      if (preparedTSLMaterials.resourceNames.length) {
+        writePreparedTSLMaterials({
+          prepared: preparedTSLMaterials,
+          outputDirectory: outputDir,
+          fileSystem: browserS3FileSystem,
+        });
       }
 
       browserS3FileSystem.patchPendingTextFile('data.js', contents =>

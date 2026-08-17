@@ -28,6 +28,8 @@ import {
   ExportFlow,
 } from '../GenericExporters/OnlineElectronExport';
 
+import { exportWholePixiProjectWithTSL } from '../../TSLMaterial/TSLMaterialProjectCompiler';
+
 const gd: libGDevelop = global.gd;
 
 type PreparedExporter = {|
@@ -107,7 +109,7 @@ export const browserOnlineElectronExportPipeline: ExportPipeline<
     });
   },
 
-  launchExport: (
+  launchExport: async (
     context: ExportPipelineContext<ExportState>,
     { exporter, outputDir, abstractFileSystem }: PreparedExporter,
     fallbackAuthor: ?{ id: string, username: string }
@@ -121,9 +123,21 @@ export const browserOnlineElectronExportPipeline: ExportPipeline<
         fallbackAuthor.username
       );
     }
-    exporter.exportWholePixiProject(exportOptions);
-    exportOptions.delete();
-    exporter.delete();
+    let exportSucceeded = false;
+    try {
+      exportSucceeded = await exportWholePixiProjectWithTSL({
+        project,
+        exporter,
+        exportOptions,
+        fileSystem: abstractFileSystem,
+        outputDirectory: outputDir,
+        target: 'electron',
+      });
+    } finally {
+      exportOptions.delete();
+      exporter.delete();
+    }
+    if (!exportSucceeded) throw new Error('Export failed.');
 
     return Promise.resolve({
       textFiles: abstractFileSystem.getAllTextFilesIn(outputDir),

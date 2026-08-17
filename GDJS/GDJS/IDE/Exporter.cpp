@@ -61,12 +61,15 @@ bool Exporter::ExportWholePixiProject(const ExportOptions &options) {
   auto usedExtensionsResult =
       gd::UsedExtensionsFinder::ScanProject(options.project);
   auto &usedExtensions = usedExtensionsResult.GetUsedExtensions();
+  const bool projectUsesTSLMaterials =
+      ExporterHelper::ProjectUsesTSLMaterials(options.project);
 
   auto exportProject = [this,
                         &exportedProject,
                         &options,
                         &helper,
-                        &usedExtensionsResult](gd::String exportDir) {
+                        &usedExtensionsResult,
+                        projectUsesTSLMaterials](gd::String exportDir) {
     gd::WholeProjectDiagnosticReport &wholeProjectDiagnosticReport =
         options.project.GetWholeProjectDiagnosticReport();
     wholeProjectDiagnosticReport.Clear();
@@ -102,6 +105,7 @@ bool Exporter::ExportWholePixiProject(const ExportOptions &options) {
     helper.AddLibsInclude(
         /*pixiRenderers=*/true,
         usedExtensionsResult.Has3DObjects(),
+        projectUsesTSLMaterials,
         /*isInGameEditor=*/false,
         /*includeWebsocketDebuggerClient=*/false,
         /*includeWindowMessageDebuggerClient=*/false,
@@ -114,6 +118,10 @@ bool Exporter::ExportWholePixiProject(const ExportOptions &options) {
     // Export files for free function, object and behaviors
     for (const auto &includeFile : usedExtensionsResult.GetUsedIncludeFiles()) {
       InsertUnique(includesFiles, includeFile);
+    }
+    if (projectUsesTSLMaterials) {
+      InsertUnique(includesFiles,
+                   exportDir + "/tsl-material-registry.js");
     }
     for (const auto &requiredFile :
          usedExtensionsResult.GetUsedRequiredFiles()) {

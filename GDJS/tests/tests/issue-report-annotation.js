@@ -42,6 +42,37 @@ describe('gdjs.AbstractDebuggerClient issue report annotation', function () {
     });
   });
 
+  it('requests an issue report after two quick unmodified R presses', function () {
+    const messages = [];
+    const client = Object.create(gdjs.AbstractDebuggerClient.prototype);
+    client._lastReportIssueShortcutPressTime = null;
+    client._sendMessage = (message) => messages.push(JSON.parse(message));
+    const makeEvent = (timeStamp, overrides = {}) => ({
+      code: 'KeyR',
+      timeStamp,
+      repeat: false,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      target: document.body,
+      ...overrides,
+    });
+
+    client._handleReportIssueShortcutKeyDown(makeEvent(100));
+    client._handleReportIssueShortcutKeyDown(makeEvent(550));
+    expect(messages.length).to.be(1);
+    expect(messages[0].command).to.be('issueReport.shortcut');
+
+    client._handleReportIssueShortcutKeyDown(makeEvent(1000));
+    client._handleReportIssueShortcutKeyDown(makeEvent(1600));
+    client._handleReportIssueShortcutKeyDown(
+      makeEvent(1650, { ctrlKey: true })
+    );
+    client._handleReportIssueShortcutKeyDown(makeEvent(1700));
+    expect(messages.length).to.be(1);
+  });
+
   it('draws, captures, undoes, clears and removes an intrinsic-size overlay', async function () {
     const gameCanvas = document.createElement('canvas');
     gameCanvas.width = 100;

@@ -24,6 +24,7 @@ import {
   ExportFlow,
 } from '../GenericExporters/OnlineCordovaExport';
 import { downloadUrlsToLocalFiles } from '../../Utils/LocalFileDownloader';
+import { exportWholePixiProjectWithTSL } from '../../TSLMaterial/TSLMaterialProjectCompiler';
 
 const path = optionalRequire('path');
 const os = optionalRequire('os');
@@ -130,9 +131,20 @@ export const localOnlineCordovaExportPipeline: ExportPipeline<
         fallbackAuthor.username
       );
     }
-    const exportSucceeded = exporter.exportWholePixiProject(exportOptions);
-    exportOptions.delete();
-    exporter.delete();
+    let exportSucceeded = false;
+    try {
+      exportSucceeded = await exportWholePixiProjectWithTSL({
+        project: context.project,
+        exporter,
+        exportOptions,
+        fileSystem: localFileSystem,
+        outputDirectory: temporaryOutputDir,
+        target: 'cordova',
+      });
+    } finally {
+      exportOptions.delete();
+      exporter.delete();
+    }
 
     if (!exportSucceeded) {
       throw new Error(

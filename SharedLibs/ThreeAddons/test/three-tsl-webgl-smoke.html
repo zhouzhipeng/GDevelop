@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en" data-result="pending">
+  <head>
+    <meta charset="utf-8" />
+    <title>GDevelop Three TSL WebGL smoke test</title>
+  </head>
+  <body>
+    <canvas id="canvas" width="64" height="64"></canvas>
+    <script src="../../../GDJS/Runtime/pixi-renderers/three-tsl.js"></script>
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const finish = (result, detail) => {
+          root.dataset.result = result;
+          root.dataset.detail = String(detail || "");
+        };
+
+        try {
+          const canvas = document.getElementById("canvas");
+          const context = canvas.getContext("webgl2", {
+            alpha: true,
+            preserveDrawingBuffer: true,
+          });
+          if (!context) {
+            finish("failed", "webgl2-unavailable");
+            return;
+          }
+
+          const renderer = new THREE.WebGLRenderer({ canvas, context });
+          renderer.setSize(64, 64, false);
+          renderer.setClearColor(0x000000, 1);
+          renderer.setNodesHandler(new THREE.WebGLNodesHandler());
+
+          if (
+            !(new THREE.MeshStandardNodeMaterial() instanceof THREE.Material) ||
+            !(new THREE.MeshBasicNodeMaterial() instanceof THREE.Material) ||
+            !(new THREE.MeshPhysicalNodeMaterial() instanceof THREE.Material)
+          ) {
+            throw new Error(
+              "TSL bundle contains more than one Three core identity."
+            );
+          }
+          for (const name of [
+            "materialColor",
+            "materialOpacity",
+            "materialEmissive",
+            "materialRoughness",
+            "materialMetalness",
+            "materialNormal",
+          ]) {
+            if (!THREE.GDevelopTSL[name] || !THREE.GDevelopTSL[name].isNode) {
+              throw new Error(`TSL bundle is missing inherited node ${name}.`);
+            }
+          }
+
+          const scene = new THREE.Scene();
+          const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10);
+          camera.position.z = 3;
+          const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+          const material = new THREE.MeshStandardNodeMaterial();
+          material.color.set(0x00ff00);
+          material.colorNode = THREE.GDevelopTSL.mix(
+            THREE.GDevelopTSL.materialColor,
+            THREE.GDevelopTSL.color(0xff0000),
+            THREE.GDevelopTSL.float(0.25)
+          );
+          material.opacityNode = THREE.GDevelopTSL.materialOpacity;
+          material.emissiveNode = THREE.GDevelopTSL.materialEmissive;
+          material.roughnessNode = THREE.GDevelopTSL.materialRoughness;
+          material.metalnessNode = THREE.GDevelopTSL.materialMetalness;
+          material.normalNode = THREE.GDevelopTSL.materialNormal;
+          const mesh = new THREE.Mesh(geometry, material);
+          scene.add(mesh);
+          scene.add(new THREE.AmbientLight(0xffffff, 2));
+
+          renderer.render(scene, camera);
+          const pixel = new Uint8Array(4);
+          context.readPixels(
+            32,
+            32,
+            1,
+            1,
+            context.RGBA,
+            context.UNSIGNED_BYTE,
+            pixel
+          );
+
+          const passed = pixel[1] > pixel[0] && pixel[1] > pixel[2];
+          finish(passed ? "passed" : "failed", Array.from(pixel).join(","));
+
+          material.dispose();
+          geometry.dispose();
+          renderer.dispose();
+        } catch (error) {
+          finish("failed", error && error.message ? error.message : error);
+        }
+      })();
+    </script>
+  </body>
+</html>

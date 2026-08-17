@@ -6,7 +6,7 @@ import { getSignedUrls } from './Usage';
 export type UploadedObject = {|
   Key: string,
   Body: string,
-  ContentType: 'text/javascript' | 'text/html',
+  ContentType: 'text/javascript' | 'text/html' | 'application/json',
 |};
 
 export const uploadObjects = async (

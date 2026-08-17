@@ -19,6 +19,13 @@ namespace gdjs {
             | null = null;
           _isEnabled: boolean = false;
 
+          private _invalidateTSLMaterials(): void {
+            const tslMaterialSystem = (gdjs as any).TSLMaterialSystem;
+            if (tslMaterialSystem) {
+              tslMaterialSystem.invalidateSceneInputs(target.getRuntimeScene());
+            }
+          }
+
           constructor() {
             this._cubeTexture = target
               .getRuntimeScene()
@@ -63,6 +70,7 @@ namespace gdjs {
               scene.environment = this._cubeTexture;
             }
             this._isEnabled = true;
+            this._invalidateTSLMaterials();
             return true;
           }
           removeEffect(target: EffectsTarget): boolean {
@@ -76,6 +84,7 @@ namespace gdjs {
             scene.background = this._oldBackground;
             scene.environment = null;
             this._isEnabled = false;
+            this._invalidateTSLMaterials();
             return true;
           }
           updatePreRender(target: gdjs.EffectsTarget): any {}

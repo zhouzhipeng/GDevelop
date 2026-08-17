@@ -128,6 +128,20 @@ const run = async () => {
     'catalog-runtime-api-written',
     'catalog-project-api-writing',
     'catalog-project-api-written',
+    'catalog-harness-api-writing',
+    'catalog-harness-api-verifying',
+    'catalog-harness-api-verified',
+    'catalog-harness-api-written',
+    'catalog-tsl-api-building',
+    'catalog-tsl-api-built',
+    'catalog-tsl-api-writing',
+    'catalog-tsl-api-verifying',
+    'catalog-tsl-api-verified',
+    'catalog-tsl-api-written',
+    'catalog-tsl-catalog-writing',
+    'catalog-tsl-catalog-verifying',
+    'catalog-tsl-catalog-verified',
+    'catalog-tsl-catalog-written',
     'catalogs-modification-time-reading',
     'catalogs-modification-time-acknowledged',
     'catalogs-complete',
@@ -321,6 +335,56 @@ const run = async () => {
   assert.strictEqual(firstValidationResult.structuredContent.valid, true);
   assert.strictEqual(secondValidationResult.structuredContent.valid, true);
 
+  const tslValidationRequest = {
+    method: 'tools/call',
+    params: {
+      name: 'validate_tsl_file',
+      arguments: {
+        file_path: 'materials/Tint.tsl.ts',
+        validation_level: 'backend',
+      },
+    },
+  };
+  const firstTslValidation = projectFilesBroker.send(tslValidationRequest);
+  const secondTslValidation = projectFilesBroker.send(tslValidationRequest);
+  assert.strictEqual(
+    projectFilesRequests.length,
+    2,
+    'identical TSL validations should share one renderer operation'
+  );
+  const differingTslValidation = projectFilesBroker.send({
+    ...tslValidationRequest,
+    params: {
+      ...tslValidationRequest.params,
+      arguments: {
+        ...tslValidationRequest.params.arguments,
+        validation_level: 'model',
+        model_file_path: 'models/Hero.glb',
+      },
+    },
+  });
+  assert.strictEqual(
+    projectFilesRequests.length,
+    3,
+    'different TSL fixtures must not share a renderer operation'
+  );
+  projectFilesBroker.handleResponse(projectFilesWebContents, {
+    id: projectFilesRequests[1].request.id,
+    result: toolResult({ success: true, valid: true }),
+  });
+  projectFilesBroker.handleResponse(projectFilesWebContents, {
+    id: projectFilesRequests[2].request.id,
+    result: toolResult({ success: true, valid: true }),
+  });
+  const tslResults = await Promise.all([
+    firstTslValidation,
+    secondTslValidation,
+    differingTslValidation,
+  ]);
+  tslResults.forEach(result =>
+    assert.strictEqual(result.structuredContent.valid, true)
+  );
+
   const openProjectRequest = {
     method: 'tools/call',
     params: {
@@ -332,17 +396,14 @@ const run = async () => {
   await delay(30);
   assert.strictEqual(
     projectFilesRequests.length,
-    2,
+    4,
     'open_project should use the longer project-files operation timeout'
   );
   projectFilesBroker.handleResponse(projectFilesWebContents, {
-    id: projectFilesRequests[1].request.id,
+    id: projectFilesRequests[3].request.id,
     result: toolResult({ success: true, opened: true }),
   });
-  assert.strictEqual(
-    (await openProjectPromise).structuredContent.opened,
-    true
-  );
+  assert.strictEqual((await openProjectPromise).structuredContent.opened, true);
 
   const timedOutProjectFilesRequests = [];
   const timedOutProjectFilesWebContents = {
