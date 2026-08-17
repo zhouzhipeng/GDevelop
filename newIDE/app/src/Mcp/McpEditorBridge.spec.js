@@ -471,6 +471,29 @@ describe('McpEditorBridge', () => {
           skins: [{ joints: [0, 1, 2, 3] }],
         })
       );
+      (inspectTSLMaterialModelBytes: any).mockResolvedValue({
+        meshCount: 1,
+        materialSlotCount: 1,
+        meshes: [
+          {
+            name: 'Body',
+            skinned: true,
+            morphTargets: false,
+            materialArray: false,
+            materials: [
+              {
+                slot: 0,
+                name: 'BodyMaterial',
+                kind: 'standard',
+                transparent: false,
+                alphaTest: 0,
+                transmission: 0,
+                textureChannels: ['map', 'normalMap'],
+              },
+            ],
+          },
+        ],
+      });
       const project: any = { getProjectFile: () => projectFile };
       const response = await makeBridge({
         getProject: () => project,
@@ -489,7 +512,29 @@ describe('McpEditorBridge', () => {
         resolvedFilePath: modelFile,
         animationNames: ['Idle', 'animation_1'],
         boneNames: ['Arm.L', 'Hips'],
+        meshCount: 1,
+        materialSlotCount: 1,
+        meshes: [
+          {
+            name: 'Body',
+            skinned: true,
+            morphTargets: false,
+            materialArray: false,
+            materials: [
+              {
+                slot: 0,
+                name: 'BodyMaterial',
+                kind: 'standard',
+                transparent: false,
+                alphaTest: 0,
+                transmission: 0,
+                textureChannels: ['map', 'normalMap'],
+              },
+            ],
+          },
+        ],
       });
+      expect(inspectTSLMaterialModelBytes).toHaveBeenCalledTimes(1);
 
       const absoluteResponse = await makeBridge().handleRendererMcpRequest({
         method: 'tools/call',
@@ -505,8 +550,31 @@ describe('McpEditorBridge', () => {
         resolvedFilePath: modelFile,
         animationNames: ['Idle', 'animation_1'],
         boneNames: ['Arm.L', 'Hips'],
+        meshCount: 1,
+        materialSlotCount: 1,
+        meshes: [
+          {
+            name: 'Body',
+            skinned: true,
+            morphTargets: false,
+            materialArray: false,
+            materials: [
+              {
+                slot: 0,
+                name: 'BodyMaterial',
+                kind: 'standard',
+                transparent: false,
+                alphaTest: 0,
+                transmission: 0,
+                textureChannels: ['map', 'normalMap'],
+              },
+            ],
+          },
+        ],
       });
+      expect(inspectTSLMaterialModelBytes).toHaveBeenCalledTimes(2);
     } finally {
+      (inspectTSLMaterialModelBytes: any).mockReset();
       fs.rmSync(temporaryDirectory, { recursive: true, force: true });
     }
   });

@@ -477,6 +477,91 @@ const getTSLAuthoringContextOutputSchema = {
   additionalProperties: false,
 };
 
+const glbMaterialStructureSchema = {
+  type: 'object',
+  properties: {
+    slot: { type: 'integer', minimum: 0 },
+    name: { type: 'string' },
+    kind: {
+      type: 'string',
+      enum: ['basic', 'standard', 'physical', 'unsupported'],
+    },
+    transparent: { type: 'boolean' },
+    alphaTest: { type: 'number' },
+    transmission: { type: 'number' },
+    textureChannels: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+  },
+  required: [
+    'slot',
+    'name',
+    'kind',
+    'transparent',
+    'alphaTest',
+    'transmission',
+    'textureChannels',
+  ],
+  additionalProperties: false,
+};
+
+const glbMeshStructureSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    skinned: { type: 'boolean' },
+    morphTargets: { type: 'boolean' },
+    materialArray: { type: 'boolean' },
+    materials: {
+      type: 'array',
+      items: glbMaterialStructureSchema,
+    },
+  },
+  required: [
+    'name',
+    'skinned',
+    'morphTargets',
+    'materialArray',
+    'materials',
+  ],
+  additionalProperties: false,
+};
+
+const inspectGlbModelOutputSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', enum: [true] },
+    filePath: { type: 'string' },
+    resolvedFilePath: { type: 'string' },
+    animationNames: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    boneNames: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    meshCount: { type: 'integer', minimum: 0 },
+    materialSlotCount: { type: 'integer', minimum: 0 },
+    meshes: {
+      type: 'array',
+      items: glbMeshStructureSchema,
+    },
+  },
+  required: [
+    'success',
+    'filePath',
+    'resolvedFilePath',
+    'animationNames',
+    'boneNames',
+    'meshCount',
+    'materialSlotCount',
+    'meshes',
+  ],
+  additionalProperties: false,
+};
+
 const inspectModelMaterialsOutputSchema = {
   type: 'object',
   properties: {
@@ -490,54 +575,7 @@ const inspectModelMaterialsOutputSchema = {
     materialSlotCount: { type: 'integer', minimum: 0 },
     meshes: {
       type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          skinned: { type: 'boolean' },
-          morphTargets: { type: 'boolean' },
-          materialArray: { type: 'boolean' },
-          materials: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                slot: { type: 'integer', minimum: 0 },
-                name: { type: 'string' },
-                kind: {
-                  type: 'string',
-                  enum: ['basic', 'standard', 'physical', 'unsupported'],
-                },
-                transparent: { type: 'boolean' },
-                alphaTest: { type: 'number' },
-                transmission: { type: 'number' },
-                textureChannels: {
-                  type: 'array',
-                  items: { type: 'string' },
-                },
-              },
-              required: [
-                'slot',
-                'name',
-                'kind',
-                'transparent',
-                'alphaTest',
-                'transmission',
-                'textureChannels',
-              ],
-              additionalProperties: false,
-            },
-          },
-        },
-        required: [
-          'name',
-          'skinned',
-          'morphTargets',
-          'materialArray',
-          'materials',
-        ],
-        additionalProperties: false,
-      },
+      items: glbMeshStructureSchema,
     },
   },
   required: [
@@ -1511,8 +1549,9 @@ const readTools: Array<McpTool> = [
   {
     name: 'inspect_glb_model',
     description:
-      'Inspect a local binary glTF (.glb) file without loading its meshes or textures. Returns exact animation clip source names for Model3D animation source fields and exact case-sensitive canonical bone names GDevelop can reference. A configured Model3D animation alias/name may differ from its returned source name. Accepts an absolute local path or a path relative to the open project folder; empty, ambiguous duplicate, and runtime-generated fallback bone names are omitted.',
+      'Inspect a local binary glTF (.glb) file and return exact animation clip source names, canonical bone names, and the runtime mesh/material structure used by the TSL Resources editor. The mesh structure includes mesh names, material slots, material classes, texture channels, skinning, morph targets, transparency, and transmission. A configured Model3D animation alias/name may differ from its returned source name. Accepts an absolute local path or a path relative to the open project folder; empty, ambiguous duplicate, and runtime-generated fallback bone names are omitted.',
     inputSchema: inspectGlbModelSchema,
+    outputSchema: inspectGlbModelOutputSchema,
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -1818,7 +1857,7 @@ const toolUsageExamples: { [string]: Array<Object> } = {
   inspect_glb_model: [
     {
       description:
-        'Inspect animation clip source names and usable canonical bone names in a project GLB asset.',
+        'Inspect animation/bone names plus the runtime mesh/material structure in a project GLB asset.',
       arguments: {
         file_path: 'assets/models/hero.glb',
       },

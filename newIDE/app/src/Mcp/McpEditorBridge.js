@@ -73,6 +73,12 @@ const nodeBuffer = bufferModule && bufferModule.Buffer;
 const electron = optionalRequire('electron');
 const nativeImage = electron && electron.nativeImage;
 
+// Runtime mesh/material inspection uses the same GLTFLoader path as the TSL
+// editor. Keep the full-file read bounded separately from the metadata-only
+// GLB inspection limit so a large model cannot unexpectedly consume renderer
+// memory just because mesh selectors were requested.
+const MAX_GLB_RUNTIME_INSPECTION_BYTES = 256 * 1024 * 1024;
+
 const catalogEventsFunctionCodeWriter: EventsFunctionCodeWriter = {
   getIncludeFileFor: (functionName: string) => `${functionName}.js`,
   writeFunctionCode: async () => {},
@@ -4454,11 +4460,42 @@ const callMcpTool = async ({
       const inspection = inspectGlbModelFile(resolvedFilePath, {
         fileSystem: fs,
       });
+      const fileStat = fs.statSync(resolvedFilePath);
+      if (
+        !fileStat.isFile() ||
+        fileStat.size > MAX_GLB_RUNTIME_INSPECTION_BYTES
+      ) {
+        throw new GlbModelInspectionError(
+          'GLB_RUNTIME_INSPECTION_TOO_LARGE',
+          `The GLB mesh/material inspection is limited to ${
+            MAX_GLB_RUNTIME_INSPECTION_BYTES
+          } bytes.`,
+          {
+            byteLength: fileStat.size,
+            maxFileSizeBytes: MAX_GLB_RUNTIME_INSPECTION_BYTES,
+          }
+        );
+      }
+      const modelBytes = fs.readFileSync(resolvedFilePath);
+      const browserValidator = await import(/* webpackChunkName: "tsl-material-validator" */ '../TSLMaterial/TSLMaterialBrowserValidator');
+      const meshMaterialInspection = await browserValidator.inspectTSLMaterialModelBytes(
+        modelBytes
+      );
+      if (
+        !meshMaterialInspection ||
+        typeof meshMaterialInspection !== 'object'
+      ) {
+        throw new GlbModelInspectionError(
+          'GLB_MESH_MATERIAL_INSPECTION_FAILED',
+          'The GLB mesh/material inspection did not return a structure.'
+        );
+      }
       return textResult({
         success: true,
         filePath: requestedFilePath,
         resolvedFilePath,
         ...inspection,
+        ...meshMaterialInspection,
       });
     } catch (error) {
       if (error instanceof GlbModelInspectionError) {

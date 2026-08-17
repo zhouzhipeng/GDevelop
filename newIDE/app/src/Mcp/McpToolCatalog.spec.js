@@ -461,6 +461,18 @@ describe('McpToolCatalog', () => {
     });
     expect(tool.description).toContain('animation clip source names');
     expect(tool.description).toContain('alias/name may differ');
+    expect(tool.description).toContain('mesh/material structure');
+    expect(tool.outputSchema).toEqual(
+      expect.objectContaining({
+        required: expect.arrayContaining([
+          'animationNames',
+          'boneNames',
+          'meshCount',
+          'materialSlotCount',
+          'meshes',
+        ]),
+      })
+    );
     expect(
       getMcpToolUsageExamples('inspect_glb_model').inspect_glb_model
     ).toContainEqual(
