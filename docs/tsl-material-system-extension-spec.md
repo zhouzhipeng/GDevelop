@@ -2439,6 +2439,7 @@ The AI-facing tool set is conceptually:
 | Tool                          | Purpose                                                                                           | Authoritative result                                               |
 | ----------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `get_tsl_authoring_context`   | Retrieve exact declarations, symbol cards, examples, and capability rules for requested concepts. | Authoritative for the installed authoring API.                     |
+| `inspect_glb_model`           | Return animation/bone names together with the runtime GLB mesh/material structure used by the TSL editor. | Authoritative for the selected GLB runtime structure and names.     |
 | `inspect_model_materials`     | Return structured, escaped GLB mesh/material/feature metadata.                                    | Authoritative for the selected loaded resource revision.           |
 | `validate_tsl_file`           | Validate one saved project TSL file through the requested stages in section 10.8.                 | Authoritative for code/backend validity within its reported scope. |
 | `render_tsl_material_preview` | Render fixed views, parameter states, and animation times after validation.                       | Evidence of visual output, not proof of user intent.               |
