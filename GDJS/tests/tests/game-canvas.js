@@ -63,6 +63,17 @@ describe('gdjs.RuntimeGameRenderer canvas tests', () => {
         expect(actualDomElementsContainer.parentElement).to.be(gameContainer);
     });
 
+    it('should configure the shared WebGL context for Pixi masks and shadows', () => {
+        renderer.createStandardCanvas(gameContainer);
+
+        const actualThreeRenderer = renderer.getThreeRenderer();
+        expect(actualThreeRenderer).to.not.be(null);
+        expect(
+            actualThreeRenderer.getContext().getContextAttributes().stencil
+        ).to.be(true);
+        expect(actualThreeRenderer.shadowMap.type).to.be(THREE.PCFShadowMap);
+    });
+
     it('should render the canvas with the device pixel ratio without scaling the scene', () => {
         restoreDevicePixelRatio = setDevicePixelRatio(2);
 
