@@ -1,5 +1,8 @@
 // @flow
 import LocalFileSystem from './LocalFileSystem';
+import fs from 'fs-extra';
+// $FlowFixMe[cannot-resolve-module]
+import os from 'os';
 // $FlowFixMe[cannot-resolve-module]
 import path from 'path';
 
@@ -41,6 +44,66 @@ describe('LocalFileSystem', () => {
           url: 'http://file.com/from/url',
         },
       ]);
+    });
+
+    test('skips unchanged local files when requested', () => {
+      const temporaryDirectory = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'gdevelop-preview-copy-')
+      );
+      try {
+        const source = path.join(temporaryDirectory, 'source.glb');
+        const destination = path.join(
+          temporaryDirectory,
+          'preview',
+          'source.glb'
+        );
+        fs.outputFileSync(source, 'unchanged content');
+        fs.outputFileSync(destination, 'unchanged content');
+
+        const destinationTime = new Date(Date.now() + 1000);
+        fs.utimesSync(destination, destinationTime, destinationTime);
+        const destinationModificationTime = fs.statSync(destination).mtimeMs;
+        const localFileSystem = new LocalFileSystem({
+          downloadUrlsToLocalFiles: false,
+          skipUnchangedFiles: true,
+        });
+
+        expect(localFileSystem.copyFile(source, destination)).toBe(true);
+        expect(fs.statSync(destination).mtimeMs).toBe(
+          destinationModificationTime
+        );
+      } finally {
+        fs.removeSync(temporaryDirectory);
+      }
+    });
+
+    test('copies a local file when its source changed', () => {
+      const temporaryDirectory = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'gdevelop-preview-copy-')
+      );
+      try {
+        const source = path.join(temporaryDirectory, 'source.glb');
+        const destination = path.join(
+          temporaryDirectory,
+          'preview',
+          'source.glb'
+        );
+        fs.outputFileSync(source, 'old content');
+        fs.outputFileSync(destination, 'old content');
+
+        const sourceTime = new Date(Date.now() + 2000);
+        fs.outputFileSync(source, 'new content');
+        fs.utimesSync(source, sourceTime, sourceTime);
+        const localFileSystem = new LocalFileSystem({
+          downloadUrlsToLocalFiles: false,
+          skipUnchangedFiles: true,
+        });
+
+        expect(localFileSystem.copyFile(source, destination)).toBe(true);
+        expect(fs.readFileSync(destination, 'utf8')).toBe('new content');
+      } finally {
+        fs.removeSync(temporaryDirectory);
+      }
     });
   });
 
