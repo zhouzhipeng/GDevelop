@@ -135,10 +135,12 @@ namespace gdjs {
             this._game.getAntialiasingMode() !== 'none' &&
             (this._game.isAntialisingEnabledOnMobile() ||
               !gdjs.evtTools.common.isMobile()),
+          // Pixi uses the shared context's stencil buffer for masks.
+          stencil: true,
           preserveDrawingBuffer: true, // Keep to true to allow screenshots.
         });
         this._threeRenderer.shadowMap.enabled = true;
-        this._threeRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this._threeRenderer.shadowMap.type = THREE.PCFShadowMap;
         this._threeRenderer.autoClear = false;
         this._threeRenderer.setPixelRatio(canvasResolution);
         this._threeRenderer.setSize(

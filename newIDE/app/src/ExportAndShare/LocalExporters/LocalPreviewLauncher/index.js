@@ -72,6 +72,7 @@ const prepareExporter = async ({
 
   const localFileSystem = new LocalFileSystem({
     downloadUrlsToLocalFiles: false,
+    skipUnchangedFiles: true,
   });
   const fileSystem = assignIn(new gd.AbstractFileSystemJS(), localFileSystem);
   const outputDir = path.join(

@@ -35,6 +35,13 @@ class LocalFileSystem {
   _downloadUrlsToLocalFiles: boolean;
 
   /**
+   * Reuse unchanged local files that are already in a disposable output
+   * directory (used by local previews).
+   * @private
+   */
+  _skipUnchangedFiles: boolean;
+
+  /**
    * Store all the files that should be downloaded (filepath => url)
    * @private
    */
@@ -43,10 +50,12 @@ class LocalFileSystem {
   constructor(
     options: ?{|
       downloadUrlsToLocalFiles: boolean,
+      skipUnchangedFiles?: boolean,
     |}
   ) {
     this._downloadUrlsToLocalFiles =
       !!options && options.downloadUrlsToLocalFiles;
+    this._skipUnchangedFiles = !!options && !!options.skipUnchangedFiles;
   }
 
   /**
@@ -162,6 +171,29 @@ class LocalFileSystem {
 
       this._filesToDownload[pathPosix.normalize(dest)] = source;
       return true;
+    }
+
+    // Local previews reuse the same temporary output directory. Avoid copying
+    // large unchanged assets (GLB, audio, textures) on every preview launch.
+    // This is deliberately opt-in: export destinations are user-owned and
+    // must always be refreshed, while preview output is disposable and owned
+    // by the editor.
+    if (this._skipUnchangedFiles && source !== dest) {
+      try {
+        const sourceStat = fs.statSync(source);
+        const destinationStat = fs.statSync(dest);
+        if (
+          sourceStat.isFile() &&
+          destinationStat.isFile() &&
+          sourceStat.size === destinationStat.size &&
+          destinationStat.mtimeMs >= sourceStat.mtimeMs
+        ) {
+          return true;
+        }
+      } catch (e) {
+        // A missing destination or an inaccessible file is handled by the
+        // normal copy path below, which preserves the existing error behavior.
+      }
     }
 
     try {
