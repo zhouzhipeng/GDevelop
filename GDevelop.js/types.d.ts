@@ -572,7 +572,7 @@ export class ObjectsContainer extends EmscriptenObject {
   getTypeOfBehavior(layout: ObjectsContainer, name: string, searchInGroups: boolean): string;
   getTypeOfObject(layout: ObjectsContainer, name: string, searchInGroups: boolean): string;
   getBehaviorsOfObject(layout: ObjectsContainer, name: string, searchInGroups: boolean): VectorString;
-  isDefaultBehavior(layout: ObjectsContainer, objectOrGroupName: string, behaviorName: string, searchInGroups: boolean): boolean;
+  hasDefaultBehavior(layout: ObjectsContainer, objectOrGroupName: string, behaviorName: string, searchInGroups: boolean): boolean;
   getTypeOfBehaviorInObjectOrGroup(layout: ObjectsContainer, objectOrGroupName: string, behaviorName: string, searchInGroups: boolean): string;
   getBehaviorNamesInObjectOrGroup(layout: ObjectsContainer, objectOrGroupName: string, behaviorType: string, searchInGroups: boolean): VectorString;
 }
@@ -714,7 +714,7 @@ export class ObjectsContainersList extends EmscriptenObject {
   getTypeOfBehavior(name: string, searchInGroups: boolean): string;
   getBehaviorsOfObject(objectOrGroupName: string, searchInGroups: boolean): VectorString;
   getBehaviorNamesInObjectOrGroup(objectOrGroupName: string, behaviorType: string, searchInGroups: boolean): VectorString;
-  isDefaultBehavior(objectOrGroupName: string, behaviorType: string, searchInGroups: boolean): boolean;
+  hasDefaultBehavior(objectOrGroupName: string, behaviorName: string, searchInGroups: boolean): boolean;
   getAnimationNamesOfObject(name: string): VectorString;
   getTypeOfBehaviorInObjectOrGroup(objectOrGroupName: string, behaviorName: string, searchInGroups: boolean): string;
   hasObjectOrGroupNamed(name: string): boolean;
@@ -3500,7 +3500,7 @@ export function getTypeOfObject(layout: ObjectsContainer, name: string, searchIn
 
 export function getBehaviorsOfObject(layout: ObjectsContainer, name: string, searchInGroups: boolean): VectorString;
 
-export function isDefaultBehavior(layout: ObjectsContainer, objectOrGroupName: string, behaviorName: string, searchInGroups: boolean): boolean;
+export function hasDefaultBehavior(layout: ObjectsContainer, objectOrGroupName: string, behaviorName: string, searchInGroups: boolean): boolean;
 
 export function getTypeOfBehaviorInObjectOrGroup(layout: ObjectsContainer, objectOrGroupName: string, behaviorName: string, searchInGroups: boolean): string;
 

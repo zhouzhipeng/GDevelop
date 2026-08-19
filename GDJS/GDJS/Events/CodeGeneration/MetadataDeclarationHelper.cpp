@@ -544,7 +544,7 @@ MetadataDeclarationHelper::DeclareExpressionMetadata(
             GetFullName(eventsFunction),
         // An operator and an operand are inserted before user parameters.
         ShiftSentenceParamIndexes(GetFreeFunctionSentence(eventsFunction), 2),
-        eventsFunction.GetGroup(), iconURL);
+        GetFunctionGroup(eventsFunction), iconURL);
     // By convention, first parameter is always the Runtime Scene.
     expressionAndCondition.AddCodeOnlyParameter("currentScene", "");
     DeclareEventsFunctionParameters(freeEventsFunctions, eventsFunction,
@@ -562,13 +562,13 @@ MetadataDeclarationHelper::DeclareExpressionMetadata(
                   MetadataDeclarationHelper::GetFullName(eventsFunction),
                   eventsFunction.GetDescription() ||
                       GetFullName(eventsFunction),
-                  eventsFunction.GetGroup(), iconURL)
+                  GetFunctionGroup(eventsFunction), iconURL)
             : extension.AddStrExpression(
                   eventsFunction.GetName(),
                   MetadataDeclarationHelper::GetFullName(eventsFunction),
                   eventsFunction.GetDescription() ||
                       GetFullName(eventsFunction),
-                  eventsFunction.GetGroup(), iconURL);
+                  GetFunctionGroup(eventsFunction), iconURL);
     // By convention, first parameter is always the Runtime Scene.
     expression.AddCodeOnlyParameter("currentScene", "");
     DeclareEventsFunctionParameters(freeEventsFunctions, eventsFunction,
@@ -593,11 +593,11 @@ gd::InstructionMetadata &MetadataDeclarationHelper::DeclareInstructionMetadata(
   auto &freeEventsFunctions = eventsFunctionsExtension.GetEventsFunctions();
   if (functionType == gd::EventsFunction::Condition) {
     auto &condition = extension.AddCondition(
-        eventsFunction.GetName(),
-        GetFullName(eventsFunction),
-        GetTranslation(eventsFunction.GetDescription()) || GetFullName(eventsFunction),
-        GetFreeFunctionSentence(eventsFunction), eventsFunction.GetGroup(),
-        iconURL, iconURL);
+        eventsFunction.GetName(), GetFullName(eventsFunction),
+        GetTranslation(eventsFunction.GetDescription()) ||
+            GetFullName(eventsFunction),
+        GetFreeFunctionSentence(eventsFunction),
+        GetFunctionGroup(eventsFunction), iconURL, iconURL);
     // By convention, first parameter is always the Runtime Scene.
     condition.AddCodeOnlyParameter("currentScene", "");
     DeclareEventsFunctionParameters(freeEventsFunctions, eventsFunction,
@@ -619,7 +619,7 @@ gd::InstructionMetadata &MetadataDeclarationHelper::DeclareInstructionMetadata(
               (getterFunction.GetDescription() || GetFullName(getterFunction)),
           // An operator and an operand are inserted before user parameters.
           ShiftSentenceParamIndexes(GetFreeFunctionSentence(getterFunction), 2),
-          getterFunction.GetGroup(), iconURL, iconURL);
+          GetFunctionGroup(getterFunction), iconURL, iconURL);
       action
           .SetManipulatedType(gd::ValueTypeMetadata::GetPrimitiveValueType(
               getterFunction.GetExpressionType().GetName()))
@@ -653,11 +653,11 @@ gd::InstructionMetadata &MetadataDeclarationHelper::DeclareInstructionMetadata(
     }
   } else {
     auto &action = extension.AddAction(
-        eventsFunction.GetName(),
-        GetFullName(eventsFunction),
-        GetTranslation(eventsFunction.GetDescription()) || GetFullName(eventsFunction),
-        GetFreeFunctionSentence(eventsFunction), eventsFunction.GetGroup(),
-        iconURL, iconURL);
+        eventsFunction.GetName(), GetFullName(eventsFunction),
+        GetTranslation(eventsFunction.GetDescription()) ||
+            GetFullName(eventsFunction),
+        GetFreeFunctionSentence(eventsFunction),
+        GetFunctionGroup(eventsFunction), iconURL, iconURL);
     // By convention, first parameter is always the Runtime Scene.
     action.AddCodeOnlyParameter("currentScene", "");
     DeclareEventsFunctionParameters(freeEventsFunctions, eventsFunction,
@@ -747,14 +747,14 @@ MetadataDeclarationHelper::DeclareBehaviorExpressionMetadata(
     auto expressionAndCondition = behaviorMetadata.AddExpressionAndCondition(
         gd::ValueTypeMetadata::GetPrimitiveValueType(
             eventsFunction.GetExpressionType().GetName()),
-        eventsFunction.GetName(),
-        GetFullName(eventsFunction),
+        eventsFunction.GetName(), GetFullName(eventsFunction),
         RemoveTrailingDot(eventsFunction.GetDescription()) ||
             GetFullName(eventsFunction),
         // An operator and an operand are inserted before user parameters.
-        ShiftSentenceParamIndexes(GetBehaviorFunctionSentence(eventsFunction, true), 2),
-        eventsFunction.GetGroup() || eventsBasedBehavior.GetFullName() ||
-            eventsBasedBehavior.GetName(),
+        ShiftSentenceParamIndexes(
+            GetBehaviorFunctionSentence(eventsFunction, true), 2),
+        GetFunctionGroup(eventsFunction) ||
+            eventsBasedBehavior.GetFullName() || eventsBasedBehavior.GetName(),
         iconURL);
     DeclareEventsFunctionParameters(eventsBasedBehavior.GetEventsFunctions(),
                                     eventsFunction, expressionAndCondition, 2);
@@ -771,7 +771,7 @@ MetadataDeclarationHelper::DeclareBehaviorExpressionMetadata(
                   MetadataDeclarationHelper::GetFullName(eventsFunction),
                   eventsFunction.GetDescription() ||
                       GetFullName(eventsFunction),
-                  eventsFunction.GetGroup() ||
+                  GetFunctionGroup(eventsFunction) ||
                       eventsBasedBehavior.GetFullName() ||
                       eventsBasedBehavior.GetName(),
                   iconURL)
@@ -780,7 +780,7 @@ MetadataDeclarationHelper::DeclareBehaviorExpressionMetadata(
                   MetadataDeclarationHelper::GetFullName(eventsFunction),
                   eventsFunction.GetDescription() ||
                       GetFullName(eventsFunction),
-                  eventsFunction.GetGroup() ||
+                  GetFunctionGroup(eventsFunction) ||
                       eventsBasedBehavior.GetFullName() ||
                       eventsBasedBehavior.GetName(),
                   iconURL);
@@ -809,11 +809,10 @@ MetadataDeclarationHelper::DeclareBehaviorInstructionMetadata(
     // we want to prevent any conflict between free functions and
     // behaviors (that can totally have functions with the same name).
     auto &condition = behaviorMetadata.AddScopedCondition(
-        eventsFunction.GetName(),
-        GetFullName(eventsFunction),
+        eventsFunction.GetName(), GetFullName(eventsFunction),
         eventsFunction.GetDescription() || GetFullName(eventsFunction),
         GetBehaviorFunctionSentence(eventsFunction),
-        eventsFunction.GetGroup() || eventsBasedBehavior.GetFullName() ||
+        GetFunctionGroup(eventsFunction) || eventsBasedBehavior.GetFullName() ||
             eventsBasedBehavior.GetName(),
         iconURL, iconURL);
     DeclareEventsFunctionParameters(eventsBasedBehavior.GetEventsFunctions(),
@@ -836,7 +835,7 @@ MetadataDeclarationHelper::DeclareBehaviorInstructionMetadata(
                                                GetFullName(getterFunction)),
           // An operator and an operand are inserted before user parameters.
           ShiftSentenceParamIndexes(GetBehaviorFunctionSentence(getterFunction, true), 2),
-          getterFunction.GetGroup() || eventsBasedBehavior.GetFullName() ||
+          GetFunctionGroup(getterFunction) || eventsBasedBehavior.GetFullName() ||
               eventsBasedBehavior.GetName(),
           iconURL, iconURL);
       action
@@ -876,7 +875,7 @@ MetadataDeclarationHelper::DeclareBehaviorInstructionMetadata(
         GetFullName(eventsFunction),
         eventsFunction.GetDescription() || GetFullName(eventsFunction),
         GetBehaviorFunctionSentence(eventsFunction),
-        eventsFunction.GetGroup() || eventsBasedBehavior.GetFullName() ||
+        GetFunctionGroup(eventsFunction) || eventsBasedBehavior.GetFullName() ||
             eventsBasedBehavior.GetName(),
         iconURL, iconURL);
 
@@ -946,7 +945,7 @@ MetadataDeclarationHelper::DeclareObjectExpressionMetadata(
             GetFullName(eventsFunction),
         // An operator and an operand are inserted before user parameters.
         ShiftSentenceParamIndexes(GetObjectFunctionSentence(eventsFunction, true), 2),
-        eventsFunction.GetGroup() || eventsBasedObject.GetFullName() ||
+        GetFunctionGroup(eventsFunction) || eventsBasedObject.GetFullName() ||
             eventsBasedObject.GetName(),
         iconURL);
 
@@ -965,7 +964,7 @@ MetadataDeclarationHelper::DeclareObjectExpressionMetadata(
                   MetadataDeclarationHelper::GetFullName(eventsFunction),
                   eventsFunction.GetDescription() ||
                       GetFullName(eventsFunction),
-                  eventsFunction.GetGroup() ||
+                  GetFunctionGroup(eventsFunction) ||
                       eventsBasedObject.GetFullName() ||
                       eventsBasedObject.GetName(),
                   iconURL)
@@ -974,7 +973,7 @@ MetadataDeclarationHelper::DeclareObjectExpressionMetadata(
                   MetadataDeclarationHelper::GetFullName(eventsFunction),
                   eventsFunction.GetDescription() ||
                       GetFullName(eventsFunction),
-                  eventsFunction.GetGroup() ||
+                  GetFunctionGroup(eventsFunction) ||
                       eventsBasedObject.GetFullName() ||
                       eventsBasedObject.GetName(),
                   iconURL);
@@ -1008,7 +1007,7 @@ MetadataDeclarationHelper::DeclareObjectInstructionMetadata(
         GetFullName(eventsFunction),
         eventsFunction.GetDescription() || GetFullName(eventsFunction),
         GetObjectFunctionSentence(eventsFunction),
-        eventsFunction.GetGroup() || eventsBasedObject.GetFullName() ||
+        GetFunctionGroup(eventsFunction) || eventsBasedObject.GetFullName() ||
             eventsBasedObject.GetName(),
         iconURL, iconURL);
 
@@ -1031,7 +1030,7 @@ MetadataDeclarationHelper::DeclareObjectInstructionMetadata(
               (getterFunction.GetDescription() || GetFullName(getterFunction)),
           // An operator and an operand are inserted before user parameters.
           ShiftSentenceParamIndexes(GetObjectFunctionSentence(getterFunction, true), 2),
-          getterFunction.GetGroup() || eventsBasedObject.GetFullName() ||
+          GetFunctionGroup(getterFunction) || eventsBasedObject.GetFullName() ||
               eventsBasedObject.GetName(),
           iconURL, iconURL);
       action
@@ -1070,7 +1069,7 @@ MetadataDeclarationHelper::DeclareObjectInstructionMetadata(
         GetFullName(eventsFunction),
         eventsFunction.GetDescription() || GetFullName(eventsFunction),
         GetObjectFunctionSentence(eventsFunction),
-        eventsFunction.GetGroup() || eventsBasedObject.GetFullName() ||
+        GetFunctionGroup(eventsFunction) || eventsBasedObject.GetFullName() ||
             eventsBasedObject.GetName(),
         iconURL, iconURL);
 
@@ -1725,6 +1724,11 @@ gd::ObjectMetadata &MetadataDeclarationHelper::GenerateObjectMetadata(
   UpdateCustomObjectInheritedBehaviors(project, objectMetadata);
 
   return objectMetadata;
+}
+
+gd::String MetadataDeclarationHelper::GetFunctionGroup(
+    const gd::EventsFunction &eventsFunction) {
+  return eventsFunction.GetGroup().FindAndReplace("/", " ❯ ");
 }
 
 class DefaultBehaviorUpdater : public gd::ArbitraryObjectsWorker {

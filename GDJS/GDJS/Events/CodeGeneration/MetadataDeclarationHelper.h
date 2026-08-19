@@ -349,6 +349,8 @@ private:
   GetObjectFunctionSentence(const gd::EventsFunction &eventsFunction,
                             const bool excludeObjectParameter = false);
 
+  static gd::String GetFunctionGroup(const gd::EventsFunction &eventsFunction);
+
   std::vector<gd::MultipleInstructionMetadata> expressionAndConditions;
 };
 
