@@ -228,6 +228,9 @@ type Props = {|
   ) => void,
   onWillInstallExtension: (extensionNames: Array<string>) => void,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
+  onCreateNewExtensionWithBehavior:
+    | ((project: gdProject, object: gdObject) => void)
+    | null,
   isVariableListLocked: boolean,
   isBehaviorListLocked: boolean,
 |};
@@ -260,6 +263,7 @@ export const CompactObjectPropertiesEditorContent = ({
   onDeleteEventsBasedObjectVariant,
   onWillInstallExtension,
   onExtensionInstalled,
+  onCreateNewExtensionWithBehavior,
   isVariableListLocked,
   isBehaviorListLocked,
   expand = true,
@@ -320,6 +324,8 @@ export const CompactObjectPropertiesEditorContent = ({
     onUpdateBehaviorsSharedData,
     onWillInstallExtension,
     onExtensionInstalled,
+    onCreateNewExtensionWithBehavior,
+    allVisibleBehaviorNames,
   });
 
   // Events based object children:

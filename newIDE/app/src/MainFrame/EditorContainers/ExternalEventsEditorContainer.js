@@ -107,7 +107,7 @@ export class ExternalEventsEditorContainer extends React.Component<
 
   onResourceExternallyChanged = (resourceInfo: {| identifier: string |}) => {
     if (this.lifecycleFunctionsEditor) {
-      this.lifecycleFunctionsEditor.forEachEditor((editor) =>
+      this.lifecycleFunctionsEditor.forEachEditor(editor =>
         editor.onResourceExternallyChanged(resourceInfo)
       );
     }
@@ -227,10 +227,11 @@ export class ExternalEventsEditorContainer extends React.Component<
 
   onSceneEventsModifiedOutsideEditor(changes: SceneEventsOutsideEditorChanges) {
     if (this.getExternalEvents() === changes.externalEvents) {
-      const lifecycleFunctionName: SceneLifecycleFunctionName =
-        isSceneLifecycleFunctionName(changes.lifecycleFunctionName)
-          ? (changes.lifecycleFunctionName: any)
-          : DEFAULT_SCENE_LIFECYCLE_FUNCTION_NAME;
+      const lifecycleFunctionName: SceneLifecycleFunctionName = isSceneLifecycleFunctionName(
+        changes.lifecycleFunctionName
+      )
+        ? (changes.lifecycleFunctionName: any)
+        : DEFAULT_SCENE_LIFECYCLE_FUNCTION_NAME;
       const editor = this.lifecycleFunctionsEditor
         ? this.lifecycleFunctionsEditor.getEditor(lifecycleFunctionName)
         : null;
@@ -269,7 +270,7 @@ export class ExternalEventsEditorContainer extends React.Component<
     }
 
     if (this.lifecycleFunctionsEditor) {
-      this.lifecycleFunctionsEditor.forEachEditor((editor) =>
+      this.lifecycleFunctionsEditor.forEachEditor(editor =>
         editor.forceUpdateEditor()
       );
     }
@@ -373,7 +374,7 @@ export class ExternalEventsEditorContainer extends React.Component<
       <div style={styles.container}>
         {layout && (
           <SceneContextLifecycleFunctionsEditor
-            ref={(editor) => (this.lifecycleFunctionsEditor = editor)}
+            ref={editor => (this.lifecycleFunctionsEditor = editor)}
             ownerKind="external-events"
             ownerName={externalEvents.getName()}
             owner={externalEvents}
@@ -453,6 +454,9 @@ export class ExternalEventsEditorContainer extends React.Component<
                   }
                   onWillInstallExtension={this.props.onWillInstallExtension}
                   onExtensionInstalled={this.props.onExtensionInstalled}
+                  onCreateNewExtensionWithBehavior={
+                    this.props.onCreateNewExtensionWithBehavior
+                  }
                 />
               );
             }}

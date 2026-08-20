@@ -489,6 +489,7 @@ export const useManageObjectBehaviors = ({
   onWillInstallExtension,
   onExtensionInstalled,
   canUseWholeProjectRefactorer,
+  onCreateNewExtensionWithBehavior,
 }: {
   project: gdProject,
   object: BehaviorHolder,
@@ -502,6 +503,9 @@ export const useManageObjectBehaviors = ({
   onWillInstallExtension: (extensionNames: Array<string>) => void,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
   canUseWholeProjectRefactorer?: boolean,
+  onCreateNewExtensionWithBehavior?:
+    | ((project: gdProject, object: gdObject) => void)
+    | null,
 }): UseManageBehaviorsState => {
   const [
     justAddedBehaviorName,
@@ -800,6 +804,14 @@ export const useManageObjectBehaviors = ({
       onWillInstallExtension={onWillInstallExtension}
       onExtensionInstalled={onExtensionInstalled}
       shouldShowCapabilityBehaviors={false}
+      onCreateNewExtensionWithBehavior={
+        onCreateNewExtensionWithBehavior
+          ? () => {
+              onCreateNewExtensionWithBehavior(project, object);
+              setNewBehaviorDialogOpen(false);
+            }
+          : null
+      }
     />
   );
 
@@ -839,6 +851,9 @@ type Props = {|
   ) => void | Promise<void>,
   onWillInstallExtension: (extensionNames: Array<string>) => void,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
+  onCreateNewExtensionWithBehavior?:
+    | ((project: gdProject, object: gdObject) => void)
+    | null,
   isListLocked: boolean,
   canToggleBehaviorMute?: boolean,
   canUseWholeProjectRefactorer?: boolean,
@@ -866,6 +881,7 @@ const BehaviorsEditor = (props: Props): React.Node => {
     openBehaviorEvents,
     onWillInstallExtension,
     onExtensionInstalled,
+    onCreateNewExtensionWithBehavior,
     isListLocked,
     canToggleBehaviorMute,
     canUseWholeProjectRefactorer,
@@ -901,6 +917,7 @@ const BehaviorsEditor = (props: Props): React.Node => {
     onWillInstallExtension,
     onExtensionInstalled,
     canUseWholeProjectRefactorer,
+    onCreateNewExtensionWithBehavior,
   });
 
   React.useEffect(

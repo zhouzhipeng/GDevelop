@@ -193,10 +193,11 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
 
   onSceneEventsModifiedOutsideEditor(changes: SceneEventsOutsideEditorChanges) {
     if (this.getLayout() === changes.scene) {
-      const lifecycleFunctionName: SceneLifecycleFunctionName =
-        isSceneLifecycleFunctionName(changes.lifecycleFunctionName)
-          ? (changes.lifecycleFunctionName: any)
-          : DEFAULT_SCENE_LIFECYCLE_FUNCTION_NAME;
+      const lifecycleFunctionName: SceneLifecycleFunctionName = isSceneLifecycleFunctionName(
+        changes.lifecycleFunctionName
+      )
+        ? (changes.lifecycleFunctionName: any)
+        : DEFAULT_SCENE_LIFECYCLE_FUNCTION_NAME;
       const editor = this.lifecycleFunctionsEditor
         ? this.lifecycleFunctionsEditor.getEditor(lifecycleFunctionName)
         : null;
@@ -234,7 +235,7 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
     }
 
     if (this.lifecycleFunctionsEditor) {
-      this.lifecycleFunctionsEditor.forEachEditor((editor) =>
+      this.lifecycleFunctionsEditor.forEachEditor(editor =>
         editor.forceUpdateEditor()
       );
     }
@@ -291,7 +292,7 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
 
     return (
       <SceneContextLifecycleFunctionsEditor
-        ref={(editor) => (this.lifecycleFunctionsEditor = editor)}
+        ref={editor => (this.lifecycleFunctionsEditor = editor)}
         ownerKind="scene"
         ownerName={layout.getName()}
         owner={layout}
@@ -364,9 +365,7 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
               settingsTooltip={
                 onOpenParameters ? t`Open parameters` : undefined
               }
-              settingsButtonPosition={
-                onOpenParameters ? 'start' : undefined
-              }
+              settingsButtonPosition={onOpenParameters ? 'start' : undefined}
               onOpenExternalEvents={this.props.onOpenExternalEvents}
               isActive={this.props.isActive && isSelected}
               hotReloadPreviewButtonProps={
@@ -374,6 +373,9 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
               }
               onWillInstallExtension={this.props.onWillInstallExtension}
               onExtensionInstalled={this.props.onExtensionInstalled}
+              onCreateNewExtensionWithBehavior={
+                this.props.onCreateNewExtensionWithBehavior
+              }
             />
           );
         }}

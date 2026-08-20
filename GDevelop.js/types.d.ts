@@ -2844,6 +2844,11 @@ export class EventsFunctionsExtension extends EmscriptenObject {
   static isExtensionLifecycleEventsFunction(eventsFunctionName: string): boolean;
 }
 
+export class EventsFunctionsExtensionExtractor extends EmscriptenObject {
+  constructor();
+  static createCustomBehaviorForObject(project: Project, eventsFunctionsExtension: EventsFunctionsExtension, obj: gdObject): EventsBasedBehavior;
+}
+
 export class AbstractFileSystem extends EmscriptenObject {}
 
 export class AbstractFileSystemJS extends AbstractFileSystem {
