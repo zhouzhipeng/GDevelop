@@ -316,6 +316,9 @@ export type EditorTabsPaneCommonProps = {|
   onWillDeleteObject: (changes: WillDeleteObjectChanges) => void,
   onWillInstallExtension: (extensionNames: Array<string>) => void,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
+  onCreateNewExtensionWithBehavior:
+    | ((project: gdProject, object: gdObject) => void)
+    | null,
   onLoadEventsFunctionsExtensions: ({|
     shouldHotReloadEditor: boolean,
   |}) => Promise<void>,
@@ -451,6 +454,7 @@ const EditorTabsPane: React.ComponentType<{
     onWillDeleteObject,
     onWillInstallExtension,
     onExtensionInstalled,
+    onCreateNewExtensionWithBehavior,
     onEffectAdded,
     onObjectListsModified,
     onExternalAssociationChanged,
@@ -950,6 +954,7 @@ const EditorTabsPane: React.ComponentType<{
                     onWillDeleteObject: onWillDeleteObject,
                     onWillInstallExtension: onWillInstallExtension,
                     onExtensionInstalled: onExtensionInstalled,
+                    onCreateNewExtensionWithBehavior: onCreateNewExtensionWithBehavior,
                     onEffectAdded: onEffectAdded,
                     onObjectListsModified: onObjectListsModified,
                     onExternalAssociationChanged,

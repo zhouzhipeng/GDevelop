@@ -60,6 +60,9 @@ type Props = {|
   onUpdateBehaviorsSharedData: () => void,
   onWillInstallExtension: (extensionNames: Array<string>) => void,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
+  onCreateNewExtensionWithBehavior:
+    | ((project: gdProject, object: gdObject) => void)
+    | null,
   onOpenEventBasedObjectVariantEditor: (
     extensionName: string,
     eventsBasedObjectName: string,
@@ -167,6 +170,7 @@ export const InstanceOrObjectPropertiesEditorContainer: React.ComponentType<{
       onUpdateBehaviorsSharedData,
       onWillInstallExtension,
       onExtensionInstalled,
+      onCreateNewExtensionWithBehavior,
       onOpenEventBasedObjectVariantEditor,
       onDeleteEventsBasedObjectVariant,
       isBehaviorListLocked,
@@ -296,6 +300,7 @@ export const InstanceOrObjectPropertiesEditorContainer: React.ComponentType<{
             onUpdateBehaviorsSharedData={onUpdateBehaviorsSharedData}
             onWillInstallExtension={onWillInstallExtension}
             onExtensionInstalled={onExtensionInstalled}
+            onCreateNewExtensionWithBehavior={onCreateNewExtensionWithBehavior}
             isBehaviorListLocked={isBehaviorListLocked}
             onOpenEventBasedObjectVariantEditor={
               onOpenEventBasedObjectVariantEditor
@@ -335,6 +340,7 @@ export const InstanceOrObjectPropertiesEditorContainer: React.ComponentType<{
             onUpdateBehaviorsSharedData={onUpdateBehaviorsSharedData}
             onWillInstallExtension={onWillInstallExtension}
             onExtensionInstalled={onExtensionInstalled}
+            onCreateNewExtensionWithBehavior={onCreateNewExtensionWithBehavior}
           />
         ) : layer && lastSelectionType === 'layer' ? (
           <CompactLayerPropertiesEditor

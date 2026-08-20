@@ -15,17 +15,15 @@ export type EventsFunctionEditorCapabilities = {|
   canEditProperties: boolean,
 |};
 
-export const editableEventsFunctionCapabilities: EventsFunctionEditorCapabilities =
-  {
-    canEditParameters: true,
-    canEditProperties: true,
-  };
+export const editableEventsFunctionCapabilities: EventsFunctionEditorCapabilities = {
+  canEditParameters: true,
+  canEditProperties: true,
+};
 
-export const fixedEventsFunctionCapabilities: EventsFunctionEditorCapabilities =
-  {
-    canEditParameters: false,
-    canEditProperties: false,
-  };
+export const fixedEventsFunctionCapabilities: EventsFunctionEditorCapabilities = {
+  canEditParameters: false,
+  canEditProperties: false,
+};
 
 type Props = {|
   project: gdProject,
@@ -41,8 +39,8 @@ type Props = {|
   settingsIcon?: React.Node,
   settingsTooltip?: MessageDescriptor,
   settingsButtonPosition?: 'start' | 'end',
-  onOpenExternalEvents: (string) => void,
-  onOpenLayout: (string) => void,
+  onOpenExternalEvents: string => void,
+  onOpenLayout: string => void,
   resourceManagementProps: ResourceManagementProps,
   openInstructionOrExpression: (
     extension: gdPlatformExtension,
@@ -58,6 +56,9 @@ type Props = {|
   hotReloadPreviewButtonProps: HotReloadPreviewButtonProps,
   onWillInstallExtension: (extensionNames: Array<string>) => void,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
+  onCreateNewExtensionWithBehavior?:
+    | ((project: gdProject, object: gdObject) => void)
+    | null,
   editEventsFunctionParameter?: ?(VariableDialogOpeningProps) => void,
   openEventsBasedEntityPropertyEditorDialog?: ?(
     VariableDialogOpeningProps
@@ -72,6 +73,7 @@ const EventsFunctionEditor: React.ComponentType<{
     {
       eventsFunction,
       capabilities,
+      onCreateNewExtensionWithBehavior = null,
       editEventsFunctionParameter,
       openEventsBasedEntityPropertyEditorDialog,
       ...eventsSheetProps
@@ -82,6 +84,7 @@ const EventsFunctionEditor: React.ComponentType<{
       {...eventsSheetProps}
       ref={ref}
       events={eventsFunction.getEvents()}
+      onCreateNewExtensionWithBehavior={onCreateNewExtensionWithBehavior}
       editEventsFunctionParameter={
         capabilities.canEditParameters
           ? editEventsFunctionParameter || null

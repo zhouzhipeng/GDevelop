@@ -963,6 +963,7 @@ export const EventsBasedBehaviorOrObjectPropertiesEditor: React.ComponentType<{
                     }}
                     onWillInstallExtension={onWillInstallExtension}
                     onExtensionInstalled={onExtensionInstalled}
+                    onCreateNewExtensionWithBehavior={null}
                     shouldShowCapabilityBehaviors={true}
                   />
                 )}

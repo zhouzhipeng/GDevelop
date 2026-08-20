@@ -10,8 +10,9 @@ import {
   copySpritePolygons,
   allDirectionSpritesHaveSamePointsAs,
   allDirectionSpritesHaveSameCollisionMasksAs,
-  deleteSpritesFromAnimation,
-  duplicateSpritesInAnimation,
+  deleteSpritesByIndexes,
+  duplicateSpritesByIndexes,
+  getSpriteIndexAfterMove,
   isFirstSpriteUsingFullImageCollisionMask,
   allObjectSpritesHaveSameCollisionMaskAs,
   allObjectSpritesHaveSamePointsAs,
@@ -225,13 +226,15 @@ type Props = {|
   // See `direction` in the component.
   animationIndex: number,
   directionIndex: number,
+  // Changed when the animations are modified from outside this component
+  // (an animation added, moved, removed...). See `selectedSpriteIndexes`.
+  animationsChangeTrigger: {},
   project: gdProject,
   resourcesLoader: typeof ResourcesLoader,
   resourceManagementProps: ResourceManagementProps,
   editDirectionWith: (
     i18n: I18nType,
-    ResourceExternalEditor,
-    direction: gdDirection
+    externalEditor: ResourceExternalEditor
   ) => Promise<void>,
   onReplaceByDirection: (newDirection: gdDirection) => void,
   onSpriteAdded: (sprite: gdSprite) => void,
@@ -247,6 +250,7 @@ const SpritesList = ({
   animations,
   animationIndex,
   directionIndex,
+  animationsChangeTrigger,
   project,
   resourcesLoader,
   resourceManagementProps,
@@ -260,18 +264,35 @@ const SpritesList = ({
   objectName,
   animationName,
 }: Props): React.Node => {
-  // It's important to save the selected sprites in a ref, so that
-  // we can update the selection when a context menu is opened without relying on the state.
-  // Otherwise, the selection would be updated after the context menu is opened.
-  // Then, we need to ensure we trigger a force-update every time the selection changes.
-  const selectedSprites = React.useRef<{
-    [number]: boolean,
-  }>({});
+  // The selected sprites, as their indexes in the direction. It's kept in a
+  // ref, so that it can be read and updated synchronously when a context menu
+  // is opened - a state would only be updated after the menu opened. In
+  // exchange, a force update is needed every time the selection changes.
+  const selectedSpriteIndexes = React.useRef<Set<number>>(new Set());
   const spriteContextMenu = React.useRef<?ContextMenuInterface>(null);
   const forceUpdate = useForceUpdate();
   const { showConfirmation } = useAlertDialog();
   const [isDraggedOver, setDraggedOver] = React.useState<boolean>(false);
   const dragDropManager = useDragDropManager();
+
+  const setSelectedSpriteIndexes = React.useCallback(
+    (spriteIndexes: Set<number>) => {
+      selectedSpriteIndexes.current = spriteIndexes;
+      forceUpdate();
+    },
+    [forceUpdate]
+  );
+
+  // The selection designates sprites by their index: reset it when the
+  // animations are changed from outside this component, as the same indexes
+  // would then designate other sprites.
+  React.useEffect(
+    () => {
+      if (selectedSpriteIndexes.current.size === 0) return;
+      setSelectedSpriteIndexes(new Set());
+    },
+    [animationsChangeTrigger, setSelectedSpriteIndexes]
+  );
 
   // The C++ vectors holding the animations and their sprites are reallocated
   // as soon as an animation or a sprite is added or removed. Any `gdDirection`
@@ -290,6 +311,18 @@ const SpritesList = ({
     [animations, animationIndex, directionIndex]
   );
 
+  const getSelectedSpriteIndexes = React.useCallback(
+    (): Array<number> => {
+      const direction = getDirection();
+      if (!direction) return [];
+      const spritesCount = direction.getSpritesCount();
+      return [...selectedSpriteIndexes.current]
+        .filter(spriteIndex => spriteIndex < spritesCount)
+        .sort((a, b) => a - b);
+    },
+    [getDirection]
+  );
+
   const storageProvider = resourceManagementProps.getStorageProvider();
   const resourceSources = resourceManagementProps.resourceSources
     .filter(source => source.kind === 'image')
@@ -299,79 +332,21 @@ const SpritesList = ({
         onlyForStorageProvider === storageProvider.internalName
     );
 
-  const updateSelectionIndexesAfterMoveUp = React.useCallback(
-    (oldIndex: number, newIndex: number, wasMovedItemSelected: boolean) => {
-      const direction = getDirection();
-      if (!direction) return;
-      for (let i = oldIndex; i <= newIndex; ++i) {
-        const spriteAtIndex = direction.getSprite(i);
-        if (i === newIndex) {
-          // If this is the new index of the moved sprite, we keep its selection status.
-          selectedSprites.current[spriteAtIndex.ptr] = wasMovedItemSelected;
-        } else {
-          // If moving up, the other sprites are going down, so their previous index was i+1.
-          const previousSpriteIndex = i + 1;
-          const previousSelectionStatus = !!selectedSprites.current[
-            direction.getSprite(previousSpriteIndex).ptr
-          ];
-          selectedSprites.current[spriteAtIndex.ptr] = previousSelectionStatus;
-        }
-      }
-    },
-    [getDirection]
-  );
-
-  const updateSelectionIndexesAfterMoveDown = React.useCallback(
-    (oldIndex: number, newIndex: number, wasMovedItemSelected: boolean) => {
-      const direction = getDirection();
-      if (!direction) return;
-      for (let i = oldIndex; i >= newIndex; --i) {
-        const spriteAtIndex = direction.getSprite(i);
-        if (i === newIndex) {
-          // If this is the new index of the moved sprite, we keep its selection status.
-          selectedSprites.current[spriteAtIndex.ptr] = wasMovedItemSelected;
-        } else {
-          // If moving down, the other sprites are going up, so their previous index was i-1.
-          const previousSpriteIndex = i - 1;
-          const previousSelectionStatus = !!selectedSprites.current[
-            direction.getSprite(previousSpriteIndex).ptr
-          ];
-          selectedSprites.current[spriteAtIndex.ptr] = previousSelectionStatus;
-        }
-      }
-    },
-    [getDirection]
-  );
-
   const moveSpriteToIndex = React.useCallback(
     (oldIndex: number, newIndex: number) => {
       if (oldIndex === newIndex) return;
       const direction = getDirection();
       if (!direction) return;
-      // We store the selection value of the moved sprite, as its pointer will
-      // be changed by the move.
-      const wasMovedItemSelected = !!selectedSprites.current[
-        direction.getSprite(oldIndex).ptr
-      ];
       direction.moveSprite(oldIndex, newIndex);
 
-      // When moving a sprite, the pointers are all shifted, so we need to
-      // update the selectedSprites map for the user not to lose their selection.
-      if (oldIndex < newIndex) {
-        updateSelectionIndexesAfterMoveUp(
-          oldIndex,
-          newIndex,
-          wasMovedItemSelected
-        );
-      } else {
-        updateSelectionIndexesAfterMoveDown(
-          oldIndex,
-          newIndex,
-          wasMovedItemSelected
-        );
-      }
-
-      forceUpdate();
+      // Move the selection along with the moved sprite.
+      setSelectedSpriteIndexes(
+        new Set(
+          [...selectedSpriteIndexes.current].map(spriteIndex =>
+            getSpriteIndexAfterMove(spriteIndex, oldIndex, newIndex)
+          )
+        )
+      );
       onSpriteUpdated && onSpriteUpdated();
       if (oldIndex === 0 || newIndex === 0) {
         // If a sprite was moved from or to the first position,
@@ -381,11 +356,9 @@ const SpritesList = ({
     },
     [
       getDirection,
-      forceUpdate,
+      setSelectedSpriteIndexes,
       onSpriteUpdated,
       onFirstSpriteUpdated,
-      updateSelectionIndexesAfterMoveDown,
-      updateSelectionIndexesAfterMoveUp,
     ]
   );
 
@@ -557,7 +530,9 @@ const SpritesList = ({
       );
       if (!imageFilePaths.length) return;
 
-      const directionSpritesCountBeforeAdding = direction.getSpritesCount();
+      const directionBeforeAdding = getDirection();
+      if (!directionBeforeAdding) return;
+      const directionSpritesCountBeforeAdding = directionBeforeAdding.getSpritesCount();
       let hasCreatedAnyResource = false;
       let hasAddedAnySprite = false;
       let importError: any = null;
@@ -577,6 +552,8 @@ const SpritesList = ({
           const resource = project
             .getResourcesManager()
             .getResource(resourceName);
+          const direction = getDirection();
+          if (!direction) break;
           addAnimationFrame(animations, direction, resource, onSpriteAdded);
           hasAddedAnySprite = true;
         } catch (error) {
@@ -609,8 +586,8 @@ const SpritesList = ({
     },
     [
       animations,
-      direction,
       forceUpdate,
+      getDirection,
       hasSupportedDropData,
       onFirstSpriteUpdated,
       onSpriteAdded,
@@ -622,26 +599,16 @@ const SpritesList = ({
 
   const deleteSprites = React.useCallback(
     async () => {
-      const sprites = selectedSprites.current;
-      // The first direction of the first animation can be empty (for example,
-      // when editing another animation of the object).
-      const firstObjectSprite = getCurrentElements(animations, 0, 0, 0).sprite;
-      const isObjectFirstSpriteDeleted =
-        !!firstObjectSprite && !!sprites[firstObjectSprite.ptr];
-
-      const totalSpritesCount = getTotalSpritesCount(animations);
-      const isDeletingLastSprites =
-        Object.keys(sprites).length === totalSpritesCount;
       const direction = getDirection();
-      const oneOfSpritesInCurrentDirection =
-        direction && direction.getSpritesCount() > 0
-          ? direction.getSprite(0)
-          : null;
+      if (!direction) return;
+      const spriteIndexesToDelete = getSelectedSpriteIndexes();
+      if (spriteIndexesToDelete.length === 0) return;
 
+      const isDeletingLastSprites =
+        spriteIndexesToDelete.length === getTotalSpritesCount(animations);
       const isUsingCustomCollisionMask =
         !animations.adaptCollisionMaskAutomatically() &&
-        oneOfSpritesInCurrentDirection &&
-        !oneOfSpritesInCurrentDirection.isFullImageCollisionMask();
+        !direction.getSprite(0).isFullImageCollisionMask();
       const shouldWarnBecauseLosingCustomCollisionMask =
         isDeletingLastSprites && isUsingCustomCollisionMask;
 
@@ -655,14 +622,17 @@ const SpritesList = ({
         if (!deleteAnswer) return;
       }
 
-      mapFor(0, animations.getAnimationsCount(), index => {
-        const animation = animations.getAnimation(index);
-        deleteSpritesFromAnimation(animation, sprites);
-      });
+      // Resolve the direction again: the animations could have been changed
+      // while the confirmation was shown.
+      const directionAfterConfirmation = getDirection();
+      if (!directionAfterConfirmation) return;
+      const isObjectFirstSpriteDeleted =
+        animationIndex === 0 &&
+        directionIndex === 0 &&
+        spriteIndexesToDelete[0] === 0;
+      deleteSpritesByIndexes(directionAfterConfirmation, spriteIndexesToDelete);
 
-      // Clear selection after deletion.
-      selectedSprites.current = {};
-      forceUpdate();
+      setSelectedSpriteIndexes(new Set());
       if (onSpriteUpdated) onSpriteUpdated();
       if (isObjectFirstSpriteDeleted && onFirstSpriteUpdated)
         onFirstSpriteUpdated();
@@ -674,64 +644,50 @@ const SpritesList = ({
     },
     [
       getDirection,
+      getSelectedSpriteIndexes,
+      setSelectedSpriteIndexes,
+      animationIndex,
+      directionIndex,
       onSpriteUpdated,
       onFirstSpriteUpdated,
       animations,
-      forceUpdate,
       showConfirmation,
     ]
   );
 
   const duplicateSprites = React.useCallback(
     () => {
-      const sprites = selectedSprites.current;
-      mapFor(0, animations.getAnimationsCount(), index => {
-        const animation = animations.getAnimation(index);
-        duplicateSpritesInAnimation(animation, sprites);
-      });
+      const direction = getDirection();
+      if (!direction) return;
+      duplicateSpritesByIndexes(direction, getSelectedSpriteIndexes());
 
       // Clear selection after duplication.
-      selectedSprites.current = {};
-      forceUpdate();
+      setSelectedSpriteIndexes(new Set());
       if (onSpriteUpdated) onSpriteUpdated();
     },
-    [onSpriteUpdated, animations, forceUpdate]
+    [
+      getDirection,
+      getSelectedSpriteIndexes,
+      setSelectedSpriteIndexes,
+      onSpriteUpdated,
+    ]
   );
 
   const addSpriteToSelection = React.useCallback(
-    (spritePtr: number, selected: boolean) => {
-      selectedSprites.current = {
-        ...selectedSprites.current,
-        [spritePtr]: selected,
-      };
-      forceUpdate();
+    (spriteIndex: number, selected: boolean) => {
+      const spriteIndexes = new Set(selectedSpriteIndexes.current);
+      if (selected) spriteIndexes.add(spriteIndex);
+      else spriteIndexes.delete(spriteIndex);
+      setSelectedSpriteIndexes(spriteIndexes);
     },
-    [forceUpdate]
+    [setSelectedSpriteIndexes]
   );
 
   const selectUniqueSprite = React.useCallback(
-    (spritePtr: number) => {
-      selectedSprites.current = {
-        [spritePtr]: true,
-      };
-      forceUpdate();
+    (spriteIndex: number) => {
+      setSelectedSpriteIndexes(new Set([spriteIndex]));
     },
-    [forceUpdate]
-  );
-
-  const getSelectedSpriteIndexes = React.useCallback(
-    () => {
-      const selectedIndexes = [];
-      const direction = getDirection();
-      if (!direction) return selectedIndexes;
-      mapFor(0, direction.getSpritesCount(), i => {
-        if (selectedSprites.current[direction.getSprite(i).ptr]) {
-          selectedIndexes.push(i);
-        }
-      });
-      return selectedIndexes;
-    },
-    [getDirection]
+    [setSelectedSpriteIndexes]
   );
 
   const moveSelectedSpritesToPosition = React.useCallback(
@@ -767,15 +723,10 @@ const SpritesList = ({
         if (fromIndex !== toIndex) direction.moveSprite(fromIndex, toIndex);
       });
 
-      // As sprites were moved, the pointers of the selected sprites are now
-      // the ones at the final positions of the selection.
-      const newSelectedSprites: { [number]: boolean } = {};
-      mapFor(0, selectedCount, j => {
-        newSelectedSprites[direction.getSprite(startIndex + j).ptr] = true;
-      });
-      selectedSprites.current = newSelectedSprites;
-
-      forceUpdate();
+      // The selection is now the block of sprites at its final position.
+      setSelectedSpriteIndexes(
+        new Set(mapFor(0, selectedCount, j => startIndex + j))
+      );
       if (onSpriteUpdated) onSpriteUpdated();
       if (startIndex === 0 || selectedIndexes[0] === 0) {
         // A sprite was moved from or to the first position,
@@ -786,14 +737,14 @@ const SpritesList = ({
     [
       getDirection,
       getSelectedSpriteIndexes,
-      forceUpdate,
+      setSelectedSpriteIndexes,
       onSpriteUpdated,
       onFirstSpriteUpdated,
     ]
   );
 
   const openSpriteContextMenu = React.useCallback(
-    (x: number, y: number, spritePtr: number) => {
+    (x: number, y: number, spriteIndex: number) => {
       // When the context menu opens (long press on mobile), it intercepts
       // subsequent touch events, so the drag backend would never receive
       // touchend and a drag started by the press would stay active
@@ -802,8 +753,8 @@ const SpritesList = ({
         dragDropManager.getActions().endDrag();
       }
       // If the sprite is not selected, select only it.
-      if (!selectedSprites.current[spritePtr]) {
-        selectUniqueSprite(spritePtr);
+      if (!selectedSpriteIndexes.current.has(spriteIndex)) {
+        selectUniqueSprite(spriteIndex);
       }
       // Otherwise, keep the selection as is.
       if (spriteContextMenu.current) {
@@ -821,6 +772,7 @@ const SpritesList = ({
 
   const spritesCount = direction.getSpritesCount();
   const hasMoreThanOneSprite = spritesCount > 1;
+  const directionPtr = direction.ptr;
 
   return (
     <ColumnStackLayout noMargin>
@@ -832,9 +784,7 @@ const SpritesList = ({
         resourceExternalEditors={
           resourceManagementProps.resourceExternalEditors
         }
-        onEditWith={(i18n, ResourceExternalEditor) =>
-          editDirectionWith(i18n, ResourceExternalEditor, direction)
-        }
+        onEditWith={editDirectionWith}
         onDirectionUpdated={onSpriteUpdated}
       />
       <ResponsiveLineStackLayout noMargin expand alignItems="center">
@@ -851,24 +801,23 @@ const SpritesList = ({
         >
           <div style={styles.spritesList} ref={spritesListRef}>
             {mapFor(0, spritesCount, i => {
-              const sprite = direction.getSprite(i);
-              // Extract the sprite pointer and image name right away: the
+              // Extract the sprite and image name right away: the
               // closures below can be called by react-dnd after the underlying
               // C++ sprite was moved or deleted (following a drag'n'drop or a
               // deletion), but before this component is re-rendered. `sprite`
               // would then be a dangling wrapper: calling any of its methods
               // would crash the editor - so closures must only capture these
               // primitives.
-              const spritePtr = sprite.ptr;
+              const sprite = direction.getSprite(i);
               const imageName = sprite.getImageName();
               return (
                 <DragSourceAndDropTarget
-                  key={spritePtr}
+                  key={i}
                   beginDrag={() => {
                     draggedSpriteIndex.current = i;
                     startAutoScroll();
                     return {
-                      directionPtr: direction.ptr,
+                      directionPtr,
                       name: imageName,
                       thumbnail: resourcesLoader.getResourceFullUrl(
                         project,
@@ -881,7 +830,7 @@ const SpritesList = ({
                   // If there is only one sprite, don't make it draggable.
                   canDrag={() => hasMoreThanOneSprite}
                   // Only allow moving sprites within the same direction.
-                  canDrop={item => item.directionPtr === direction.ptr}
+                  canDrop={item => item.directionPtr === directionPtr}
                   drop={() => dropBeforeSprite(i)}
                 >
                   {({
@@ -897,12 +846,12 @@ const SpritesList = ({
                           <div style={styles.spriteDragSource}>
                             <ImageThumbnail
                               selectable
-                              selected={!!selectedSprites.current[spritePtr]}
+                              selected={selectedSpriteIndexes.current.has(i)}
                               onSelect={selected =>
-                                addSpriteToSelection(spritePtr, selected)
+                                addSpriteToSelection(i, selected)
                               }
                               onContextMenu={(x, y) =>
-                                openSpriteContextMenu(x, y, spritePtr)
+                                openSpriteContextMenu(x, y, i)
                               }
                               resourceName={imageName}
                               resourcesLoader={resourcesLoader}
@@ -928,7 +877,7 @@ const SpritesList = ({
               />
             ) : (
               <EndOfListDropTarget
-                canDrop={item => item.directionPtr === direction.ptr}
+                canDrop={item => item.directionPtr === directionPtr}
                 drop={dropAtEndOfList}
               >
                 {({ connectDropTarget, isOver, canDrop }) =>

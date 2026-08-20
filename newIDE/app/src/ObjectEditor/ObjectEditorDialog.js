@@ -68,6 +68,9 @@ type Props = {|
   openBehaviorEvents: (extensionName: string, behaviorName: string) => void,
   onWillInstallExtension: (extensionNames: Array<string>) => void,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
+  onCreateNewExtensionWithBehavior:
+    | ((project: gdProject, object: gdObject) => void)
+    | null,
   onOpenEventBasedObjectEditor: (
     extensionName: string,
     eventsBasedObjectName: string
@@ -116,6 +119,7 @@ const InnerDialog = (props: InnerDialogProps) => {
     onComputeAllVariableNames,
     onWillInstallExtension,
     onExtensionInstalled,
+    onCreateNewExtensionWithBehavior,
     onOpenEventBasedObjectEditor,
     onOpenEventBasedObjectVariantEditor,
     onDeleteEventsBasedObjectVariant,
@@ -410,6 +414,14 @@ const InnerDialog = (props: InnerDialogProps) => {
             openBehaviorEvents={askConfirmationAndOpenBehaviorEvents}
             onWillInstallExtension={onWillInstallExtension}
             onExtensionInstalled={onExtensionInstalled}
+            onCreateNewExtensionWithBehavior={
+              onCreateNewExtensionWithBehavior
+                ? (project, object) => {
+                    onApply();
+                    onCreateNewExtensionWithBehavior(project, object);
+                  }
+                : null
+            }
             isListLocked={isBehaviorListLocked}
             canToggleBehaviorMute
           />
