@@ -10,6 +10,7 @@ from unittest import mock
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT_DIR / "scripts" / "start-windows-app.py"
+HEADLESS_SCRIPT = ROOT_DIR / "scripts" / "start-windows-headless-app.py"
 
 
 def load_script_module():
@@ -223,6 +224,18 @@ class StartWindowsAppScriptTest(unittest.TestCase):
         self.assertIn("Write-Warning", port_stop_script)
         self.assertIn("exit 0", port_stop_script)
 
+    def test_headless_cleanup_keeps_existing_electron_instances(self):
+        module = load_script_module()
+        with mock.patch.object(module, "run_powershell") as run_powershell:
+            module.stop_existing_processes(
+                ROOT_DIR,
+                ROOT_DIR / "electron.exe",
+                dry_run=False,
+                stop_electron=False,
+            )
+
+        run_powershell.assert_not_called()
+
     def test_electron_runs_detached_without_inherited_console(self):
         module = load_script_module()
         electron_app_dir = ROOT_DIR / "newIDE" / "electron-app"
@@ -254,6 +267,104 @@ class StartWindowsAppScriptTest(unittest.TestCase):
             popen.call_args.kwargs["creationflags"],
             subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
         )
+
+    def test_headless_electron_command_includes_project_and_mcp_port(self):
+        module = load_script_module()
+        electron_app_dir = ROOT_DIR / "newIDE" / "electron-app"
+        electron_exe = (
+            electron_app_dir
+            / "node_modules"
+            / "electron"
+            / "dist"
+            / "electron.exe"
+        )
+        project = ROOT_DIR / "examples" / "headless.gdevelop"
+        process = mock.Mock(pid=4321)
+
+        with mock.patch.object(module.subprocess, "Popen", return_value=process) as popen:
+            launched_process = module.launch_electron(
+                electron_app_dir,
+                electron_exe,
+                dry_run=False,
+                headless=True,
+                mcp_port=32110,
+                project=project,
+            )
+
+        self.assertIs(launched_process, process)
+        self.assertEqual(
+            popen.call_args.args[0],
+            [
+                str(electron_exe),
+                "--force_high_performance_gpu",
+                "app",
+                "--headless",
+                "--mcp-port=32110",
+                str(project),
+            ],
+        )
+        self.assertEqual(popen.call_args.kwargs["env"]["ELECTRON_IS_DEV"], "0")
+        self.assertEqual(
+            popen.call_args.kwargs["env"]["ELECTRON_ENABLE_LOGGING"], "1"
+        )
+        self.assertIsNone(popen.call_args.kwargs["stdin"])
+        self.assertIsNone(popen.call_args.kwargs["stdout"])
+        self.assertIsNone(popen.call_args.kwargs["stderr"])
+        self.assertEqual(popen.call_args.kwargs["creationflags"], 0)
+
+    def test_headless_wait_returns_editor_exit_code(self):
+        module = load_script_module()
+        process = mock.Mock()
+        process.wait.return_value = 23
+
+        with mock.patch.object(module, "step"):
+            exit_code = module.wait_for_headless_electron(process)
+
+        self.assertEqual(exit_code, 23)
+        process.wait.assert_called_once_with()
+
+    def test_headless_wrapper_forwards_arguments_and_forces_mode(self):
+        spec = util.spec_from_file_location("start_windows_headless_app", HEADLESS_SCRIPT)
+        module = util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+
+        with mock.patch.object(module, "load_base_launcher") as load_launcher:
+            base_launcher = load_launcher.return_value
+            base_launcher.main.return_value = 17
+
+            result = module.main(["--skip-build", "--mcp-port=32111", "game.gdevelop"])
+
+        self.assertEqual(result, 17)
+        base_launcher.main.assert_called_once_with(
+            ["--headless", "--skip-build", "--mcp-port=32111", "game.gdevelop"]
+        )
+
+    def test_normal_launcher_keeps_preferences_mcp_port(self):
+        module = load_script_module()
+
+        args = module.parse_args([])
+        self.assertFalse(args.headless)
+        self.assertEqual(args.mcp_port, module.DEFAULT_MCP_PORT)
+
+        with mock.patch.object(module.subprocess, "Popen") as popen:
+            process = mock.Mock(pid=9876)
+            popen.return_value = process
+            module.launch_electron(
+                ROOT_DIR / "newIDE" / "electron-app",
+                ROOT_DIR / "newIDE" / "newIDE.exe",
+                dry_run=False,
+            )
+
+        self.assertNotIn("--headless", popen.call_args.args[0])
+        self.assertNotIn("--mcp-port=32110", popen.call_args.args[0])
+
+    def test_headless_requires_project(self):
+        module = load_script_module()
+
+        with mock.patch.object(module, "is_running_as_administrator") as is_admin:
+            is_admin.return_value = False
+            self.assertEqual(module.main(["--headless", "--dry-run"]), 2)
 
 
 if __name__ == "__main__":

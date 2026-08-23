@@ -222,7 +222,8 @@ const detachChildWindowsFromParent = parentWindowId => {
 
 const keepParentWindowVisibleAfterChildClose = (
   parentWindowId,
-  parentWasMinimizedBeforeChildClose
+  parentWasMinimizedBeforeChildClose,
+  headless = false
 ) => {
   if (parentWindowId === null) return;
 
@@ -230,7 +231,7 @@ const keepParentWindowVisibleAfterChildClose = (
   // attached/always-on-top over it.
   detachChildWindowsFromParent(parentWindowId);
 
-  if (parentWasMinimizedBeforeChildClose) return;
+  if (headless || parentWasMinimizedBeforeChildClose) return;
 
   const restoreParentWindow = () => {
     const parentWindow = BrowserWindow.fromId(parentWindowId);
@@ -465,6 +466,7 @@ const openPreviewWindow = ({
   numberOfWindows,
   captureOptions,
   openEvent,
+  headless = false,
 }) => {
   // If opening multiple windows at once, place them across the screen.
   const primaryWorkArea = screen.getPrimaryDisplay().workArea;
@@ -484,6 +486,9 @@ const openPreviewWindow = ({
     },
   };
   for (let i = 0; i < numberOfWindows; i++) {
+    // Keep the logical parent ID so closing a headless editor also closes its
+    // hidden preview windows. The native BrowserWindow parent is still null
+    // below, so the preview cannot steal focus or stay above the editor.
     const parentWindowId = parentWindow ? parentWindow.id : null;
     const x = numberOfWindows > 1 ? positions[i + 1].x : undefined;
     const y = numberOfWindows > 1 ? positions[i + 1].y : undefined;
@@ -498,12 +503,28 @@ const openPreviewWindow = ({
     );
     const browserWindowOptions = {
       ...fittedPreviewBrowserWindowOptions,
-      parent: alwaysOnTop ? parentWindow : null,
+      parent: headless ? null : alwaysOnTop ? parentWindow : null,
+      alwaysOnTop: headless
+        ? false
+        : fittedPreviewBrowserWindowOptions.alwaysOnTop,
+      show: headless ? false : fittedPreviewBrowserWindowOptions.show,
+      skipTaskbar: headless
+        ? true
+        : fittedPreviewBrowserWindowOptions.skipTaskbar,
+      webPreferences: {
+        ...(fittedPreviewBrowserWindowOptions.webPreferences || {}),
+        // Native preview input, debugger messages, and frame stepping must
+        // keep running while no editor window is visible.
+        backgroundThrottling: false,
+      },
       x,
       y,
     };
 
     let previewWindow = new BrowserWindow(browserWindowOptions);
+    if (headless && typeof previewWindow.hide === 'function') {
+      previewWindow.hide();
+    }
     setPreviewWindowMenuBarVisibilityAndContentSize(
       previewWindow,
       fittedPreviewBrowserWindowOptions,
@@ -521,7 +542,7 @@ const openPreviewWindow = ({
       openDevToolsByDefault = false;
     });
 
-    if (openDevToolsByDefault) previewWindow.openDevTools();
+    if (openDevToolsByDefault && !headless) previewWindow.openDevTools();
 
     // Enable `@electron/remote` module for renderer process
     require('@electron/remote/main').enable(previewWindow.webContents);
@@ -549,9 +570,10 @@ const openPreviewWindow = ({
     previewWindows.push({
       previewWindow: previewWindow,
       parentWindowId,
+      headless,
     });
     updatePowerSaveBlocker();
-    arrangeDebuggerPopOutWithLatestPreview(parentWindowId);
+    if (!headless) arrangeDebuggerPopOutWithLatestPreview(parentWindowId);
 
     previewWindow.on('closed', closeEvent => {
       previewWindows = previewWindows.filter(
@@ -565,7 +587,7 @@ const openPreviewWindow = ({
           !entry.previewWindow.isDestroyed()
       ).length;
       if (remainingPreviewWindowsForParent > 0) {
-        arrangeDebuggerPopOutWithLatestPreview(parentWindowId);
+        if (!headless) arrangeDebuggerPopOutWithLatestPreview(parentWindowId);
       }
       const debuggerCloseRequested =
         remainingPreviewWindowsForParent === 0
@@ -573,7 +595,8 @@ const openPreviewWindow = ({
           : false;
       keepParentWindowVisibleAfterChildClose(
         parentWindowId,
-        parentWasMinimizedBeforePreviewClose
+        parentWasMinimizedBeforePreviewClose,
+        headless
       );
       // Only send message if the parent window still exists
       if (openEvent.sender && !openEvent.sender.isDestroyed()) {
@@ -676,6 +699,7 @@ const closeAllPreviewWindows = async () => {
 
 const focusAllPreviewWindows = () => {
   previewWindows.forEach(entry => {
+    if (entry.headless) return;
     const win = entry.previewWindow;
     try {
       if (win && !win.isDestroyed()) {
@@ -724,7 +748,9 @@ const injectPreviewUserGesture = async ({ windowId, inputs } = {}) => {
     };
   }
 
-  return injectPreviewClickUserGesture(entry.previewWindow, inputs);
+  return injectPreviewClickUserGesture(entry.previewWindow, inputs, {
+    keepHidden: !!entry.headless,
+  });
 };
 
 // Capture a PNG of a preview window's content from the MAIN process via

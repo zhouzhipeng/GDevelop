@@ -3,6 +3,7 @@ const assert = require('assert');
 const {
   getElectronAppCommandLineArguments,
 } = require('../app/Utils/AppArguments');
+const { parseGDevelopArgs } = require('../app/CliArguments');
 
 const run = () => {
   assert.deepStrictEqual(
@@ -39,6 +40,15 @@ const run = () => {
     ),
     ['C:\\Projects\\game.json']
   );
+
+  const headlessArgs = parseGDevelopArgs([
+    '--headless',
+    '--mcp-port=0',
+    'C:\\Projects\\game.json',
+  ]);
+  assert.strictEqual(headlessArgs.headless, true);
+  assert.strictEqual(headlessArgs['mcp-port'], '0');
+  assert.deepStrictEqual(headlessArgs._, ['C:\\Projects\\game.json']);
 
   assert.deepStrictEqual(
     getElectronAppCommandLineArguments(

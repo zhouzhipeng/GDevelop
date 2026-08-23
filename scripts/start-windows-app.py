@@ -15,27 +15,46 @@ install (so a newly-added dependency does not fail the build with a late
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from libgd_build import LIBGD_VARIANTS, build_libgd, npm_install_needed
 
 
 DEV_PORTS = (3000, 5002)
+DEFAULT_MCP_PORT = 32110
+HEADLESS_STARTUP_TIMEOUT_SECONDS = 30
 REACT_BUILD_MINIMUM_HEAP_MB = 8192
 NODE_MAX_OLD_SPACE_SIZE_PATTERN = re.compile(
     r"(?<!\S)--max[-_]old[-_]space[-_]size(?:=|\s+)(\d+)(?!\S)"
 )
 
 
-def parse_args() -> argparse.Namespace:
+def parse_mcp_port(value: str) -> int:
+    try:
+        port = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("MCP port must be an integer.") from error
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError("MCP port must be between 0 and 65535.")
+    return port
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fully build, sync, and start the GDevelop Windows app."
+        description=(
+            "Fully build, sync, and start the GDevelop Windows app. "
+            "Use --headless with a project path for the AI/MCP host."
+        )
     )
     parser.add_argument(
         "--repo-root",
@@ -70,6 +89,30 @@ def parse_args() -> argparse.Namespace:
         help="Build GDevelop.js with npm run build-with-MinGW instead of the default Ninja build.",
     )
     parser.add_argument(
+        "--headless",
+        action="store_true",
+        help=(
+            "Start a hidden editor and automatically enable its localhost MCP "
+            "server. Requires a project path."
+        ),
+    )
+    parser.add_argument(
+        "--mcp-port",
+        type=parse_mcp_port,
+        default=DEFAULT_MCP_PORT,
+        help=(
+            "MCP port for --headless (0 chooses a free port; default: "
+            f"{DEFAULT_MCP_PORT}). Ignored by the normal visible launch, "
+            "which keeps its Preferences-controlled MCP port."
+        ),
+    )
+    parser.add_argument(
+        "project",
+        nargs="?",
+        type=Path,
+        help="Optional project file to open; required by --headless.",
+    )
+    parser.add_argument(
         "--no-launch",
         action="store_true",
         help="Build and sync app/www but do not start Electron.",
@@ -79,7 +122,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print the planned commands without running them.",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def step(title: str) -> None:
@@ -226,9 +269,16 @@ def ensure_not_running_as_administrator() -> None:
     )
 
 
-def stop_existing_processes(repo_root: Path, electron_exe: Path, dry_run: bool) -> None:
-    step("Stop existing GDevelop Electron processes")
-    script = f"""
+def stop_existing_processes(
+    repo_root: Path,
+    electron_exe: Path,
+    dry_run: bool,
+    *,
+    stop_electron: bool = True,
+) -> None:
+    if stop_electron:
+        step("Stop existing GDevelop Electron processes")
+        script = f"""
 $electronPath = {quote_powershell_string(electron_exe)}
 $processes = Get-Process electron -ErrorAction SilentlyContinue |
   Where-Object {{ $_.Path -eq $electronPath }}
@@ -242,7 +292,15 @@ foreach ($process in $processes) {{
 }}
 exit 0
 """
-    run_powershell(script, cwd=repo_root, dry_run=dry_run)
+        run_powershell(script, cwd=repo_root, dry_run=dry_run)
+    else:
+        step("Keep existing GDevelop Electron processes")
+        print(
+            "Headless mode keeps visible/headless Electron instances running "
+            "so they can coexist (including their development servers).",
+            flush=True,
+        )
+        return
 
     step("Stop stale dev servers on ports 3000 and 5002")
     ports_pattern = "|".join(f":{port}.*LISTENING" for port in DEV_PORTS)
@@ -391,11 +449,27 @@ def sync_electron_www(electron_app_dir: Path, build: bool, dry_run: bool) -> Non
 
 
 def launch_electron(
-    electron_app_dir: Path, electron_exe: Path, dry_run: bool
-) -> int | None:
-    """Start Electron detached from this launcher and return its process ID."""
+    electron_app_dir: Path,
+    electron_exe: Path,
+    dry_run: bool,
+    *,
+    headless: bool = False,
+    mcp_port: int = DEFAULT_MCP_PORT,
+    project: Path | None = None,
+) -> int | subprocess.Popen | None:
+    """Start Electron and return its PID, or its process in foreground mode.
+
+    The visible launcher keeps its historical detached behavior. Headless mode
+    deliberately inherits this terminal's stdin/stdout/stderr and returns the
+    live ``Popen`` object so the caller can wait for the editor and propagate
+    its exit code.
+    """
     step("Launch Electron")
     command = [str(electron_exe), "--force_high_performance_gpu", "app"]
+    if headless:
+        command.extend(["--headless", f"--mcp-port={mcp_port}"])
+    if project is not None:
+        command.append(str(project))
     print(
         f"[run] {electron_app_dir}> ELECTRON_IS_DEV=0 {command_line(command)}",
         flush=True,
@@ -405,6 +479,23 @@ def launch_electron(
 
     env = os.environ.copy()
     env["ELECTRON_IS_DEV"] = "0"
+    if headless:
+        env["ELECTRON_ENABLE_LOGGING"] = "1"
+        process = subprocess.Popen(
+            command,
+            cwd=electron_app_dir,
+            env=env,
+            stdin=None,
+            stdout=None,
+            stderr=None,
+            creationflags=0,
+        )
+        print(
+            f"Started foreground headless Electron process PID: {process.pid}",
+            flush=True,
+        )
+        return process
+
     process = subprocess.Popen(
         command,
         cwd=electron_app_dir,
@@ -454,10 +545,113 @@ if ($ports) {{
     run_powershell(script, cwd=repo_root, dry_run=dry_run)
 
 
-def verify_electron_started(repo_root: Path, electron_exe: Path, dry_run: bool) -> None:
-    step("Verify Electron window")
+def reserve_headless_mcp_port(requested_port: int, dry_run: bool) -> int:
+    """Resolve --mcp-port=0 before launch so the launcher can verify readiness.
+
+    The Electron process still receives a valid fixed port. This keeps the
+    foreground launcher discoverable even when the caller requested an
+    ephemeral port. The short bind/release interval has the same best-effort
+    race as any command-line port probe; a real bind failure is reported by
+    Electron's structured MCP startup event.
+    """
+    if requested_port != 0 or dry_run:
+        return requested_port
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        selected_port = int(probe.getsockname()[1])
+    print(
+        f"Headless MCP requested an ephemeral port; selected {selected_port}.",
+        flush=True,
+    )
+    return selected_port
+
+
+def verify_headless_mcp_started(
+    repo_root: Path,
+    mcp_port: int,
+    *,
+    timeout_seconds: int = HEADLESS_STARTUP_TIMEOUT_SECONDS,
+    process: subprocess.Popen | None = None,
+) -> None:
+    """Wait for the hidden editor's MCP listener and renderer readiness."""
+    del repo_root  # Kept in the public verifier signature for launcher symmetry.
+    health_url = f"http://127.0.0.1:{mcp_port}/health"
+    deadline = time.monotonic() + timeout_seconds
+    last_status = "no health response yet"
+
+    while time.monotonic() < deadline:
+        if process is not None:
+            exit_code = process.poll()
+            if exit_code is not None:
+                raise RuntimeError(
+                    "Headless Electron exited before MCP became ready "
+                    f"(exit code {exit_code})."
+                )
+        try:
+            request = urllib.request.Request(
+                health_url,
+                headers={"Accept": "application/json"},
+            )
+            with urllib.request.urlopen(request, timeout=1.5) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            if not isinstance(payload, dict):
+                last_status = f"unexpected health payload: {payload}"
+                time.sleep(0.25)
+                continue
+            if (
+                payload.get("server") == "gdevelop-editor"
+                and payload.get("headless") is True
+                and payload.get("ok")
+                and payload.get("rendererReady")
+            ):
+                print(
+                    "Headless MCP is ready: "
+                    f"{payload.get('mcpUrl') or health_url}",
+                    flush=True,
+                )
+                return
+            if (
+                payload.get("server") == "gdevelop-editor"
+                and payload.get("headless") is False
+            ):
+                raise RuntimeError(
+                    f"MCP port {mcp_port} is already owned by a visible GDevelop "
+                    "editor; pass --mcp-port=<different-port> for headless mode."
+                )
+            last_status = (
+                "listener is up but rendererReady is false"
+                if payload.get("server") == "gdevelop-editor"
+                else f"unexpected health payload: {payload}"
+            )
+        except urllib.error.URLError as error:
+            last_status = str(error.reason or error)
+        except (OSError, ValueError) as error:
+            last_status = str(error)
+        time.sleep(0.25)
+
+    raise RuntimeError(
+        f"Headless MCP did not become ready on {health_url} within "
+        f"{timeout_seconds}s ({last_status})."
+    )
+
+
+def verify_electron_started(
+    repo_root: Path,
+    electron_exe: Path,
+    dry_run: bool,
+    *,
+    headless: bool = False,
+    mcp_port: int = DEFAULT_MCP_PORT,
+    process: subprocess.Popen | None = None,
+) -> None:
+    step("Verify headless MCP readiness" if headless else "Verify Electron window")
     if dry_run:
         print("Dry run: not checking live Electron processes.", flush=True)
+        return
+
+    if headless:
+        verify_headless_mcp_started(repo_root, mcp_port, process=process)
         return
 
     time.sleep(5)
@@ -478,8 +672,62 @@ $windows | Select-Object Id,MainWindowTitle,StartTime | Format-Table -AutoSize
     run_powershell(script, cwd=repo_root, dry_run=dry_run)
 
 
-def main() -> int:
-    args = parse_args()
+def terminate_headless_electron(process: subprocess.Popen, reason: str) -> None:
+    """Stop a foreground headless process after a launcher-side failure."""
+    if process.poll() is not None:
+        return
+
+    print(f"Stopping headless Electron ({reason})...", file=sys.stderr, flush=True)
+    process.terminate()
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        print(
+            "Headless Electron did not stop after 10 seconds; terminating it.",
+            file=sys.stderr,
+            flush=True,
+        )
+        process.kill()
+        process.wait()
+
+
+def wait_for_headless_electron(process: subprocess.Popen) -> int:
+    """Keep the headless editor attached to the terminal until it exits."""
+    step("Run headless Electron in foreground")
+    print(
+        "Headless GDevelop is running in this terminal. Press Ctrl+C to stop it.",
+        flush=True,
+    )
+    try:
+        exit_code = process.wait()
+    except KeyboardInterrupt:
+        terminate_headless_electron(process, "Ctrl+C")
+
+        # Ctrl+C is an expected user action, but return the conventional shell
+        # status so scripts can distinguish it from a clean editor exit.
+        return 130
+
+    if exit_code:
+        print(
+            f"Headless Electron exited with code {exit_code}.",
+            file=sys.stderr,
+            flush=True,
+        )
+    else:
+        print("Headless Electron exited normally.", flush=True)
+    return int(exit_code or 0)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+
+    if args.headless and args.project is None:
+        print(
+            "ERROR: --headless requires a project file path.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 2
 
     # Refuse to run elevated: Administrator breaks drag-and-drop on Windows
     # (see ensure_not_running_as_administrator). Checked before doing any work.
@@ -492,6 +740,16 @@ def main() -> int:
     electron_app_dir = repo_root / "newIDE" / "electron-app"
     electron_runtime_dir = electron_app_dir / "app"
     electron_exe = electron_app_dir / "node_modules" / "electron" / "dist" / "electron.exe"
+    project_path = args.project.resolve() if args.project is not None else None
+
+    if args.headless and project_path is not None and not args.dry_run:
+        if not project_path.is_file():
+            print(
+                f"ERROR: headless project file does not exist: {project_path}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 2
 
     if args.dry_run:
         print("DRY RUN: no commands will be executed.", flush=True)
@@ -537,10 +795,52 @@ def main() -> int:
                 args.dry_run,
                 check_dev_ports=False,
             )
-            stop_existing_processes(repo_root, electron_exe, args.dry_run)
-            verify_inputs(repo_root, electron_app_dir, electron_exe, args.dry_run)
-            launch_electron(electron_app_dir, electron_exe, args.dry_run)
-            verify_electron_started(repo_root, electron_exe, args.dry_run)
+            stop_existing_processes(
+                repo_root,
+                electron_exe,
+                args.dry_run,
+                stop_electron=not args.headless,
+            )
+            verify_inputs(
+                repo_root,
+                electron_app_dir,
+                electron_exe,
+                args.dry_run,
+                check_dev_ports=not args.headless,
+            )
+            mcp_port = reserve_headless_mcp_port(args.mcp_port, args.dry_run)
+            launched_process = launch_electron(
+                electron_app_dir,
+                electron_exe,
+                args.dry_run,
+                headless=args.headless,
+                mcp_port=mcp_port,
+                project=project_path,
+            )
+            headless_process = launched_process if args.headless else None
+            try:
+                verify_electron_started(
+                    repo_root,
+                    electron_exe,
+                    args.dry_run,
+                    headless=args.headless,
+                    mcp_port=mcp_port,
+                    process=headless_process,
+                )
+            except KeyboardInterrupt:
+                if headless_process is not None:
+                    terminate_headless_electron(
+                        headless_process, "Ctrl+C during startup"
+                    )
+                return 130
+            except Exception:
+                if headless_process is not None:
+                    terminate_headless_electron(
+                        headless_process, "startup verification failed"
+                    )
+                raise
+            if headless_process is not None:
+                return wait_for_headless_electron(headless_process)
     except (RuntimeError, subprocess.CalledProcessError) as error:
         print(f"ERROR: {error}", file=sys.stderr, flush=True)
         return 1

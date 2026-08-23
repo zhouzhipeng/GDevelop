@@ -47,7 +47,9 @@ export const create = (authentication: Authentication): React.Node => {
   return (
     <Providers
       authentication={authentication}
-      disableCheckForUpdates={!!appArguments['disable-update-check']}
+      disableCheckForUpdates={
+        !!appArguments['disable-update-check'] || Window.isHeadless()
+      }
       makeEventsFunctionCodeWriter={makeLocalEventsFunctionCodeWriter}
       // $FlowFixMe[incompatible-type]
       // $FlowFixMe[incompatible-exact]

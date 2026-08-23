@@ -89,7 +89,11 @@ const findClickDescriptor = (inputs, contentBounds) => {
     : null;
 };
 
-const injectPreviewClickUserGesture = async (previewWindow, inputs) => {
+const injectPreviewClickUserGesture = async (
+  previewWindow,
+  inputs,
+  { keepHidden = false } = {}
+) => {
   if (!previewWindow || previewWindow.isDestroyed()) {
     return {
       success: false,
@@ -127,9 +131,11 @@ const injectPreviewClickUserGesture = async (previewWindow, inputs) => {
     };
   }
 
-  if (previewWindow.isMinimized()) previewWindow.restore();
-  previewWindow.show();
-  previewWindow.focus();
+  if (!keepHidden) {
+    if (previewWindow.isMinimized()) previewWindow.restore();
+    previewWindow.show();
+    previewWindow.focus();
+  }
 
   const common = {
     x: click.x,

@@ -8426,14 +8426,17 @@ const MainFrame = (props: Props): React.MixedElement => {
     [hasExtensionLoadErrors, isSaveProjectInProgress, saveProject]
   );
   const launchPreviewForSceneRef = useStableUpToDateRef(launchPreviewForScene);
+  const isHeadless = Window.isHeadless();
 
   const mcpEditorBridge = React.useMemo(
     () =>
       createMcpEditorBridge({
         getProject: () => currentProjectRef.current,
         getPermissions: () => ({
-          allowWriteTools: preferences.values.mcpAllowWriteTools,
-          allowCommandTools: preferences.values.mcpAllowCommandTools,
+          allowWriteTools:
+            isHeadless || preferences.values.mcpAllowWriteTools,
+          allowCommandTools:
+            isHeadless || preferences.values.mcpAllowCommandTools,
         }),
         i18n,
         editorCallbacks: mcpEditorCallbacks,
@@ -8672,6 +8675,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       }),
     [
       currentProjectRef,
+      isHeadless,
       preferences.values.mcpAllowWriteTools,
       preferences.values.mcpAllowCommandTools,
       i18n,
@@ -8758,6 +8762,10 @@ const MainFrame = (props: Props): React.MixedElement => {
       };
 
       ipcRenderer.on('mcp-renderer-request', handleMcpRendererRequest);
+      // The main process starts the headless MCP listener before React has
+      // finished mounting. Explicit readiness prevents requests from being
+      // dispatched into a renderer that is still booting.
+      ipcRenderer.send('mcp-renderer-ready');
       return () => {
         ipcRenderer.removeListener(
           'mcp-renderer-request',

@@ -25,6 +25,7 @@ import { type FileMetadataAndStorageProviderName } from '../../ProjectsStorage';
 import defaultShortcuts from '../../KeyboardShortcuts/DefaultShortcuts';
 import { type CommandName } from '../../CommandPalette/CommandsList';
 import { setLanguageInDOM } from '../../Utils/Language';
+import Window from '../../Utils/Window';
 import { type GamesDashboardOrderBy } from '../../GameDashboard/GamesList';
 import {
   CHECK_APP_UPDATES_TIMEOUT,
@@ -459,10 +460,11 @@ export default class PreferencesProvider extends React.Component<Props, State> {
     if (!ipcRenderer || !ipcRenderer.invoke) return;
 
     const { enableMcpServer, mcpServerPort } = this.state.values;
+    const headlessMcpPort = Window.getHeadlessMcpPort();
     ipcRenderer
       .invoke('mcp-server-update-config', {
-        enabled: enableMcpServer,
-        port: mcpServerPort,
+        enabled: enableMcpServer || Window.isHeadless(),
+        port: headlessMcpPort === null ? mcpServerPort : headlessMcpPort,
       })
       .catch(error => {
         console.error('Unable to update MCP server configuration:', error);

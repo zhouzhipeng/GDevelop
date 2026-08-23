@@ -103,6 +103,15 @@ const run = async () => {
     error: undefined,
   });
 
+  windowCalls.length = 0;
+  const hiddenResult = await injectPreviewClickUserGesture(
+    previewWindow,
+    [{ type: 'mouseButtonPressed', button: 'left' }],
+    { keepHidden: true }
+  );
+  assert.strictEqual(hiddenResult.success, true);
+  assert.deepStrictEqual(windowCalls, []);
+
   previewWindow.isMinimized = () => false;
   previewWindow.webContents.executeJavaScript = async () => ({
     audioContextPresent: true,
