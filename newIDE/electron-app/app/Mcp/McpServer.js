@@ -1,5 +1,6 @@
 const http = require('http');
 const {
+  MCP_PROTOCOL_VERSION,
   JSON_RPC_ERROR_CODES,
   createJsonRpcResult,
   createJsonRpcError,
@@ -94,9 +95,38 @@ const writeJsonResponse = (response, statusCode, payload) => {
   response.end(JSON.stringify(payload));
 };
 
-const startMcpServer = ({ port, sendRendererRequest }) =>
+const startMcpServer = ({ port, sendRendererRequest, getHealth }) =>
   new Promise((resolve, reject) => {
+    let serverState = null;
     const server = http.createServer(async (request, response) => {
+      if (request.method === 'GET' && request.url === '/health') {
+        let health = {};
+        try {
+          health =
+            typeof getHealth === 'function'
+              ? getHealth({
+                  port: serverState && serverState.port,
+                  url: serverState && serverState.url,
+                }) || {}
+              : {};
+        } catch (error) {
+          health = {
+            ok: false,
+            error: error && error.message ? error.message : String(error),
+          };
+        }
+        const rendererReady = health.rendererReady !== false;
+        const serverUrl = serverState && serverState.url;
+        writeJsonResponse(response, 200, {
+          ok: health.ok !== false && rendererReady,
+          server: 'gdevelop-editor',
+          protocolVersion: MCP_PROTOCOL_VERSION,
+          ...health,
+          mcpUrl: health.mcpUrl || serverUrl,
+        });
+        return;
+      }
+
       if (request.method === 'GET' && request.url === '/mcp') {
         response.writeHead(405, {
           Allow: 'POST',
@@ -146,7 +176,7 @@ const startMcpServer = ({ port, sendRendererRequest }) =>
     server.listen(port, '127.0.0.1', () => {
       server.removeListener('error', reject);
       const address = server.address();
-      const serverState = {
+      serverState = {
         server,
         port: address && typeof address === 'object' ? address.port : port,
         url: `http://127.0.0.1:${

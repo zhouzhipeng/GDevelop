@@ -126,11 +126,17 @@ let mainWindows = new Set();
 let mainWindow = null; // Primary window reference for backwards compatibility
 let windowCounter = 0; // Counter for creating unique session partitions
 let mcpRendererWebContents = null;
+let mcpRendererReady = false;
+let mcpHeadless = false;
+let mcpHeadlessReadyEmitted = false;
+let mcpServerStartPromise = null;
 
 const serializeMcpServerState = (state, error) => ({
   isRunning: !!state,
   port: state ? state.port : null,
   url: state ? state.url : null,
+  rendererReady: mcpRendererReady,
+  headless: mcpHeadless,
   error: error || null,
 });
 
@@ -138,8 +144,19 @@ const mcpRendererRequestBroker = createMcpRendererRequestBroker({
   getWebContents: () => mcpRendererWebContents,
 });
 
-const sendMcpRendererRequest = request =>
-  mcpRendererRequestBroker.send(request);
+const sendMcpRendererRequest = request => {
+  if (!mcpRendererWebContents || !mcpRendererReady) {
+    const error = new Error(
+      'The GDevelop editor renderer is still starting. Retry after /health reports rendererReady:true.'
+    );
+    error.data = {
+      code: 'MCP_RENDERER_NOT_READY',
+      rendererReady: false,
+    };
+    return Promise.reject(error);
+  }
+  return mcpRendererRequestBroker.send(request);
+};
 
 const clearPendingMcpRendererRequestsFor = (webContents, disconnectDetails) =>
   mcpRendererRequestBroker.clearFor(webContents, disconnectDetails);
@@ -155,6 +172,130 @@ const args = parseGDevelopArgs(getCommandLineArguments(process.argv));
 const windowArgsById = {};
 global['args'] = args;
 global['windowArgsById'] = windowArgsById;
+
+// A foreground headless launcher is an automation/debugging surface, so keep
+// the Electron main-process log transport attached to the terminal at the
+// most verbose level. Renderer warnings/errors are forwarded below through the
+// automation window's console-message listener.
+const isHeadlessRun = !!args.headless;
+if (isHeadlessRun && log.transports && log.transports.console) {
+  log.transports.console.level = 'silly';
+  log.transports.console.useStyles = false;
+}
+if (isHeadlessRun && typeof log.catchErrors === 'function') {
+  // Keep uncaught main-process exceptions/rejections in the terminal instead
+  // of opening a modal error dialog that a headless client cannot dismiss.
+  log.catchErrors({ showDialog: false });
+}
+
+const DEFAULT_MCP_PORT = 32110;
+const normalizeMcpPort = (value, { strict = false } = {}) => {
+  if (value === undefined) return DEFAULT_MCP_PORT;
+  if (value === null || value === '') return strict ? null : DEFAULT_MCP_PORT;
+  const port = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(port) && port >= 0 && port <= 65535
+    ? port
+    : strict
+    ? null
+    : DEFAULT_MCP_PORT;
+};
+
+const emitHeadlessMcpEvent = (name, payload) => {
+  if (!args.headless) return;
+  try {
+    process.stdout.write(`${name} ${JSON.stringify(payload || {})}\n`);
+  } catch (error) {
+    // A parent process may close stdout while the editor is still shutting
+    // down. Logging the lifecycle record must never crash the editor.
+  }
+};
+
+const emitHeadlessMcpReady = serverState => {
+  if (!args.headless || !serverState || mcpHeadlessReadyEmitted) return;
+  mcpHeadlessReadyEmitted = true;
+  emitHeadlessMcpEvent('GDEVELOP_MCP_READY', {
+    port: serverState.port,
+    url: serverState.url,
+    rendererReady: true,
+  });
+};
+
+const getMcpHealth = ({ port, url } = {}) => ({
+  rendererReady: mcpRendererReady,
+  headless: mcpHeadless,
+  mcpUrl: url || (port !== undefined ? `http://127.0.0.1:${port}/mcp` : null),
+});
+
+const startConfiguredMcpServer = async ({ port, headless = false }) => {
+  const normalizedPort = normalizeMcpPort(port);
+  const currentServerState = getMcpServerState();
+
+  // Port 0 asks the OS for an ephemeral port. Once bound, compare against
+  // the requested value rather than restarting the listener on every
+  // renderer preference notification.
+  if (
+    currentServerState &&
+    (currentServerState.port === normalizedPort || normalizedPort === 0)
+  ) {
+    mcpHeadless = mcpHeadless || headless;
+    return currentServerState;
+  }
+
+  // PreferencesProvider can report the headless configuration while the
+  // automatic app-start listener is still binding. Share that in-flight
+  // bind instead of racing a second listener onto the same port.
+  if (mcpServerStartPromise) {
+    await mcpServerStartPromise;
+    return startConfiguredMcpServer({ port: normalizedPort, headless });
+  }
+
+  const startPromise = (async () => {
+    if (currentServerState) {
+      await stopMcpServer(currentServerState);
+    }
+
+    mcpHeadless = !!headless;
+    mcpHeadlessReadyEmitted = false;
+    try {
+      const serverState = await startMcpServer({
+        port: normalizedPort,
+        sendRendererRequest: sendMcpRendererRequest,
+        getHealth: getMcpHealth,
+      });
+      log.info(`MCP server listening on ${serverState.url}`);
+      if (headless) {
+        emitHeadlessMcpEvent('GDEVELOP_MCP_LISTENING', {
+          port: serverState.port,
+          url: serverState.url,
+          rendererReady: mcpRendererReady,
+        });
+        emitHeadlessMcpReady(serverState);
+      }
+      return serverState;
+    } catch (error) {
+      mcpHeadless = false;
+      if (headless) {
+        emitHeadlessMcpEvent('GDEVELOP_MCP_ERROR', {
+          code: 'MCP_SERVER_START_FAILED',
+          message: error && error.message ? error.message : String(error),
+        });
+      }
+      throw error;
+    }
+  })();
+  mcpServerStartPromise = startPromise;
+  try {
+    return await startPromise;
+  } finally {
+    if (mcpServerStartPromise === startPromise) mcpServerStartPromise = null;
+  }
+};
+
+const stopMcpServerWhenReady = () => {
+  const pendingStart = mcpServerStartPromise;
+  if (!pendingStart) return stopMcpServer();
+  return pendingStart.catch(() => {}).then(() => stopMcpServer());
+};
 
 const projectFileOpenHandler = createProjectFileOpenHandler({
   openProjectFile: filePath =>
@@ -228,10 +369,11 @@ if (process.platform === 'win32') {
 // CLI: skip the lock unless the target project is a known open window (registry hit);
 // a stale registry entry falls back to running headless in this process.
 const isCliRunCommand = !!args['run-command'];
-const gotTheLock =
-  isCliRunCommand && !isCliProjectAlreadyOpenElsewhere(args)
-    ? true
-    : app.requestSingleInstanceLock({ args });
+const shouldBypassSingleInstanceLock =
+  isHeadlessRun || (isCliRunCommand && !isCliProjectAlreadyOpenElsewhere(args));
+const gotTheLock = shouldBypassSingleInstanceLock
+  ? true
+  : app.requestSingleInstanceLock({ args });
 
 if (!gotTheLock) {
   // Second instance attempted - quit immediately
@@ -274,7 +416,7 @@ app.on('window-all-closed', function() {
     // Ignore errors during shutdown
   }
   try {
-    stopMcpServer();
+    stopMcpServerWhenReady();
   } catch (e) {
     // Ignore errors during shutdown
   }
@@ -296,6 +438,8 @@ function createNewWindow(windowArgs = args) {
   const isIntegrated = windowArgs.mode === 'integrated';
   // windowArgs: a GUI primary process can still open a CLI window (second-instance fallback).
   const isCliWindow = !!windowArgs['run-command'];
+  const isHeadlessWindow = !!windowArgs.headless;
+  const isAutomationWindow = isCliWindow || isHeadlessWindow;
 
   if (isIntegrated && app.dock) {
     app.dock.hide();
@@ -320,6 +464,7 @@ function createNewWindow(windowArgs = args) {
       nodeIntegration: true,
       contextIsolation: false,
       webviewTag: true,
+      backgroundThrottling: false,
     },
     enableLargerThanScreen: true,
     backgroundColor: '#000',
@@ -359,13 +504,20 @@ function createNewWindow(windowArgs = args) {
     options.show = false;
     options.skipTaskbar = true;
   }
+  if (isHeadlessWindow) {
+    options.show = false;
+    options.skipTaskbar = true;
+  }
 
   const newWindow = new BrowserWindow(options);
-  if (!isIntegrated && !isCliWindow) newWindow.maximize();
+  if (!isIntegrated && !isAutomationWindow) newWindow.maximize();
 
   // Capture window ID and whether this is the primary window before it can be destroyed
   const windowId = newWindow.id;
   const windowWebContents = newWindow.webContents;
+  if (isHeadlessWindow) {
+    mcpRendererWebContents = windowWebContents;
+  }
   let lastKnownRendererProcessId = null;
   const isPrimaryWindow = windowNumber === 0;
   windowArgsById[windowId] = windowArgs;
@@ -386,7 +538,7 @@ function createNewWindow(windowArgs = args) {
 
   // Uses process.stdout/stderr directly (not electron-log) to avoid
   // re-entering the renderer console and causing an infinite loop.
-  if (isCliWindow) {
+  if (isAutomationWindow) {
     newWindow.webContents.on('console-message', (_event, level, message) => {
       if (level < 1) return;
       if (message.startsWith('%c')) return;
@@ -442,6 +594,14 @@ function createNewWindow(windowArgs = args) {
     });
     if (mcpRendererWebContents === windowWebContents) {
       mcpRendererWebContents = null;
+      mcpRendererReady = false;
+      mcpHeadlessReadyEmitted = false;
+      if (isHeadlessWindow) {
+        emitHeadlessMcpEvent('GDEVELOP_MCP_ERROR', {
+          code: 'MCP_RENDERER_PROCESS_GONE',
+          message: 'The headless editor renderer process exited.',
+        });
+      }
     }
   });
 
@@ -455,7 +615,7 @@ function createNewWindow(windowArgs = args) {
     window: newWindow,
     isDev,
     path: '/index.html',
-    devTools,
+    devTools: isHeadlessWindow ? false : devTools,
   });
 
   newWindow.on('closed', function() {
@@ -464,7 +624,10 @@ function createNewWindow(windowArgs = args) {
     clearPendingMcpRendererRequestsFor(windowWebContents);
     if (mcpRendererWebContents === windowWebContents) {
       mcpRendererWebContents = null;
-      stopMcpServer().catch(error => {
+      mcpRendererReady = false;
+      mcpHeadless = false;
+      mcpHeadlessReadyEmitted = false;
+      stopMcpServerWhenReady().catch(error => {
         log.error('Failed to stop MCP server after window close:', error);
       });
     }
@@ -525,7 +688,14 @@ function createNewWindow(windowArgs = args) {
           },
           trafficLightPosition: { x: 12, y: 12 },
           backgroundColor,
-          parent: isDebuggerPopOut ? newWindow : undefined,
+          parent: isHeadlessWindow
+            ? null
+            : isDebuggerPopOut
+            ? newWindow
+            : undefined,
+          show: isHeadlessWindow ? false : undefined,
+          skipTaskbar: isHeadlessWindow ? true : undefined,
+          alwaysOnTop: isHeadlessWindow ? false : undefined,
           modal: false,
           webPreferences: {
             // No need for Node.js integration or disabled context isolation, because
@@ -535,6 +705,7 @@ function createNewWindow(windowArgs = args) {
             // contextIsolation: false,
             webSecurity: false,
             webviewTag: isBrowserPopup,
+            backgroundThrottling: false,
           },
         },
       };
@@ -553,6 +724,13 @@ function createNewWindow(windowArgs = args) {
       delete windowArgsById[childWindow.id];
     });
     require('@electron/remote/main').enable(childWindow.webContents);
+
+    if (isHeadlessWindow) {
+      if (typeof childWindow.hide === 'function') childWindow.hide();
+      if (typeof childWindow.setSkipTaskbar === 'function') {
+        childWindow.setSkipTaskbar(true);
+      }
+    }
 
     if (
       !details.frameName ||
@@ -575,6 +753,7 @@ function createNewWindow(windowArgs = args) {
     }
 
     if (
+      !isHeadlessWindow &&
       details.frameName &&
       details.frameName.startsWith('GDevelopWindowPortal-debugger-')
     ) {
@@ -617,6 +796,25 @@ app.on('ready', function() {
   const openedQueuedProjectCount = projectFileOpenHandler.markReady();
   if (openedQueuedProjectCount === 0) {
     createNewWindow(args);
+  }
+
+  if (args.headless) {
+    const headlessMcpPort = normalizeMcpPort(args['mcp-port'], {
+      strict: true,
+    });
+    if (headlessMcpPort === null) {
+      emitHeadlessMcpEvent('GDEVELOP_MCP_ERROR', {
+        code: 'MCP_INVALID_PORT',
+        message: 'The --mcp-port value must be an integer from 0 to 65535.',
+      });
+    } else {
+      startConfiguredMcpServer({
+        port: headlessMcpPort,
+        headless: true,
+      }).catch(error => {
+        log.error('Failed to start headless MCP server:', error);
+      });
+    }
   }
 
   Menu.setApplicationMenu(buildPlaceholderMainMenu());
@@ -682,6 +880,16 @@ app.on('ready', function() {
     );
   });
 
+  ipcMain.on('mcp-renderer-ready', event => {
+    mcpRendererWebContents = event.sender;
+    const wasReady = mcpRendererReady;
+    mcpRendererReady = true;
+    if (!wasReady && args.headless) {
+      const serverState = getMcpServerState();
+      emitHeadlessMcpReady(serverState);
+    }
+  });
+
   ipcMain.on('mcp-renderer-response', (event, response) => {
     mcpRendererRequestBroker.handleResponse(event.sender, response);
   });
@@ -697,38 +905,29 @@ app.on('ready', function() {
   ipcMain.handle('mcp-server-update-config', async (event, config) => {
     mcpRendererWebContents = event.sender;
 
-    const enabled = !!(config && config.enabled);
+    const enabled = args.headless || !!(config && config.enabled);
     if (!enabled) {
-      await stopMcpServer();
+      await stopMcpServerWhenReady();
+      mcpHeadless = false;
+      mcpHeadlessReadyEmitted = false;
       return serializeMcpServerState(null);
     }
 
-    const configuredPort =
-      config && typeof config.port === 'number'
-        ? config.port
-        : parseInt(config && config.port, 10);
-    const port =
-      Number.isInteger(configuredPort) &&
-      configuredPort >= 0 &&
-      configuredPort <= 65535
-        ? configuredPort
-        : 32110;
-    const currentServerState = getMcpServerState();
-
-    if (currentServerState && currentServerState.port === port) {
-      return serializeMcpServerState(currentServerState);
-    }
-
-    if (currentServerState) {
-      await stopMcpServer(currentServerState);
+    const port = args.headless
+      ? normalizeMcpPort(args['mcp-port'], { strict: true })
+      : normalizeMcpPort(config && config.port);
+    if (port === null) {
+      return serializeMcpServerState(
+        null,
+        'The --mcp-port value must be an integer from 0 to 65535.'
+      );
     }
 
     try {
-      const serverState = await startMcpServer({
+      const serverState = await startConfiguredMcpServer({
         port,
-        sendRendererRequest: sendMcpRendererRequest,
+        headless: !!args.headless,
       });
-      log.info(`MCP server listening on ${serverState.url}`);
       return serializeMcpServerState(serverState);
     } catch (error) {
       log.error('Failed to start MCP server:', error);
@@ -750,6 +949,11 @@ app.on('ready', function() {
       numberOfWindows: options.numberOfWindows,
       captureOptions: options.captureOptions,
       openEvent: event,
+      headless: !!(
+        parentWindow &&
+        windowArgsById[parentWindow.id] &&
+        windowArgsById[parentWindow.id].headless
+      ),
     });
   });
   ipcMain.handle('preview-close', async (event, options) => {

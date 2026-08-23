@@ -245,10 +245,25 @@ export default class Window {
     return remote.getCurrentWindow().on('close', cb);
   }
 
-  /** True when the app was launched with `--run-command` (CLI / CI mode). */
+  /** True when the app was launched in an automation-only CLI mode. */
   static isRunningCommandFromCli(): boolean {
     const args = Window.getArguments();
-    return !!args['run-command'];
+    return !!args['run-command'] || Window.isHeadless();
+  }
+
+  /** True when the Electron editor is running without a visible editor UI. */
+  static isHeadless(): boolean {
+    return !!remote && Window.getArguments().headless === true;
+  }
+
+  /** Return a validated MCP port supplied on the headless command line. */
+  static getHeadlessMcpPort(): ?number {
+    if (!Window.isHeadless()) return null;
+    const value = Window.getArguments()['mcp-port'];
+    if (value === undefined || value === null || value === '') return null;
+    const port = Number(value);
+    if (!Number.isInteger(port) || port < 0 || port > 65535) return null;
+    return port;
   }
 
   /**
@@ -311,6 +326,10 @@ export default class Window {
     message: string,
     type?: 'none' | 'info' | 'error' | 'question' | 'warning'
   ) {
+    if (Window.isHeadless()) {
+      console.error(`[headless] ${message}`);
+      return;
+    }
     if (!dialog || !electron) {
       alert(message);
       return;
@@ -328,6 +347,10 @@ export default class Window {
     message: string,
     type?: 'none' | 'info' | 'error' | 'question' | 'warning'
   ): YesNoCancelDialogChoice {
+    if (Window.isHeadless()) {
+      console.error(`[headless] ${message}`);
+      return 'no';
+    }
     if (!dialog || !electron) {
       // TODO: Find a way to display an alert with 3 buttons (not possible with the 3 native js method confirm, alert and prompt)
       // eslint-disable-next-line
@@ -360,6 +383,10 @@ export default class Window {
     message: string,
     type?: 'none' | 'info' | 'error' | 'question' | 'warning'
   ): any {
+    if (Window.isHeadless()) {
+      console.error(`[headless] ${message}`);
+      return false;
+    }
     if (!dialog || !electron) {
       // eslint-disable-next-line
       return confirm(message);

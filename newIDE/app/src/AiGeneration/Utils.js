@@ -102,7 +102,9 @@ export const AI_CHAT_TOOLS_VERSION = 'v8';
 // Only bump it once the matching prompts and generation-api are deployed;
 // reverting it is the flip-back (every past version stays served).
 // v14 adds gameplay tests (`run_tests` + the tester sub-agent).
-export const AI_ORCHESTRATOR_TOOLS_VERSION: string = 'v14';
+// v15 makes read_game_project_json a live, editor-side read (backend stops
+// overwriting its output) and exposes it to the edit/explorer script agents.
+export const AI_ORCHESTRATOR_TOOLS_VERSION: string = 'v15';
 export const AI_AGENT_EXPLORER_TOOLS_VERSION = 'v3'; // TODO: useless?
 export const AI_AGENT_EDIT_TOOLS_VERSION = 'v3';
 

@@ -717,7 +717,18 @@ export default class EventsFunctionsExtensionEditor extends React.Component<
     selectedEventsBasedObject: ?gdEventsBasedObject,
     onSelected?: () => void
   ) => {
-    this.onSelectionChanged(null, null);
+    const hasLeftEntityProperties =
+      !this.state.selectedEventsFunction &&
+      (this.state.selectedEventsBasedBehavior ||
+        this.state.selectedEventsBasedObject);
+    this.onSelectionChanged(
+      this.state.selectedEventsFunction,
+      this.state.selectedEventsBasedBehavior,
+      this.state.selectedEventsBasedObject,
+      selectedEventsFunction,
+      selectedEventsBasedBehavior,
+      selectedEventsBasedObject
+    );
     if (!selectedEventsFunction) {
       this.setState(
         {
@@ -728,12 +739,6 @@ export default class EventsFunctionsExtensionEditor extends React.Component<
         () => this.updateToolbar()
       );
       return;
-    }
-
-    // Users may have change a function declaration.
-    // Reload metadata just in case.
-    if (this.props.onFunctionEdited) {
-      this.props.onFunctionEdited();
     }
 
     this._updateProjectScopedContainerFrom({
@@ -748,6 +753,13 @@ export default class EventsFunctionsExtensionEditor extends React.Component<
         selectedEventsBasedObject,
       },
       () => {
+        // Reload the selected events function, if any, as the object was
+        // changed so objects containers need to be re-created. Notably, the
+        // type of the object that is handled by the object may have changed.
+        if (hasLeftEntityProperties) {
+          this._updateProjectScopedContainer();
+        }
+
         this.updateToolbar();
 
         if (this._editorMosaic) {
@@ -1060,18 +1072,17 @@ export default class EventsFunctionsExtensionEditor extends React.Component<
     }
   };
 
-  onSelectionChanged = (
-    selectedEventsBasedBehavior: ?gdEventsBasedBehavior,
-    selectedEventsBasedObject: ?gdEventsBasedObject
-  ) => {
-    this._editBehavior(selectedEventsBasedBehavior);
-    this._editObject(selectedEventsBasedObject);
-  };
-
   _selectEventsBasedBehavior = (
     selectedEventsBasedBehavior: ?gdEventsBasedBehavior
   ) => {
-    this.onSelectionChanged(selectedEventsBasedBehavior, null);
+    this.onSelectionChanged(
+      this.state.selectedEventsFunction,
+      this.state.selectedEventsBasedBehavior,
+      this.state.selectedEventsBasedObject,
+      null,
+      selectedEventsBasedBehavior,
+      null
+    );
     this._updateProjectScopedContainerFrom({
       eventsBasedBehavior: selectedEventsBasedBehavior,
     });
@@ -1100,7 +1111,14 @@ export default class EventsFunctionsExtensionEditor extends React.Component<
   _selectEventsBasedObject = (
     selectedEventsBasedObject: ?gdEventsBasedObject
   ) => {
-    this.onSelectionChanged(null, selectedEventsBasedObject);
+    this.onSelectionChanged(
+      this.state.selectedEventsFunction,
+      this.state.selectedEventsBasedBehavior,
+      this.state.selectedEventsBasedObject,
+      null,
+      null,
+      selectedEventsBasedObject
+    );
     this._updateProjectScopedContainerFrom({
       eventsBasedObject: selectedEventsBasedObject,
     });
@@ -1777,6 +1795,86 @@ export default class EventsFunctionsExtensionEditor extends React.Component<
           }
         }
       }
+    );
+  };
+
+  onSelectionChanged = (
+    oldSelectedEventsFunction: ?gdEventsFunction,
+    oldEditedEventsBasedBehavior: ?gdEventsBasedBehavior,
+    oldEditedEventsBasedObject: ?gdEventsBasedObject,
+    newSelectedEventsFunction: ?gdEventsFunction,
+    newEditedEventsBasedBehavior: ?gdEventsBasedBehavior,
+    newEditedEventsBasedObject: ?gdEventsBasedObject
+  ) => {
+    if (
+      oldSelectedEventsFunction === newSelectedEventsFunction &&
+      oldEditedEventsBasedBehavior === newEditedEventsBasedBehavior &&
+      oldEditedEventsBasedObject === newEditedEventsBasedObject
+    ) {
+      return;
+    }
+    // If we're leaving the event sheet of a function...
+    if (oldSelectedEventsFunction) {
+      // Users may have change a function declaration.
+      // Reload metadata just in case.
+      if (this.props.onFunctionEdited) {
+        this.props.onFunctionEdited();
+      }
+      return;
+    }
+
+    // If we're leaving the properties of a behavior...
+    if (oldEditedEventsBasedBehavior) {
+      // Ensure parameters are up-to-date in all event functions of the
+      // behavior (the object type might have changed).
+      gd.WholeProjectRefactorer.ensureBehaviorEventsFunctionsProperParameters(
+        this.props.eventsFunctionsExtension,
+        oldEditedEventsBasedBehavior
+      );
+
+      // TODO: Is this logic the same as in _onEventsBasedBehaviorRenamed?
+
+      // Notify parent that a behavior was edited (to trigger reload of extensions)
+      if (this.props.onBehaviorEdited) {
+        this.props.onBehaviorEdited();
+
+        // Once extensions are reloaded, ensure the project stays valid by
+        // filling any invalid required behavior property in the objects
+        // of the project.
+        //
+        // We need to do that as "required behavior" properties may have been
+        // added (or the type of the required behavior changed) in the dialog.
+        gd.WholeProjectRefactorer.fixInvalidRequiredBehaviorProperties(
+          this.props.project
+        );
+      }
+    }
+
+    // If we're closing the properties of an object...
+    if (oldEditedEventsBasedObject) {
+      // ensure parameters are up-to-date in all event functions of the object.
+      gd.WholeProjectRefactorer.ensureObjectEventsFunctionsProperParameters(
+        this.props.eventsFunctionsExtension,
+        oldEditedEventsBasedObject
+      );
+
+      // TODO: Is this logic the same as in _onEventsBasedObjectRenamed?
+
+      // Notify parent that a object was edited (to trigger reload of extensions)
+      if (this.props.onObjectEdited) {
+        this.props.onObjectEdited();
+      }
+    }
+  };
+
+  onFocusLost = () => {
+    this.onSelectionChanged(
+      this.state.selectedEventsFunction,
+      this.state.selectedEventsBasedBehavior,
+      this.state.selectedEventsBasedObject,
+      null,
+      null,
+      null
     );
   };
 
@@ -2746,6 +2844,15 @@ export default class EventsFunctionsExtensionEditor extends React.Component<
             <EventsBasedBehaviorOrObjectEditorDialog
               initiallySelectedProperty={eventsBasedEntityPropertiesDialogOpen}
               onClose={() => {
+                // Required behaviors might have been added
+                this.onSelectionChanged(
+                  null,
+                  this.state.selectedEventsBasedBehavior,
+                  null,
+                  null,
+                  null,
+                  null
+                );
                 this.setState({
                   eventsBasedEntityPropertiesDialogOpen: null,
                 });

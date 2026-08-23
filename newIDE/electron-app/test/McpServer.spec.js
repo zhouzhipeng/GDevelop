@@ -7,14 +7,14 @@ const {
   stopMcpServer,
 } = require('../app/Mcp/McpServer');
 
-const request = ({ port, body }) =>
+const request = ({ port, body, path = '/mcp', method = 'POST' }) =>
   new Promise((resolve, reject) => {
     const req = http.request(
       {
         hostname: '127.0.0.1',
         port,
-        path: '/mcp',
-        method: 'POST',
+        path,
+        method,
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
@@ -34,7 +34,8 @@ const request = ({ port, body }) =>
       }
     );
     req.on('error', reject);
-    req.end(JSON.stringify(body));
+    if (method === 'GET') req.end();
+    else req.end(JSON.stringify(body));
   });
 
 const run = async () => {
@@ -103,8 +104,10 @@ const run = async () => {
     rendererError.data
   );
 
+  let rendererReady = false;
   const server = await startMcpServer({
     port: 0,
+    getHealth: () => ({ rendererReady, headless: true }),
     sendRendererRequest: async rendererRequest => {
       if (rendererRequest.method === 'tools/list') {
         return { tools: [{ name: 'read_scene_events' }] };
@@ -127,6 +130,28 @@ const run = async () => {
     assert.deepStrictEqual(response.body.result.tools, [
       { name: 'read_scene_events' },
     ]);
+
+    const healthResponse = await request({
+      port: server.port,
+      path: '/health',
+      method: 'GET',
+      body: null,
+    });
+    assert.strictEqual(healthResponse.statusCode, 200);
+    assert.strictEqual(healthResponse.body.ok, false);
+    assert.strictEqual(healthResponse.body.rendererReady, false);
+    assert.strictEqual(healthResponse.body.headless, true);
+    assert.strictEqual(healthResponse.body.mcpUrl, server.url);
+
+    rendererReady = true;
+    const readyHealthResponse = await request({
+      port: server.port,
+      path: '/health',
+      method: 'GET',
+      body: null,
+    });
+    assert.strictEqual(readyHealthResponse.body.ok, true);
+    assert.strictEqual(readyHealthResponse.body.rendererReady, true);
   } finally {
     await stopMcpServer(server);
   }
