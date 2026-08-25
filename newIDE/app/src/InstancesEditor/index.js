@@ -66,6 +66,7 @@ import ClickInterceptor from './ClickInterceptor';
 import getObjectByName from '../Utils/GetObjectByName';
 import { AffineTransformation } from '../Utils/AffineTransformation';
 import { ErrorFallbackComponent } from '../UI/ErrorBoundary';
+import { startNativeAppActivity } from '../Utils/NativeAppLifecycle';
 import { Trans } from '@lingui/macro';
 import { generateUUID } from 'three/src/math/MathUtils';
 import {
@@ -230,6 +231,7 @@ export default class InstancesEditor extends Component<Props, State> {
   grid: Grid;
   background: Background;
   _unmounted = false;
+  _stopNativeAppActivity: (() => void) | null = null;
   _renderingPausedReasons: Set<string> = new Set();
   nextFrame: AnimationFrameID;
   contextMenuLongTouchTimeoutID: TimeoutID;
@@ -349,6 +351,10 @@ export default class InstancesEditor extends Component<Props, State> {
 
       gameCanvas = this.pixiRenderer.view;
     }
+
+    // Each instances editor keeps a WebGL context and its textures alive.
+    if (this._stopNativeAppActivity) this._stopNativeAppActivity();
+    this._stopNativeAppActivity = startNativeAppActivity('instances-editor');
 
     // Deactivating accessibility support in PixiJS renderer, as we want to be in control of this.
     // See https://github.com/pixijs/pixijs/issues/5111#issuecomment-420047824
@@ -713,6 +719,11 @@ export default class InstancesEditor extends Component<Props, State> {
     // to protect against renders after the component is unmounted.
     this._unmounted = true;
     this._cancelClearCanvasSceneCoordinatesToKeepAfterResize();
+
+    if (this._stopNativeAppActivity) {
+      this._stopNativeAppActivity();
+      this._stopNativeAppActivity = null;
+    }
 
     // We've seen all those elements being undefined in some cases, so
     // by security, check that they are defined before deleting them.
@@ -1544,15 +1555,6 @@ export default class InstancesEditor extends Component<Props, State> {
     // the start position now.
     if (!shouldMoveView) {
       this.selectionRectangle.startSelectionRectangle(x, y);
-    }
-
-    if (
-      !this.keyboardShortcuts.shouldMultiSelect() &&
-      !shouldMoveView &&
-      this.props.instancesSelection.hasSelectedInstances()
-    ) {
-      this.props.instancesSelection.clearSelection();
-      this.props.onInstancesSelected([]);
     }
   };
 

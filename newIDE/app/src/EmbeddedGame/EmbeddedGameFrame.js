@@ -23,6 +23,7 @@ import { get3DModelFilePathsFromDataTransfer } from '../SceneEditor/Create3DMode
 import { hasProjectFileDragData } from '../Utils/ProjectFileDragData';
 import { registerPreventGameFramePointerEventsCallback } from './EmbeddedGameFramePointerEvents';
 import { safelyRemoveWindowEventListener } from './CrossOriginWindowEventListener';
+import { startNativeAppActivity } from '../Utils/NativeAppLifecycle';
 
 type AttachToPreviewOptions = {|
   previewIndexHtmlLocation: string,
@@ -552,6 +553,16 @@ export const EmbeddedGameFrame = ({
       onLaunchPreviewForInGameEdition,
       enabled,
     ]
+  );
+
+  // A game loaded in the frame adds its whole memory to the one used by the editor.
+  React.useEffect(
+    () => {
+      if (!previewIndexHtmlLocation) return undefined;
+
+      return startNativeAppActivity('embedded-in-game-editor');
+    },
+    [previewIndexHtmlLocation]
   );
 
   // Register the iframe window in the debugger as soon as the iframe is shown.

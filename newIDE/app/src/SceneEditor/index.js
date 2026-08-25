@@ -70,7 +70,10 @@ import debounce from 'lodash/debounce';
 import { mapFor } from '../Utils/MapFor';
 import MosaicEditorsDisplay from './MosaicEditorsDisplay';
 import SwipeableDrawerEditorsDisplay from './SwipeableDrawerEditorsDisplay';
-import { type SceneEditorsDisplayInterface } from './EditorsDisplay.flow';
+import {
+  type LastSelectionType,
+  type SceneEditorsDisplayInterface,
+} from './EditorsDisplay.flow';
 import newNameGenerator from '../Utils/NewNameGenerator';
 import ObjectsRenderingService from '../ObjectsRendering/ObjectsRenderingService';
 import {
@@ -130,12 +133,6 @@ import optionalRequire from '../Utils/OptionalRequire';
 const gd: libGDevelop = global.gd;
 const path = optionalRequire('path');
 const url = optionalRequire('url');
-
-// The kind of the last selection whose properties are shown in the side panel.
-// NOTE: Upstream imports this as `type LastSelectionType` from
-// './EditorsDisplay.flow', but that (sibling) module does not currently export
-// it, so the union is kept in sync locally here.
-type LastSelectionType = 'instance' | 'object' | 'layer' | 'objectGroup';
 
 type EmbeddedGameFrameDropPosition = {|
   x: number,
@@ -1538,12 +1535,14 @@ export default class SceneEditor extends React.Component<Props, State> {
     }
     this.editObject(container.getObject(objectName), initialTab);
     if (shouldSelectTheObject) {
-      this._onObjectFolderOrObjectWithContextSelected({
-        objectFolderOrObject: container
-          .getRootFolder()
-          .getObjectNamed(objectName),
-        global,
-      });
+      this._onObjectFolderOrObjectsWithContextSelected([
+        {
+          objectFolderOrObject: container
+            .getRootFolder()
+            .getObjectNamed(objectName),
+          global,
+        },
+      ]);
     }
   };
 
@@ -1707,23 +1706,48 @@ export default class SceneEditor extends React.Component<Props, State> {
       });
   };
 
-  _onObjectFolderOrObjectWithContextSelected = (
-    objectFolderOrObjectWithContext: ?ObjectFolderOrObjectWithContext = null
+  _onObjectFolderOrObjectsWithContextSelected = (
+    objectFolderOrObjectsWithContext: Array<ObjectFolderOrObjectWithContext> = []
   ) => {
-    const selectedObjectFolderOrObjectsWithContext = [];
-    const objectFolderOrObject = objectFolderOrObjectWithContext
-      ? exceptionallyGuardAgainstDeadObject(
+    const aliveObjectFolderOrObjectsWithContext = objectFolderOrObjectsWithContext.filter(
+      objectFolderOrObjectWithContext =>
+        exceptionallyGuardAgainstDeadObject(
           objectFolderOrObjectWithContext.objectFolderOrObject
         )
-      : null;
+    );
 
-    const instancesToSelect =
-      objectFolderOrObject && !objectFolderOrObject.isFolder()
-        ? getInstancesInLayoutForObject(
+    // The selection must stay within a single section (scene objects or
+    // global objects): keep only the items matching the first one's scope.
+    const selectedObjectFolderOrObjectsWithContext: Array<ObjectFolderOrObjectWithContext> =
+      aliveObjectFolderOrObjectsWithContext.length === 0
+        ? []
+        : aliveObjectFolderOrObjectsWithContext.filter(
+            objectFolderOrObjectWithContext =>
+              objectFolderOrObjectWithContext.global ===
+              aliveObjectFolderOrObjectsWithContext[0].global
+          );
+
+    const instancesToSelect: Array<gdInitialInstance> = selectedObjectFolderOrObjectsWithContext.reduce(
+      (
+        instances: Array<gdInitialInstance>,
+        objectFolderOrObjectWithContext
+      ) => {
+        const objectFolderOrObject = exceptionallyGuardAgainstDeadObject(
+          objectFolderOrObjectWithContext.objectFolderOrObject
+        );
+        if (!objectFolderOrObject || objectFolderOrObject.isFolder()) {
+          return instances;
+        }
+
+        return instances.concat(
+          getInstancesInLayoutForObject(
             this.props.initialInstances,
             objectFolderOrObject.getObject().getName()
           )
-        : [];
+        );
+      },
+      []
+    );
     this.instancesSelection.selectInstances({
       instances: instancesToSelect,
       multiSelect: false,
@@ -1731,13 +1755,6 @@ export default class SceneEditor extends React.Component<Props, State> {
       ignoreSeal: true,
     });
     this._sendSelectedInstances();
-
-    if (objectFolderOrObjectWithContext && objectFolderOrObject) {
-      selectedObjectFolderOrObjectsWithContext.push({
-        ...objectFolderOrObjectWithContext,
-        objectFolderOrObject,
-      });
-    }
 
     this.setState(
       {
@@ -1812,9 +1829,9 @@ export default class SceneEditor extends React.Component<Props, State> {
 
     this.setState({ newObjectDialogOpen: false });
     this.editObject(object, 'properties');
-    this._onObjectFolderOrObjectWithContextSelected(
-      objectFolderOrObjectWithContext
-    );
+    this._onObjectFolderOrObjectsWithContextSelected([
+      objectFolderOrObjectWithContext,
+    ]);
     this._onObjectCreated([object], isTheFirstOfItsTypeInProject, {
       shouldCreateInstance: true,
     });
@@ -2593,7 +2610,6 @@ export default class SceneEditor extends React.Component<Props, State> {
     { notifyInGameEditor = true }: {| notifyInGameEditor?: boolean |} = {}
   ) => {
     if (objects.length === 0) return;
-
     objects.forEach(object => {
       const infoBarDetails = onObjectAdded({
         object,
@@ -3328,9 +3344,9 @@ export default class SceneEditor extends React.Component<Props, State> {
     );
     // Avoid triggering renaming refactoring if name has not really changed
     if (unifiedName === newName) {
-      this._onObjectFolderOrObjectWithContextSelected(
-        objectFolderOrObjectWithContext
-      );
+      this._onObjectFolderOrObjectsWithContextSelected([
+        objectFolderOrObjectWithContext,
+      ]);
       done(false);
       return;
     }
@@ -3345,9 +3361,9 @@ export default class SceneEditor extends React.Component<Props, State> {
     const object = objectFolderOrObject.getObject();
 
     this._onRenameObjectFinish({ object, global }, newName);
-    this._onObjectFolderOrObjectWithContextSelected(
-      objectFolderOrObjectWithContext
-    );
+    this._onObjectFolderOrObjectsWithContextSelected([
+      objectFolderOrObjectWithContext,
+    ]);
     done(true);
   };
 
@@ -4623,8 +4639,8 @@ export default class SceneEditor extends React.Component<Props, State> {
                     onObjectEdited={this._onObjectEdited}
                     onObjectsModified={this._onObjectsModified}
                     onEffectAdded={this.props.onEffectAdded}
-                    onObjectFolderOrObjectWithContextSelected={
-                      this._onObjectFolderOrObjectWithContextSelected
+                    onObjectFolderOrObjectsWithContextSelected={
+                      this._onObjectFolderOrObjectsWithContextSelected
                     }
                     onSetAsGlobalObject={this._onSetAsGlobalObject}
                     historyHandler={{

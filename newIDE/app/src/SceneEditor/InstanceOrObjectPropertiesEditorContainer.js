@@ -4,7 +4,7 @@ import { type I18n as I18nType } from '@lingui/core';
 import Paper from '../UI/Paper';
 import useForceUpdate from '../Utils/UseForceUpdate';
 import { CompactInstancePropertiesEditor } from '../InstancesEditor/CompactInstancePropertiesEditor';
-import { Trans } from '@lingui/macro';
+import { Trans, Plural } from '@lingui/macro';
 import { ProjectScopedContainersAccessor } from '../InstructionOrExpression/EventsScope';
 import { type UnsavedChanges } from '../MainFrame/UnsavedChangesContext';
 import { type HistoryHandler } from '../VariablesList/VariablesList';
@@ -21,12 +21,8 @@ import { CompactScenePropertiesEditor } from './CompactScenePropertiesEditor';
 import { CompactObjectGroupPropertiesEditor } from '../ObjectGroupEditor/CompactObjectGroupPropertiesEditor';
 import { type ObjectGroupEditorTab } from '../ObjectGroupEditor/EditedObjectGroupEditorDialog';
 import Rectangle from '../Utils/Rectangle';
-
-// The kind of the current selection whose properties are displayed in the panel.
-// NOTE: Upstream exposes this as `type LastSelectionType` from
-// './EditorsDisplay.flow', but that module (a sibling not owned by this change)
-// does not currently export it, so the union is kept in sync locally here.
-export type LastSelectionType = 'instance' | 'object' | 'layer' | 'objectGroup';
+import { type LastSelectionType } from './EditorsDisplay.flow';
+import EmptyMessage from '../UI/EmptyMessage';
 
 export const styles = {
   paper: {
@@ -53,6 +49,7 @@ type Props = {|
   globalObjectsContainer: gdObjectsContainer | null,
 
   // For objects:
+  selectedObjectFolderOrObjectsCount: number,
   objects: Array<gdObject>,
   onEditObject: (object: gdObject, initialTab: ?ObjectEditorTab) => void,
   onObjectsModified: (objects: Array<gdObject>) => void,
@@ -140,7 +137,15 @@ export const InstanceOrObjectPropertiesEditorContainer: React.ComponentType<{
           lastSelectionType === 'instance' ? (
             <Trans>Instance properties</Trans>
           ) : lastSelectionType === 'object' ? (
-            <Trans>Object properties</Trans>
+            objects.length > 1 ? (
+              <Plural
+                value={objects.length}
+                one="# object selected"
+                other="# objects selected"
+              />
+            ) : (
+              <Trans>Object properties</Trans>
+            )
           ) : lastSelectionType === 'layer' ? (
             <Trans>Layer properties</Trans>
           ) : lastSelectionType === 'objectGroup' ? (
@@ -161,6 +166,7 @@ export const InstanceOrObjectPropertiesEditorContainer: React.ComponentType<{
       lastSelectionType,
 
       // For objects:
+      selectedObjectFolderOrObjectsCount,
       objects,
       onEditObject,
       onObjectsModified,
@@ -243,6 +249,9 @@ export const InstanceOrObjectPropertiesEditorContainer: React.ComponentType<{
                 onUpdateBehaviorsSharedData={onUpdateBehaviorsSharedData}
                 onWillInstallExtension={onWillInstallExtension}
                 onExtensionInstalled={onExtensionInstalled}
+                onCreateNewExtensionWithBehavior={
+                  onCreateNewExtensionWithBehavior
+                }
                 isBehaviorListLocked={isBehaviorListLocked}
                 onOpenEventBasedObjectVariantEditor={
                   onOpenEventBasedObjectVariantEditor
@@ -281,7 +290,9 @@ export const InstanceOrObjectPropertiesEditorContainer: React.ComponentType<{
             unsavedChanges={unsavedChanges}
             i18n={i18n}
           />
-        ) : !!objects.length && lastSelectionType === 'object' ? (
+        ) : lastSelectionType === 'object' &&
+          objects.length === 1 &&
+          selectedObjectFolderOrObjectsCount === 1 ? (
           <CompactObjectPropertiesEditor
             objects={objects}
             onEditObject={onEditObject}
@@ -318,6 +329,21 @@ export const InstanceOrObjectPropertiesEditorContainer: React.ComponentType<{
             unsavedChanges={unsavedChanges}
             i18n={i18n}
           />
+        ) : lastSelectionType === 'object' &&
+          selectedObjectFolderOrObjectsCount > 0 &&
+          objects.length === 0 ? (
+          <EmptyMessage>
+            <Trans>Folder selected. No properties to display.</Trans>
+          </EmptyMessage>
+        ) : lastSelectionType === 'object' &&
+          selectedObjectFolderOrObjectsCount > 0 ? (
+          <EmptyMessage>
+            <Plural
+              value={objects.length}
+              one="# object selected."
+              other="# objects selected."
+            />
+          </EmptyMessage>
         ) : objectGroup && lastSelectionType === 'objectGroup' ? (
           <CompactObjectGroupPropertiesEditor
             project={project}

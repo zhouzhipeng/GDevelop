@@ -21,6 +21,9 @@ import { ProjectScopedContainersAccessor } from '../InstructionOrExpression/Even
 import { type TileMapTileSelection } from '../InstancesEditor/TileSetVisualizer';
 import { type EditorViewPosition2D } from '../InstancesEditor';
 import { type CustomObjectDragItem } from '../ProjectManager/ProjectManagerItemDragAndDrop';
+import { type ObjectGroupEditorTab } from '../ObjectGroupEditor/EditedObjectGroupEditorDialog';
+
+export type LastSelectionType = 'instance' | 'object' | 'layer' | 'objectGroup';
 
 export type SceneEditorsDisplayProps = {|
   gameEditorMode: 'embedded-game' | 'instances-editor',
@@ -103,8 +106,8 @@ export type SceneEditorsDisplayProps = {|
     objectWithContext: ObjectWithContext,
     hasResourceChanged: boolean
   ) => void,
-  onObjectFolderOrObjectWithContextSelected: (
-    ?ObjectFolderOrObjectWithContext
+  onObjectFolderOrObjectsWithContextSelected: (
+    Array<ObjectFolderOrObjectWithContext>
   ) => void,
   onSetAsGlobalObject: (object: gdObject) => void,
   onExportAssets: () => void,
