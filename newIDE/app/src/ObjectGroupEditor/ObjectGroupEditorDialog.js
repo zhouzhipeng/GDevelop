@@ -51,8 +51,11 @@ const ObjectGroupEditorDialog = ({
   onObjectGroupAdded,
   globalObjectsContainer,
   objectsContainer,
+  initialInstances,
   bypassedObjectGroupsContainer,
   initialTab,
+  onComputeAllVariableNames,
+  isVariableListLocked,
   isObjectListLocked,
   isGroupGlobal = false,
   objectNameFilter,
@@ -144,7 +147,10 @@ const ObjectGroupEditorDialog = ({
       onCancel={onCancel}
       globalObjectsContainer={globalObjectsContainer}
       objectsContainer={objectsContainer}
+      initialInstances={initialInstances}
       initialTab={initialTab}
+      onComputeAllVariableNames={onComputeAllVariableNames}
+      isVariableListLocked={isVariableListLocked}
       isObjectListLocked={isObjectListLocked}
       isGroupGlobal={isGroupGlobal}
       objectNameFilter={objectNameFilter}
