@@ -49,9 +49,15 @@ const styles = {
 export class CustomObjectEditorContainer extends React.Component<RenderEditorContainerProps> {
   editor: ?SceneEditor;
   resourceExternallyChangedCallbackId: ?string;
+  _projectScopedContainersAccessor: ProjectScopedContainersAccessor | null = null;
   _objectsContainer: gdObjectsContainer = new gd.ObjectsContainer(
     gd.ObjectsContainer.Function
   );
+
+  constructor(props: RenderEditorContainerProps) {
+    super(props);
+    this._rebuildProjectScopedContainersAccessor();
+  }
 
   getProject(): ?gdProject {
     return this.props.project;
@@ -72,6 +78,15 @@ export class CustomObjectEditorContainer extends React.Component<RenderEditorCon
     return this.props.isActive || nextProps.isActive;
   }
 
+  componentDidUpdate(prevProps: RenderEditorContainerProps): void {
+    if (
+      this.props.project !== prevProps.project ||
+      this.props.projectItemName !== prevProps.projectItemName
+    ) {
+      this._rebuildProjectScopedContainersAccessor();
+    }
+  }
+
   componentDidMount() {
     if (this.props.isActive) {
       this._setPreviewedLayout();
@@ -90,6 +105,25 @@ export class CustomObjectEditorContainer extends React.Component<RenderEditorCon
       eventsBasedObjectType: projectItemName || null,
       eventsBasedObjectVariantName: this.getVariantName(),
     });
+  }
+
+  _rebuildProjectScopedContainersAccessor() {
+    const { project } = this.props;
+    const eventsFunctionsExtension = this.getEventsFunctionsExtension();
+    const eventsBasedObject = this.getEventsBasedObject();
+    const variant = this.getVariant();
+    if (project && eventsFunctionsExtension && eventsBasedObject && variant) {
+      this._projectScopedContainersAccessor = new ProjectScopedContainersAccessor(
+        {
+          project,
+          eventsFunctionsExtension,
+          eventsBasedObject,
+        },
+        this._objectsContainer
+      );
+    } else {
+      this._projectScopedContainersAccessor = null;
+    }
   }
 
   componentWillUnmount() {
@@ -314,14 +348,9 @@ export class CustomObjectEditorContainer extends React.Component<RenderEditorCon
     const variant = this.getVariant();
     if (!variant) return null;
 
-    const projectScopedContainersAccessor = new ProjectScopedContainersAccessor(
-      {
-        project,
-        eventsFunctionsExtension,
-        eventsBasedObject,
-      },
-      this._objectsContainer
-    );
+    if (!this._projectScopedContainersAccessor) {
+      return null;
+    }
 
     return (
       <div style={styles.container}>
@@ -338,7 +367,9 @@ export class CustomObjectEditorContainer extends React.Component<RenderEditorCon
           unsavedChanges={this.props.unsavedChanges}
           ref={editor => (this.editor = editor)}
           project={project}
-          projectScopedContainersAccessor={projectScopedContainersAccessor}
+          projectScopedContainersAccessor={
+            this._projectScopedContainersAccessor
+          }
           layout={null}
           eventsFunctionsExtension={eventsFunctionsExtension}
           eventsBasedObject={eventsBasedObject}

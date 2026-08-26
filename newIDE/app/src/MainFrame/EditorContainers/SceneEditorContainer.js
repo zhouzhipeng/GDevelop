@@ -31,6 +31,12 @@ import { type EditorId as SceneEditorPanelId } from '../../SceneEditor/utils';
 
 export class SceneEditorContainer extends React.Component<RenderEditorContainerProps> {
   editor: ?SceneEditor;
+  _projectScopedContainersAccessor: ProjectScopedContainersAccessor | null = null;
+
+  constructor(props: RenderEditorContainerProps) {
+    super(props);
+    this._rebuildProjectScopedContainersAccessor();
+  }
 
   getProject(): ?gdProject {
     return this.props.project;
@@ -51,20 +57,26 @@ export class SceneEditorContainer extends React.Component<RenderEditorContainerP
     return this.props.isActive || nextProps.isActive;
   }
 
-  componentDidMount() {
-    if (this.props.isActive) {
-      this._setPreviewedLayout();
+  componentDidUpdate(prevProps: RenderEditorContainerProps): void {
+    if (
+      this.props.project !== prevProps.project ||
+      this.props.projectItemName !== prevProps.projectItemName
+    ) {
+      this._rebuildProjectScopedContainersAccessor();
     }
-    this._openRequestedScenePanel();
-  }
-
-  componentDidUpdate(prevProps: RenderEditorContainerProps) {
     if (
       prevProps.extraEditorProps !== this.props.extraEditorProps ||
       prevProps.isActive !== this.props.isActive
     ) {
       this._openRequestedScenePanel();
     }
+  }
+
+  componentDidMount() {
+    if (this.props.isActive) {
+      this._setPreviewedLayout();
+    }
+    this._openRequestedScenePanel();
   }
 
   _openRequestedScenePanel() {
@@ -86,6 +98,21 @@ export class SceneEditorContainer extends React.Component<RenderEditorContainerP
       eventsBasedObjectType: null,
       eventsBasedObjectVariantName: null,
     });
+  }
+
+  _rebuildProjectScopedContainersAccessor() {
+    const { project } = this.props;
+    const scene = this.getLayout();
+    if (scene && project) {
+      this._projectScopedContainersAccessor = new ProjectScopedContainersAccessor(
+        {
+          project,
+          layout: scene,
+        }
+      );
+    } else {
+      this._projectScopedContainersAccessor = null;
+    }
   }
 
   notifyChangesToInGameEditor(hotReloadSteps: HotReloadSteps) {
@@ -277,17 +304,10 @@ export class SceneEditorContainer extends React.Component<RenderEditorContainerP
   render(): any {
     const { project, projectItemName, isActive } = this.props;
     const layout = this.getLayout();
-    if (!layout || !project) {
+    if (!project || !layout || !this._projectScopedContainersAccessor) {
       //TODO: Error component
       return <div>No layout called {projectItemName} found!</div>;
     }
-
-    const projectScopedContainersAccessor = new ProjectScopedContainersAccessor(
-      {
-        project,
-        layout,
-      }
-    );
 
     return (
       <SceneEditor
@@ -303,7 +323,7 @@ export class SceneEditorContainer extends React.Component<RenderEditorContainerP
         unsavedChanges={this.props.unsavedChanges}
         ref={editor => (this.editor = editor)}
         project={project}
-        projectScopedContainersAccessor={projectScopedContainersAccessor}
+        projectScopedContainersAccessor={this._projectScopedContainersAccessor}
         layout={layout}
         eventsFunctionsExtension={null}
         eventsBasedObject={null}
