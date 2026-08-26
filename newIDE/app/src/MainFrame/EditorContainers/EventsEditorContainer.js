@@ -42,8 +42,17 @@ import {
   type SceneLifecycleFunctionName,
 } from '../../SceneContextLifecycleFunctions';
 
+type LifecycleFunctionContext = {|
+  eventsFunction: gdEventsFunction,
+  scope: EventsScope,
+  projectScopedContainersAccessor: ProjectScopedContainersAccessor,
+|};
+
 export class EventsEditorContainer extends React.Component<RenderEditorContainerProps> {
   lifecycleFunctionsEditor: ?SceneContextLifecycleFunctionsEditorInterface;
+  _lifecycleFunctionContexts: {
+    [string]: LifecycleFunctionContext,
+  } = {};
 
   getSelectedEditor = (): ?EventsSheetInterface =>
     this.lifecycleFunctionsEditor
@@ -63,9 +72,15 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
     }
   }
 
-  componentDidUpdate(prevProps: RenderEditorContainerProps) {
+  componentDidUpdate(prevProps: RenderEditorContainerProps): void {
     if (!prevProps.isActive && this.props.isActive) {
       this._setPreviewedLayout();
+    }
+    if (
+      this.props.project !== prevProps.project ||
+      this.props.projectItemName !== prevProps.projectItemName
+    ) {
+      this._resetLifecycleFunctionContexts();
     }
   }
 
@@ -78,6 +93,48 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
       eventsBasedObjectVariantName: null,
     });
   }
+
+  _resetLifecycleFunctionContexts = (): void => {
+    this._lifecycleFunctionContexts = {};
+  };
+
+  _getLifecycleFunctionContext = (
+    project: gdProject,
+    layout: gdLayout,
+    lifecycleFunctionName: SceneLifecycleFunctionName
+  ): LifecycleFunctionContext => {
+    const eventsFunction = getSceneLifecycleEventsFunction(
+      layout,
+      lifecycleFunctionName
+    );
+    const existingContext = this._lifecycleFunctionContexts[
+      lifecycleFunctionName
+    ];
+    if (
+      existingContext &&
+      existingContext.eventsFunction === eventsFunction &&
+      existingContext.scope.project === project &&
+      existingContext.scope.layout === layout
+    ) {
+      return existingContext;
+    }
+
+    const scope: EventsScope = {
+      project,
+      layout,
+      eventsFunction,
+      sceneLifecycleFunctionName: lifecycleFunctionName,
+    };
+    const context: LifecycleFunctionContext = {
+      eventsFunction,
+      scope,
+      projectScopedContainersAccessor: new ProjectScopedContainersAccessor(
+        scope
+      ),
+    };
+    this._lifecycleFunctionContexts[lifecycleFunctionName] = context;
+    return context;
+  };
 
   getProject(): ?gdProject {
     return this.props.project;
@@ -168,6 +225,7 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
     if (this.props.unsavedChanges) {
       this.props.unsavedChanges.triggerUnsavedChanges();
     }
+    this._resetLifecycleFunctionContexts();
     this.forceUpdate();
     this.props.triggerHotReloadInGameEditorIfNeeded();
   };
@@ -299,22 +357,18 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
         onSelectedFunctionChanged={this.onSelectedLifecycleFunctionChanged}
         onLifecycleFunctionsChanged={this.onLifecycleFunctionsChanged}
         renderFunctionParameters={({ lifecycleFunctionName }) => {
-          const eventsFunction = getSceneLifecycleEventsFunction(
+          const {
+            eventsFunction,
+            projectScopedContainersAccessor,
+          } = this._getLifecycleFunctionContext(
+            project,
             layout,
             lifecycleFunctionName
           );
-          const scope: EventsScope = {
-            project,
-            layout,
-            eventsFunction,
-            sceneLifecycleFunctionName: lifecycleFunctionName,
-          };
           return (
             <SceneLifecycleFunctionParametersEditor
               project={project}
-              projectScopedContainersAccessor={
-                new ProjectScopedContainersAccessor(scope)
-              }
+              projectScopedContainersAccessor={projectScopedContainersAccessor}
               eventsFunction={eventsFunction}
               onWillInstallExtension={this.props.onWillInstallExtension}
               onExtensionInstalled={this.props.onExtensionInstalled}
@@ -327,16 +381,15 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
           editorRef,
           onOpenParameters,
         }) => {
-          const eventsFunction = getSceneLifecycleEventsFunction(
+          const {
+            eventsFunction,
+            scope,
+            projectScopedContainersAccessor,
+          } = this._getLifecycleFunctionContext(
+            project,
             layout,
             lifecycleFunctionName
           );
-          const scope: EventsScope = {
-            project,
-            layout,
-            eventsFunction,
-            sceneLifecycleFunctionName: lifecycleFunctionName,
-          };
           return (
             <EventsFunctionEditor
               ref={editorRef}
@@ -354,10 +407,7 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
               scope={scope}
               globalObjectsContainer={project.getObjects()}
               objectsContainer={layout.getObjects()}
-              projectScopedContainersAccessor={
-                // $FlowFixMe[incompatible-type]
-                new ProjectScopedContainersAccessor(scope)
-              }
+              projectScopedContainersAccessor={projectScopedContainersAccessor}
               eventsFunction={eventsFunction}
               capabilities={fixedEventsFunctionCapabilities}
               onOpenSettings={onOpenParameters}

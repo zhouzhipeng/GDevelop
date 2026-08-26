@@ -99,7 +99,6 @@ const EditedObjectGroupEditorDialog = ({
       }),
     [group, isGroupGlobal, objectGroupName, onRenameGroup]
   );
-
   const apply = async () => {
     const wasNameChangeApplied = await applyNameChange();
     if (!wasNameChangeApplied) return;
