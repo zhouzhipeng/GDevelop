@@ -21,6 +21,7 @@ import {
   findSurfaceBackgroundColor,
 } from './StickyRows';
 import GDevelopThemeContext from '../Theme/GDevelopThemeContext';
+import { useTreeViewSelection } from './UseTreeViewSelection';
 
 export const navigationKeys = [
   'ArrowDown',
@@ -46,7 +47,7 @@ export type MenuButton = {|
   showPrimaryLabel?: boolean,
 |};
 
-type FlattenedNode<Item> = {|
+export type FlattenedNode<Item> = {|
   id: string,
   name: string | React.Node,
   rightComponent: ?React.Node,
@@ -64,10 +65,18 @@ type FlattenedNode<Item> = {|
   item: Item,
 |};
 
+export type SelectArgs<Item> = {|
+  node: FlattenedNode<Item>,
+  exclusive?: boolean,
+  extendFromAnchor?: boolean,
+|};
+
+export type OnSelectFn<Item> = (SelectArgs<Item>) => void;
+
 export type ItemData<Item> = {|
   onOpen: (FlattenedNode<Item>) => void,
   onClick: (FlattenedNode<Item>) => void,
-  onSelect: ({| node: FlattenedNode<Item>, exclusive?: boolean |}) => void,
+  onSelect: OnSelectFn<Item>,
   onBlurField: () => void,
   flattenedData: FlattenedNode<Item>[],
   onEndRenaming: (item: Item, newName: string) => void,
@@ -86,6 +95,7 @@ export type ItemData<Item> = {|
   getItemHtmlId?: (Item, index: number) => ?string,
   forceDefaultDraggingPreview?: boolean,
   shouldSelectUponContextMenuOpening?: boolean,
+  multiSelect: boolean,
 |};
 
 const getItemProps = memoizeOne(
@@ -93,7 +103,7 @@ const getItemProps = memoizeOne(
     flattenedData: FlattenedNode<Item>[],
     onOpen: (FlattenedNode<Item>) => void,
     onClick: (FlattenedNode<Item>) => void,
-    onSelect: ({| node: FlattenedNode<Item>, exclusive?: boolean |}) => void,
+    onSelect: OnSelectFn<Item>,
     onBlurField: () => void,
     onEndRenaming: (item: Item, newName: string) => void,
     renamedItemId: ?string,
@@ -113,7 +123,8 @@ const getItemProps = memoizeOne(
     DragSourceAndDropTarget: any => React.Node,
     getItemHtmlId?: (Item, index: number) => ?string,
     forceDefaultDraggingPreview?: boolean,
-    shouldSelectUponContextMenuOpening?: boolean
+    shouldSelectUponContextMenuOpening?: boolean,
+    multiSelect: boolean
   ): ItemData<Item> => ({
     onOpen,
     onClick,
@@ -131,6 +142,7 @@ const getItemProps = memoizeOne(
     getItemHtmlId,
     forceDefaultDraggingPreview,
     shouldSelectUponContextMenuOpening,
+    multiSelect,
   })
 );
 
@@ -170,7 +182,9 @@ type Props<Item> = {|
   searchText?: string,
   selectedItems: $ReadOnlyArray<Item>,
   onClickItem?: Item => void,
-  onSelectItems: (Item[]) => void,
+  // `removedItems` lists the items explicitly deselected by the gesture
+  // (Ctrl/Cmd+click toggle-off), so callers can drop related items too.
+  onSelectItems: (Item[], removedItems?: Array<Item>) => void,
   multiSelect: boolean,
   onRenameItem: (Item, newName: string) => void,
   onMoveSelectionToItem: (
@@ -414,32 +428,18 @@ function InnerTreeView<Item: ItemBaseAttributes>(
     ]
   );
 
-  const onSelect = React.useCallback(
-    ({
-      node,
-      exclusive,
-    }: {|
-      node: FlattenedNode<Item>,
-      exclusive?: boolean,
-    |}) => {
-      if (multiSelect) {
-        if (node.selected) {
-          if (exclusive) {
-            if (selectedItems.length === 1) return;
-            onSelectItems([node.item]);
-          } else
-            onSelectItems(selectedItems.filter(item => item !== node.item));
-        } else {
-          if (exclusive) onSelectItems([node.item]);
-          else onSelectItems([...selectedItems, node.item]);
-        }
-      } else {
-        if (node.selected && selectedItems.length === 1) return;
-        onSelectItems([node.item]);
-      }
-    },
-    [multiSelect, onSelectItems, selectedItems]
+  const flattenedData = React.useMemo(
+    () => flattenOpened(items, searchText ? searchText.toLowerCase() : null),
+    [flattenOpened, items, searchText]
   );
+
+  const { onSelect, navigationFocusIdRef } = useTreeViewSelection({
+    multiSelect,
+    selectedItems,
+    flattenedData,
+    onSelectItems,
+    getItemId,
+  });
 
   const onClick = React.useCallback(
     (node: FlattenedNode<Item>) => {
@@ -457,11 +457,6 @@ function InnerTreeView<Item: ItemBaseAttributes>(
     if (getItemName(item) === trimmedNewName) return;
     onRenameItem(item, trimmedNewName);
   };
-
-  const flattenedData = React.useMemo(
-    () => flattenOpened(items, searchText ? searchText.toLowerCase() : null),
-    [flattenOpened, items, searchText]
-  );
 
   const parentIndexes = React.useMemo(
     () => (enableStickyAncestors ? computeParentIndexes(flattenedData) : []),
@@ -767,7 +762,8 @@ function InnerTreeView<Item: ItemBaseAttributes>(
     DragSourceAndDropTarget,
     getItemHtmlId,
     forceDefaultDraggingPreview,
-    shouldSelectUponContextMenuOpening
+    shouldSelectUponContextMenuOpening,
+    multiSelect
   );
 
   // Reset opened nodes during search when user stops searching
@@ -785,13 +781,16 @@ function InnerTreeView<Item: ItemBaseAttributes>(
     (event: KeyboardEvent) => {
       if (!navigationKeys.includes(event.key)) return;
       let newFocusedItem;
-      const item = selectedItems[0];
-      let itemIndexInFlattenedData = -1;
-      if (item) {
-        itemIndexInFlattenedData = flattenedData.findIndex(
-          node => node.id === getItemId(item)
-        );
-      }
+      const focusedId =
+        navigationFocusIdRef.current ||
+        (selectedItems[0] ? getItemId(selectedItems[0]) : null);
+      let itemIndexInFlattenedData = focusedId
+        ? flattenedData.findIndex(node => node.id === focusedId)
+        : -1;
+      const item =
+        itemIndexInFlattenedData !== -1
+          ? flattenedData[itemIndexInFlattenedData].item
+          : selectedItems[0];
 
       if (itemIndexInFlattenedData === -1) {
         // If no row is selected, start from the first row that is selectable.
@@ -876,7 +875,22 @@ function InnerTreeView<Item: ItemBaseAttributes>(
       }
       if (newFocusedItem) {
         scrollToItem(newFocusedItem);
-        onSelectItems([newFocusedItem]);
+        const newFocusedItemId = getItemId(newFocusedItem);
+        const newFocusedNode = flattenedData.find(
+          flattenedNode => flattenedNode.id === newFocusedItemId
+        );
+        if (!newFocusedNode) return;
+        if (
+          multiSelect &&
+          event.shiftKey &&
+          (event.key === 'ArrowDown' || event.key === 'ArrowUp')
+        ) {
+          onSelect({ node: newFocusedNode, extendFromAnchor: true });
+        } else {
+          // Route through onSelect so that selectionAnchorIdRef and
+          // shiftSelectionBaseRef stay consistent with the new selection.
+          onSelect({ node: newFocusedNode, exclusive: true });
+        }
       }
     },
     [
@@ -884,11 +898,13 @@ function InnerTreeView<Item: ItemBaseAttributes>(
       arrowKeyNavigationProps,
       flattenedData,
       getItemId,
+      multiSelect,
+      onSelect,
       openItems,
       closeItems,
       onClickItem,
       scrollToItem,
-      onSelectItems,
+      navigationFocusIdRef,
     ]
   );
 
