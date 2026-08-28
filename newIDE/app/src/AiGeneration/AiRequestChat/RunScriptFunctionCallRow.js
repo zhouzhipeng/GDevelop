@@ -10,6 +10,7 @@ import {
   type AiRequestFunctionCallOutput,
 } from '../../Utils/GDevelopServices/Generation';
 import { type EditorFunctionCallResult } from '../../EditorFunctions';
+import { AiRequestContext } from '../AiRequestContext';
 import {
   FunctionCallRowLayout,
   FunctionCallStatusIcon,
@@ -366,7 +367,20 @@ export const RunScriptFunctionCallRow = ({
   existingFunctionCallOutput,
   isRequestStopped,
 }: Props): React.Node => {
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const { pendingEditApproval } = React.useContext(AiRequestContext);
+  const isAwaitingApproval =
+    !!pendingEditApproval &&
+    pendingEditApproval.callIds.includes(functionCall.call_id);
+
+  const [isExpanded, setIsExpanded] = React.useState(isAwaitingApproval);
+  // A script waiting for approval is about to modify the project: open the row
+  // so the user can read the code before allowing it to run.
+  React.useEffect(
+    () => {
+      if (isAwaitingApproval) setIsExpanded(true);
+    },
+    [isAwaitingApproval]
+  );
 
   const { title, jsCode } = React.useMemo(
     () => parseRunScriptArguments(functionCall.arguments),
@@ -425,7 +439,8 @@ export const RunScriptFunctionCallRow = ({
     ? 'aborted'
     : isFinished
     ? 'finished'
-    : !!editorFunctionCallResult &&
+    : !isAwaitingApproval &&
+      !!editorFunctionCallResult &&
       editorFunctionCallResult.status === 'working'
     ? 'working'
     : 'pending';
@@ -438,7 +453,9 @@ export const RunScriptFunctionCallRow = ({
       icon={<FunctionCallStatusIcon status={status} />}
       label={title || <Trans>Run a script</Trans>}
       secondaryLabel={
-        records.length === 1 ? (
+        isAwaitingApproval ? (
+          <Trans>Waiting for approval</Trans>
+        ) : records.length === 1 ? (
           <Trans>1 operation</Trans>
         ) : records.length > 1 ? (
           <Trans>{records.length} operations</Trans>
@@ -451,7 +468,10 @@ export const RunScriptFunctionCallRow = ({
       <div className={classes.scriptDetails}>
         {error && <ScriptErrorBlock error={error} />}
         {!!jsCode && (
-          <ScriptSection label={<Trans>Script</Trans>} isOpenByDefault={false}>
+          <ScriptSection
+            label={<Trans>Script</Trans>}
+            isOpenByDefault={isAwaitingApproval}
+          >
             <LightweightJavaScriptCodeBlock
               code={jsCode}
               highlightedLineNumber={error ? error.lineNumber : null}

@@ -1941,11 +1941,6 @@ const MainFrame = (props: Props): React.MixedElement => {
           if (openedEditor.paneIdentifier !== newPaneIdentifier) {
             // The editor is opened, but not at the right position, close it.
             // It will re-open in the right pane.
-            // Tell the editor not to suspend the AI request on close, since
-            // we're just repositioning it, not intentionally closing it.
-            if (openedEditor.askAiEditor) {
-              openedEditor.askAiEditor.prepareToReposition();
-            }
             newEditorTabs = closeEditorTab(
               newEditorTabs,
               openedEditor.editorTab
@@ -5814,7 +5809,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       for (const editor of getAllEditorTabs(state.editorTabs)) {
         const { editorRef } = editor;
         if (editorRef) {
-          editorRef.onEventsBasedObjectChildrenEdited();
+          (editorRef.onEventsBasedObjectChildrenEdited: any)(eventsBasedObject);
         }
       }
     },
@@ -8433,8 +8428,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       createMcpEditorBridge({
         getProject: () => currentProjectRef.current,
         getPermissions: () => ({
-          allowWriteTools:
-            isHeadless || preferences.values.mcpAllowWriteTools,
+          allowWriteTools: isHeadless || preferences.values.mcpAllowWriteTools,
           allowCommandTools:
             isHeadless || preferences.values.mcpAllowCommandTools,
         }),

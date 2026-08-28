@@ -94,7 +94,6 @@ import {
   getObjectSizeInfoHints,
   type ObjectSizeInfo,
 } from './Utils';
-import { type OpenLayoutHandler } from '../MainFrame/EditorContainers/BaseEditor';
 import { executeScript } from './ScriptExecution/ScriptRunner';
 import { buildExposedScriptFunctions } from './ScriptExecution/ExposedFunctions';
 import { capScriptExecutionResult } from './ScriptExecution/CapScriptOutput';
@@ -334,7 +333,18 @@ export type AssetSearchAndInstallOptions = {|
 |};
 
 export type EditorCallbacks = {|
-  onOpenLayout: OpenLayoutHandler,
+  onOpenLayout: (
+    sceneName: string,
+    options: {|
+      openEventsEditor: boolean,
+      openSceneEditor: boolean,
+      focusWhenOpened:
+        | 'scene-or-events-otherwise'
+        | 'scene'
+        | 'events'
+        | 'none',
+    |}
+  ) => void,
   // Kept for legacy scene deletion/rename tools. Editors are closed before
   // mutating the layout so mounted views cannot retain freed C++ wrappers.
   onCloseLayout?: (sceneName: string) => void,
