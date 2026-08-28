@@ -7,10 +7,99 @@ import optionalRequire from '../Utils/OptionalRequire';
 import { scanProjectForValidationErrors } from '../Utils/EventsValidationScanner';
 import { lintExtensionFunctionEvents } from './McpExtensionTools';
 import { validateProjectJavaScriptAuthoring } from '../ProjectsStorage/JavaScriptAuthoringApi';
+import {
+  reloadProjectEventsFunctionsExtensionMetadata,
+  type EventsFunctionCodeWriter,
+} from '../EventsFunctionsExtensionsLoader';
 
 const gd: libGDevelop = global.gd;
 const fs = optionalRequire('fs');
 const path = optionalRequire('path');
+
+const validationEventsFunctionCodeWriter: EventsFunctionCodeWriter = {
+  getIncludeFileFor: (functionName: string) => `${functionName}.js`,
+  writeFunctionCode: async () => {},
+  writeBehaviorCode: async () => {},
+  writeObjectCode: async () => {},
+};
+
+const validationI18n = ({
+  _: value =>
+    typeof value === 'string' ? value : value.id || value.message || '',
+}: any);
+
+/**
+ * Load the project extension metadata used by a temporary validation project.
+ *
+ * Event validation reads instruction metadata from the global JS platform,
+ * while multi-file validation deliberately reconstructs a separate project
+ * from disk before the editor is reloaded. Temporarily replacing metadata for
+ * the reconstructed project's extensions keeps validation aligned with the
+ * sources being checked. The returned callback restores the editor project's
+ * metadata exactly after validation.
+ */
+const temporarilyLoadProjectExtensionMetadataForValidation = (
+  validationProject: gdProject,
+  restoreProject: gdProject
+): (() => void) => {
+  const platform = gd.JsPlatform.get();
+  const extensionNames = [];
+  for (
+    let index = 0;
+    index < validationProject.getEventsFunctionsExtensionsCount();
+    index++
+  ) {
+    const extensionName = validationProject
+      .getEventsFunctionsExtensionAt(index)
+      .getName();
+    if (
+      platform.isExtensionLoaded(extensionName) &&
+      !restoreProject.hasEventsFunctionsExtensionNamed(extensionName)
+    ) {
+      throw new Error(
+        `Cannot validate project extension "${extensionName}" because it collides with a loaded platform extension.`
+      );
+    }
+    extensionNames.push(extensionName);
+  }
+
+  let restored = false;
+  const restoreMetadata = () => {
+    if (restored) return;
+    restored = true;
+    extensionNames.forEach(extensionName => {
+      platform.removeExtension(extensionName);
+      if (restoreProject.hasEventsFunctionsExtensionNamed(extensionName)) {
+        reloadProjectEventsFunctionsExtensionMetadata(
+          restoreProject,
+          restoreProject.getEventsFunctionsExtension(extensionName),
+          validationEventsFunctionCodeWriter,
+          validationI18n
+        );
+      }
+    });
+  };
+
+  try {
+    for (
+      let index = 0;
+      index < validationProject.getEventsFunctionsExtensionsCount();
+      index++
+    ) {
+      reloadProjectEventsFunctionsExtensionMetadata(
+        validationProject,
+        validationProject.getEventsFunctionsExtensionAt(index),
+        validationEventsFunctionCodeWriter,
+        validationI18n
+      );
+    }
+  } catch (error) {
+    restoreMetadata();
+    throw error;
+  }
+
+  return restoreMetadata;
+};
 
 const hasOwn = (object: any, propertyName: string): boolean =>
   !!object &&
@@ -623,15 +712,23 @@ const collectProjectSemanticDiagnostics = (
 
 export const validateSerializedProject = (
   serializedProject: Object,
-  args: Object = {}
+  args: Object = {},
+  extensionMetadataRestoreProject?: gdProject
 ): Object => {
   // $FlowFixMe[invalid-constructor]
   const validationProject = new gd.ProjectHelper.createNewGDJSProject();
+  let restoreExtensionMetadata = () => {};
   try {
     unserializeFromJSObject(validationProject, serializedProject);
     // Round-trip serialization catches late serializer crashes and normalizes
     // the same path the editor will use after a sync/apply.
     serializeToJSObject(validationProject);
+    if (extensionMetadataRestoreProject) {
+      restoreExtensionMetadata = temporarilyLoadProjectExtensionMetadataForValidation(
+        validationProject,
+        extensionMetadataRestoreProject
+      );
+    }
     const projectValidationErrors = scanProjectForValidationErrors(
       validationProject
     );
@@ -808,7 +905,11 @@ export const validateSerializedProject = (
       ],
     };
   } finally {
-    validationProject.delete();
+    try {
+      restoreExtensionMetadata();
+    } finally {
+      validationProject.delete();
+    }
   }
 };
 
@@ -817,7 +918,11 @@ export const validateCurrentProjectJson = (
   args: Object = {}
 ): Object => {
   const serializedProject = serializeToJSObject(project);
-  const validation = validateSerializedProject(serializedProject, args);
+  const validation = validateSerializedProject(
+    serializedProject,
+    args,
+    project
+  );
   return {
     ...validation,
     validationMode: 'current-editor-project',
@@ -843,7 +948,11 @@ export const applyValidatedProjectJsonPatch = (
     applySinglePatchOperation(scopedTarget.target, operation)
   );
 
-  const validation = validateSerializedProject(patchedSerializedProject, args);
+  const validation = validateSerializedProject(
+    patchedSerializedProject,
+    args,
+    project
+  );
   if (!validation.valid) {
     return {
       success: false,
@@ -930,7 +1039,11 @@ export const syncEditorFromValidatedProjectJson = (
   const diskSerializedProject = JSON.parse(
     fs.readFileSync(projectFile, 'utf8')
   );
-  const validation = validateSerializedProject(diskSerializedProject, args);
+  const validation = validateSerializedProject(
+    diskSerializedProject,
+    args,
+    project
+  );
   const beforeSerializedProject = serializeToJSObject(project);
   const semanticDiff = summarizeProjectSemanticDiff(
     beforeSerializedProject,

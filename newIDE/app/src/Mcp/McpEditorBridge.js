@@ -4467,9 +4467,7 @@ const callMcpTool = async ({
       ) {
         throw new GlbModelInspectionError(
           'GLB_RUNTIME_INSPECTION_TOO_LARGE',
-          `The GLB mesh/material inspection is limited to ${
-            MAX_GLB_RUNTIME_INSPECTION_BYTES
-          } bytes.`,
+          `The GLB mesh/material inspection is limited to ${MAX_GLB_RUNTIME_INSPECTION_BYTES} bytes.`,
           {
             byteLength: fileStat.size,
             maxFileSizeBytes: MAX_GLB_RUNTIME_INSPECTION_BYTES,
@@ -5599,10 +5597,14 @@ const callMcpTool = async ({
           ? nodeBuffer.byteLength(generatedJson, 'utf8')
           : new TextEncoder().encode(generatedJson).byteLength,
       };
-      const validation = validateSerializedProject(serializedProject, {
-        include_generated_code: true,
-        javascript_source_files: sourceTree.files,
-      });
+      const validation = validateSerializedProject(
+        serializedProject,
+        {
+          include_generated_code: true,
+          javascript_source_files: sourceTree.files,
+        },
+        project
+      );
       const sourceLocatedErrors = (validation.errors || []).map(diagnostic =>
         addProjectSourceLocationDetails(diagnostic, projectFile)
       );

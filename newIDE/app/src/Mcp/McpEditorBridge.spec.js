@@ -1269,6 +1269,79 @@ bounds = { min = [0, 0, 0], max = [64, 64, 0] }
     expect(result.note).toContain('RUNTIME NOT VERIFIED');
   });
 
+  it('validates calls to a disk-only project extension before editor reload', async () => {
+    const temporaryDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'gdevelop-mcp-validate-disk-extension-')
+    );
+    const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+    const extensionName = 'DiskOnlyValidationExtension';
+    const actionType = `${extensionName}::Initialize`;
+    const editorProject = gd.ProjectHelper.createNewGDJSProject();
+    editorProject.setName('Editor project without disk extension');
+    editorProject.setProjectFile(projectFile);
+    editorProject.insertNewLayout('Scene', 0);
+
+    const diskProject = gd.ProjectHelper.createNewGDJSProject();
+    diskProject.setName('Disk project with new extension');
+    diskProject.setProjectFile(projectFile);
+    diskProject.insertNewLayout('Scene', 0);
+    const extension = diskProject.insertNewEventsFunctionsExtension(
+      extensionName,
+      0
+    );
+    extension.setFullName('Disk-only validation extension');
+    const initializeFunction = extension
+      .getEventsFunctions()
+      .insertNewEventsFunction('Initialize', 0);
+    initializeFunction.setFunctionType(gd.EventsFunction.Action);
+    initializeFunction.setFullName('Initialize');
+    const files = decomposeLegacyProjectToFiles(
+      serializeProjectWithConstants(diskProject)
+    );
+    files[
+      'game://scenes/Scene/functions/sceneUpdate.events'
+    ] = `@event\nif SceneJustBegins\ndo ${actionType}\n`;
+    diskProject.delete();
+    await writeMultiFileSourceTree({ entryPath: projectFile, files });
+
+    const platform = gd.JsPlatform.get();
+    platform.removeExtension(extensionName);
+    try {
+      const bridge = makeBridge({ getProject: () => editorProject });
+      const response = await bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: { name: 'validate_project_files', arguments: {} },
+      });
+      const result = JSON.parse(response.content[0].text);
+
+      expect(response.isError).not.toBe(true);
+      expect(result).toEqual(
+        expect.objectContaining({
+          success: true,
+          valid: true,
+          validationMode: 'multi-file-disk-sources',
+          projectFile,
+        })
+      );
+      expect(
+        result.projectValidationErrors.filter(
+          error =>
+            error.type === 'missing-instruction' &&
+            error.instructionType === actionType
+        )
+      ).toEqual([]);
+      expect(
+        gd.MetadataProvider.isBadInstructionMetadata(
+          gd.MetadataProvider.getActionMetadata(platform, actionType)
+        )
+      ).toBe(true);
+    } finally {
+      platform.removeExtension(extensionName);
+      editorProject.delete();
+      fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
   it('reports strict JavaScript API errors against the original events source', async () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-invalid-javascript-api-')
