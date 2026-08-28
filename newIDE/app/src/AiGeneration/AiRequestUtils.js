@@ -9,6 +9,25 @@ import {
 import { type EditorFunctionCallResult } from '../EditorFunctions';
 import { type RelatedAiRequestLastMessages } from '../EditorFunctions';
 
+/**
+ * Maximum number of times a failed AI request can be continued without making
+ * any progress in between - kept in sync with the API, which is what really
+ * enforces it.
+ */
+export const MAX_AI_REQUEST_RETRIES_IN_A_ROW = 3;
+
+/**
+ * Whether the API would still accept to continue this failed request, so that
+ * a retry is only offered when it can work. Like the API, the retries only
+ * count while nothing was written to the conversation in between.
+ */
+export const canRetryAiRequest = (aiRequest: AiRequest): boolean =>
+  aiRequest.status === 'error' &&
+  !(
+    aiRequest.retriedAfterMessagesCount === (aiRequest.output || []).length &&
+    (aiRequest.retriesInARowCount || 0) >= MAX_AI_REQUEST_RETRIES_IN_A_ROW
+  );
+
 export const getFunctionCallToFunctionCallOutputMap = ({
   aiRequest,
 }: {|
@@ -269,6 +288,37 @@ export const aiRequestShouldBeWatched = (aiRequest: AiRequest): boolean => {
     return getPendingSubAgentFunctionCalls({ aiRequest }).length > 0;
   }
   return false;
+};
+
+/**
+ * Whether a poll observed activity (a status change or new messages) for an AI
+ * request, used to drive adaptive polling.
+ *
+ * A full fetch is incremental from the last already-known message, which is
+ * echoed back: so when there was a known message, a returned count > 1 means at
+ * least one new message; when there was no known message yet, every returned
+ * message is new.
+ */
+export const aiRequestPollSawActivity = (
+  previousAiRequest: ?AiRequest,
+  fetchedAiRequest: AiRequest
+): boolean => {
+  const previousOutput = (previousAiRequest && previousAiRequest.output) || [];
+  const lastKnownMessage =
+    previousOutput.length > 0
+      ? previousOutput[previousOutput.length - 1]
+      : null;
+  const wasIncrementalFetch = !!(
+    lastKnownMessage && lastKnownMessage.messageId
+  );
+  const fetchedMessageCount =
+    (fetchedAiRequest.output && fetchedAiRequest.output.length) || 0;
+  const newMessageCount = wasIncrementalFetch
+    ? Math.max(0, fetchedMessageCount - 1)
+    : fetchedMessageCount;
+
+  const previousStatus = previousAiRequest ? previousAiRequest.status : null;
+  return fetchedAiRequest.status !== previousStatus || newMessageCount > 0;
 };
 
 // TODO: can we merge these two functions?

@@ -18,6 +18,7 @@ import { type ResourceManagementProps } from '../ResourcesList/ResourceSource';
 import RouterContext from './RouterContext';
 import { type CreateProjectResult } from '../Utils/UseCreateProject';
 import { type OpenLayoutHandler } from './EditorContainers/BaseEditor';
+import { type OpenAskAiOptions } from '../AiGeneration/Utils';
 
 type Props = {|
   project: ?gdProject,

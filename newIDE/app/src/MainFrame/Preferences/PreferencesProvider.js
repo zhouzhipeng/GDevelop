@@ -142,6 +142,7 @@ export const getInitialPreferences = (): {
   showInAppTutorialDeveloperMode: boolean,
   takeScreenshotOnPreview: boolean,
   gameplayTestFramePosition: {| left: number, bottom: number |} | null,
+  gameplayTestFrameZoomFactor: number | null,
   themeName: any,
   use3DEditor: any,
   useBackgroundSerializerForSaving: boolean,
@@ -407,6 +408,10 @@ export default class PreferencesProvider extends React.Component<Props, State> {
       this
     ): any),
     // $FlowFixMe[method-unbinding]
+    setGameplayTestFrameZoomFactor: (this._setGameplayTestFrameZoomFactor.bind(
+      this
+    ): any),
+    // $FlowFixMe[method-unbinding]
     setShowAiAskButtonInTitleBar: (this._setShowAiAskButtonInTitleBar.bind(
       this
     ): any),
@@ -416,6 +421,10 @@ export default class PreferencesProvider extends React.Component<Props, State> {
     ): any),
     // $FlowFixMe[method-unbinding]
     setAutomaticallyUseCreditsForAiRequests: (this._setAutomaticallyUseCreditsForAiRequests.bind(
+      this
+    ): any),
+    // $FlowFixMe[method-unbinding]
+    setAutomaticallyApplyAiRequestEditsForProjectId: (this._setAutomaticallyApplyAiRequestEditsForProjectId.bind(
       this
     ): any),
     // $FlowFixMe[method-unbinding]
@@ -1461,6 +1470,18 @@ export default class PreferencesProvider extends React.Component<Props, State> {
     );
   }
 
+  _setGameplayTestFrameZoomFactor(newValue: number) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          gameplayTestFrameZoomFactor: newValue,
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
   _setShowAiAskButtonInTitleBar(newValue: boolean) {
     this.setState(
       state => ({
@@ -1491,6 +1512,24 @@ export default class PreferencesProvider extends React.Component<Props, State> {
         values: {
           ...state.values,
           automaticallyUseCreditsForAiRequests: newValue,
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _setAutomaticallyApplyAiRequestEditsForProjectId(
+    projectId: string,
+    newValue: boolean
+  ) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          automaticallyApplyAiRequestEditsByProjectId: {
+            ...state.values.automaticallyApplyAiRequestEditsByProjectId,
+            [projectId]: newValue,
+          },
         },
       }),
       () => this._persistValuesToLocalStorage(this.state)

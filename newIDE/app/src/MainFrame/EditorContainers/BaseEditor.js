@@ -51,12 +51,12 @@ export type EditorContainerExtraProps = {|
   continueProcessingFunctionCallsOnMount?: boolean,
 |};
 
-export type OpenLayoutOptions = {|
+export type OpenLayoutOptions = {
   openEventsEditor: boolean,
   openSceneEditor: boolean,
   focusWhenOpened: 'scene-or-events-otherwise' | 'scene' | 'events' | 'none',
-  scenePanelToOpen?: ?SceneEditorPanelId,
-|};
+  +scenePanelToOpen?: ?SceneEditorPanelId,
+};
 
 export type OpenLayoutHandler = (
   sceneName: string,

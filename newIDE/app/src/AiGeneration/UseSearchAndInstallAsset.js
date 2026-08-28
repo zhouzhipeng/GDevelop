@@ -4,6 +4,7 @@ import {
   type AssetSearchAndInstallOptions,
   type AssetSearchAndInstallResult,
 } from '../EditorFunctions';
+import AuthenticatedUserContext from '../Profile/AuthenticatedUserContext';
 import {
   createAssetSearch,
   type AssetSearch,
@@ -12,7 +13,6 @@ import { retryIfFailed } from '../Utils/RetryIfFailed';
 import { useInstallAsset } from '../AssetStore/NewObjectDialog';
 import { type ResourceManagementProps } from '../ResourcesList/ResourceSource';
 import { AssetStoreContext } from '../AssetStore/AssetStoreContext';
-import { useAiGenerationService } from './AiService';
 
 type _FuncReturnType = {
   searchAndInstallAsset: AssetSearchAndInstallOptions => Promise<AssetSearchAndInstallResult>,
@@ -29,7 +29,9 @@ export const useSearchAndInstallAsset = ({
   onWillInstallExtension: (extensionNames: Array<string>) => void,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
 |}): _FuncReturnType => {
-  const { userId, getAuthorizationHeader } = useAiGenerationService();
+  const { profile, getAuthorizationHeader } = React.useContext(
+    AuthenticatedUserContext
+  );
   const { getAssetShortHeaderFromId } = React.useContext(AssetStoreContext);
   const installAsset = useInstallAsset({
     project,
@@ -47,7 +49,7 @@ export const useSearchAndInstallAsset = ({
         exactOrPartialAssetId,
         ...assetSearchOptions
       }: AssetSearchAndInstallOptions): Promise<AssetSearchAndInstallResult> => {
-        if (!userId) throw new Error('You must be logged in to use AI.');
+        if (!profile) throw new Error('User should be authenticated.');
 
         let assetShortHeader;
         if (exactOrPartialAssetId) {
@@ -88,7 +90,7 @@ export const useSearchAndInstallAsset = ({
             { times: 3, backoff: { initialDelay: 300, factor: 2 } },
             () =>
               createAssetSearch(getAuthorizationHeader, {
-                userId,
+                userId: profile.id,
                 objectType,
                 exactOrPartialAssetId,
                 ...assetSearchOptions,
@@ -140,7 +142,7 @@ export const useSearchAndInstallAsset = ({
             installOutput.isTheFirstOfItsTypeInProject,
         };
       },
-      [installAsset, userId, getAuthorizationHeader, getAssetShortHeaderFromId]
+      [installAsset, profile, getAuthorizationHeader, getAssetShortHeaderFromId]
     ),
   };
 };
