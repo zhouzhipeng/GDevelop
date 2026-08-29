@@ -43,6 +43,7 @@ import VariableBooleanIcon from '../../VariablesList/Icons/VariableBooleanIcon';
 import VariableStructureIcon from '../../VariablesList/Icons/VariableStructureIcon';
 import NewBehaviorDialog from '../../BehaviorsEditor/NewBehaviorDialog';
 import { type CompactTextFieldInterface } from '../../UI/CompactTextField';
+import { getChoiceDisplayLabel } from '../../Utils/ChoiceLabel';
 
 const gd: libGDevelop = global.gd;
 
@@ -873,13 +874,10 @@ export const EventsBasedBehaviorOrObjectPropertiesEditor: React.ComponentType<{
                                           <SelectOption
                                             key={index}
                                             value={choice.value}
-                                            label={
-                                              choice.value +
-                                              (choice.label &&
-                                              choice.label !== choice.value
-                                                ? ` — ${choice.label}`
-                                                : '')
-                                            }
+                                            label={getChoiceDisplayLabel(
+                                              choice.value,
+                                              choice.label
+                                            )}
                                           />
                                         )
                                       )}
