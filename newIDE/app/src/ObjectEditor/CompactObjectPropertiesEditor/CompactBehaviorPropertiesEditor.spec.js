@@ -39,7 +39,9 @@ describe('CompactBehaviorPropertiesEditor', () => {
     metadataProvider.getBehaviorMetadata = () => currentMetadata;
 
     const behavior: any = {
+      ptr: 1,
       getTypeName: () => 'TestExtension::TestBehavior',
+      getProperties: () => ({}),
     };
     const props: any = {
       project: {},

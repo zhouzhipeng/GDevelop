@@ -71,7 +71,6 @@ export const CompactBehaviorPropertiesEditor = ({
   resourceManagementProps,
   isAdvancedSectionInitiallyUncollapsed,
 }: CompactBehaviorPropertiesEditorProps): React.Node => {
-  const behavior = behaviors[0];
   // Behavior metadata is owned by the platform extension and is replaced when
   // extensions are refreshed. Do not keep its WebIDL wrapper in React props:
   // a deferred render could otherwise call into a freed WASM object.
@@ -82,15 +81,25 @@ export const CompactBehaviorPropertiesEditor = ({
   const openFullEditorLabel = behaviorMetadata.getOpenFullEditorLabel();
 
   const [schemaRecomputeTrigger, forceRecomputeSchema] = useForceRecompute();
+  // The schema is built from the first behavior. There is always one, but
+  // stay safe as an empty list would break the whole properties panel.
+  const behavior = behaviors.length > 0 ? behaviors[0] : null;
+  // The behavior is identified by its pointer, as a new wrapper object is
+  // given at each render.
+  const behaviorPtr = behavior ? behavior.ptr : null;
 
-  const propertiesSchema = React.useMemo(
+  const propertiesSchema: Schema = React.useMemo(
     () => {
       if (schemaRecomputeTrigger) {
         // schemaRecomputeTrigger allows to invalidate the schema when required.
       }
+      if (!behavior) return [];
       const behaviorMetadataProperties = behaviorMetadata.getProperties();
       const schema = propertiesMapToSchema({
-        properties: behaviorMetadataProperties,
+        // Use the behavior properties (and not the metadata ones) so that
+        // properties adapting themselves to the current values (labels,
+        // visibility...) are properly displayed.
+        properties: behavior.getProperties(),
         defaultValueProperties: behaviorMetadataProperties,
         getPropertyValue: (instance, name) =>
           instance
@@ -110,12 +119,13 @@ export const CompactBehaviorPropertiesEditor = ({
       }
       return schema;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       schemaRecomputeTrigger,
+      behaviorPtr,
       behaviorMetadata,
       object,
       layersContainer,
-      behavior,
     ]
   );
 
