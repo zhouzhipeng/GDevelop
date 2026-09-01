@@ -265,6 +265,48 @@ namespace gdjs {
     // Keep the pickers intact for interaction - they're invisible anyway
   }
 
+  /**
+   * Remove the near-infinite white guide lines shown by the Three.js TransformControls
+   * when an axis is hovered or dragged (helpers named X/Y/Z for translate/scale,
+   * AXIS for rotate). They cross the whole scene, which is distracting -
+   * especially when manipulating small objects.
+   */
+  function patchAxisGuideLinesOnTransformControlsGizmos(
+    controls: THREE_ADDONS.TransformControls
+  ) {
+    const gizmo = (controls as any)._gizmo;
+    if (!gizmo || !gizmo.helper) return;
+
+    // Only the axis guide lines are removed: the other helpers (START/END/DELTA,
+    // giving a discreet feedback of the movement while dragging) are kept.
+    const guideLineNamesByMode = {
+      translate: ['X', 'Y', 'Z'],
+      rotate: ['AXIS'],
+      scale: ['X', 'Y', 'Z'],
+    };
+
+    Object.keys(guideLineNamesByMode).forEach((mode) => {
+      const helperGroup = gizmo.helper[mode];
+      if (!helperGroup || !helperGroup.children) return;
+
+      const guideLines = helperGroup.children.filter((child) =>
+        guideLineNamesByMode[mode].includes(child.name)
+      );
+
+      guideLines.forEach((guideLine) => {
+        helperGroup.remove(guideLine);
+        // Geometries and materials are cloned per handle by TransformControls,
+        // so they can safely be disposed.
+        if (guideLine.geometry) guideLine.geometry.dispose();
+        if (Array.isArray(guideLine.material)) {
+          guideLine.material.forEach((material) => material.dispose());
+        } else if (guideLine.material) {
+          guideLine.material.dispose();
+        }
+      });
+    });
+  }
+
   const getSvgIconUrl = (game: RuntimeGame, resourceName: string) => {
     const resource = game.getResourceLoader().getResource(resourceName);
     if (!resource) return '';
@@ -2430,6 +2472,10 @@ namespace gdjs {
             patchNegativeAxisHandlesOnTransformControlsGizmos(
               threeTransformControls
             );
+            patchAxisGuideLinesOnTransformControlsGizmos(
+              threeTransformControls
+            );
+
             threeTransformControls.getHelper().rotation.order = 'ZYX';
             const worldScale = this._currentScene
               ? this._currentScene.getRenderer3DWorldScale()
