@@ -79,7 +79,7 @@ type Props = {|
 |};
 
 type State = {|
-  debuggerServerState: 'started' | 'stopped',
+  debuggerServerState: 'started' | 'starting' | 'stopped',
   debuggerServerError: ?any,
   debuggerIds: Array<DebuggerId>,
   unregisterDebuggerServerCallbacks: ?() => void,
@@ -111,6 +111,7 @@ export default class Debugger extends React.Component<Props, State> {
   state = {
     debuggerServerState: (this.props.previewDebuggerServer.getServerState():
       | 'started'
+      | 'starting'
       | 'stopped'),
     debuggerServerError: null,
     debuggerIds: (this.props.previewDebuggerServer.getExistingDebuggerIds(): Array<DebuggerId>),
@@ -966,7 +967,7 @@ export default class Debugger extends React.Component<Props, State> {
     return (
       <React.Fragment>
         <Background>
-          {debuggerServerState === 'stopped' && !debuggerServerError && (
+          {debuggerServerState === 'starting' && (
             <PlaceholderMessage>
               <PlaceholderLoader />
               <Text>
@@ -984,7 +985,8 @@ export default class Debugger extends React.Component<Props, State> {
               </Text>
             </PlaceholderMessage>
           )}
-          {debuggerServerState === 'started' && (
+          {(debuggerServerState === 'started' ||
+            (debuggerServerState === 'stopped' && !debuggerServerError)) && (
             <Column expand noMargin>
               <DebuggerSelector
                 selectedId={selectedId}
