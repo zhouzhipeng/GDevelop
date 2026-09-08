@@ -345,6 +345,9 @@ export class ExtensionItemDetailEditorContainer extends React.Component<Props> {
           }
           onRenamedEventsBasedObject={this.props.onRenamedEventsBasedObject}
           onDeletedEventsBasedObject={this.props.onDeletedEventsBasedObject}
+          onEventsBasedObjectMoved={this.props.onEventsBasedObjectMoved}
+          onEventsBasedBehaviorMoved={this.props.onEventsBasedBehaviorMoved}
+          onEventsFunctionMoved={this.props.onEventsFunctionMoved}
           onWillInstallExtension={this.props.onWillInstallExtension}
           onExtensionInstalled={this.props.onExtensionInstalled}
           onEventBasedObjectTypeChanged={

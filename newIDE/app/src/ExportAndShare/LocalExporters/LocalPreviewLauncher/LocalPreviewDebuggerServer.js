@@ -9,7 +9,7 @@ import {
 const electron = optionalRequire('electron');
 const ipcRenderer = electron ? electron.ipcRenderer : null;
 
-let debuggerServerState: 'started' | 'stopped' = 'stopped';
+let debuggerServerState: 'started' | 'starting' | 'stopped' = 'stopped';
 let debuggerServerAddress: ?ServerAddress = null;
 const callbacksList: Array<PreviewDebuggerServerCallbacks> = [];
 const debuggerIds: Array<DebuggerId> = [];
@@ -36,6 +36,15 @@ const hasDebuggerId = (id: DebuggerId): boolean =>
     : id === 'gameplay-test-frame'
     ? !!gameplayTestFrameWindow
     : debuggerIds.indexOf(id) !== -1;
+
+const setDebuggerServerState = (
+  newState: 'started' | 'starting' | 'stopped'
+) => {
+  if (debuggerServerState === newState) return;
+
+  debuggerServerState = newState;
+  callbacksList.forEach(({ onServerStateChanged }) => onServerStateChanged());
+};
 
 const getExistingDebuggerIds = (): Array<DebuggerId> => [
   ...getExistingEmbeddedGameFrameDebuggerIds(),
@@ -193,11 +202,12 @@ class LocalPreviewDebuggerServer {
 
     const serverStartPromise = new Promise((resolve, reject) => {
       let serverStartPromiseCompleted = false;
-      debuggerServerState = 'stopped';
       debuggerServerAddress = null;
       removeServerListeners();
+      setDebuggerServerState('starting');
 
       ipcRenderer.on('debugger-error-received', (event, err) => {
+        setDebuggerServerState('stopped');
         if (!serverStartPromiseCompleted) {
           reject(err);
           serverStartPromiseCompleted = true;
@@ -274,16 +284,12 @@ class LocalPreviewDebuggerServer {
 
       ipcRenderer.on('debugger-start-server-done', (event, { address }) => {
         console.info('Local preview debugger started');
-        debuggerServerState = 'started';
         debuggerServerAddress = address;
+        setDebuggerServerState('started');
         if (!serverStartPromiseCompleted) {
           resolve();
           serverStartPromiseCompleted = true;
         }
-
-        callbacksList.forEach(({ onServerStateChanged }) =>
-          onServerStateChanged()
-        );
       });
 
       ipcRenderer.on('debugger-message-received', (event, { id, message }) => {
@@ -306,6 +312,10 @@ class LocalPreviewDebuggerServer {
     // after 5s.
     const serverStartTimeoutPromise = new Promise((resolve, reject) => {
       setTimeout(() => {
+        // The server can still be started later (the listeners are kept), but
+        // don't leave the debugger waiting for it indefinitely.
+        if (debuggerServerState === 'starting')
+          setDebuggerServerState('stopped');
         reject(
           new Error(
             'Debugger server not started or errored after 5s - aborting.'
@@ -340,8 +350,8 @@ class LocalPreviewDebuggerServer {
     }
 
     if (!ipcRenderer) return;
-    if (debuggerServerState === 'stopped') {
-      console.error('Cannot send message when debugger server is stopped.');
+    if (debuggerServerState !== 'started') {
+      console.error('Cannot send message when debugger server is not started.');
       return;
     }
 
@@ -404,7 +414,7 @@ class LocalPreviewDebuggerServer {
       this.sendMessage(id, { ...message, messageId });
     });
   }
-  getServerState(): 'started' | 'stopped' {
+  getServerState(): 'started' | 'starting' | 'stopped' {
     return debuggerServerState;
   }
   getExistingDebuggerIds(): Array<DebuggerId> {

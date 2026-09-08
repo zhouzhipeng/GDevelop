@@ -93,6 +93,9 @@ export type ObjectGroupsOutsideEditorChanges = {|
 
 export type RenderEditorContainerProps = {|
   isActive: boolean,
+  // The pane the editor is displayed in ('left', 'center' or 'right'), for
+  // editors adapting their layout to their position.
+  paneIdentifier: string,
   gameEditorMode: 'embedded-game' | 'instances-editor',
   setGameEditorMode: ('embedded-game' | 'instances-editor') => void,
   projectItemName: ?string,
@@ -127,10 +130,7 @@ export type RenderEditorContainerProps = {|
   onOpenExternalEvents: string => void,
   onOpenLayout: OpenLayoutHandler,
   onOpenEvents: (sceneName: string) => void,
-  openInstructionOrExpression: (
-    extension: gdPlatformExtension,
-    type: string
-  ) => void,
+  openInstructionOrExpression: (type: string) => void,
   onOpenCustomObjectEditor: (
     gdEventsFunctionsExtension,
     gdEventsBasedObject,
@@ -183,6 +183,24 @@ export type RenderEditorContainerProps = {|
   onDeletedEventsBasedObject: (
     eventsFunctionsExtension: gdEventsFunctionsExtension,
     name: string
+  ) => void,
+  onEventsBasedObjectMoved: (
+    oldExtensionName: string,
+    newExtensionName: string,
+    oldObjectName: string,
+    newObjectName: string
+  ) => void,
+  onEventsBasedBehaviorMoved: (
+    oldExtensionName: string,
+    newExtensionName: string,
+    oldBehaviorName: string,
+    newBehaviorName: string
+  ) => void,
+  onEventsFunctionMoved: (
+    oldExtensionName: string,
+    newExtensionName: string,
+    oldFunctionName: string,
+    newFunctionName: string
   ) => void,
 
   // Project opening

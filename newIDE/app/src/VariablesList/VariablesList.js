@@ -97,7 +97,9 @@ import { EnumVariableEditorDialog } from './EnumVariableEditorDialog';
 const gd: libGDevelop = global.gd;
 
 // $FlowFixMe[underconstrained-implicit-instantiation]
-const DragSourceAndDropTarget = makeDragSourceAndDropTarget('variable-editor');
+const DragSourceAndDropTarget = makeDragSourceAndDropTarget('variable-editor', {
+  touchDragStart: 'immediate',
+});
 
 const stopEventPropagation = (event: SyntheticPointerEvent<HTMLInputElement>) =>
   event.stopPropagation();

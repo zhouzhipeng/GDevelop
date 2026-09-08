@@ -211,6 +211,8 @@ const PoppedOutEditorContainerWindow = (props: Props): React.Node => {
                     >
                       {editorTab.renderEditorContainer({
                         editorId: editorTab.id,
+                        // The editor has its own window: a full width layout.
+                        paneIdentifier: 'center',
                         gameEditorMode: props.gameEditorMode,
                         setGameEditorMode: props.setGameEditorMode,
                         isActive: true,
@@ -283,6 +285,11 @@ const PoppedOutEditorContainerWindow = (props: Props): React.Node => {
                           props.onRenamedEventsBasedObject,
                         onDeletedEventsBasedObject:
                           props.onDeletedEventsBasedObject,
+                        onEventsBasedObjectMoved:
+                          props.onEventsBasedObjectMoved,
+                        onEventsBasedBehaviorMoved:
+                          props.onEventsBasedBehaviorMoved,
+                        onEventsFunctionMoved: props.onEventsFunctionMoved,
                         openObjectEvents: props.openObjectEvents,
                         onNavigateToEventFromGlobalSearch:
                           props.onNavigateToEventFromGlobalSearch,

@@ -217,6 +217,7 @@ declare class libGDevelop {
   ObjectTools: Class<gdObjectTools>;
   EventsBasedObjectDependencyFinder: Class<gdEventsBasedObjectDependencyFinder>;
   PropertyFunctionGenerator: Class<gdPropertyFunctionGenerator>;
+  ChildObjectForwardFunctionGenerator: Class<gdChildObjectForwardFunctionGenerator>;
   UsedExtensionsResult: Class<gdUsedExtensionsResult>;
   UsedExtensionsFinder: Class<gdUsedExtensionsFinder>;
   UsedObjectTypeFinder: Class<gdUsedObjectTypeFinder>;

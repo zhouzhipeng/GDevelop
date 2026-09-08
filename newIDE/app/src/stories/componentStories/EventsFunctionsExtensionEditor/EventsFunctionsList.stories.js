@@ -32,7 +32,9 @@ export const Default = (): React.Node => (
         onSelectEventsBasedObject={action('object selected')}
         onDeleteEventsBasedObject={action('object deleted')}
         onRenameEventsBasedObject={action('rename object')}
+        moveEventsBasedObjectTo={action('move object')}
         onEventsBasedObjectRenamed={action('object renamed')}
+        onEventsBasedObjectMoved={action('object moved')}
         onEventsBasedObjectPasted={action('object pasted')}
         onEventsBasedObjectMetadataChanged={action('object metadata changed')}
         onOpenCustomObjectEditor={action('onOpenCustomObjectEditor')}
@@ -47,11 +49,15 @@ export const Default = (): React.Node => (
         onSelectEventsBasedBehavior={action('behavior selected')}
         onDeleteEventsBasedBehavior={action('behavior deleted')}
         onRenameEventsBasedBehavior={action('rename behavior')}
+        moveEventsBasedBehaviorTo={action('move behavior')}
+        moveEventsFunctionTo={action('move function')}
         onEventsBasedBehaviorRenamed={action('behavior renamed')}
         onEventsBasedBehaviorPasted={action('behavior pasted')}
         onEventsBasedBehaviorMetadataChanged={action(
           'behavior metadata changed'
         )}
+        onEventsBasedBehaviorMoved={action('behavior moved')}
+        onEventsFunctionMoved={action('function moved')}
         // Free functions
         onSelectEventsFunction={action('function selected')}
         onOpenEventsFunctionSettings={action('function settings opened')}

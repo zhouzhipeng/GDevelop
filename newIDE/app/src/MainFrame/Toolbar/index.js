@@ -162,7 +162,9 @@ export default (React.forwardRef<MainFrameToolbarProps, ToolbarInterface>(
               navigationEditorToolbar={navigationEditorToolbar}
               leadingEditorToolbar={leadingEditorToolbar}
             />
-            {props.showPreviewAndShareButtons ? (
+            {/* When there is no preview button (a gameplay test), the editor
+            toolbar provides its own centered group taking its place. */}
+            {props.showPreviewAndShareButtons && (
               <ToolbarGroup>
                 <Spacer />
                 <PreviewAndShareButtons
@@ -195,8 +197,6 @@ export default (React.forwardRef<MainFrameToolbarProps, ToolbarInterface>(
                 />
                 <Spacer />
               </ToolbarGroup>
-            ) : (
-              <ToolbarGroup />
             )}
           </>
         ) : navigationEditorToolbar || leadingEditorToolbar ? (

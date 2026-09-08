@@ -143,9 +143,9 @@ const EditedObjectGroupEditorDialog = ({
     const wasNameChangeApplied = await applyNameChange();
     if (!wasNameChangeApplied) return;
 
-    onApply();
     if (!initialInstances) {
       // Legacy function object groups have no instances to refactor.
+      onApply();
       return;
     }
 
@@ -175,6 +175,8 @@ const EditedObjectGroupEditorDialog = ({
         );
       }
     }
+    // Notify only once the variables are copied to the objects of the group.
+    onApply();
   };
 
   const removeObject = React.useCallback(
