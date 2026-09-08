@@ -20,7 +20,7 @@ const styles = {
 };
 
 type Props = {|
-  project: ?gdProject,
+  project: gdProject,
   projectScopedContainersAccessor: ProjectScopedContainersAccessor,
   globalObjectsContainer: gdObjectsContainer | null,
   objectsContainer: gdObjectsContainer,
@@ -131,6 +131,33 @@ const ObjectGroupEditor = ({
   return (
     <ColumnStackLayout noMargin>
       {renderExplanation()}
+      <Paper style={styles.objectSelector} background="medium">
+        <Column noMargin>
+          <ObjectSelector
+            project={project}
+            projectScopedContainersAccessor={projectScopedContainersAccessor}
+            value={objectName}
+            excludedObjectOrGroupNames={groupObjectNames}
+            onChange={setObjectName}
+            onChoose={addObject}
+            openOnFocus
+            noGroups
+            hintText={
+              isGlobalGroup
+                ? requiredBehaviorTypes && requiredBehaviorTypes.length > 0
+                  ? t`Choose a matching global object to add to the group`
+                  : t`Choose a global object to add to the group`
+                : requiredBehaviorTypes && requiredBehaviorTypes.length > 0
+                ? t`Choose a matching object to add to the group`
+                : t`Choose an object to add to the group`
+            }
+            fullWidth
+            disabled={isObjectListLocked}
+            objectNameFilter={canUseObject}
+            requiredCapabilitiesBehaviorTypes={requiredBehaviorTypes}
+          />
+        </Column>
+      </Paper>
       <List>
         {groupObjectNames.map(objectName => {
           let object = getObjectByName(
@@ -165,33 +192,6 @@ const ObjectGroupEditor = ({
           );
         })}
       </List>
-      <Paper style={styles.objectSelector} background="medium">
-        <Column noMargin>
-          <ObjectSelector
-            project={project}
-            projectScopedContainersAccessor={projectScopedContainersAccessor}
-            value={objectName}
-            excludedObjectOrGroupNames={groupObjectNames}
-            onChange={setObjectName}
-            onChoose={addObject}
-            openOnFocus
-            noGroups
-            hintText={
-              isGlobalGroup
-                ? requiredBehaviorTypes && requiredBehaviorTypes.length > 0
-                  ? t`Choose a matching global object to add to the group`
-                  : t`Choose a global object to add to the group`
-                : requiredBehaviorTypes && requiredBehaviorTypes.length > 0
-                ? t`Choose a matching object to add to the group`
-                : t`Choose an object to add to the group`
-            }
-            fullWidth
-            disabled={isObjectListLocked}
-            objectNameFilter={canUseObject}
-            requiredCapabilitiesBehaviorTypes={requiredBehaviorTypes}
-          />
-        </Column>
-      </Paper>
     </ColumnStackLayout>
   );
 };

@@ -55,7 +55,8 @@ const gd: libGDevelop = global.gd;
 
 // $FlowFixMe[underconstrained-implicit-instantiation]
 const DragSourceAndDropTarget = makeDragSourceAndDropTarget(
-  'model3d-animations-list'
+  'model3d-animations-list',
+  { touchDragStart: 'immediate' }
 );
 
 const styles = {

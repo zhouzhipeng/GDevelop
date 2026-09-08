@@ -696,6 +696,7 @@ const EventsFunctionsList = React.forwardRef<
       onDeleteEventsBasedObject,
       onRenameEventsBasedObject,
       onEventsBasedObjectRenamed,
+      onEventsBasedObjectMoved,
       onEventsBasedObjectPasted,
       onEventsBasedObjectMetadataChanged,
       onAddEventsBasedObject,
@@ -712,6 +713,12 @@ const EventsFunctionsList = React.forwardRef<
       onSelectExtensionSceneVariables,
       onOpenCustomObjectEditor,
       headerControls,
+      onEventBasedObjectTypeChanged,
+      moveEventsBasedObjectTo,
+      moveEventsBasedBehaviorTo,
+      onEventsBasedBehaviorMoved,
+      moveEventsFunctionTo,
+      onEventsFunctionMoved,
     }: Props,
     ref
   ) => {
@@ -1281,6 +1288,8 @@ const EventsFunctionsList = React.forwardRef<
         onEventsFunctionMetadataChanged,
         addFolder,
         onMovedFunctionFolderOrFunctionToAnotherFolderInSameContainer,
+        moveEventsFunctionTo,
+        onEventsFunctionMoved,
       }),
       [
         treeItemProps,
@@ -1293,6 +1302,8 @@ const EventsFunctionsList = React.forwardRef<
         onEventsFunctionMetadataChanged,
         addFolder,
         onMovedFunctionFolderOrFunctionToAnotherFolderInSameContainer,
+        moveEventsFunctionTo,
+        onEventsFunctionMoved,
       ]
     );
 
@@ -1338,6 +1349,8 @@ const EventsFunctionsList = React.forwardRef<
         addNewEventsFunction,
         addFolder,
         expandFolders,
+        moveEventsBasedBehaviorTo,
+        onEventsBasedBehaviorMoved,
       }),
       [
         treeItemProps,
@@ -1351,6 +1364,8 @@ const EventsFunctionsList = React.forwardRef<
         addNewEventsFunction,
         addFolder,
         expandFolders,
+        moveEventsBasedBehaviorTo,
+        onEventsBasedBehaviorMoved,
       ]
     );
 
@@ -1371,6 +1386,9 @@ const EventsFunctionsList = React.forwardRef<
         addFolder,
         expandFolders,
         onOpenCustomObjectEditor,
+        onEventBasedObjectTypeChanged,
+        moveEventsBasedObjectTo,
+        onEventsBasedObjectMoved,
       }),
       [
         treeItemProps,
@@ -1386,6 +1404,9 @@ const EventsFunctionsList = React.forwardRef<
         addFolder,
         expandFolders,
         onOpenCustomObjectEditor,
+        onEventBasedObjectTypeChanged,
+        moveEventsBasedObjectTo,
+        onEventsBasedObjectMoved,
       ]
     );
 

@@ -5,9 +5,30 @@ import {
   type AiRequestMessageAssistantFunctionCall,
   type AiRequestFunctionCallOutput,
   type AiRequestPlan,
+  type AiRequestSummary,
+  type AiRequestUserMessage,
 } from '../Utils/GDevelopServices/Generation';
 import { type EditorFunctionCallResult } from '../EditorFunctions';
 import { type RelatedAiRequestLastMessages } from '../EditorFunctions';
+
+/** The text typed by the user in one of their messages. */
+export const getUserRequestText = (message: AiRequestUserMessage): string =>
+  message.content
+    .filter(content => content.type === 'user_request')
+    .map(content => content.text)
+    .join(' ');
+
+/**
+ * The name of a chat: the title the user gave to it, or its first message
+ * otherwise. Empty when the chat has neither.
+ */
+export const getAiRequestSummaryTitle = (
+  aiRequestSummary: AiRequestSummary
+): string =>
+  aiRequestSummary.title ||
+  (aiRequestSummary.firstUserMessage
+    ? getUserRequestText(aiRequestSummary.firstUserMessage)
+    : '');
 
 /**
  * Maximum number of times a failed AI request can be continued without making
