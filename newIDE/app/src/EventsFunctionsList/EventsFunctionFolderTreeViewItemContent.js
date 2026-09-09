@@ -25,6 +25,10 @@ import {
 import { type MessageDescriptor } from '../Utils/i18n/MessageDescriptor.flow';
 import { type HTMLDataset } from '../Utils/HTMLDataset';
 import { type MenuItemTemplate } from '../UI/Menu/Menu.flow';
+import newNameGenerator from '../Utils/NewNameGenerator';
+import { getOrCreateChildFolder, removeSubFolders } from '../Utils/Folders';
+
+const gd: libGDevelop = global.gd;
 
 export const moveFunctionFolderOrFunction = (
   selectedItemContent: TreeViewItemContent,
@@ -161,9 +165,7 @@ export const buildMoveToMenu = ({
             eventsBasedObject
           ),
       },
-      ...(functionFolderOrFunction.isFolder() ||
-      eventsBasedBehavior ||
-      eventsBasedObject
+      ...(eventsBasedBehavior || eventsBasedObject
         ? []
         : [
             {
@@ -212,6 +214,15 @@ export type EventFunctionFolderCommonProps = {|
     eventsBasedObject: ?gdEventsBasedObject
   ) => void,
   onEventsFunctionMetadataChanged: () => void,
+  moveEventsFunctionTo: (
+    (destinationExtensionName: string) => Promise<void>
+  ) => void,
+  onEventsFunctionMoved: (
+    oldExtensionName: string,
+    newExtensionName: string,
+    oldObjectName: string,
+    newObjectName: string
+  ) => void,
 |};
 
 export type EventsFunctionFolderProps = {|
@@ -338,6 +349,65 @@ export class EventsFunctionFolderTreeViewItemContent
     this.functionFolder.setFolderName(safeNewName);
   }
 
+  _moveTo(): void {
+    const { project } = this.props;
+    const functionFolder = this.functionFolder;
+    this.props.moveEventsFunctionTo(async destinationExtensionName => {
+      const extension = project.getEventsFunctionsExtension(
+        destinationExtensionName
+      );
+      const oldExtensionName = this.props.eventsFunctionsExtension.getName();
+      const newExtensionName = extension.getName();
+      let oldFirstFunctionName = '';
+      let newFirstFunctionName = '';
+      let isFirst = true;
+      for (const oldEventsFunction of enumerateFunctionsInFolder(
+        functionFolder
+      )) {
+        const oldFunctionName = oldEventsFunction.getName();
+        const newFunctionName = newNameGenerator(oldFunctionName, name =>
+          extension.getEventsFunctions().hasEventsFunctionNamed(name)
+        );
+        if (isFirst) {
+          isFirst = false;
+          oldFirstFunctionName = oldFunctionName;
+          newFirstFunctionName = newFunctionName;
+        }
+        const rootFolder = extension.getEventsFunctions().getRootFolder();
+        const folder = getOrCreateChildFolder(
+          rootFolder,
+          oldEventsFunction.getGroup().split('/')
+        );
+        extension
+          .getEventsFunctions()
+          .insertNewEventsFunctionInFolder(
+            newFunctionName,
+            folder,
+            folder.getChildrenCount()
+          );
+
+        gd.WholeProjectRefactorer.moveEventsFunction(
+          project,
+          this.props.eventsFunctionsExtension,
+          oldExtensionName,
+          newExtensionName,
+          oldFunctionName,
+          newFunctionName
+        );
+      }
+      // Rebuild tabs with the newly created custom object.
+      this.props.onEventsFunctionMoved(
+        oldExtensionName,
+        newExtensionName,
+        oldFirstFunctionName,
+        newFirstFunctionName
+      );
+      // We can now safely remove the old custom object
+      // since it's no longer used in the UI.
+      await this._delete({ isSilent: true });
+    });
+  }
+
   edit(): void {}
 
   _getPasteLabel(i18n: I18nType): any {
@@ -376,7 +446,7 @@ export class EventsFunctionFolderTreeViewItemContent
         eventsBasedObject,
         addFolder,
         onMovedFunctionFolderOrFunctionToAnotherFolderInSameContainer,
-        moveToExtension: () => {},
+        moveToExtension: () => this._moveTo(),
         canBeRenamed: true,
       }),
       {
@@ -422,10 +492,10 @@ export class EventsFunctionFolderTreeViewItemContent
   }
 
   delete(): void {
-    this._delete();
+    this._delete({ isSilent: false });
   }
 
-  async _delete(): Promise<void> {
+  async _delete({ isSilent }: { isSilent: boolean }): Promise<void> {
     const {
       eventsFunctionsContainer,
       forceUpdateList,
@@ -437,25 +507,28 @@ export class EventsFunctionFolderTreeViewItemContent
     if (functionsToDelete.length === 0) {
       // Folder is empty or contains only empty folders.
       setSelectedFunctionFolderOrFunction(null);
+      removeSubFolders(this.functionFolder);
       this.functionFolder.getParent().removeFolderChild(this.functionFolder);
       forceUpdateList();
       return;
     }
 
-    let message: MessageDescriptor;
-    let title: MessageDescriptor;
-    if (functionsToDelete.length === 1) {
-      message = t`Are you sure you want to remove this folder and with it the function ${functionsToDelete[0].getName()}? This can't be undone.`;
-      title = t`Remove folder and function`;
-    } else {
-      message = t`Are you sure you want to remove this folder and all its functions (${functionsToDelete
-        .map(eventsFunction => eventsFunction.getName())
-        .join(', ')})? This can't be undone.`;
-      title = t`Remove folder and functions`;
-    }
+    if (!isSilent) {
+      let message: MessageDescriptor;
+      let title: MessageDescriptor;
+      if (functionsToDelete.length === 1) {
+        message = t`Are you sure you want to remove this folder and with it the function ${functionsToDelete[0].getName()}? This can't be undone.`;
+        title = t`Remove folder and function`;
+      } else {
+        message = t`Are you sure you want to remove this folder and all its functions (${functionsToDelete
+          .map(eventsFunction => eventsFunction.getName())
+          .join(', ')})? This can't be undone.`;
+        title = t`Remove folder and functions`;
+      }
 
-    const answer = await showDeleteConfirmation({ message, title });
-    if (!answer) return;
+      const answer = await showDeleteConfirmation({ message, title });
+      if (!answer) return;
+    }
 
     // TODO: Change selectedFunctionFolderOrFunctionWithContext so that it's easy
     // to remove an item using keyboard only and to navigate with the arrow
@@ -465,6 +538,7 @@ export class EventsFunctionFolderTreeViewItemContent
     for (const functionToDelete of functionsToDelete) {
       eventsFunctionsContainer.removeEventsFunction(functionToDelete.getName());
     }
+    removeSubFolders(this.functionFolder);
     this.functionFolder.getParent().removeFolderChild(this.functionFolder);
     this._onProjectItemModified();
     this.props.onEventsFunctionMetadataChanged();
