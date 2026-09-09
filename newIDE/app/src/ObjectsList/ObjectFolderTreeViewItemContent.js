@@ -24,6 +24,7 @@ import { type MessageDescriptor } from '../Utils/i18n/MessageDescriptor.flow';
 import type { ObjectWithContext } from '../ObjectsList/EnumerateObjects';
 import { type HTMLDataset } from '../Utils/HTMLDataset';
 import { exceptionallyGuardAgainstDeadObject } from '../Utils/IsNullPtr';
+import { removeSubFolders } from '../Utils/Folders';
 
 const gd: libGDevelop = global.gd;
 
@@ -374,6 +375,7 @@ export class ObjectFolderTreeViewItemContent implements TreeViewItemContent {
     if (objectsToDelete.length === 0) {
       // Folder is empty or contains only empty folders.
       selectObjectFolderOrObjectWithContext(null);
+      removeSubFolders(this.objectFolder);
       this.objectFolder.getParent().removeFolderChild(this.objectFolder);
       onObjectModified(true);
       return true;
@@ -421,6 +423,7 @@ export class ObjectFolderTreeViewItemContent implements TreeViewItemContent {
         });
       }
 
+      removeSubFolders(folderToDelete);
       folderToDelete.getParent().removeFolderChild(folderToDelete);
       forceUpdateList();
 

@@ -1320,6 +1320,8 @@ const EventsFunctionsList = React.forwardRef<
         onEventsFunctionAdded,
         onEventsFunctionMetadataChanged,
         onSelectEventsFunction,
+        moveEventsFunctionTo,
+        onEventsFunctionMoved,
       }),
       [
         treeItemProps,
@@ -1331,6 +1333,8 @@ const EventsFunctionsList = React.forwardRef<
         onEventsFunctionAdded,
         onEventsFunctionMetadataChanged,
         onSelectEventsFunction,
+        moveEventsFunctionTo,
+        onEventsFunctionMoved,
       ]
     );
 
@@ -1651,29 +1655,6 @@ const EventsFunctionsList = React.forwardRef<
           {
             isRoot: true,
             content: new LabelTreeViewItemContent(
-              extensionTestsRootFolderId,
-              i18n._(t`Gameplay tests`),
-              {
-                icon: <Add />,
-                label: i18n._(t`Add a gameplay test`),
-                click: addNewGameplayTest,
-              }
-            ),
-            getChildren(i18n: I18nType): ?Array<TreeViewItem> {
-              return gameplayTestTreeViewItems.length === 0
-                ? [
-                    new PlaceHolderTreeViewItem(
-                      extensionTestsEmptyPlaceholderId,
-                      i18n._(t`Start by adding a new gameplay test.`)
-                    ),
-                  ]
-                : // $FlowFixMe[incompatible-type]
-                  gameplayTestTreeViewItems;
-            },
-          },
-          {
-            isRoot: true,
-            content: new LabelTreeViewItemContent(
               extensionFunctionsRootFolderId,
               i18n._(t`Functions`),
               {
@@ -1741,6 +1722,29 @@ const EventsFunctionsList = React.forwardRef<
                   functionTreeViewItemProps: freeFunctionProps,
                 });
               });
+            },
+          },
+          {
+            isRoot: true,
+            content: new LabelTreeViewItemContent(
+              extensionTestsRootFolderId,
+              i18n._(t`Gameplay tests`),
+              {
+                icon: <Add />,
+                label: i18n._(t`Add a gameplay test`),
+                click: addNewGameplayTest,
+              }
+            ),
+            getChildren(i18n: I18nType): ?Array<TreeViewItem> {
+              return gameplayTestTreeViewItems.length === 0
+                ? [
+                    new PlaceHolderTreeViewItem(
+                      extensionTestsEmptyPlaceholderId,
+                      i18n._(t`Start by adding a new gameplay test.`)
+                    ),
+                  ]
+                : // $FlowFixMe[incompatible-type]
+                  gameplayTestTreeViewItems;
             },
           },
         ].filter(Boolean);
