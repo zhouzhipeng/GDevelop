@@ -4854,6 +4854,12 @@ const MainFrame = (props: Props): React.MixedElement => {
 
   const openResources = React.useCallback(
     () => {
+      // Opening an already popped-out tab does not bring its window forward.
+      // Request focus on every click, including when the tab already exists.
+      setPoppedOutEditorFocusRequest(previousRequest => ({
+        editorKey: 'resources',
+        requestId: previousRequest.requestId + 1,
+      }));
       setState(state => ({
         ...state,
         editorTabs: popOutTab(
@@ -4870,7 +4876,7 @@ const MainFrame = (props: Props): React.MixedElement => {
         ),
       }));
     },
-    [getEditorOpeningOptions, setState]
+    [getEditorOpeningOptions, setState, setPoppedOutEditorFocusRequest]
   );
 
   const openResourceToolFromSwitcher = React.useCallback(
