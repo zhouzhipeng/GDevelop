@@ -5,6 +5,7 @@ import { type State } from './MainFrameState';
 import {
   beginPreviewFileWriting,
   canReleaseCancelledPreviewPreparation,
+  handlePreviewWindowClosed,
   type PreviewLaunchPhase,
 } from './PreviewLaunchCancellation';
 import { autoSaveProjectForPreviewIfNeeded } from './PreviewProjectAutoSave';
@@ -1491,7 +1492,6 @@ const MainFrame = (props: Props): React.MixedElement => {
         event: any,
         {
           remainingPreviewWindowsForParent,
-          debuggerCloseRequested,
         }: {
           remainingPreviewWindowsForParent?: number,
           debuggerCloseRequested?: boolean,
@@ -1501,25 +1501,26 @@ const MainFrame = (props: Props): React.MixedElement => {
         // on debugger-popout-close-requested to restore the main window. Run
         // input/overlay recovery for every native preview close, including one
         // of several preview windows being closed.
-        healMainWindowAfterPopOutClose();
-        const isLastPreviewWindowClosed =
-          remainingPreviewWindowsForParent === 0;
-        if (isLastPreviewWindowClosed) {
-          if (previewDebuggerServer) {
-            previewDebuggerServer.closeAllPreviewConnections();
-          }
-          clearPreviewDebuggerStatuses();
-        }
-        if (isLastPreviewWindowClosed && !debuggerCloseRequested) {
-          // A preview without a debugger pop-out has no correlated debugger
-          // close event, so its own close notification owns cancellation.
-          cancelPendingPreviewLaunchAfterWindowClosed(
-            'the last preview window was closed'
-          );
-          releaseCancelledPreviewPreparation(
-            'the last preview window was closed before preparation finished'
-          );
-        }
+        handlePreviewWindowClosed({
+          remainingPreviewWindowsForParent,
+          cancelLaunch: () => {
+            // Do not wait for a separate debugger close notification: it can
+            // race with startup or portal teardown when the preview is closed
+            // immediately after opening.
+            cancelPendingPreviewLaunchAfterWindowClosed(
+              'the last preview window was closed'
+            );
+            releaseCancelledPreviewPreparation(
+              'the last preview window was closed before preparation finished'
+            );
+          },
+          closeConnections: () => {
+            if (previewDebuggerServer)
+              previewDebuggerServer.closeAllPreviewConnections();
+          },
+          clearStatuses: clearPreviewDebuggerStatuses,
+          restoreInput: healMainWindowAfterPopOutClose,
+        });
       };
 
       ipcRenderer.on('preview-window-closed', onPreviewWindowClosed);

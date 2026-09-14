@@ -707,7 +707,7 @@ class GD_CORE_API ExpressionCompletionFinder
                     gd::JsonObjectPropertyTools::ParseJsonExampleAsVariable(
                         property);
                 AddCompletionsForChildrenVariablesOf(
-                    &jsonExample,
+                    jsonExample,
                     node.childIdentifierNameLocation,
                     node.childIdentifierName);
               }
@@ -1085,7 +1085,8 @@ class GD_CORE_API ExpressionCompletionFinder
                 gd::JsonObjectPropertyTools::ParseJsonExampleAsVariable(
                     property);
             AddEagerCompletionForVariableChildren(
-                jsonExample, property.GetName(), location);
+                jsonExample, property.GetName(),
+                gd::VariablesContainer::SourceType::Properties, location);
           }
         },
         [&](const gd::ParameterMetadata& parameter) {
@@ -1159,7 +1160,8 @@ class GD_CORE_API ExpressionCompletionFinder
                   gd::JsonObjectPropertyTools::ParseJsonExampleAsVariable(
                       property);
               AddEagerCompletionForVariableChildren(
-                  jsonExample, property.GetName(), location);
+                  jsonExample, property.GetName(),
+                  gd::VariablesContainer::SourceType::Properties, location);
             }
           }
         },
@@ -1218,9 +1220,11 @@ class GD_CORE_API ExpressionCompletionFinder
           const gd::Variable* parentVariable =
               gd::JsonObjectPropertyTools::GetChildAtPath(jsonExample,
                                                           pathToParent);
-          AddCompletionsForChildrenVariablesOf(parentVariable,
-                                               node.nameLocation,
-                                               node.name);
+          if (parentVariable) {
+            AddCompletionsForChildrenVariablesOf(*parentVariable,
+                                                node.nameLocation,
+                                                node.name);
+          }
           return true;
         },
         [&]() { return false; },
