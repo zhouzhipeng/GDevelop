@@ -699,7 +699,9 @@ function createNewWindow(windowArgs = args) {
             : isDebuggerPopOut
             ? newWindow
             : undefined,
-          show: isHeadlessWindow ? false : undefined,
+          // Electron treats an explicitly undefined `show` as false, leaving
+          // normal editor pop-outs hidden even though their tabs are open.
+          show: !isHeadlessWindow,
           skipTaskbar: isHeadlessWindow ? true : undefined,
           alwaysOnTop: isHeadlessWindow ? false : undefined,
           modal: false,

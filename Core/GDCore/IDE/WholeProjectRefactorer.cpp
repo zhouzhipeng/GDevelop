@@ -1826,7 +1826,7 @@ void WholeProjectRefactorer::ObjectOrGroupRenamedInScene(
         lifecycleScopedContainers.SetScopeSceneLifecycleFunctionRole(role);
         gd::EventsRefactorer::RenameObjectInEvents(
             project.GetCurrentPlatform(), lifecycleScopedContainers,
-            eventsFunction.GetEvents(), layout.GetObjects(), oldName, newName);
+            eventsFunction.GetEvents(), targetedObjectsContainer, oldName, newName);
       });
 
   // Object groups can't have instances or be in other groups
@@ -1851,7 +1851,7 @@ void WholeProjectRefactorer::ObjectOrGroupRenamedInScene(
           lifecycleScopedContainers.SetScopeSceneLifecycleFunctionRole(role);
           gd::EventsRefactorer::RenameObjectInEvents(
               project.GetCurrentPlatform(), lifecycleScopedContainers,
-              eventsFunction.GetEvents(), layout.GetObjects(), oldName,
+              eventsFunction.GetEvents(), targetedObjectsContainer, oldName,
               newName);
         });
   }

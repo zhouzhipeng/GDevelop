@@ -1097,6 +1097,26 @@ describe('gd.ExpressionCompletionFinder', function () {
       sharedPropertiesContainer.delete();
     });
 
+    it('completes JSON property children and safely handles missing paths', () => {
+      propertiesContainer
+        .insertNew('CardConfig', 2)
+        .setType('JsonObject')
+        .setValue('{"price":100,"stats":{"power":20}}');
+
+      for (const type of ['number', 'variableOrProperty']) {
+        expect(testCompletions(type, 'CardConfig|')).toEqual(
+          expect.arrayContaining([expect.stringContaining(', CardConfig.price,')])
+        );
+        expect(testCompletions(type, 'CardConfig.|')).toEqual(
+          expect.arrayContaining([expect.stringContaining(', price,')])
+        );
+        expect(testCompletions(type, 'CardConfig.stats.|')).toEqual(
+          expect.arrayContaining([expect.stringContaining(', power,')])
+        );
+        expect(testCompletions(type, 'CardConfig.missing.|')).toEqual([]);
+      }
+    });
+
     it('completes an empty expression', function () {
       // Verify we list everything (objects, variables, properties, expressions).
       expect(testCompletions('number', '|')).toMatchInlineSnapshot(`
