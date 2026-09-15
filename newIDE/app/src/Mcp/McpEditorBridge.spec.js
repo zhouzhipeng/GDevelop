@@ -2624,6 +2624,22 @@ runtimeScene._instances.length;
                   _stringDirty: true,
                   _isStructure: false,
                 },
+                SaveText: {
+                  _type: 'string',
+                  _str: '{"revision":1}',
+                  _value: 0,
+                },
+                Enabled: { _type: 'boolean', _bool: true, _value: 0 },
+                Cells: {
+                  _type: 'array',
+                  _childrenArray: [{ _type: 'number', _value: 35 }],
+                },
+                Profile: {
+                  _type: 'structure',
+                  _children: {
+                    Form: { _type: 'enum', _str: 'normal', _value: 0 },
+                  },
+                },
               },
             },
           },
@@ -2698,6 +2714,14 @@ runtimeScene._instances.length;
     );
     expect(result.runtime.scenes[0].totalInstances).toBe(3);
     expect(result.runtime.scenes[0].sceneVariables.Score).toBe(42);
+    expect(result.runtime.scenes[0].sceneVariables.SaveText).toBe(
+      '{"revision":1}'
+    );
+    expect(result.runtime.scenes[0].sceneVariables.Enabled).toBe(true);
+    expect(result.runtime.scenes[0].sceneVariables.Cells).toEqual([35]);
+    expect(result.runtime.scenes[0].sceneVariables.Profile).toEqual({
+      Form: 'normal',
+    });
     expect(result.runtime.globalVariables.Coins).toBe(7);
     expect(result.runtime.scenes[0].instanceStates.Player[0]).toEqual(
       expect.objectContaining({

@@ -918,7 +918,20 @@ const summarizeRuntimePlainValue = (value: any, depth: number = 0): any => {
 // Extract a readable, bounded value from a serialized GDJS RuntimeVariable.
 const readRuntimeVariableValue = (variable: any, depth: number = 0): any => {
   if (!variable || typeof variable !== 'object') return undefined;
-  if (variable._isStructure && variable._children) {
+  if (variable._type === 'string' || variable._type === 'enum')
+    return summarizeRuntimePlainValue(variable._str);
+  if (variable._type === 'boolean') return variable._bool;
+  if (variable._type === 'number') return variable._value;
+  if (variable._type === 'array') {
+    if (depth >= 4) return '[Maximum variable depth reached]';
+    return (variable._childrenArray || [])
+      .slice(0, 50)
+      .map(child => readRuntimeVariableValue(child, depth + 1));
+  }
+  if (
+    (variable._type === 'structure' || variable._isStructure) &&
+    variable._children
+  ) {
     if (depth >= 4) return '[Maximum variable depth reached]';
     const children = readRuntimeMap(variable._children);
     const result: { [string]: any } = {};
