@@ -278,6 +278,9 @@ const MosaicEditorsDisplay: React.ComponentType<{
           clearHighlightedInstance: editor
             ? editor.clearHighlightedInstance
             : noop,
+          cancelClickInterception: editor
+            ? editor.cancelClickInterception
+            : () => false,
           resetInstanceRenderersFor: editor
             ? editor.resetInstanceRenderersFor
             : noop,

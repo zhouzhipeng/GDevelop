@@ -291,7 +291,6 @@ export default class InstancesEditor extends Component<Props, State> {
     this.keyboardShortcuts = new KeyboardShortcuts({
       shortcutCallbacks: {
         onMove: this.moveSelection,
-        onEscape: this.onPressEscape,
         ...this.props.instancesEditorShortcutsCallbacks,
       },
     });
@@ -1923,12 +1922,12 @@ export default class InstancesEditor extends Component<Props, State> {
     this.onInstancesMovedDebounced(unlockedSelectedInstances);
   };
 
-  onPressEscape = () => {
+  cancelClickInterception = (): boolean => {
     if (this.clickInterceptor && this.clickInterceptor.isIntercepting()) {
       this.clickInterceptor.cancelClickInterception();
-    } else if (this.props.tileMapTileSelection) {
-      this.props.onSelectTileMapTile(null);
+      return true;
     }
+    return false;
   };
 
   scrollBy(x: number, y: number) {

@@ -249,6 +249,7 @@ export type SceneEditorsDisplayInterface = {|
       layer: string
     ) => Array<gdInitialInstance>,
     clearHighlightedInstance: () => void,
+    cancelClickInterception: () => boolean,
     resetInstanceRenderersFor: (objectName: string) => void,
     forceRemountInstancesRenderers: () => void,
     addSerializedInstances: ({|
