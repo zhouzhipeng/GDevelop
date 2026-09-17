@@ -318,6 +318,7 @@ import {
   areLegacyProjectsEquivalent,
 } from '../ProjectsStorage/MultiFileProjectFormat';
 import { serializeToJSObject } from '../Utils/Serializer';
+import { useResourcesAccessRefresh } from './UseResourcesAccessRefresh';
 import { extractGDevelopApiErrorStatusAndCode } from '../Utils/GDevelopServices/Errors';
 import { type CourseChapter } from '../Utils/GDevelopServices/Asset';
 import useVersionHistory from '../VersionHistory/UseVersionHistory';
@@ -1214,6 +1215,11 @@ const MainFrame = (props: Props): React.MixedElement => {
     isProjectSplitInMultipleFiles: currentProject
       ? currentProject.isFolderProject()
       : false,
+  });
+  const { ensureCanAccessResources } = useResourcesAccessRefresh({
+    project: currentProject,
+    fileMetadata: currentFileMetadata,
+    getStorageProviderOperations,
   });
 
   const gamesList = useGamesList();
@@ -4177,9 +4183,11 @@ const MainFrame = (props: Props): React.MixedElement => {
         }
 
         try {
-          await eventsFunctionsExtensionsState.ensureLoadFinished(
-            currentProject
-          );
+          await Promise.all([
+            eventsFunctionsExtensionsState.ensureLoadFinished(currentProject),
+            // Refresh credentials before the preview loads project resources.
+            ensureCanAccessResources(),
+          ]);
           if (isPreviewLaunchCancelled(previewLaunchId)) {
             return false;
           }
@@ -4352,6 +4360,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       loadProjectFromSavedFileForPreview,
       authenticatedUser.profile,
       eventsFunctionsExtensionsState,
+      ensureCanAccessResources,
       preferences.getIsMenuBarHiddenInPreview,
       preferences.getIsAlwaysOnTopInPreview,
       preferences.values.openDiagnosticReportAutomatically,
