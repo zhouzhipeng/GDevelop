@@ -124,6 +124,25 @@ describe('gdjs.gameplayTests', () => {
       .../** @type {any} */ (extraPayload || {}),
     });
 
+  it('finishes when a hidden preview never delivers animation frames', async () => {
+    const raf = sinon.stub(window, 'requestAnimationFrame').returns(123);
+    const cancel = sinon.stub(window, 'cancelAnimationFrame');
+    try {
+      const result = await runTestScript(makeRuntimeGame(), `
+        await harness.goToScene('Scene 1');
+        await harness.stepFrames(3);
+        harness.assert(harness.getSceneName() === 'Scene 1', 'Scene advanced');
+      `, { speedFactor: 1 });
+      expect(result.status).to.be('passed');
+      expect(result.framesExecuted).to.be(4);
+      expect(raf.called).to.be(true);
+      expect(cancel.calledWith(123)).to.be(true);
+    } finally {
+      raf.restore();
+      cancel.restore();
+    }
+  });
+
   it('runs a passing test and reports its result', async () => {
     const runtimeGame = makeRuntimeGame();
     const result = await runTestScript(

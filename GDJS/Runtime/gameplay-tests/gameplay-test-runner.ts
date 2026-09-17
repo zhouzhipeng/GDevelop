@@ -960,10 +960,19 @@ namespace gdjs {
 
       private _waitForNextAnimationFrame(): Promise<void> {
         return new Promise((resolve) => {
+          // Hidden Electron previews can suspend RAF while timers still run.
+          // A rendering opportunity must never block deterministic stepping.
+          let animationFrameId: number | null = null;
+          const finish = () => {
+            clearTimeout(timeoutId);
+            if (animationFrameId !== null && typeof cancelAnimationFrame !== 'undefined') {
+              cancelAnimationFrame(animationFrameId);
+            }
+            resolve();
+          };
+          const timeoutId = setTimeout(finish, 50);
           if (typeof requestAnimationFrame !== 'undefined') {
-            requestAnimationFrame(() => resolve());
-          } else {
-            setTimeout(() => resolve(), 0);
+            animationFrameId = requestAnimationFrame(finish);
           }
         });
       }
