@@ -898,11 +898,9 @@ const groupMapBody = (groups: ?Array<Object>, indent: string): string => {
   return entries.length ? entries.join('\n') : `${indent}// No groups.`;
 };
 
-const layerUnion = (layout: Object): string => {
-  const names = sortedUnique([
-    '',
-    ...(layout.layers || []).map(layer => String(layer.name || '')),
-  ]);
+const layerUnion = (scene: Object): string => {
+  // buildProjectApiModel already normalizes layer records to names.
+  const names = sortedUnique(['', ...(scene.layers || [])]);
   return names.map(quoted).join(' | ');
 };
 

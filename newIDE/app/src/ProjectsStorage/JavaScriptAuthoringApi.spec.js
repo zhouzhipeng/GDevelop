@@ -200,6 +200,7 @@ describe('JavaScript authoring API', () => {
     expect(declaration).toContain('readonly "Health": number');
     expect(declaration).toContain('readonly "Actors": "Player"');
     expect(declaration).toContain('readonly "Score": number');
+    expect(declaration).toContain('readonly layers: "" | "UI";');
     expect(declaration).toContain('readonly "player.png"');
     expect(declaration).toContain('readonly "Combat::Damage"');
 

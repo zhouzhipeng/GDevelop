@@ -16,9 +16,10 @@ between high- and low-poly meshes. Use Blender's render bake workflow for those
 jobs. This script is for deterministic texture conversion and PBR material
 preparation.
 
-Run it through Blender Foundation's official Blender MCP server. Load this file
-with ``runpy`` and call ``run_with_arguments`` from ``execute_blender_code`` or
-``execute_blender_code_for_cli``.
+Run it directly with a Blender executable using ``--python`` and pass the
+script arguments after Blender's ``--`` separator. When applying materials,
+load the source ``.blend`` before ``--python``; ``--save-blend`` writes the
+result to a separate path.
 
 Recipe example (paths may be absolute or relative to the recipe file):
 
@@ -892,7 +893,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def run_with_arguments(arguments: list[str]) -> dict[str, Any]:
-    """Run from Blender MCP with an explicit command-line-style argument list."""
+    """Run with explicit command-line-style arguments in Blender."""
     return run(parse_arguments(arguments))
 
 

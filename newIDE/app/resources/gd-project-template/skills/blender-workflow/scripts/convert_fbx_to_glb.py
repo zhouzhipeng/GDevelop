@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Convert FBX files to standalone GLBs or bake them onto a target rig.
 
-Run this utility through Blender Foundation's official Blender MCP server.
-Load it with ``runpy`` inside ``execute_blender_code_for_cli`` and call
-``run_with_arguments`` with command-line-style arguments. Direct conversion
+Run this utility directly with a Blender executable using ``--python`` and pass
+command-line-style arguments after Blender's ``--`` separator. Direct conversion
 supports one FBX file or a directory batch, preserves relative paths for
 recursive batches, imports referenced images, exports skins and actions, and
 validates the resulting GLB 2.0 container before replacing the destination.
@@ -18,8 +17,8 @@ locations are copied by default so attachments do not remain at their bind
 positions.
 
 Animation import and export are enabled by default. Existing outputs are never
-replaced unless ``--overwrite`` is passed. The connected/background ``.blend``
-is used only as a disposable execution host and is never saved by this script.
+replaced unless ``--overwrite`` is passed. The background ``.blend`` is used
+only as a disposable execution host and is never saved by this script.
 """
 
 from __future__ import annotations
@@ -333,8 +332,9 @@ def build_jobs(args: ConversionOptions) -> list[ConversionJob]:
 def require_blender() -> None:
     if bpy is None:
         raise ConversionError(
-            "This conversion must run inside Blender through the official Blender MCP; "
-            "only --dry-run is available in system Python"
+            "This conversion must run inside Blender; launch it with the Blender "
+            "executable and pass this script with --python; only --dry-run is "
+            "available in system Python"
         )
 
 
@@ -490,7 +490,7 @@ def saved_execution_host() -> Path:
     if filepath is None or not filepath.is_file():
         raise ConversionError(
             "Retarget mode requires a saved, task-owned .blend as the "
-            "execute_blender_code_for_cli host"
+            "background Blender host"
         )
     return filepath
 
@@ -1110,7 +1110,7 @@ def run(args: ConversionOptions) -> dict[str, Any]:
 
 
 def run_with_arguments(arguments: list[str]) -> dict[str, Any]:
-    """Run from Blender MCP with an explicit command-line-style argument list."""
+    """Run with explicit command-line-style arguments in Blender."""
     try:
         return run(options_from_namespace(parse_arguments(arguments)))
     except ConversionError as error:

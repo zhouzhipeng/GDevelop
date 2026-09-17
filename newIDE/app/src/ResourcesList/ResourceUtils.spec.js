@@ -4,6 +4,7 @@ import {
   getUniqueResourceNameFromFilePath,
   normalizeLocalResourceFilePath,
   normalizeProjectLocalResourceFilePaths,
+  getLocalResourceFullPath,
   parseLocalFilePathOrExtensionFromMetadata,
   prepareNewResourceForRegistration,
   removeAllUnusedResources,
@@ -346,6 +347,31 @@ describe('ResourceUtils', () => {
     expect(project.getResourcesManager().hasResource('UnusedAudio')).toBe(
       false
     );
+
+    project.delete();
+  });
+
+  it('gives the path on disk of a local resource, even with special characters', () => {
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    project.setProjectFile('/home/user/My Project/game.json');
+    const resource = new gd.AudioResource();
+    resource.setName('Track #3');
+    resource.setFile('assets/Track #3 (100%).wav');
+    project.getResourcesManager().addResource(resource);
+    const urlResource = new gd.ImageResource();
+    urlResource.setName('Remote');
+    urlResource.setFile('https://example.com/a%23b.png');
+    project.getResourcesManager().addResource(urlResource);
+
+    expect(getLocalResourceFullPath(project, 'Track #3')).toBe(
+      path
+        .resolve('/home/user/My Project/assets/Track #3 (100%).wav')
+        .replace(/\\/g, '/')
+    );
+    expect(getLocalResourceFullPath(project, 'Remote')).toBe(
+      'https://example.com/a%23b.png'
+    );
+    expect(getLocalResourceFullPath(project, 'Unknown')).toBe('');
 
     project.delete();
   });

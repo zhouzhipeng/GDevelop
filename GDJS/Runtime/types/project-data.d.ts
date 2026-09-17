@@ -225,6 +225,7 @@ declare type SceneTweenType =
   | 'cameraZoom'
   | 'cameraRotation'
   | 'cameraPosition'
+  | 'cameraZ'
   | 'colorEffectProperty'
   | 'numberEffectProperty';
 declare type ObjectTweenType =
