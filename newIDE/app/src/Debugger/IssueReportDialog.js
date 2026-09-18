@@ -1,8 +1,10 @@
 // @flow
 import { t, Trans } from '@lingui/macro';
+import { I18n } from '@lingui/react';
 import * as React from 'react';
 import Dialog, { DialogPrimaryButton } from '../UI/Dialog';
 import FlatButton from '../UI/FlatButton';
+import IconButton from '../UI/IconButton';
 import TextField from '../UI/TextField';
 import Text from '../UI/Text';
 import AlertMessage from '../UI/AlertMessage';
@@ -71,20 +73,30 @@ const IssueReportDialog = ({
       />,
     ]}
     secondaryActions={[
-      <FlatButton
-        key="undo"
-        label={<Trans>Undo last annotation</Trans>}
-        leftIcon={<UndoIcon />}
-        onClick={onUndo}
-        disabled={isSaving}
-      />,
-      <FlatButton
-        key="clear"
-        label={<Trans>Clear annotations</Trans>}
-        leftIcon={<TrashIcon />}
-        onClick={onClear}
-        disabled={isSaving}
-      />,
+      <I18n key="undo">
+        {({ i18n }) => (
+          <IconButton
+            tooltip={t`Undo last annotation`}
+            aria-label={i18n._(t`Undo last annotation`)}
+            onClick={onUndo}
+            disabled={isSaving}
+          >
+            <UndoIcon />
+          </IconButton>
+        )}
+      </I18n>,
+      <I18n key="clear">
+        {({ i18n }) => (
+          <IconButton
+            tooltip={t`Clear annotations`}
+            aria-label={i18n._(t`Clear annotations`)}
+            onClick={onClear}
+            disabled={isSaving}
+          >
+            <TrashIcon />
+          </IconButton>
+        )}
+      </I18n>,
     ]}
   >
     <ColumnStackLayout noMargin>
