@@ -1757,6 +1757,33 @@ const readTools: Array<McpTool> = [
 
 const writeTools: Array<McpTool> = [
   {
+    name: 'create_project',
+    description:
+      'Create a new local multi-file GDevelop game with a default Game scene, generated authoring catalogs, and bundled skill/template files. Works without an open project. project_directory must not exist and its parent must exist. Does not replace the current editor project; use open_project with the returned projectFile to open it. Never overwrites an existing directory. On failure, partial files may remain in the new directory.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_directory: {
+          type: 'string',
+          minLength: 1,
+          description:
+            'Absolute path to a new project directory; parent must exist.',
+        },
+        project_name: { type: 'string', minLength: 1 },
+        width: { type: 'integer', minimum: 1, maximum: 16384, default: 1280 },
+        height: { type: 'integer', minimum: 1, maximum: 16384, default: 720 },
+      },
+      required: ['project_directory', 'project_name'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
     name: 'import_extension',
     description:
       'Import an official GDevelop extension by its registry name (persistence protocol v3). GDevelop downloads the legacy extension JSON with its required dependencies, loads it through the native extension model, waits for any active save, immediately saves the project again, reads the canonical multi-file extension sources back from disk before reporting success, and returns the original writer error when persistence fails. After this one conversion step, edit the returned .settings, .layout, and .events files directly.',
@@ -1784,6 +1811,18 @@ const writeTools: Array<McpTool> = [
 const commandTools: Array<McpTool> = [];
 
 const toolUsageExamples: { [string]: Array<Object> } = {
+  create_project: [
+    {
+      description:
+        'Create a new game, then pass the returned projectFile to open_project.',
+      arguments: {
+        project_directory: 'D:/Games/MyGame',
+        project_name: 'My Game',
+        width: 1280,
+        height: 720,
+      },
+    },
+  ],
   open_project: [
     {
       description: 'Open a local multi-file GDevelop project.',
@@ -2174,6 +2213,7 @@ const toolUsageExamples: { [string]: Array<Object> } = {
 
 const writeToolNames: Set<string> = new Set(writeTools.map(tool => tool.name));
 const alwaysAvailableWriteToolNames: Set<string> = new Set([
+  'create_project',
   'import_extension',
 ]);
 const commandToolNames: Set<string> = new Set(
@@ -2285,6 +2325,7 @@ export const getCapabilitiesSummary = (
     allByName[tool.name] = tool;
   });
   const categories: { [string]: Array<string> } = {
+    'Project creation': ['create_project'],
     'Extension import': ['import_extension'],
     'Project opening': ['open_project'],
     'Editor queries': [
@@ -2332,7 +2373,7 @@ export const getCapabilitiesSummary = (
   });
   return {
     note:
-      'GDevelop MCP is intentionally limited to local project opening, one extension import/conversion tool, editor queries, bounded local GLB metadata inspection, synchronization, validation, authored gameplay-test execution, and preview debugging. There are no Constants MCP tools: the AI model must read and modify constants.toml directly on disk. After import_extension generates canonical sources, author the game through project files and the generated .gdevelop/settings-catalog.json (including embedded-layout authoring data) and .gdevelop/instructions-catalog.json. Before authoring JavaScript events, also read .gdevelop/runtime-api.d.ts and .gdevelop/project-api.d.ts; before authoring gameplay tests, read .gdevelop/harness-api.d.ts.',
+      'GDevelop MCP is intentionally limited to local project creation and opening, one extension import/conversion tool, editor queries, bounded local GLB metadata inspection, synchronization, validation, authored gameplay-test execution, and preview debugging. There are no Constants MCP tools: the AI model must read and modify constants.toml directly on disk. After create_project or import_extension generates canonical sources, author the game through project files and the generated .gdevelop/settings-catalog.json (including embedded-layout authoring data) and .gdevelop/instructions-catalog.json. Before authoring JavaScript events, also read .gdevelop/runtime-api.d.ts and .gdevelop/project-api.d.ts; before authoring gameplay tests, read .gdevelop/harness-api.d.ts.',
     permissions: {
       writeToolsEnabled: !!permissions.allowWriteTools,
       commandToolsEnabled: !!permissions.allowCommandTools,

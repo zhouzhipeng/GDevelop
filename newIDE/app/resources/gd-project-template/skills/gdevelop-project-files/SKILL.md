@@ -8,11 +8,32 @@ description: Create, inspect, modify, refactor, and verify GDevelop games throug
 ## Source of truth
 
 Treat project files as authoritative. Modify them directly; do not use MCP to
-author the game. The sole authoring-related exception is `import_extension`:
-use it once to import and convert an official legacy extension into canonical
-multi-file sources, then continue by editing those generated files directly.
+author the game after initialization. Use `create_project` to initialize a new
+game, and `import_extension` to import and convert an official legacy extension
+into canonical multi-file sources. Continue by editing generated sources directly.
 There are no dedicated Constants MCP tools. Read and modify `constants.toml`
 directly.
+
+## Create a new game
+
+When no project exists, call `create_project` with `project_directory` (an
+absolute path to a directory that does not exist) and `project_name`. Its parent
+directory must already exist. Optional integer `width` and `height` range from
+1 to 16384 and default to 1280 and 720. For example:
+
+```json
+{"project_directory":"D:/Games/MyGame","project_name":"My Game","width":1280,"height":720}
+```
+
+The tool saves a canonical multi-file project with a default `Game` scene,
+generated authoring catalogs/declarations, and bundled template/skill files.
+It works without an open project and leaves the current editor project alone.
+Require `created: true`, then call `open_project` with `project_path` equal to
+the returned `projectFile`. Existing unsaved editor changes are protected by
+`open_project`; save them or obtain authorization before explicitly discarding.
+Read the new project's sources and generated catalogs before further edits.
+Creation refuses all existing target directories. If it fails, inspect any
+partial files before retrying with a fresh destination.
 
 ## Engine-level bugs
 
@@ -601,7 +622,7 @@ The complete public protocol surface is the following allowlist:
   `verify_project_change`, `simulate_preview_input`, `control_preview`,
   `set_runtime_state`, and `capture_preview_screenshot`.
 - Gameplay tests: `run_gameplay_tests` and `get_gameplay_test_results`.
-- Public write operation: `import_extension`.
+- Public write operations: `create_project` and `import_extension`.
 
 No other MCP tool name is supported, introspectable, or callable, even when
 write/command permissions are enabled. The two gameplay-test tools are always
@@ -615,9 +636,9 @@ below and authors project source directly.
 Constants are outside this MCP surface. The AI model must author them by
 reading and editing `constants.toml` directly.
 
+- Initializing a new local game with `create_project` as described above.
 - Importing and converting an official legacy extension with
-  `import_extension`. This is the only MCP tool allowed to create project
-  source. It must return the generated source paths; all later adaptation is a
+  `import_extension`. It must return the generated source paths; all later adaptation is a
   direct file edit.
 - Opening a specific local project entry in the editor with `open_project`.
 - Reloading direct disk edits into the editor with `reload_project`.
@@ -648,7 +669,8 @@ reading and editing `constants.toml` directly.
   layer/group/camera/mesh/visibility/texture-failure/rejection information;
   they never serialize raw Three.js, Pixi, renderer, canvas, or DOM objects.
 
-Except for the single `import_extension` conversion transaction, never use MCP
+Except for `create_project` initialization and the single `import_extension`
+conversion transaction, never use MCP
 to create scenes, objects, resources, variables, instances, extensions,
 behaviors, prefabs, or events. Never use generic editor-call, command, patch,
 sync, or save tools for authoring.
