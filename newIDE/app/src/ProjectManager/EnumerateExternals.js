@@ -50,5 +50,17 @@ export const enumerateExternalsByScene = (
     (sceneExternals || unlinkedExternals).externalEvents.push(externalEvents);
   }
 
+  // Fragment display order is derived from names; execution follows Link order.
+  const sortFragments = (externals: SceneExternals) =>
+    externals.externalEvents.sort((left, right) =>
+      left.getName() < right.getName()
+        ? -1
+        : left.getName() > right.getName()
+        ? 1
+        : 0
+    );
+  bySceneName.forEach(sortFragments);
+  sortFragments(unlinkedExternals);
+
   return { bySceneName, unlinkedExternals };
 };

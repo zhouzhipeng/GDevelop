@@ -16,7 +16,7 @@ import {
   decompileEmbeddedLayoutToml,
 } from '../LayoutToml';
 
-export const MULTI_FILE_FORMAT_VERSION = 5;
+export const MULTI_FILE_FORMAT_VERSION = 6;
 export const MULTI_FILE_ENTRY_NAME = 'project.gdevelop';
 export const MULTI_FILE_ENTRY_URI = 'game://project.gdevelop';
 export const MULTI_FILE_RESOURCES_URI = 'game://resources.settings';
@@ -1453,28 +1453,6 @@ const settingsNamespacePathForUri = (uri, payload) => {
   )
     return ['scenes', segments[1], 'functions', name];
   if (
-    segments.length === 5 &&
-    segments[0] === 'scenes' &&
-    segments[2] === 'external-events' &&
-    segments[4] === 'external-events.settings'
-  )
-    return ['scenes', segments[1], 'externalEvents', name];
-  if (
-    segments.length === 6 &&
-    segments[0] === 'scenes' &&
-    segments[2] === 'external-events' &&
-    segments[4] === 'functions' &&
-    segments[5].endsWith('.settings')
-  )
-    return [
-      'scenes',
-      segments[1],
-      'externalEvents',
-      segments[3],
-      'functions',
-      name,
-    ];
-  if (
     segments.length === 4 &&
     segments[0] === 'scenes' &&
     segments[2] === 'external-layout' &&
@@ -2079,78 +2057,42 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
     return sceneInfo;
   };
   const externalEventNames = new Set();
-  const externalEventDisplayNames = new Set();
-  (project.externalEvents || []).forEach((external, order) => {
-    const name = String(external.name || '');
-    if (!name || externalEventDisplayNames.has(name)) {
+  (project.externalEvents || []).forEach(external => {
+    assertOnlyFields(
+      external,
+      new Set(['name', 'associatedLayout', 'events']),
+      'External event fragment',
+      MULTI_FILE_ENTRY_URI
+    );
+    const name = expectString(
+      external.name,
+      'External event name',
+      MULTI_FILE_ENTRY_URI
+    );
+    const nameKey = name.normalize('NFC').toLowerCase();
+    if (
+      !name ||
+      name !== name.normalize('NFC') ||
+      externalEventNames.has(nameKey)
+    ) {
       fail(
-        name ? 'MULTIFILE_DUPLICATE_IDENTITY' : 'MULTIFILE_INVALID_SCHEMA',
-        name
-          ? `External event settings contain duplicate name ${JSON.stringify(
-              name
-            )}.`
-          : 'External event name must not be empty.'
+        'MULTIFILE_DUPLICATE_IDENTITY',
+        'External event names must be non-empty, NFC normalized, and unique ignoring case.'
       );
     }
-    externalEventDisplayNames.add(name);
+    externalEventNames.add(nameKey);
     const sceneInfo = requireExternalSceneInfo(external, 'External event');
-    const fileName = uniqueManagedName(name, externalEventNames);
-    const externalBaseSegments = [
-      'scenes',
-      sceneInfo.folderName,
-      'external-events',
-      fileName,
-    ];
-    const ownerSettingsUri = encodeUriPath([
-      ...externalBaseSegments,
-      'external-events.settings',
-    ]);
-    putSettingsFile(files, ownerSettingsUri, {
-      scenes: {
-        [sceneInfo.name]: {
-          externalEvents: {
-            [name]: {
-              kind: 'externalEvents',
-              settingsFormatVersion: MULTI_FILE_FORMAT_VERSION,
-              order,
-              ...omitFields(
-                external,
-                new Set([
-                  'name',
-                  'order',
-                  'associatedLayout',
-                  'linkedScene',
-                  'unresolvedScene',
-                  'events',
-                  'sceneLoadEvents',
-                  'sceneSignalEvents',
-                  'sceneUnloadEvents',
-                  LEGACY_SCENE_LIFECYCLE_PRESENCE_FIELD,
-                ])
-              ),
-              name,
-            },
-          },
-        },
-      },
-    });
-    splitSceneLifecycleFunctions({
-      owner: external,
-      baseSegments: externalBaseSegments,
-      namespaceForFunction: (functionName, payload) => ({
-        scenes: {
-          [sceneInfo.name]: {
-            externalEvents: {
-              [name]: {
-                functions: { [functionName]: payload },
-              },
-            },
-          },
-        },
-      }),
+    putEventsFile(
       files,
-      eventsDslOptions: options.eventsDslOptions,
-    });
+      encodeUriPath([
+        'scenes',
+        sceneInfo.folderName,
+        'external-events',
+        encodeManagedName(`${name}.events`),
+      ]),
+      external.events,
+      options.eventsDslOptions
+    );
   });
   const externalLayoutNames = new Set();
   const externalLayoutDisplayNames = new Set();
@@ -3492,7 +3434,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       ) {
         fail(
           'MULTIFILE_INVALID_LOCAL_SETTINGS',
-          'Version 5 scene settings must embed layout and must not own retired layout/events/external manifest fields.',
+          'Version 6 scene settings must embed layout and must not own retired layout/events/external manifest fields.',
           uri
         );
       }
@@ -3508,101 +3450,50 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   assertContiguousSettingsOrder(sceneDocuments, 'Scene');
   const externalEventDocuments = [];
   const externalLayoutDocuments = [];
+  const externalEventNames = new Set();
   Object.keys(files)
-    .filter(uri =>
-      /^game:\/\/scenes\/[^/]+\/external-events\/[^/]+\/external-events\.settings$/.test(
-        uri
-      )
-    )
+    .filter(uri => /^game:\/\/scenes\/[^/]+\/external-events\//.test(uri))
     .forEach(uri => {
-      registerUri(uri);
-      settingsUris.push(uri);
-      const segments = rawGameUriSegments(uri);
-      const owningSceneDocument = sceneDocuments.find(
-        sceneDocument =>
-          rawGameUriSegments(sceneDocument.uri)[1] === segments[1]
-      );
-      if (!owningSceneDocument) {
-        fail(
-          'MULTIFILE_EXTERNAL_SCENE_REQUIRED',
-          'External Events settings must be stored below an existing scene.',
-          uri
-        );
-      }
-      const sceneName = owningSceneDocument.entry.name;
-      const document = parseSettings(files, uri);
-      const externalEventsNamespace = requireNamespace(
-        document,
-        ['scenes', segments[1], 'externalEvents'],
-        uri
-      );
-      const name = onlyNamespaceName(
-        externalEventsNamespace,
-        `scenes.${sceneName}.externalEvents`,
-        uri
-      );
-      const payload = restoreTomlPayload(externalEventsNamespace[name], uri);
       if (
-        payload.kind !== 'externalEvents' ||
-        payload.settingsFormatVersion !== formatVersion
+        !/^game:\/\/scenes\/[^/]+\/external-events\/[^/]+\.events$/.test(uri)
       ) {
         fail(
-          'MULTIFILE_UNSUPPORTED_VERSION',
-          'Invalid External Events namespace marker.',
+          'MULTIFILE_INVALID_EXTERNAL_SOURCE',
+          'External events must be flat .events fragments without settings or function directories.',
           uri
         );
       }
-      const forbiddenFields = [
-        'associatedLayout',
-        'linkedScene',
-        'unresolvedScene',
-        'events',
-        'externalEventFiles',
-        'functionFiles',
-      ];
-      if (forbiddenFields.some(field => payload[field] !== undefined)) {
+      registerUri(uri);
+      const segments = rawGameUriSegments(uri);
+      const sceneDocument = sceneDocuments.find(
+        scene => rawGameUriSegments(scene.uri)[1] === segments[1]
+      );
+      if (!sceneDocument) {
         fail(
-          'MULTIFILE_INVALID_LOCAL_SETTINGS',
-          'External Events owner settings must derive association and function ownership from its physical path.',
+          'MULTIFILE_EXTERNAL_SCENE_REQUIRED',
+          'External events must belong to an existing scene.',
           uri
         );
       }
-      const expectedDirectoryNames = [
-        decodeURIComponent(encodeManagedName(name)),
-        `${decodeURIComponent(encodeManagedName(name))}~${stableHash8(name)}`,
-      ];
-      if (!expectedDirectoryNames.includes(segments[3])) {
+      const name = segments[3].slice(0, -'.events'.length);
+      const key = name.normalize('NFC').toLowerCase();
+      if (
+        !name ||
+        name !== name.normalize('NFC') ||
+        externalEventNames.has(key)
+      ) {
         fail(
-          'MULTIFILE_IDENTITY_MISMATCH',
-          `External Events ${name} must use its canonical managed owner directory.`,
+          'MULTIFILE_DUPLICATE_IDENTITY',
+          'External event names must be non-empty, NFC normalized, and unique ignoring case.',
           uri
         );
       }
-      const entry = {
-        ...payload,
-        name,
-        order: readSettingsOrder(
-          payload,
-          `scenes.${sceneName}.externalEvents.${name}`,
-          uri
-        ),
-      };
-      validateManifestIdentity(entry, payload, uri);
+      externalEventNames.add(key);
       externalEventDocuments.push({
-        entry,
+        name,
         uri,
-        sceneName,
-        lifecycleFunctionDocuments: readSceneLifecycleFunctionDocuments({
-          baseSegments: segments.slice(0, -1),
-          namespacePath: [
-            'scenes',
-            segments[1],
-            'externalEvents',
-            segments[3],
-            'functions',
-          ],
-          label: `scenes.${sceneName}.externalEvents.${name}`,
-        }),
+        sceneName: sceneDocument.entry.name,
+        sceneOrder: sceneDocument.entry.order,
       });
     });
 
@@ -3686,22 +3577,18 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       externalLayoutDocuments.push({ entry, uri, sceneName, document });
     });
   externalEventDocuments.sort(
-    (left, right) => left.entry.order - right.entry.order
+    (left, right) =>
+      left.sceneOrder - right.sceneOrder ||
+      (left.name < right.name ? -1 : left.name > right.name ? 1 : 0)
   );
   externalLayoutDocuments.sort(
     (left, right) => left.entry.order - right.entry.order
-  );
-  assertUniqueManifestNames(
-    externalEventDocuments.map(({ entry }) => entry),
-    'external event settings',
-    MULTI_FILE_ENTRY_URI
   );
   assertUniqueManifestNames(
     externalLayoutDocuments.map(({ entry }) => entry),
     'external layout settings',
     MULTI_FILE_ENTRY_URI
   );
-  assertContiguousSettingsOrder(externalEventDocuments, 'External event');
   assertContiguousSettingsOrder(externalLayoutDocuments, 'External layout');
   sceneDocuments = sceneDocuments.map(sceneDocument => {
     const sceneSegments = rawGameUriSegments(sceneDocument.uri);
@@ -3939,7 +3826,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       if (prefabPayload.variants !== undefined) {
         fail(
           'MULTIFILE_MIXED_FORMAT_VERSION',
-          'Version 5 prefab settings must not contain a nested variants array.',
+          'Version 6 prefab settings must not contain a nested variants array.',
           childDocument.uri
         );
       }
@@ -4283,7 +4170,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   if (retiredLayoutUri) {
     fail(
       'MULTIFILE_RETIRED_LAYOUT_SOURCE',
-      'Version 5 projects must embed layout data in the owning settings file.',
+      'Version 6 projects must embed layout data in the owning settings file.',
       retiredLayoutUri
     );
   }
@@ -4293,12 +4180,12 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   if (retiredFunctionUri) {
     fail(
       'MULTIFILE_RETIRED_FUNCTION_SOURCE',
-      'Version 5 functions must use a flat same-stem settings/events pair.',
+      'Version 6 functions must use a flat same-stem settings/events pair.',
       retiredFunctionUri
     );
   }
 
-  const managedSettingsUriPattern = /^(?:game:\/\/(?:project|resources|tests)\.settings|game:\/\/objects\/(?:[^/]+\/)*[^/]+\.settings|game:\/\/scenes\/[^/]+\/(?:scene\.settings|objects\/(?:[^/]+\/)*[^/]+\.settings|functions\/[^/]+\.settings|external-events\/[^/]+\/(?:external-events\.settings|functions\/[^/]+\.settings)|external-layout\/[^/]+\.settings)|game:\/\/extensions\/[^/]+\/(?:extension\.settings|functions\/[^/]+\.settings|prefabs\/[^/]+\/(?:prefab\.settings|objects\/(?:[^/]+\/)*[^/]+\.settings|functions\/[^/]+\.settings|variants\/[^/]+\/(?:variant\.settings|objects\/(?:[^/]+\/)*[^/]+\.settings))|behaviors\/[^/]+\/(?:behavior\.settings|functions\/[^/]+\.settings)))$/;
+  const managedSettingsUriPattern = /^(?:game:\/\/(?:project|resources|tests)\.settings|game:\/\/objects\/(?:[^/]+\/)*[^/]+\.settings|game:\/\/scenes\/[^/]+\/(?:scene\.settings|objects\/(?:[^/]+\/)*[^/]+\.settings|functions\/[^/]+\.settings|external-layout\/[^/]+\.settings)|game:\/\/extensions\/[^/]+\/(?:extension\.settings|functions\/[^/]+\.settings|prefabs\/[^/]+\/(?:prefab\.settings|objects\/(?:[^/]+\/)*[^/]+\.settings|functions\/[^/]+\.settings|variants\/[^/]+\/(?:variant\.settings|objects\/(?:[^/]+\/)*[^/]+\.settings))|behaviors\/[^/]+\/(?:behavior\.settings|functions\/[^/]+\.settings)))$/;
   Object.keys(files)
     .filter(uri => managedSettingsUriPattern.test(uri))
     .forEach(uri => {
@@ -4318,7 +4205,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   if (orphanFunctionEventsUri) {
     fail(
       'MULTIFILE_ORPHAN_EVENTS',
-      'Every managed events body must have a same-stem function settings file.',
+      'Every function events body must have a same-stem function settings file.',
       orphanFunctionEventsUri
     );
   }
@@ -4352,7 +4239,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   if (retiredOwnedEventsUri) {
     fail(
       'MULTIFILE_OWNERSHIP_CONFLICT',
-      'Version 5 projects must not contain retired scene-owned flat events sources outside a functions directory.',
+      'Version 6 projects must not contain retired scene-owned flat events sources outside a functions directory.',
       retiredOwnedEventsUri
     );
   }
@@ -4364,7 +4251,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   if (retiredExternalOwnerUri) {
     fail(
       'MULTIFILE_RETIRED_EXTERNAL_SOURCE',
-      'Version 5 External Events and External Layout sources must use the external-events and external-layout directories.',
+      'Version 6 External Events and External Layout sources must use the external-events and external-layout directories.',
       retiredExternalOwnerUri
     );
   }
@@ -4466,42 +4353,11 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   );
 
   project.externalEvents = externalEventDocuments.map(
-    ({ entry, uri, sourceUri, sceneName, lifecycleFunctionDocuments }) => {
-      const metadata =
-        formatVersion === MULTI_FILE_FORMAT_VERSION
-          ? removeFormatFields(entry)
-          : entry;
-      const lifecycleBodies =
-        formatVersion === MULTI_FILE_FORMAT_VERSION
-          ? compileSceneLifecycleBodies(
-              lifecycleFunctionDocuments,
-              `External Events ${entry.name}`
-            )
-          : {
-              events: compileEvents(
-                files,
-                registerUri(
-                  expectString(sourceUri, 'external events URI', uri)
-                ),
-                options
-              ),
-            };
-      return {
-        ...omitFields(
-          metadata,
-          new Set([
-            'name',
-            'order',
-            'events',
-            'functions',
-            LEGACY_SCENE_LIFECYCLE_PRESENCE_FIELD,
-          ])
-        ),
-        name: entry.name,
-        associatedLayout: sceneName,
-        ...lifecycleBodies,
-      };
-    }
+    ({ name, uri, sceneName }) => ({
+      name,
+      associatedLayout: sceneName,
+      events: compileEvents(files, uri, options),
+    })
   );
   project.externalLayouts = externalLayoutDocuments.map(
     ({ entry, uri, sceneName }) => {
@@ -4841,21 +4697,19 @@ export const normalizeLegacyProjectForMultiFile = (
     normalizeLayoutFragment(external, 'editionSettings', false)
   );
   project.externalEvents.forEach(external => {
-    normalizeLegacySceneLifecyclePresence(external);
     external.events = parseLegacyEventsJson(
       JSON.stringify(external.events || [])
     );
-    ['sceneLoadEvents', 'sceneSignalEvents', 'sceneUnloadEvents'].forEach(
-      field => {
-        if (external[field] !== undefined) {
-          external[field] = parseLegacyEventsJson(
-            JSON.stringify(external[field] || [])
-          );
-          if (!external[field].length) delete external[field];
-        }
-      }
-    );
   });
+  const sceneOrder = new Map(
+    project.layouts.map((scene, index) => [scene.name, index])
+  );
+  project.externalEvents.sort(
+    (left, right) =>
+      (sceneOrder.get(left.associatedLayout) || 0) -
+        (sceneOrder.get(right.associatedLayout) || 0) ||
+      (left.name < right.name ? -1 : left.name > right.name ? 1 : 0)
+  );
   project.eventsFunctionsExtensions.forEach(extension => {
     if (extension.tests !== undefined) {
       extension.tests = normalizeGameplayTestsForMultiFile(extension.tests);

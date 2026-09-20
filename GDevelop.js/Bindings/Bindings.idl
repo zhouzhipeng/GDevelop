@@ -1136,7 +1136,6 @@ interface ExternalEvents {
     void SetAssociatedLayout([Const] DOMString name);
 
     [Ref] EventsList GetEvents();
-    [Ref] SceneLifecycleEventsFunctions GetLifecycleEventsFunctions();
 
     void SerializeTo([Ref] SerializerElement element);
     void UnserializeFrom([Ref] Project project, [Const, Ref] SerializerElement element);

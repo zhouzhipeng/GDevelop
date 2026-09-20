@@ -1842,18 +1842,11 @@ void WholeProjectRefactorer::ObjectOrGroupRenamedInScene(
   for (auto &externalEventsName :
        GetAssociatedExternalEvents(project, layout.GetName())) {
     auto &externalEvents = project.GetExternalEvents(externalEventsName);
-    externalEvents.GetLifecycleEventsFunctions().ForEach(
-        [&](gd::SceneLifecycleFunctionRole role,
-            gd::EventsFunction& eventsFunction) {
-          auto lifecycleScopedContainers = projectScopedContainers;
-          lifecycleScopedContainers.SetScopeExternalEventsName(
-              externalEvents.GetName());
-          lifecycleScopedContainers.SetScopeSceneLifecycleFunctionRole(role);
-          gd::EventsRefactorer::RenameObjectInEvents(
-              project.GetCurrentPlatform(), lifecycleScopedContainers,
-              eventsFunction.GetEvents(), targetedObjectsContainer, oldName,
-              newName);
-        });
+    auto externalScopedContainers = projectScopedContainers;
+    externalScopedContainers.SetScopeExternalEventsName(externalEvents.GetName());
+    gd::EventsRefactorer::RenameObjectInEvents(
+        project.GetCurrentPlatform(), externalScopedContainers,
+        externalEvents.GetEvents(), targetedObjectsContainer, oldName, newName);
   }
 
   // Rename object in external layouts

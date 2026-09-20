@@ -82,7 +82,7 @@ extensions/CombatKit/
 
 ```toml
 kind = "extension"
-settingsFormatVersion = 5
+settingsFormatVersion = 6
 order = 0
 name = "CombatKit"
 fullName = "Combat Kit"
@@ -110,7 +110,7 @@ structure.
 
 ```toml
 kind = "function"
-settingsFormatVersion = 5
+settingsFormatVersion = 6
 order = 0
 extension = "CombatKit"
 name = "ResetCombat"
@@ -141,7 +141,7 @@ do SetBooleanVariable variable="ResetRequested" modification_sign="False"
 
 ```toml
 kind = "prefab"
-settingsFormatVersion = 5
+settingsFormatVersion = 6
 order = 0
 name = "Enemy"
 fullName = "Enemy"
@@ -171,7 +171,7 @@ bounds = { min = [0, 0, 0], max = [64, 64, 64] }
 
 ```toml
 kind = "function"
-settingsFormatVersion = 5
+settingsFormatVersion = 6
 order = 0
 folder = []
 name = "Initialize"
@@ -197,7 +197,7 @@ do SetBooleanObjectVariable object="Object" variable="Initialized" modification_
 
 ```toml
 kind = "object"
-settingsFormatVersion = 5
+settingsFormatVersion = 6
 order = 0
 folder = []
 name = "Body"
@@ -232,7 +232,7 @@ catalog and preserve all existing unknown fields.
 
 ```toml
 kind = "behavior"
-settingsFormatVersion = 5
+settingsFormatVersion = 6
 order = 0
 name = "Health"
 fullName = "Health"
@@ -249,7 +249,7 @@ quickCustomizationVisibility = "default"
 
 ```toml
 kind = "function"
-settingsFormatVersion = 5
+settingsFormatVersion = 6
 order = 0
 folder = []
 name = "TakeDamage"

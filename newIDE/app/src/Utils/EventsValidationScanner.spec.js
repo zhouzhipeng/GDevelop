@@ -39,6 +39,7 @@ describe('EventsValidationScanner', () => {
           .getConditions()
           .insert(condition, 0);
         condition.delete();
+        return event;
       };
 
       const addAction = (
@@ -67,19 +68,18 @@ describe('EventsValidationScanner', () => {
       it('only validates unconditioned actions in sceneUpdate', () => {
         const { project, testLayout } = makeTestProject(gd);
         const lifecycleFunctions = testLayout.getLifecycleEventsFunctions();
-        [
-          'sceneLoad',
-          'sceneSignal',
-          'sceneUpdate',
-          'sceneUnload',
-        ].forEach(lifecycleFunctionName => {
-          addAction(
-            project,
-            lifecycleFunctions.getByName(lifecycleFunctionName).getEvents(),
-            'SetNumberVariable',
-            ['Variable1', '=', '1']
-          );
-        });
+        ['sceneLoad', 'sceneSignal', 'sceneUpdate', 'sceneUnload'].forEach(
+          lifecycleFunctionName => {
+            addAction(
+              project,
+              lifecycleFunctions
+                .insertByName(lifecycleFunctionName)
+                .getEvents(),
+              'SetNumberVariable',
+              ['Variable1', '=', '1']
+            );
+          }
+        );
 
         const unconditionedActionErrors = scanProjectForValidationErrors(
           project
@@ -97,7 +97,7 @@ describe('EventsValidationScanner', () => {
         ['sceneLoad', 'sceneUpdate'].forEach(lifecycleFunctionName => {
           addAction(
             project,
-            lifecycleFunctions.getByName(lifecycleFunctionName).getEvents(),
+            lifecycleFunctions.insertByName(lifecycleFunctionName).getEvents(),
             'BuiltinExternalLayouts::CreateObjectsFromExternalLayout',
             ['', '"Main_HUD"', '0', '0', '0']
           );
@@ -105,9 +105,7 @@ describe('EventsValidationScanner', () => {
 
         const unsafeExternalLayoutCreationErrors = scanProjectForValidationErrors(
           project
-        ).filter(
-          error => error.type === 'unsafe-external-layout-creation'
-        );
+        ).filter(error => error.type === 'unsafe-external-layout-creation');
 
         expect(unsafeExternalLayoutCreationErrors).toHaveLength(1);
         expect(
@@ -120,13 +118,13 @@ describe('EventsValidationScanner', () => {
         const lifecycleFunctions = testLayout.getLifecycleEventsFunctions();
         addCondition(
           project,
-          lifecycleFunctions.getByName('sceneSignal').getEvents(),
+          lifecycleFunctions.insertByName('sceneSignal').getEvents(),
           'SignalReceived',
           ['', '"damage"']
         );
         addCondition(
           project,
-          lifecycleFunctions.getByName('sceneUpdate').getEvents(),
+          lifecycleFunctions.insertByName('sceneUpdate').getEvents(),
           'SignalReceived',
           ['', '"legacy"']
         );
@@ -146,7 +144,7 @@ describe('EventsValidationScanner', () => {
         const { project, testLayout } = makeTestProject(gd);
         const unloadEvents = testLayout
           .getLifecycleEventsFunctions()
-          .getByName('sceneUnload')
+          .insertByName('sceneUnload')
           .getEvents();
         addAction(project, unloadEvents, 'Wait', ['0.1']);
         addAction(project, unloadEvents, 'EmitSceneSignal', [
@@ -170,17 +168,17 @@ describe('EventsValidationScanner', () => {
         );
       });
 
-      it('applies lifecycle validation to external events functions', () => {
-        const { project, testExternalEvents1 } = makeTestProject(gd);
-        addAction(
-          project,
-          testExternalEvents1
-            .getLifecycleEventsFunctions()
-            .getByName('sceneUnload')
-            .getEvents(),
-          'Wait',
-          ['0.1']
+      it('validates external fragments in the caller lifecycle', () => {
+        const { project, testLayout, testExternalEvents1 } = makeTestProject(
+          gd
         );
+        const link = testLayout
+          .getLifecycleEventsFunctions()
+          .insertByName('sceneUnload')
+          .getEvents()
+          .insertNewEvent(project, 'BuiltinCommonInstructions::Link', 0);
+        gd.asLinkEvent(link).setTarget(testExternalEvents1.getName());
+        addAction(project, testExternalEvents1.getEvents(), 'Wait', ['0.1']);
 
         const targetError = scanProjectForValidationErrors(project).find(
           error =>
@@ -201,7 +199,7 @@ describe('EventsValidationScanner', () => {
           project,
           testLayout
             .getLifecycleEventsFunctions()
-            .getByName('sceneLoad')
+            .insertByName('sceneLoad')
             .getEvents(),
           'SceneJustBegins',
           ['']
@@ -215,6 +213,76 @@ describe('EventsValidationScanner', () => {
 
         expect(targetError).toBeDefined();
         if (targetError) expect(targetError.type).toBe('lifecycle-redundant');
+      });
+
+      it('inherits parent conditions and local variables without modifying source events', () => {
+        const { project, testLayout, testExternalEvents1 } = makeTestProject(
+          gd
+        );
+        const parent = addCondition(
+          project,
+          testLayout.getEvents(),
+          'SceneJustBegins',
+          ['']
+        );
+        parent
+          .getVariables()
+          .insertNew('LocalCounter', 0)
+          .setValue(0);
+        const link = parent
+          .getSubEvents()
+          .insertNewEvent(project, 'BuiltinCommonInstructions::Link', 0);
+        gd.asLinkEvent(link).setTarget(testExternalEvents1.getName());
+        addAction(
+          project,
+          testExternalEvents1.getEvents(),
+          'SetNumberVariable',
+          ['LocalCounter', '+', '1']
+        );
+        const errors = scanProjectForValidationErrors(project).filter(
+          error => error.locationName === testExternalEvents1.getName()
+        );
+        expect(errors).toEqual([]);
+        expect(
+          parent
+            .getSubEvents()
+            .getEventAt(0)
+            .getType()
+        ).toBe('BuiltinCommonInstructions::Link');
+        expect(testExternalEvents1.getEvents().getEventsCount()).toBe(1);
+        project.delete();
+      });
+
+      it('reports a cycle at the original fragment Link and ignores disabled Links', () => {
+        const { project, testLayout, testExternalEvents1 } = makeTestProject(
+          gd
+        );
+        testLayout.getEvents().clear();
+        const link = testLayout
+          .getEvents()
+          .insertNewEvent(project, 'BuiltinCommonInstructions::Link', 0);
+        gd.asLinkEvent(link).setTarget(testExternalEvents1.getName());
+        const recursiveLink = testExternalEvents1
+          .getEvents()
+          .insertNewEvent(project, 'BuiltinCommonInstructions::Link', 0);
+        gd.asLinkEvent(recursiveLink).setTarget(testExternalEvents1.getName());
+        const errors = scanProjectForValidationErrors(project).filter(
+          error => error.type === 'invalid-link'
+        );
+        expect(errors).toEqual([
+          expect.objectContaining({
+            locationType: 'external-events',
+            locationName: testExternalEvents1.getName(),
+            eventPath: [0],
+          }),
+        ]);
+        link.setDisabled(true);
+        expect(
+          scanProjectForValidationErrors(project).filter(
+            error => error.type === 'invalid-link'
+          )
+        ).toEqual([]);
+        project.delete();
       });
     });
 

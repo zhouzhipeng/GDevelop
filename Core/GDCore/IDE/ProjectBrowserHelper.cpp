@@ -201,7 +201,7 @@ void ProjectBrowserHelper::ExposeProjectEventsWithoutExtensions(
   }
   // Add external events events
   for (std::size_t s = 0; s < project.GetExternalEventsCount(); s++) {
-    ExposeLifecycleEvents(project.GetExternalEvents(s), worker);
+    worker.Launch(project.GetExternalEvents(s).GetEvents());
   }
 }
 
@@ -227,8 +227,7 @@ void ProjectBrowserHelper::ExposeProjectEventsWithoutExtensions(
                   MakeNewProjectScopedContainersForProject(project);
     projectScopedContainers.SetScopeExternalEventsName(
         externalEvents.GetName());
-    ExposeLifecycleEventsWithContext(
-        externalEvents, projectScopedContainers, worker);
+    worker.Launch(externalEvents.GetEvents(), projectScopedContainers);
   }
 }
 
@@ -255,8 +254,7 @@ void ProjectBrowserHelper::ExposeProjectEventsWithoutExtensions(
                   MakeNewProjectScopedContainersForProject(project);
     projectScopedContainers.SetScopeExternalEventsName(
         externalEvents.GetName());
-    ExposeLifecycleEventsWithContext(
-        externalEvents, projectScopedContainers, worker);
+    worker.Launch(externalEvents.GetEvents(), projectScopedContainers);
   }
 }
 
@@ -271,7 +269,7 @@ void ProjectBrowserHelper::ExposeLayoutEventsAndExternalEvents(
   for (std::size_t s = 0; s < project.GetExternalEventsCount(); s++) {
     auto &externalEvents = project.GetExternalEvents(s);
     if (externalEvents.GetAssociatedLayout() == layout.GetName()) {
-      ExposeLifecycleEvents(externalEvents, worker);
+      worker.Launch(externalEvents.GetEvents());
     }
   }
 }
@@ -292,8 +290,7 @@ void ProjectBrowserHelper::ExposeLayoutEventsAndExternalEvents(
       auto externalEventsScopedContainers = projectScopedContainers;
       externalEventsScopedContainers.SetScopeExternalEventsName(
           externalEvents.GetName());
-      ExposeLifecycleEventsWithContext(
-          externalEvents, externalEventsScopedContainers, worker);
+      worker.Launch(externalEvents.GetEvents(), externalEventsScopedContainers);
     }
   }
 }
@@ -312,14 +309,12 @@ void ProjectBrowserHelper::ExposeLayoutEventsAndDependencies(
     // Maybe a boolean parameter should be added?
     return;
   }
+  for (const gd::String& externalEventName :
+       dependenciesAnalyzer.GetExternalEventsDependencies()) {
+    worker.Launch(project.GetExternalEvents(externalEventName).GetEvents());
+  }
   layout.GetLifecycleEventsFunctions().ForEach(
       [&](gd::SceneLifecycleFunctionRole role, gd::EventsFunction&) {
-        for (const gd::String& externalEventName :
-             dependenciesAnalyzer.GetExternalEventsDependencies(role)) {
-          auto& externalEvents = project.GetExternalEvents(externalEventName);
-          worker.Launch(externalEvents.GetLifecycleEventsFunctions()
-                            .GetEvents(role));
-        }
         for (const gd::String& sceneName :
              dependenciesAnalyzer.GetScenesDependencies(role)) {
           auto& dependencyLayout = project.GetLayout(sceneName);
@@ -347,19 +342,17 @@ void ProjectBrowserHelper::ExposeLayoutEventsAndDependencies(
     return;
   }
   layout.GetLifecycleEventsFunctions().ForEach(
-      [&](gd::SceneLifecycleFunctionRole role, gd::EventsFunction&) {
+      [&](gd::SceneLifecycleFunctionRole role, gd::EventsFunction& callerFunction) {
         for (const gd::String& externalEventName :
              dependenciesAnalyzer.GetExternalEventsDependencies(role)) {
           auto& externalEvents = project.GetExternalEvents(externalEventName);
-          auto& externalEventsFunction =
-              externalEvents.GetLifecycleEventsFunctions().Get(role);
           auto dependencyScopedContainers = projectScopedContainers;
           dependencyScopedContainers.SetScopeExternalEventsName(
               externalEvents.GetName());
           dependencyScopedContainers.SetScopeSceneLifecycleFunctionRole(role);
           dependencyScopedContainers.AddParameters(
-              externalEventsFunction.GetParameters());
-          worker.Launch(externalEventsFunction.GetEvents(),
+              callerFunction.GetParameters());
+          worker.Launch(externalEvents.GetEvents(),
                         dependencyScopedContainers);
         }
         for (const gd::String& sceneName :

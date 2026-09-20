@@ -278,7 +278,7 @@ const useNavigateFromGlobalSearch = ({
                     requestAnimationFrame(applySearchResults);
                   });
                 } else if (
-                  locationType !== 'extension' &&
+                  locationType === 'scene' &&
                   lifecycleFunctionName &&
                   editorRef.selectLifecycleFunctionByName
                 ) {

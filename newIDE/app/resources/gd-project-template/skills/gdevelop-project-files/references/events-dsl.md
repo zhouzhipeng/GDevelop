@@ -1,7 +1,9 @@
 # Author Events DSL
 
-Read the owning `.settings` file and the generated instruction catalog before
-editing an `.events` file. Settings define the event sheet or function context;
+Read the scene or function settings and generated instruction catalog before
+editing an `.events` file. External fragments have no own settings: inspect their
+owning scene and Link callers to determine inherited conditions and scope.
+For real functions, the same-stem settings define the function context;
 `.events` contains only IfDo DSL event logic. Never put TOML, a function
 declaration, or raw GDevelop event JSON in this file.
 
@@ -27,17 +29,16 @@ and event scope:
 - `scene.settings` owns four fixed lifecycle functions below
   `scenes/<Scene>/functions/`: `sceneLoad`, `sceneSignal`, `sceneUpdate`, and
   `sceneUnload`. Each has a flat same-stem `.settings` and `.events` pair.
-- `external-events.settings` owns an External Events resource below
-  `scenes/<Scene>/external-events/<External>/`; it has the same four flat
-  lifecycle function pairs, and the physical owner path supplies its scene
-  context.
+- `scenes/<Scene>/external-events/<Fragment>.events` is a plain event fragment.
+  The filename supplies its name and its location supplies the scene. It has no
+  settings, parameters or lifecycle functions; its Link caller supplies scope.
 - A dedicated `<Function>.settings` owns every extension, prefab, or behavior
   function body. Its sibling `<Function>.events` uses the same stem; editor
   grouping is the `folder` array in the settings file.
 
-Every managed `.events` file is a function body and must have a same-stem
-`.settings` file in the same `functions/` directory. An orphan `.events` file
-is invalid and is never treated as an implicit function.
+A body in `functions/` must have a same-stem `.settings` file. A direct
+`external-events/*.events` fragment stands alone, including when empty or unused.
+Do not create child directories, settings or manifests for fragments.
 
 Read `.gdevelop/instructions-catalog.json` before writing instructions. It is
 regenerated on project save and is read-only. Search it narrowly instead of
@@ -266,8 +267,9 @@ link external "Shared Combat"
 link scene "Base Level"
 ```
 
-Links cannot own locals, actions, or children. Never use `link` in a function
-body. Do not create direct or indirect link cycles.
+Links cannot own locals, actions, or children. Use them in scene lifecycle
+bodies and linked fragments, not in extension, prefab or behavior functions.
+Do not create direct or indirect link cycles.
 
 ## JavaScript
 
@@ -316,10 +318,13 @@ explicitly permitted.
   in `sceneUpdate`.
 - `sceneUnload` is terminal and synchronous. Never author awaited/future-frame
   actions, deferred signal emission, or scene-stack transitions there.
-- A `link scene` or `link external` resolves the target's same lifecycle
-  function. An empty target body is a valid no-op.
-- Guard every scene/external-sheet action with an effective condition in its
-  event or an ancestor. Never create an unconditional every-frame action.
+- A `link scene` resolves the target scene's matching lifecycle function.
+  A `link external` expands the same fragment body at the call site regardless
+  of lifecycle, inheriting parent conditions, picked objects, local variables
+  and lifecycle restrictions. An empty body is a valid no-op.
+- Actions executed in sceneUpdate need an effective condition in the event or
+  an ancestor, including an ancestor of the Link. Inspect callers before judging
+  a fragment in isolation; it does not execute every frame by itself.
 - Treat object-targeting actions as applying to the current picked set. Multiple
   picked instances are valid when the gameplay intends to mutate them all; use
   `for each Object` or a deterministic selector only when each instance must be

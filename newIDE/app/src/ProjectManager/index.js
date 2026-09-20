@@ -2425,6 +2425,7 @@ const ProjectManager = React.forwardRef<Props, ProjectManagerInterface>(
         selectedItems.every(item => {
           const rootId = item.content.getRootId();
           return (
+            !(item.content instanceof ExternalEventsTreeViewItemContent) &&
             // Project and game settings children `getRootId` return an empty string.
             rootId.length > 0 &&
             // Shortcut rows are not owning project items.

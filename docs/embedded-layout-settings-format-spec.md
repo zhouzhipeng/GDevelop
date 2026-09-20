@@ -1,6 +1,15 @@
 # Embedded layout settings and flattened source paths
 
-- **Status:** Approved; implementation contract for version 5
+
+> Version 6 amendment (2026-09-20): embedded layouts and real function pairs
+> retain this schema. External Events are now single
+> `scenes/<Scene>/external-events/<Fragment>.events` files without settings,
+> functions, order or manifests. Production accepts version 6 only; settings
+> catalog version 3 adds `eventFileKinds`. Version 4/5 migration procedures below
+> are historical, not a compatibility reader. See
+> [external-events-snippets-spec.md](external-events-snippets-spec.md).
+
+- **Status:** Approved embedded-layout contract, retained in version 6
 - **Target multi-file format:** 5
 - **Layout schema version:** 1, unchanged
 - **Primary implementation:** `newIDE/app/src/ProjectsStorage`
@@ -257,11 +266,7 @@ scenes/
       sceneUnload.settings
       sceneUnload.events
     external-events/
-      SharedCombat/
-        external-events.settings
-        functions/
-          sceneUpdate.settings
-          sceneUpdate.events
+      SharedCombat.events
     external-layout/
       BonusRoom.settings
 extensions/
@@ -289,7 +294,7 @@ extensions/
 
 An external event and external layout with the same canonical name may coexist
 because they belong to independent `external-events/` and `external-layout/`
-namespaces. Their names and project-wide order sequences remain independent.
+namespaces. Their name namespaces remain independent. Only external layouts retain an order field; fragments sort by name.
 
 ### 7.2 Flattening rules
 
@@ -306,8 +311,8 @@ All function owners use one sibling pair:
 ```
 
 This applies uniformly to project extension functions, prefab functions,
-behavior functions, scene lifecycle functions, and External Events lifecycle
-functions. The old per-function directory and generic `function.settings`
+behavior functions and scene lifecycle functions. External Events are settings-free
+event fragments. The old per-function directory and generic `function.settings`
 filename are retired. The settings and events filenames have the same encoded
 stem; the settings `name` must match that decoded identity, and the event path
 is derived without an `events` URI field.
@@ -717,10 +722,9 @@ scene context.
 
 ### 12.4 Relationship to External Events
 
-`external-events.settings` and its lifecycle function `.events` files are
-unchanged. External Events and external layouts remain independent kinds with
-independent names and global order sequences. When both use the same managed
-folder, the `functions/` child belongs exclusively to External Events.
+External Events use a single `external-events/<Fragment>.events` file. External
+layouts use their own `.settings` file with embedded layout data. Neither kind
+owns the other; a same-named pair requires no shared directory or manifest.
 
 ## 13. Events and other settings sources
 
@@ -729,11 +733,11 @@ remain unchanged, but their physical function pair is flattened:
 
 - scene lifecycle bodies use `functions/<Lifecycle>.settings` and
   `functions/<Lifecycle>.events`;
-- External Events lifecycle bodies remain below their
-  `external-events.settings` owner with the same flat function pair;
+- External Events use standalone `external-events/<Fragment>.events` bodies;
 - extension, prefab, and behavior function bodies remain sibling `.events`
   files beside `<Function>.settings`;
-- event identity, signature, phase role, and grouping remain in settings;
+- real function identity, signature, phase role, and grouping remain in settings;
+  fragment identity comes from its filename and it inherits the Link caller scope;
 - compiled event arrays exist only in the temporary legacy projection.
 
 Every function settings file removes its `events` URI. The loader derives the
@@ -953,7 +957,8 @@ object source paths are preserved. Unrecognized files are never removed.
 
 ### 17.1 Production version policy
 
-The production multi-file reader and writer support format version 5 only.
+The production multi-file reader and writer now support format version 6 only.
+The version 5 rollout in this section is historical.
 Implementation removes `LEGACY_MULTI_FILE_FORMAT_VERSION`, all version 3/4
 source discovery branches, all standalone `.layout` loading branches, and all
 automatic folder-project migration behavior before the refactor is considered

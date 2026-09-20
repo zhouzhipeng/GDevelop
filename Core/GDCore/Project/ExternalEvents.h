@@ -9,7 +9,7 @@
 #include <memory>
 #include <vector>
 
-#include "GDCore/Project/SceneLifecycleEventsFunctions.h"
+#include "GDCore/Events/EventsList.h"
 #include "GDCore/String.h"
 namespace gd {
 class BaseEvent;
@@ -24,7 +24,7 @@ class SerializerElement;
 namespace gd {
 
 /**
- * \brief Contains a list of events not directly linked to a layout.
+ * \brief A scene-owned event fragment expanded at each Link event.
  *
  * \ingroup PlatformDefinition
  */
@@ -68,38 +68,17 @@ class GD_CORE_API ExternalEvents {
   };
 
   /**
-   * \brief Get the per-frame events.
-   *
-   * \note This is a compatibility alias for the sceneUpdate lifecycle
-   * function body. Use GetLifecycleEventsFunctions() for complete traversal.
+   * \brief Get the fragment's events. Execution context comes from the Link.
    */
   virtual const gd::EventsList& GetEvents() const {
-    return lifecycleEventsFunctions.GetSceneUpdateFunction().GetEvents();
+    return events;
   }
 
   /**
-   * \brief Get the per-frame events.
-   *
-   * \note This is a compatibility alias for the sceneUpdate lifecycle
-   * function body. Use GetLifecycleEventsFunctions() for complete traversal.
+   * \brief Get the fragment's events. Execution context comes from the Link.
    */
   virtual gd::EventsList& GetEvents() {
-    return lifecycleEventsFunctions.GetSceneUpdateFunction().GetEvents();
-  }
-
-  /**
-   * \brief Get all the fixed lifecycle functions.
-   */
-  virtual const gd::SceneLifecycleEventsFunctions&
-  GetLifecycleEventsFunctions() const {
-    return lifecycleEventsFunctions;
-  }
-
-  /**
-   * \brief Get all the fixed lifecycle functions.
-   */
-  virtual gd::SceneLifecycleEventsFunctions& GetLifecycleEventsFunctions() {
-    return lifecycleEventsFunctions;
+    return events;
   }
 
   /**
@@ -116,7 +95,7 @@ class GD_CORE_API ExternalEvents {
  private:
   gd::String name;
   gd::String associatedScene;
-  gd::SceneLifecycleEventsFunctions lifecycleEventsFunctions;
+  gd::EventsList events;
 
   /**
    * Initialize from another ExternalEvents. Used by copy-ctor and assign-op.

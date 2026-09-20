@@ -2,7 +2,7 @@
 
 ## A Minimal AI-Friendly DSL for GDevelop Events JSON and Functions
 
-**Status:** IfDo syntax contract used by multi-file format version 5
+**Status:** IfDo syntax contract used by multi-file format version 6
 **Canonical source filename:** `xx.events`
 
 **File extension:** `.events`
@@ -10,17 +10,18 @@
 **Encoding:** UTF-8
 **Target:** GDevelop scene event sheets, external event sheets, and extension functions
 
-Version 5 stores every function body as the same-stem sibling of its settings
-owner: `functions/<Function>.settings` and
-`functions/<Function>.events`. The settings file does not contain an events
-URI. Logical grouping is the settings `folder` value and never adds path
-segments. Any nested `functions/<Function>/function.settings` example later in
-this document is unsupported v3/v4 path history; it does not change the IfDo
-grammar described here. The controlling physical ownership contract is
+Version 6 stores real functions as same-stem settings/events pairs:
+`functions/<Function>.settings` and `functions/<Function>.events`. Function
+settings contain metadata, never an events URI. Logical grouping uses `folder`.
+External Events instead use `scenes/<Scene>/external-events/<Fragment>.events`
+alone. They contain pure IfDo events and have no settings or function signature.
+`link external "Fragment"` inserts the fragment at that position, inheriting
+parent conditions, picked objects, local variables and the caller lifecycle.
+Empty and unreferenced fragments are valid. A `link scene` continues to select
+the caller's lifecycle role in its target scene. See
+[external-events-snippets-spec.md](external-events-snippets-spec.md) and
 [embedded-layout-settings-format-spec.md](embedded-layout-settings-format-spec.md).
-Every managed `.events` source is therefore a function body; an `.events` file
-without its same-stem `.settings` owner is invalid. External lifecycle pairs
-live below `scenes/<Scene>/external-events/<External>/functions/`.
+Older physical examples below are historical; they do not change IfDo grammar.
 
 ---
 

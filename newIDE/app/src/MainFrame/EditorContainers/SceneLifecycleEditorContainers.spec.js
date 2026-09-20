@@ -39,11 +39,11 @@ const makeLifecycleFunctionsEditor = (
   editorsByName: { [string]: any }
 ): any => ({
   getSelectedEditor: jest.fn(() => selectedEditor),
-  getEditor: jest.fn((name) => editorsByName[name] || null),
-  forEachEditor: jest.fn((callback) =>
-    Object.keys(editorsByName).forEach((name) => callback(editorsByName[name]))
+  getEditor: jest.fn(name => editorsByName[name] || null),
+  forEachEditor: jest.fn(callback =>
+    Object.keys(editorsByName).forEach(name => callback(editorsByName[name]))
   ),
-  selectFunctionByName: jest.fn((name) =>
+  selectFunctionByName: jest.fn(name =>
     ['sceneLoad', 'sceneSignal', 'sceneUpdate', 'sceneUnload'].includes(name)
   ),
 });
@@ -121,33 +121,23 @@ describe('scene lifecycle editor containers', () => {
     expect(signalEditor.onEventsModifiedOutsideEditor).not.toHaveBeenCalled();
   });
 
-  it('routes external-events changes to the matching lifecycle function', () => {
+  it('routes external-events changes to its single fragment editor', () => {
     const externalEvents = ({}: any);
     const container: any = new ExternalEventsEditorContainer(({}: any));
-    const loadEditor = makeEditor('load-selection');
-    const unloadEditor = makeEditor('unload-selection');
-    container.lifecycleFunctionsEditor = makeLifecycleFunctionsEditor(
-      unloadEditor,
-      {
-        sceneLoad: loadEditor,
-        sceneUnload: unloadEditor,
-      }
-    );
+    const editor = makeEditor('fragment-selection');
+    container.eventsEditor = editor;
     container.getExternalEvents = () => externalEvents;
-
-    expect(container.getEditorSelectionSnapshot()).toBe('unload-selection');
-
+    expect(container.getEditorSelectionSnapshot()).toBe('fragment-selection');
     const changedIds = new Set<string>(['external-event']);
     container.onSceneEventsModifiedOutsideEditor({
       scene: ({}: any),
       externalEvents,
-      lifecycleFunctionName: 'sceneLoad',
       newOrChangedAiGeneratedEventIds: changedIds,
     });
-
-    expect(loadEditor.onEventsModifiedOutsideEditor).toHaveBeenCalledWith({
+    expect(editor.onEventsModifiedOutsideEditor).toHaveBeenCalledWith({
       newOrChangedAiGeneratedEventIds: changedIds,
     });
-    expect(unloadEditor.onEventsModifiedOutsideEditor).not.toHaveBeenCalled();
+    expect(container.lifecycleFunctionsEditor).toBeUndefined();
+    expect(container.selectLifecycleFunctionByName).toBeUndefined();
   });
 });

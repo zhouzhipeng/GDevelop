@@ -69,6 +69,11 @@ do not create new compatibility blocks.
 
 ## Context globals
 
+External fragment blocks live in `scenes/<Scene>/external-events/<Fragment>.events`.
+They inherit the caller's scene/function context, including `eventsFunctionContext`;
+this does not give the fragment a signature or parameter declarations. Use signal
+parameters only in fragments linked from a compatible signal caller.
+
 `runtimeScene` exists in every JavaScript event. In a scene or linked external
 events file, its generated type knows that scene's object names and layers.
 
@@ -77,8 +82,9 @@ type comes from the named object or object group in the current scene. Do not
 use `objects` without that directive, and never assume the array contains only
 one element unless event picking proves it.
 
-`eventsFunctionContext` exists only inside extension, prefab, or behavior
-function `.events` files. Do not use it in scene or external events.
+`eventsFunctionContext` is available in scene lifecycle, extension, prefab and
+behavior function bodies and their linked fragments. Its arguments are those of
+the real caller; fragments do not introduce arguments of their own.
 
 Do not invent ambient globals. If a name is not present in the generated
 declarations for that context, it is unavailable.

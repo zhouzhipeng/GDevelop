@@ -1542,20 +1542,16 @@ export const findProjectEvents = (project: gdProject, args: Object): Object => {
     if (sceneName && externalEvents.getAssociatedLayout() !== sceneName) {
       continue;
     }
-    sceneLifecycleFunctionDefinitions.forEach(({ name: role }) => {
-      if (lifecycleFunctionName && lifecycleFunctionName !== role) return;
-      findEventsInEventsList({
-        eventsList: getSceneLifecycleEvents(externalEvents, role),
-        args,
-        owner: {
-          scope: 'external-events',
-          sceneName: externalEvents.getAssociatedLayout(),
-          externalEventsName: externalEvents.getName(),
-          lifecycleFunctionName: role,
-        },
-        defaultIncludeSerialized: false,
-      }).forEach(match => matches.push(match));
-    });
+    findEventsInEventsList({
+      eventsList: externalEvents.getEvents(),
+      args,
+      owner: {
+        scope: 'external-events',
+        sceneName: externalEvents.getAssociatedLayout(),
+        externalEventsName: externalEvents.getName(),
+      },
+      defaultIncludeSerialized: false,
+    }).forEach(match => matches.push(match));
   }
 
   const extensionName =

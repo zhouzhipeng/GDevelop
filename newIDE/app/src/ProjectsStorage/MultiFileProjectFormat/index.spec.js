@@ -603,15 +603,13 @@ describe('GDevelop multi-file project format', () => {
     );
     expect(files['game://externals/external.settings']).toBeUndefined();
     expect(
-      files[
-        'game://scenes/Main/external-events/Shared%20Combat/functions/sceneUpdate.events'
-      ]
+      files['game://scenes/Main/external-events/Shared%20Combat.events']
     ).toContain('@event');
     expect(
       files[
         'game://scenes/Main/external-events/Shared%20Combat/external-events.settings'
       ]
-    ).toContain('kind = "externalEvents"');
+    ).toBeUndefined();
     expect(
       files['game://scenes/Main/external-layout/Shared%20Combat.settings']
     ).toContain('[layout]');
@@ -667,7 +665,7 @@ describe('GDevelop multi-file project format', () => {
       });
   });
 
-  test('round-trips all scene and External Events lifecycle functions through fixed directories', () => {
+  test('round-trips scene lifecycle functions alongside role-neutral external fragments', () => {
     const project = JSON.parse(JSON.stringify(projectFixture));
     project.layouts[0].sceneLifecycleFunctions = [
       'sceneLoad',
@@ -678,25 +676,11 @@ describe('GDevelop multi-file project format', () => {
     project.layouts[0].sceneLoadEvents = [standardEvent()];
     project.layouts[0].sceneSignalEvents = [standardEvent()];
     project.layouts[0].sceneUnloadEvents = [standardEvent()];
-    project.externalEvents[0].sceneLifecycleFunctions = [
-      'sceneLoad',
-      'sceneSignal',
-      'sceneUpdate',
-      'sceneUnload',
-    ];
-    project.externalEvents[0].sceneLoadEvents = [standardEvent()];
-    project.externalEvents[0].sceneSignalEvents = [standardEvent()];
-    project.externalEvents[0].sceneUnloadEvents = [standardEvent()];
 
     const files = decomposeLegacyProjectToFiles(project);
     expect(files['game://scenes/Main/scene.settings']).not.toContain(
       'sceneLifecycleFunctions'
     );
-    expect(
-      files[
-        'game://scenes/Main/external-events/Shared%20Combat/external-events.settings'
-      ]
-    ).not.toContain('sceneLifecycleFunctions');
     for (const role of [
       'sceneLoad',
       'sceneSignal',
@@ -709,11 +693,6 @@ describe('GDevelop multi-file project format', () => {
       expect(files[`game://scenes/Main/functions/${role}.events`]).toContain(
         '@event'
       );
-      expect(
-        files[
-          `game://scenes/Main/external-events/Shared%20Combat/functions/${role}.settings`
-        ]
-      ).toContain(`lifecycleRole = "${role}"`);
     }
     expect(
       files['game://scenes/Main/functions/sceneSignal.settings']
@@ -722,12 +701,6 @@ describe('GDevelop multi-file project format', () => {
     files['game://scenes/Main/scene.settings'] = files[
       'game://scenes/Main/scene.settings'
     ].replace(
-      'order = 0',
-      'order = 0\nsceneLifecycleFunctions = [ "sceneUpdate" ]'
-    );
-    const externalEventsSettingsUri =
-      'game://scenes/Main/external-events/Shared%20Combat/external-events.settings';
-    files[externalEventsSettingsUri] = files[externalEventsSettingsUri].replace(
       'order = 0',
       'order = 0\nsceneLifecycleFunctions = [ "sceneUpdate" ]'
     );
@@ -740,7 +713,7 @@ describe('GDevelop multi-file project format', () => {
     ]);
     expect(
       roundTrippedProject.externalEvents[0].sceneLifecycleFunctions
-    ).toEqual(['sceneLoad', 'sceneSignal', 'sceneUpdate', 'sceneUnload']);
+    ).toBeUndefined();
     expect(areLegacyProjectsEquivalent(project, roundTrippedProject)).toBe(
       true
     );
@@ -2287,7 +2260,7 @@ objects = [ "Player" ]
     );
   });
 
-  test('derives external ownership from scene settings and enforces global order', () => {
+  test('derives external ownership from paths and preserves empty unreferenced fragments', () => {
     const project = JSON.parse(JSON.stringify(projectFixture));
     project.layouts.push({
       ...JSON.parse(JSON.stringify(project.layouts[0])),
@@ -2312,14 +2285,12 @@ objects = [ "Player" ]
       { name: 'Secondary Logic', associatedLayout: 'Secondary' },
     ]);
 
-    const secondarySettingsUri =
-      'game://scenes/Secondary/external-events/Secondary%20Logic/external-events.settings';
-    files[secondarySettingsUri] = files[secondarySettingsUri].replace(
-      'order = 1',
-      'order = 3'
-    );
-    expect(() => composeLegacyProjectFromFiles(files)).toThrow(
-      expect.objectContaining({ code: 'MULTIFILE_INVALID_SCHEMA' })
+    expect(
+      files['game://scenes/Secondary/external-events/Secondary%20Logic.events']
+    ).toBeDefined();
+    const reordered = Object.fromEntries(Object.entries(files).reverse());
+    expect(composeLegacyProjectFromFiles(reordered).externalEvents).toEqual(
+      composeLegacyProjectFromFiles(files).externalEvents
     );
   });
 
@@ -2331,12 +2302,12 @@ objects = [ "Player" ]
       filesWithLinkMetadata[ownerSettingsUri]
     }linkedScene = "Main"\n`;
     expect(() => composeLegacyProjectFromFiles(filesWithLinkMetadata)).toThrow(
-      expect.objectContaining({ code: 'MULTIFILE_INVALID_LOCAL_SETTINGS' })
+      expect.objectContaining({ code: 'MULTIFILE_INVALID_EXTERNAL_SOURCE' })
     );
 
     const filesWithMovedSource = decomposeLegacyProjectToFiles(projectFixture);
     const canonicalUri =
-      'game://scenes/Main/external-events/Shared%20Combat/functions/sceneUpdate.events';
+      'game://scenes/Main/external-events/Shared%20Combat.events';
     const movedUri = 'game://scenes/Main/Shared%20Combat.events';
     filesWithMovedSource[movedUri] = filesWithMovedSource[canonicalUri];
     delete filesWithMovedSource[canonicalUri];
@@ -2349,12 +2320,9 @@ objects = [ "Player" ]
     const filesWithRetiredExternalPath = decomposeLegacyProjectToFiles(
       projectFixture
     );
-    const canonicalOwnerUri =
-      'game://scenes/Main/external-events/Shared%20Combat/external-events.settings';
     const retiredOwnerUri =
       'game://scenes/Main/externals/Shared%20Combat/external-events.settings';
-    filesWithRetiredExternalPath[retiredOwnerUri] =
-      filesWithRetiredExternalPath[canonicalOwnerUri];
+    filesWithRetiredExternalPath[retiredOwnerUri] = 'kind = "externalEvents"';
     Object.keys(filesWithRetiredExternalPath)
       .filter(uri => uri.includes('/external-events/Shared%20Combat/'))
       .forEach(uri => delete filesWithRetiredExternalPath[uri]);
@@ -2369,7 +2337,7 @@ objects = [ "Player" ]
       'game://scenes/Main/external-events/Shared%20Combat/functions/sceneLoad.events'
     ] = '';
     expect(() => composeLegacyProjectFromFiles(filesWithOrphanEvents)).toThrow(
-      expect.objectContaining({ code: 'MULTIFILE_ORPHAN_EVENTS' })
+      expect.objectContaining({ code: 'MULTIFILE_INVALID_EXTERNAL_SOURCE' })
     );
   });
 
@@ -2565,5 +2533,59 @@ objects = [ "Player" ]
         'game://scenes/Main/external-layout/Duplicate.settings'
       ]
     ).toContain(project.layouts[0].instances[0].persistentUuid);
+  });
+});
+
+describe('External event fragment source identity', () => {
+  test('round-trips encoded names and sorts independent of file enumeration', () => {
+    const project = JSON.parse(JSON.stringify(projectFixture));
+    const names = ['中文 片段', '100%', 'CON', 'ending.', 'Z', 'A'];
+    project.externalEvents = names.map(name => ({
+      name,
+      associatedLayout: 'Main',
+      events: [],
+    }));
+    const files = decomposeLegacyProjectToFiles(project);
+    const fragmentUris = Object.keys(files).filter(uri =>
+      uri.includes('/external-events/')
+    );
+    expect(fragmentUris).toHaveLength(names.length);
+    names.forEach(name =>
+      expect(fragmentUris).toContain(
+        `game://scenes/Main/external-events/${encodeManagedName(
+          `${name}.events`
+        )}`
+      )
+    );
+    const reversed = Object.fromEntries(Object.entries(files).reverse());
+    const result = composeLegacyProjectFromFiles(reversed);
+    expect(result.externalEvents.map(fragment => fragment.name)).toEqual(
+      names.slice().sort()
+    );
+    expect(areLegacyProjectsEquivalent(project, result)).toBe(true);
+  });
+
+  test.each([['Same', 'same'], ['é', 'e\u0301']])(
+    'rejects ambiguous identities %s and %s',
+    (left, right) => {
+      const project = JSON.parse(JSON.stringify(projectFixture));
+      project.externalEvents = [left, right].map(name => ({
+        name,
+        associatedLayout: 'Main',
+        events: [],
+      }));
+      expect(() => decomposeLegacyProjectToFiles(project)).toThrow(
+        /NFC normalized.*unique/i
+      );
+    }
+  );
+
+  test('rejects the retired format version instead of reading it as fragments', () => {
+    const files = decomposeLegacyProjectToFiles(projectFixture);
+    files[MULTI_FILE_ENTRY_URI] = files[MULTI_FILE_ENTRY_URI].replace(
+      'combinedSettingsFormatVersion = 6',
+      'combinedSettingsFormatVersion = 5'
+    );
+    expect(() => composeLegacyProjectFromFiles(files)).toThrow();
   });
 });

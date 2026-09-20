@@ -16,7 +16,7 @@ const gd: libGDevelop = global.gd;
 
 const baseSettingsCatalog = () => ({
   format: 'gdevelop-settings-catalog',
-  formatVersion: 2,
+  formatVersion: 3,
   project: { name: 'Test', uuid: 'test' },
   authoring: { rules: [] },
   layoutAuthoring: {
@@ -27,6 +27,7 @@ const baseSettingsCatalog = () => ({
   layoutTables: [],
   layoutContexts: [],
   behaviorOverrideSchemas: [],
+  eventFileKinds: [],
   counts: {},
 });
 
@@ -540,28 +541,23 @@ describe('project source catalogs', () => {
       ).requiredFields
     ).not.toContain('events');
     expect(
-      catalog.fileKinds.find(fileKind => fileKind.kind === 'external-events')
-    ).toEqual(
-      expect.objectContaining({
-        path:
-          'scenes/<Scene>/external-events/<ExternalEvents>/external-events.settings',
-        forbiddenFields: expect.arrayContaining(['sceneLifecycleFunctions']),
-      })
-    );
-    expect(
-      catalog.fileKinds.find(fileKind => fileKind.kind === 'scene')
-        .forbiddenFields
-    ).toContain('sceneLifecycleFunctions');
+      catalog.fileKinds.find(kind => kind.kind === 'external-events')
+    ).toBeUndefined();
     expect(
       catalog.fileKinds.find(
-        fileKind => fileKind.kind === 'external-lifecycle-function'
+        kind => kind.kind === 'external-lifecycle-function'
       )
-    ).toEqual(
+    ).toBeUndefined();
+    expect(catalog.eventFileKinds).toContainEqual(
       expect.objectContaining({
-        path:
-          'scenes/<Scene>/external-events/<ExternalEvents>/functions/<Role>.settings',
+        kind: 'external-events',
+        path: 'scenes/<Scene>/external-events/<Name>.events',
+        settingsRequired: false,
       })
     );
+    expect(
+      catalog.fileKinds.find(kind => kind.kind === 'scene').forbiddenFields
+    ).toContain('sceneLifecycleFunctions');
     expect(
       catalog.fileKinds
         .find(fileKind => fileKind.kind === 'function')

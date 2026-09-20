@@ -1200,12 +1200,12 @@ const safeDecode = (value: string): string => {
 };
 
 const getSourceContext = (fileUri: string, model: Object): Object => {
-  const externalLifecycleMatch = /^game:\/\/scenes\/([^/]+)\/external-events\/([^/]+)\/functions\/(sceneLoad|sceneSignal|sceneUpdate|sceneUnload)\.events$/.exec(
+  const externalFragmentMatch = /^game:\/\/scenes\/([^/]+)\/external-events\/([^/]+)\.events$/.exec(
     fileUri
   );
-  if (externalLifecycleMatch) {
-    const physicalSceneName = safeDecode(externalLifecycleMatch[1]);
-    const externalName = safeDecode(externalLifecycleMatch[2]);
+  if (externalFragmentMatch) {
+    const physicalSceneName = safeDecode(externalFragmentMatch[1]);
+    const externalName = safeDecode(externalFragmentMatch[2]);
     const external = (model.externalEvents || []).find(
       external =>
         external.name === externalName &&
@@ -1216,9 +1216,9 @@ const getSourceContext = (fileUri: string, model: Object): Object => {
       : null;
     return {
       sceneName: scene ? scene.name : null,
-      isFunction: true,
+      // A fragment inherits the linking scene/function context.
+      hasFunctionContext: true,
       external: true,
-      lifecycleFunctionName: externalLifecycleMatch[3],
     };
   }
   const sceneLifecycleMatch = /^game:\/\/scenes\/([^/]+)\/functions\/(sceneLoad|sceneSignal|sceneUpdate|sceneUnload)\.events$/.exec(
@@ -1229,7 +1229,7 @@ const getSourceContext = (fileUri: string, model: Object): Object => {
     const scene = model.scenes.find(scene => scene.name === physicalName);
     return {
       sceneName: scene ? scene.name : null,
-      isFunction: true,
+      hasFunctionContext: true,
       lifecycleFunctionName: sceneLifecycleMatch[2],
     };
   }
@@ -1237,11 +1237,11 @@ const getSourceContext = (fileUri: string, model: Object): Object => {
   if (sceneMatch) {
     const physicalName = safeDecode(sceneMatch[1]);
     const scene = model.scenes.find(scene => scene.name === physicalName);
-    return { sceneName: scene ? scene.name : null, isFunction: false };
+    return { sceneName: scene ? scene.name : null, hasFunctionContext: false };
   }
   return {
     sceneName: null,
-    isFunction: /\/functions\//.test(fileUri),
+    hasFunctionContext: /\/functions\//.test(fileUri),
   };
 };
 
@@ -1299,13 +1299,13 @@ export const collectSerializedProjectJavaScriptBlocks = (
     const sceneName = encodeManagedName(
       String(external.associatedLayout || '')
     );
-    const externalName = encodeManagedName(String(external.name || ''));
-    lifecycleSources.forEach(([role, legacyField]) =>
-      collectEventsJavaScriptBlocks(
-        external[legacyField],
-        `game://scenes/${sceneName}/external-events/${externalName}/functions/${role}.events`,
-        blocks
-      )
+    const externalFileName = encodeManagedName(
+      `${String(external.name || '')}.events`
+    );
+    collectEventsJavaScriptBlocks(
+      external.events,
+      `game://scenes/${sceneName}/external-events/${externalFileName}`,
+      blocks
     );
   });
   (serializedProject.eventsFunctionsExtensions || []).forEach(extension => {
@@ -1401,7 +1401,7 @@ const makeContextDeclaration = (block: Object, model: Object): string => {
         : 'declare const objects: gdjs.RuntimeObject[];'
     );
   }
-  if (context.isFunction) {
+  if (context.hasFunctionContext) {
     declarations.push(
       'declare const eventsFunctionContext: gdjs.EventsFunctionContext;'
     );

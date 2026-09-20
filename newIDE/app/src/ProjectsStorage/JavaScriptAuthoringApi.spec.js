@@ -388,8 +388,7 @@ const value = 1;
       collectSerializedProjectJavaScriptBlocks(projectWithExternal)
     ).toEqual([
       expect.objectContaining({
-        fileUri:
-          'game://scenes/Main/external-events/Shared%20Combat/functions/sceneUpdate.events',
+        fileUri: 'game://scenes/Main/external-events/Shared%20Combat.events',
       }),
     ]);
     expect(
@@ -400,11 +399,33 @@ const value = 1;
       expect.arrayContaining([
         expect.objectContaining({
           code: 'JS_API_TYPE_MISMATCH',
-          fileUri:
-            'game://scenes/Main/external-events/Shared%20Combat/functions/sceneUpdate.events',
+          fileUri: 'game://scenes/Main/external-events/Shared%20Combat.events',
         }),
       ])
     );
+  });
+
+  test('exposes the caller function context to external fragment JavaScript', () => {
+    const project = {
+      ...serializedProject,
+      externalEvents: [
+        {
+          name: 'Signal body',
+          associatedLayout: 'Main',
+          events: [
+            {
+              type: 'BuiltinCommonInstructions::JsCode',
+              useStrict: true,
+              inlineCode:
+                'const name = eventsFunctionContext.getArgument("SignalName");',
+            },
+          ],
+        },
+      ],
+    };
+    expect(
+      validateProjectJavaScriptAuthoring({ serializedProject: project }).errors
+    ).toEqual([]);
   });
 
   test('accepts public project-aware JavaScript in strict blocks', () => {

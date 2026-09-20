@@ -52,12 +52,12 @@ type SceneEventsTarget = {|
   scene: gdLayout,
   owner: gdLayout | gdExternalEvents,
   eventsList: gdEventsList,
-  eventsFunction: gdEventsFunction,
-  lifecycleFunctionName: SceneLifecycleFunctionName,
+  eventsFunction: ?gdEventsFunction,
+  lifecycleFunctionName: ?SceneLifecycleFunctionName,
   ownerKind: 'scene' | 'externalEvents',
   ownerName: string,
   externalEventsName: string | null,
-  functionSettingsUri: string,
+  functionSettingsUri: ?string,
   eventsUri: string,
 |};
 
@@ -138,13 +138,29 @@ const resolveSceneEventsTarget = (
         `External Events "${externalEventsName}" belongs to scene "${associatedSceneName}", not "${sceneName}".`
       );
     }
-    sceneName = associatedSceneName;
-    owner = externalEvents;
-    ownerKind = 'externalEvents';
-    ownerName = externalEventsName;
-    ownerBaseUri = `game://scenes/${encodeManagedName(
-      sceneName
-    )}/external-events/${encodeManagedName(externalEventsName)}`;
+    if (
+      getOptionalString(args, 'lifecycle_function_name') ||
+      getOptionalString(args, 'lifecycleFunctionName')
+    ) {
+      throw new Error(
+        'External event fragments do not have lifecycle functions.'
+      );
+    }
+    const scene = getScene(project, associatedSceneName);
+    return {
+      scene,
+      owner: externalEvents,
+      eventsList: externalEvents.getEvents(),
+      eventsFunction: null,
+      lifecycleFunctionName: null,
+      ownerKind: 'externalEvents',
+      ownerName: externalEventsName,
+      externalEventsName,
+      functionSettingsUri: null,
+      eventsUri: `game://scenes/${encodeManagedName(
+        associatedSceneName
+      )}/external-events/${encodeManagedName(`${externalEventsName}.events`)}`,
+    };
   } else {
     if (!sceneName) throw new Error('Missing scene_name.');
     owner = getScene(project, sceneName);
@@ -158,9 +174,9 @@ const resolveSceneEventsTarget = (
   return {
     scene,
     owner,
-    eventsList: getSceneLifecycleEvents(owner, lifecycleFunctionName),
+    eventsList: getSceneLifecycleEvents(scene, lifecycleFunctionName),
     eventsFunction: getSceneLifecycleEventsFunction(
-      owner,
+      scene,
       lifecycleFunctionName
     ),
     lifecycleFunctionName,
@@ -174,14 +190,18 @@ const resolveSceneEventsTarget = (
 
 const getSceneEventsTargetIdentity = (target: SceneEventsTarget): Object => ({
   sceneName: target.scene.getName(),
-  lifecycleFunctionName: target.lifecycleFunctionName,
-  lifecycleRole: target.lifecycleFunctionName,
+  ...(target.lifecycleFunctionName
+    ? {
+        lifecycleFunctionName: target.lifecycleFunctionName,
+        lifecycleRole: target.lifecycleFunctionName,
+        functionSettingsUri: target.functionSettingsUri,
+      }
+    : {}),
   ownerKind: target.ownerKind,
   ownerName: target.ownerName,
   ...(target.externalEventsName
     ? { externalEventsName: target.externalEventsName }
     : {}),
-  functionSettingsUri: target.functionSettingsUri,
   eventsUri: target.eventsUri,
 });
 

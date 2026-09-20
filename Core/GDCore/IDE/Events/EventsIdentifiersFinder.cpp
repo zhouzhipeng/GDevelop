@@ -241,16 +241,14 @@ void EventsIdentifiersFinder::FindArgumentsInEventsAndDependencies(
              dependenciesAnalyzer.GetExternalEventsDependencies(role)) {
           const auto& externalEvents =
               project.GetExternalEvents(externalEventName);
-          const auto& externalEventsFunction =
-              externalEvents.GetLifecycleEventsFunctions().Get(role);
           auto externalEventsScopedContainers = baseProjectScopedContainers;
           externalEventsScopedContainers.SetScopeExternalEventsName(
               externalEvents.GetName());
           externalEventsScopedContainers.SetScopeSceneLifecycleFunctionRole(
               role);
           externalEventsScopedContainers.AddParameters(
-              externalEventsFunction.GetParameters());
-          eventWorker.Launch(externalEventsFunction.GetEvents(),
+              eventsFunction.GetParameters());
+          eventWorker.Launch(externalEvents.GetEvents(),
                              externalEventsScopedContainers);
         }
         for (const gd::String& sceneName :

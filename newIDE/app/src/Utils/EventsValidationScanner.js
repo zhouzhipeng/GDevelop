@@ -5,10 +5,16 @@ import { getFunctionNameFromType } from '../EventsFunctionsExtensionsLoader';
 import type { EventPath } from './EventPath';
 import { renderInstructionSentenceAsPlainText } from '../EventsSheet/EventsTree/TextRenderer';
 import { getKeyboardKeyDefinition } from './KeyboardKeyNames';
+import {
+  expandEventsForValidation,
+  type EventSourceLocation,
+} from './ExpandEventsForValidation';
+import { sceneLifecycleFunctionDefinitions } from '../SceneContextLifecycleFunctions';
 
 const gd: libGDevelop = global.gd;
 
 export type ValidationErrorType =
+  | 'invalid-link'
   | 'missing-instruction'
   | 'invalid-parameter'
   | 'missing-parameter'
@@ -265,18 +271,28 @@ const buildEventPtrToValidationContextMap = (
 const createValidationWorker = (
   project: gdProject,
   platform: gdPlatform,
-  errors: Array<ValidationError>
+  errors: Array<ValidationError>,
+  sourceLocations?: Map<number, EventSourceLocation>,
+  structuralOnly: boolean = false
 ): gdReadOnlyArbitraryEventsWorkerWithContextJS => {
   const worker = new gd.ReadOnlyArbitraryEventsWorkerWithContextJS();
   worker.setSkipDisabledEvents(true);
 
   let currentEventPath: EventPath = [];
+  let currentSourceLocation: ?EventSourceLocation = null;
   let currentStandardEventHasEnabledConditions: ?boolean = null;
   let currentStandardEventFirstEnabledActionPtr: ?number = null;
   let eventPtrToValidationContextMap: Map<
     number,
     EventValidationContext
   > = new Map();
+
+  const getCurrentLocation = (containers: gdProjectScopedContainers) => ({
+    ...getValidationErrorLocationInformationFromProjectScopedContainers(
+      containers
+    ),
+    ...(currentSourceLocation || {}),
+  });
 
   // $FlowFixMe[incompatible-type] - overriding C++ method:
   // $FlowFixMe[cannot-write]
@@ -291,9 +307,14 @@ const createValidationWorker = (
   // $FlowFixMe[incompatible-type] - overriding C++ method:
   // $FlowFixMe[cannot-write]
   worker.doVisitEvent = (event: gdBaseEvent) => {
+    currentSourceLocation = sourceLocations
+      ? sourceLocations.get(event.ptr)
+      : null;
     const validationContext = eventPtrToValidationContextMap.get(event.ptr);
     if (validationContext) {
-      currentEventPath = validationContext.eventPath;
+      currentEventPath = currentSourceLocation
+        ? currentSourceLocation.eventPath
+        : validationContext.eventPath;
       currentStandardEventHasEnabledConditions =
         validationContext.standardEventHasEnabledConditions;
       currentStandardEventFirstEnabledActionPtr =
@@ -330,12 +351,12 @@ const createValidationWorker = (
         instructionType: type,
         instructionSentence: type,
         eventPath: [...currentEventPath],
-        ...getValidationErrorLocationInformationFromProjectScopedContainers(
-          projectScopedContainers
-        ),
+        ...getCurrentLocation(projectScopedContainers),
       });
       return;
     }
+
+    if (structuralOnly) return;
 
     const lifecycleFunctionName = projectScopedContainers.getScopeSceneLifecycleFunctionName();
     if (lifecycleFunctionName) {
@@ -343,9 +364,7 @@ const createValidationWorker = (
         instruction,
         metadata
       );
-      const locationInformation = getValidationErrorLocationInformationFromProjectScopedContainers(
-        projectScopedContainers
-      );
+      const locationInformation = getCurrentLocation(projectScopedContainers);
       const addLifecycleDiagnostic = (
         diagnosticCode: string,
         diagnosticMessage: string,
@@ -432,9 +451,7 @@ const createValidationWorker = (
           metadata
         ),
         eventPath: [...currentEventPath],
-        ...getValidationErrorLocationInformationFromProjectScopedContainers(
-          projectScopedContainers
-        ),
+        ...getCurrentLocation(projectScopedContainers),
       });
     }
 
@@ -458,9 +475,7 @@ const createValidationWorker = (
             ? instruction.getParameter(1).getPlainString()
             : '',
         eventPath: [...currentEventPath],
-        ...getValidationErrorLocationInformationFromProjectScopedContainers(
-          projectScopedContainers
-        ),
+        ...getCurrentLocation(projectScopedContainers),
       });
     }
 
@@ -514,9 +529,7 @@ const createValidationWorker = (
             parameterValue: value,
             parameterType,
             eventPath: [...currentEventPath],
-            ...getValidationErrorLocationInformationFromProjectScopedContainers(
-              projectScopedContainers
-            ),
+            ...getCurrentLocation(projectScopedContainers),
           });
           return;
         }
@@ -608,9 +621,7 @@ const createValidationWorker = (
           relatedBehaviorParameterIndex,
           relatedBehaviorParameterValue,
           eventPath: [...currentEventPath],
-          ...getValidationErrorLocationInformationFromProjectScopedContainers(
-            projectScopedContainers
-          ),
+          ...getCurrentLocation(projectScopedContainers),
         });
       }
     });
@@ -626,6 +637,7 @@ export const scanEventsListForValidationErrors = ({
   lifecycleFunction,
   lifecycleFunctionName,
   externalEventsName,
+  referencedFragments,
 }: {|
   project: gdProject,
   eventsList: gdEventsList,
@@ -633,6 +645,7 @@ export const scanEventsListForValidationErrors = ({
   lifecycleFunction?: ?gdEventsFunction,
   lifecycleFunctionName?: ?string,
   externalEventsName?: ?string,
+  referencedFragments?: Set<string>,
 |}): Array<ValidationError> => {
   const errors: Array<ValidationError> = [];
   const platform = gd.JsPlatform.get();
@@ -655,12 +668,37 @@ export const scanEventsListForValidationErrors = ({
   if (externalEventsName) {
     projectScopedContainers.setScopeExternalEventsName(externalEventsName);
   }
-  const worker = createValidationWorker(project, platform, errors);
-
+  const expansion =
+    layout && lifecycleFunctionName
+      ? expandEventsForValidation({
+          project,
+          events: eventsList,
+          sceneName: layout.getName(),
+          lifecycleFunctionName,
+          externalEventsName,
+        })
+      : null;
+  if (expansion) errors.push(...expansion.errors);
+  if (expansion && referencedFragments) {
+    expansion.referencedFragments.forEach(name =>
+      referencedFragments.add(name)
+    );
+  }
+  const worker = createValidationWorker(
+    project,
+    platform,
+    errors,
+    expansion ? expansion.locations : undefined,
+    !!externalEventsName && !lifecycleFunctionName
+  );
   try {
-    worker.launch(eventsList, projectScopedContainers);
+    worker.launch(
+      expansion ? expansion.events : eventsList,
+      projectScopedContainers
+    );
   } finally {
     worker.delete();
+    if (expansion) expansion.events.delete();
   }
 
   return errors;
@@ -677,12 +715,47 @@ export const scanProjectForValidationErrors = (
   const errors: Array<ValidationError> = [];
   const platform = gd.JsPlatform.get();
 
+  const referencedFragments = new Set<string>();
   // Create a single worker for the entire scan. The worker derives
   // location info from ProjectScopedContainers set by the C++ traversal.
   const worker = createValidationWorker(project, platform, errors);
 
-  // Scan all layouts (scenes) and external events via C++ traversal.
-  gd.ProjectBrowserHelper.exposeProjectEventsWithoutExtensions(project, worker);
+  // Validate expanded scene trees so fragments inherit the actual caller scope.
+  mapFor(0, project.getLayoutsCount(), index => {
+    const layout = project.getLayoutAt(index);
+    const functions = layout.getLifecycleEventsFunctions();
+    sceneLifecycleFunctionDefinitions.forEach(({ name }) => {
+      if (!functions.hasByName(name)) return;
+      const lifecycleFunction = functions.getByName(name);
+      errors.push(
+        ...scanEventsListForValidationErrors({
+          project,
+          layout,
+          eventsList: lifecycleFunction.getEvents(),
+          lifecycleFunction,
+          lifecycleFunctionName: name,
+          referencedFragments,
+        })
+      );
+    });
+  });
+  // Also check instruction availability in dormant fragments without inventing
+  // a lifecycle, parent condition or local-variable scope for them.
+  mapFor(0, project.getExternalEventsCount(), index => {
+    const external = project.getExternalEventsAt(index);
+    if (referencedFragments.has(external.getName())) return;
+    const sceneName = external.getAssociatedLayout();
+    errors.push(
+      ...scanEventsListForValidationErrors({
+        project,
+        eventsList: external.getEvents(),
+        externalEventsName: external.getName(),
+        layout: project.hasLayoutNamed(sceneName)
+          ? project.getLayout(sceneName)
+          : null,
+      })
+    );
+  });
 
   // Scan all extension functions (free, behavior, object).
   mapFor(0, project.getEventsFunctionsExtensionsCount(), extensionIndex => {

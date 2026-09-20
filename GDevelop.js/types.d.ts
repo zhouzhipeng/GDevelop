@@ -961,7 +961,6 @@ export class ExternalEvents extends EmscriptenObject {
   getAssociatedLayout(): string;
   setAssociatedLayout(name: string): void;
   getEvents(): EventsList;
-  getLifecycleEventsFunctions(): SceneLifecycleEventsFunctions;
   serializeTo(element: SerializerElement): void;
   unserializeFrom(project: Project, element: SerializerElement): void;
 }

@@ -53,9 +53,9 @@ const styles = {
 };
 
 type Props = {|
-  ownerKind: 'scene' | 'external-events',
+  ownerKind: 'scene',
   ownerName: string,
-  owner: gdLayout | gdExternalEvents,
+  owner: gdLayout,
   renderFunctionEditor: ({|
     lifecycleFunctionName: SceneLifecycleFunctionName,
     isSelected: boolean,
@@ -139,22 +139,16 @@ const getInitialMosaicEditorNodes = (): EditorMosaicNode => ({
   splitPercentage: 20,
 });
 
-const getMosaicPreferenceName = (
-  ownerKind: 'scene' | 'external-events'
-): EditorMosaicName =>
-  ownerKind === 'scene'
-    ? 'scene-lifecycle-functions-editor'
-    : 'external-events-lifecycle-functions-editor';
+const mosaicPreferenceName: EditorMosaicName =
+  'scene-lifecycle-functions-editor';
 
-const getPresentLifecycleFunctionDefinitions = (
-  owner: gdLayout | gdExternalEvents
-) =>
+const getPresentLifecycleFunctionDefinitions = (owner: gdLayout) =>
   sceneLifecycleFunctionDefinitions.filter(definition =>
     hasSceneLifecycleEventsFunction(owner, definition.name)
   );
 
 const getPreferredLifecycleFunctionName = (
-  owner: gdLayout | gdExternalEvents
+  owner: gdLayout
 ): ?SceneLifecycleFunctionName => {
   if (
     hasSceneLifecycleEventsFunction(
@@ -170,7 +164,7 @@ const getPreferredLifecycleFunctionName = (
 };
 
 const getFallbackLifecycleFunctionNameAfterDeletion = (
-  owner: gdLayout | gdExternalEvents,
+  owner: gdLayout,
   deletedName: SceneLifecycleFunctionName
 ): ?SceneLifecycleFunctionName => {
   if (
@@ -302,10 +296,7 @@ const SceneContextLifecycleFunctionsEditor: React.ComponentType<{
         id: `scene-lifecycle-functions-${ownerKind}`,
         name: ownerName,
         searchText: ownerName,
-        thumbnail:
-          ownerKind === 'scene'
-            ? 'res/icons_default/scene_black.svg'
-            : 'res/icons_default/external_events_black.svg',
+        thumbnail: 'res/icons_default/scene_black.svg',
         lifecycleFunctionName: null,
         children: displayedLifecycleFunctionTreeItems,
         // Match the focused Prefab/Behavior owner row rather than an
@@ -681,7 +672,6 @@ const SceneContextLifecycleFunctionsEditor: React.ComponentType<{
         ),
       },
     };
-    const mosaicPreferenceName = getMosaicPreferenceName(ownerKind);
     const savedMosaicNode = getDefaultEditorMosaicNode(mosaicPreferenceName);
     const initialMosaicNode =
       savedMosaicNode &&

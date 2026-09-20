@@ -45,31 +45,32 @@ describe('MCP scene lifecycle event tools', () => {
     );
   });
 
-  it('routes External Events to the lifecycle function under its owning scene', () => {
+  it('routes External Events directly to a fragment without a function identity', () => {
     const externalEvents = project.insertNewExternalEvents('Shared Logic', 0);
     externalEvents.setAssociatedLayout('Main Scene');
     externalEvents
-      .getLifecycleEventsFunctions()
-      .getByName('sceneUnload')
       .getEvents()
       .insertNewEvent(project, 'BuiltinCommonInstructions::Standard', 0);
 
     const result = findSceneEvents(project, {
       external_events_name: 'Shared Logic',
-      lifecycle_function_name: 'sceneUnload',
     });
 
     expect(result.count).toBe(1);
     expect(result.sceneName).toBe('Main Scene');
     expect(result.ownerKind).toBe('externalEvents');
     expect(result.ownerName).toBe('Shared Logic');
-    expect(result.lifecycleFunctionName).toBe('sceneUnload');
+    expect(result.lifecycleFunctionName).toBeUndefined();
     expect(result.eventsUri).toBe(
-      'game://scenes/Main%20Scene/external-events/Shared%20Logic/functions/sceneUnload.events'
+      'game://scenes/Main%20Scene/external-events/Shared%20Logic.events'
     );
-    expect(result.functionSettingsUri).toBe(
-      'game://scenes/Main%20Scene/external-events/Shared%20Logic/functions/sceneUnload.settings'
-    );
+    expect(result.functionSettingsUri).toBeUndefined();
+    expect(() =>
+      findSceneEvents(project, {
+        external_events_name: 'Shared Logic',
+        lifecycle_function_name: 'sceneUnload',
+      })
+    ).toThrow('do not have lifecycle functions');
   });
 
   it('rejects an External Events owner associated with another scene', () => {
