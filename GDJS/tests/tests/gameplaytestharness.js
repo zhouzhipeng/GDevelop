@@ -4,6 +4,9 @@
  * Tests for gdjs.gameplayTests (the gameplay test harness).
  */
 describe('gdjs.gameplayTests', () => {
+  // The in-game editor owns the empty/unknown type and renders it in 3D.
+  // These harness fixtures deliberately exercise the plain base runtime object.
+  gdjs.registerObject('GameplayTestObject', gdjs.RuntimeObject);
   const createSceneData = (name) =>
     /** @type {any} */ ({
       r: 0,
@@ -14,7 +17,7 @@ describe('gdjs.gameplayTests', () => {
       objects: [
         {
           name: 'MyObject',
-          type: '',
+          type: 'GameplayTestObject',
           behaviors: [],
           variables: [],
           effects: [],
@@ -39,7 +42,7 @@ describe('gdjs.gameplayTests', () => {
     const sceneData = createSceneData(name);
     sceneData.objects.push({
       name: 'Player',
-      type: '',
+      type: 'GameplayTestObject',
       behaviors: [
         {
           type: 'PlatformBehavior::PlatformerObjectBehavior',
@@ -107,7 +110,7 @@ describe('gdjs.gameplayTests', () => {
       ],
     },
     objects: {
-      '': [{ name: 'X', functionName: 'getX', kind: 'number' }],
+      GameplayTestObject: [{ name: 'X', functionName: 'getX', kind: 'number' }],
     },
   };
 
@@ -128,11 +131,15 @@ describe('gdjs.gameplayTests', () => {
     const raf = sinon.stub(window, 'requestAnimationFrame').returns(123);
     const cancel = sinon.stub(window, 'cancelAnimationFrame');
     try {
-      const result = await runTestScript(makeRuntimeGame(), `
+      const result = await runTestScript(
+        makeRuntimeGame(),
+        `
         await harness.goToScene('Scene 1');
         await harness.stepFrames(3);
         harness.assert(harness.getSceneName() === 'Scene 1', 'Scene advanced');
-      `, { speedFactor: 1 });
+      `,
+        { speedFactor: 1 }
+      );
       expect(result.status).to.be('passed');
       expect(result.framesExecuted).to.be(4);
       expect(raf.called).to.be(true);
@@ -140,6 +147,42 @@ describe('gdjs.gameplayTests', () => {
     } finally {
       raf.restore();
       cancel.restore();
+    }
+  });
+
+  it('does not leak cleanup release edges into the next test', async () => {
+    const runtimeGame = makeRuntimeGame();
+    const input = runtimeGame.getInputManager();
+    for (const shouldFail of [false, true]) {
+      const result = await runTestScript(
+        runtimeGame,
+        `
+        await harness.goToScene('Scene 1');
+        harness.setKeyPressed('b', true);
+        harness.setMouseButtonPressed(true, 'left');
+        await harness.stepFrames(1);
+        harness.assert(${!shouldFail}, 'Exercise success and failure cleanup');
+      `,
+        { freezeWhenFinished: true }
+      );
+      expect(result.status).to.be(shouldFail ? 'failed' : 'passed');
+      expect(input.anyKeyPressed()).to.be(false);
+      expect(input.anyKeyReleased()).to.be(false);
+      expect(
+        input.isMouseButtonPressed(gdjs.InputManager.MOUSE_LEFT_BUTTON)
+      ).to.be(false);
+      expect(
+        input.isMouseButtonReleased(gdjs.InputManager.MOUSE_LEFT_BUTTON)
+      ).to.be(false);
+      const next = await runTestScript(
+        runtimeGame,
+        `
+        await harness.goToScene('Scene 1');
+        harness.assert(harness.getSceneName() === 'Scene 1', 'Next scene initializes');
+      `,
+        { freezeWhenFinished: true }
+      );
+      expect(next.status).to.be('passed');
     }
   });
 
@@ -535,8 +578,7 @@ describe('gdjs.gameplayTests', () => {
     // The transient empty stack is never recorded: Scene 1 (goToScene)
     // then Scene 2 (the game's change), no '' scene in between.
     const sceneEvents = result.eventLog.filter(
-      (event) =>
-        event.event === 'sceneChanged' || event.event === 'sceneReset'
+      (event) => event.event === 'sceneChanged' || event.event === 'sceneReset'
     );
     expect(sceneEvents.length).to.be(2);
     expect(sceneEvents[0].sceneName).to.be('Scene 1');
@@ -1268,10 +1310,8 @@ describe('gdjs.gameplayTests', () => {
         -50 * inverseWorldScale,
         0
       ).project(threeCamera);
-      const expectedScreenX =
-        ((projectedPoint.x + 1) / 2) * layer.getWidth();
-      const expectedScreenY =
-        ((1 - projectedPoint.y) / 2) * layer.getHeight();
+      const expectedScreenX = ((projectedPoint.x + 1) / 2) * layer.getWidth();
+      const expectedScreenY = ((1 - projectedPoint.y) / 2) * layer.getHeight();
 
       harness.setMousePosition(100, 50, '');
 

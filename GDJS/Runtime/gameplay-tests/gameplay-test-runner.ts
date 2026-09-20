@@ -965,7 +965,10 @@ namespace gdjs {
           let animationFrameId: number | null = null;
           const finish = () => {
             clearTimeout(timeoutId);
-            if (animationFrameId !== null && typeof cancelAnimationFrame !== 'undefined') {
+            if (
+              animationFrameId !== null &&
+              typeof cancelAnimationFrame !== 'undefined'
+            ) {
               cancelAnimationFrame(animationFrameId);
             }
             resolve();
@@ -3284,6 +3287,9 @@ namespace gdjs {
         // Restore everything, whatever happened:
         try {
           harness.releaseAllInputs();
+          // Cleanup must not deliver release edges to the next test's first
+          // scene frame. Do not advance game logic just to drain these inputs.
+          originalOnFrameEnded();
         } catch (error) {
           // Ignore errors during cleanup.
         }

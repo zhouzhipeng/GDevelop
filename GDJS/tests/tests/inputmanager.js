@@ -29,6 +29,20 @@ describe('gdjs.InputManager', () => {
     expect(inputManager.anyKeyPressed()).to.be(false);
   });
 
+  it('releases only held keys and does not replay historical releases', () => {
+    inputManager.onKeyPressed(66);
+    inputManager.onKeyReleased(66);
+    inputManager.onFrameEnded();
+    inputManager.onKeyPressed(82);
+    inputManager.releaseAllPressedKeys();
+    expect(inputManager.wasKeyReleased(66)).to.be(false);
+    expect(inputManager.wasKeyReleased(82)).to.be(true);
+    expect(inputManager.isKeyPressed(82)).to.be(false);
+    inputManager.onFrameEnded();
+    inputManager.releaseAllPressedKeys();
+    expect(inputManager.anyKeyReleased()).to.be(false);
+  });
+
   it('should handle keyboards events', () => {
     expect(inputManager.anyKeyPressed()).to.be(false);
     expect(inputManager.anyKeyReleased()).to.be(false);

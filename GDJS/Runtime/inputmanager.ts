@@ -170,6 +170,7 @@ namespace gdjs {
      */
     releaseAllPressedKeys(): void {
       for (const locationAwareKeyCode in this._pressedKeys.items) {
+        if (!this._pressedKeys.items[locationAwareKeyCode]) continue;
         this._pressedKeys.put(locationAwareKeyCode, false);
         this._justPressedKeys.put(locationAwareKeyCode, false);
         this._releasedKeys.put(locationAwareKeyCode, true);
