@@ -166,6 +166,17 @@
             {
               "name": "prop-types",
               "message": "Don't import anything from prop-types - use Flow/TypeScript types instead."
+            },
+            {
+              "name": "@material-ui/core/Drawer",
+              "message": "Use UI/Drawer so closed drawers cannot block editor input when an exit transition is interrupted."
+            },
+            {
+              "name": "@material-ui/core",
+              "importNames": [
+                "Drawer"
+              ],
+              "message": "Import Drawer from UI/Drawer to preserve the editor input guard."
             }
           ]
         }

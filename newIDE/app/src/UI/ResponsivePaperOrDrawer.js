@@ -2,7 +2,7 @@
 import * as React from 'react';
 import Paper from './Paper';
 import { useResponsiveWindowSize } from './Responsive/ResponsiveWindowMeasurer';
-import Drawer from '@material-ui/core/Drawer';
+import Drawer from './Drawer';
 
 const styles = {
   paper: {

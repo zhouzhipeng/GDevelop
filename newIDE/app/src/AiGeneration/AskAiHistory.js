@@ -1,6 +1,6 @@
 // @flow
 import * as React from 'react';
-import Drawer from '@material-ui/core/Drawer';
+import Drawer from '../UI/Drawer';
 import classNames from 'classnames';
 import { Trans, t } from '@lingui/macro';
 import { type I18n as I18nType } from '@lingui/core';

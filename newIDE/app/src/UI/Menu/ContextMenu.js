@@ -7,7 +7,7 @@ import Menu from '@material-ui/core/Menu';
 import Fade from '@material-ui/core/Fade';
 import MaterialUIMenuImplementation from './MaterialUIMenuImplementation';
 import useForceUpdate from '../../Utils/UseForceUpdate';
-import { Drawer } from '@material-ui/core';
+import Drawer from '../Drawer';
 import { isMobile } from '../../Utils/Platform';
 import { itemAboveBlockingLayerZIndex } from '../../InAppTutorial/BlockingLayerWithHoles';
 import PortalContainerContext from '../PortalContainerContext';

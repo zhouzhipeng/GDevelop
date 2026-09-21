@@ -8,7 +8,7 @@ import {
 } from '../UI/MobileSoftKeyboard';
 import { dataObjectToProps } from '../Utils/HTMLDataset';
 import DrawerTopBar from '../UI/DrawerTopBar';
-import Drawer from '@material-ui/core/Drawer';
+import Drawer from '../UI/Drawer';
 import IconButton from '@material-ui/core/IconButton';
 import Tooltip from '@material-ui/core/Tooltip';
 import { tooltipEnterDelay } from '../UI/Tooltip';

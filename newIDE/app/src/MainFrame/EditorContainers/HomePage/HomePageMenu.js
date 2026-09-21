@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { Trans } from '@lingui/macro';
 import { Column, Line } from '../../../UI/Grid';
-import Drawer from '@material-ui/core/Drawer';
+import Drawer from '../../../UI/Drawer';
 import IconButton from '../../../UI/IconButton';
 import VerticalTabButton from '../../../UI/VerticalTabButton';
 import DoubleChevronArrowLeft from '../../../UI/CustomSvgIcons/DoubleChevronArrowLeft';
