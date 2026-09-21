@@ -8,11 +8,17 @@ jest.mock('../UI/Dialog', () => {
   const React = require('react');
   return {
     __esModule: true,
-    default: props => React.createElement('div', null, props.children),
+    default: props =>
+      React.createElement('div', null, props.fixedContent, props.children),
     DialogPrimaryButton: () => null,
   };
 });
 jest.mock('../UI/FlatButton', () => () => null);
+jest.mock('../UI/IconButton', () => () => null);
+jest.mock('@lingui/react', () => ({
+  ...jest.requireActual('@lingui/react'),
+  I18n: ({ children }) => children({ i18n: { _: message => message } }),
+}));
 jest.mock('../UI/TextField', () => () => null);
 jest.mock('../UI/Text', () => {
   const React = require('react');
