@@ -85,7 +85,24 @@
             pixel
           );
 
-          const passed = pixel[1] > pixel[0] && pixel[1] > pixel[2];
+          let passed = pixel[1] > pixel[0] && pixel[1] > pixel[2];
+          // Keep more live materials than the device has UBO binding points.
+          // Revisit them in reverse order to catch incorrectly shared buffers.
+          const materials = [];
+          const count = context.getParameter(context.MAX_UNIFORM_BUFFER_BINDINGS) + 8;
+          for (let i = 0; i < count; i++) {
+            const item = new THREE.MeshBasicNodeMaterial();
+            item.colorNode = THREE.GDevelopTSL.uniform(new THREE.Color(i % 2 ? 0xff0000 : 0x00ff00));
+            materials.push(item);
+          }
+          for (const index of [...materials.keys(), ...materials.keys()].reverse()) {
+            mesh.material = materials[index];
+            renderer.render(scene, camera);
+            context.readPixels(32, 32, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+            passed = passed && (index % 2 ? pixel[0] > 200 && pixel[1] < 10 : pixel[1] > 200 && pixel[0] < 10);
+          }
+          passed = passed && context.getError() === context.NO_ERROR;
+          materials.forEach(item => item.dispose());
           finish(passed ? "passed" : "failed", Array.from(pixel).join(","));
 
           material.dispose();

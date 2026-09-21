@@ -4,12 +4,13 @@ import terser from "@rollup/plugin-terser";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { patchUniformsGroups } from "./patch-uniforms-groups.mjs";
 
 const expectedWebGLNodesHandlerSha256 =
   "0e7e1a4161793982748359e910434b304d3bfa518e8feafa6c6fe7f5b50c95a1";
 const expectedThreeVersion = "0.185.1";
 const expectedTSLRuntimeSha256 =
-  "af489c44b5167a2b7755c91b06578ccac2016bdffc892264c4946021806379a8";
+  "259d9045eb32f9d9559f77fe71c6028358669625766bfc98a5d2bc8f5bbcded1";
 const tslRuntimeBanner =
   "/*! three.js v0.185.1 | Copyright 2010-2026 three.js authors | MIT License */";
 const requiredTSLRuntimeExports = [
@@ -93,6 +94,9 @@ const verifyAndTrackNodesHandler = () => ({
     }
   },
   transform(code, id) {
+    if (/[\\/]three[\\/]src[\\/]renderers[\\/]webgl[\\/]WebGLUniformsGroups\.js$/.test(id)) {
+      return { code: patchUniformsGroups(code), map: null };
+    }
     if (!/[\\/]three[\\/]src[\\/]renderers[\\/]WebGLRenderer\.js$/.test(id)) {
       return null;
     }
