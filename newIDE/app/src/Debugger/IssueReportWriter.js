@@ -21,6 +21,7 @@ export type IssueReportData = {|
   description: string,
   screenshotDataUrl: string,
   runtimeDump: Object,
+  recording?: ?{| dataUrl: string, inputs: Array<Object> |},
   consoleLogs: Array<IssueReportConsoleLog>,
 |};
 
@@ -28,6 +29,8 @@ type IssueReportArtifactLinks = {|
   screenshotRelativePath: string,
   dumpRelativePath: string,
   logRelativePath: string,
+  recordingRelativePath?: ?string,
+  inputsRelativePath?: ?string,
 |};
 
 const toSingleLine = (value: string): string =>
@@ -72,6 +75,8 @@ export const buildIssueReportMarkdown = (
     screenshotRelativePath,
     dumpRelativePath,
     logRelativePath,
+    recordingRelativePath,
+    inputsRelativePath,
   }: IssueReportArtifactLinks
 ): string => {
   if (!data.description.trim()) {
@@ -98,6 +103,18 @@ export const buildIssueReportMarkdown = (
     '',
     `![Annotated paused game frame](${screenshotRelativePath})`,
     '',
+    ...(recordingRelativePath && inputsRelativePath
+      ? [
+          '## Gameplay recording',
+          '',
+          `[Watch the gameplay recording with input overlay](${recordingRelativePath})`,
+          '',
+          `[Inspect timestamped keyboard, mouse and touch input](${inputsRelativePath})`,
+          '',
+          'Input timeMs is relative to recording start; pointer x/y are normalized to the game canvas. The screenshot and memory dump describe the paused frame after recording.',
+          '',
+        ]
+      : []),
     '## Runtime game memory dump',
     '',
     `[Open the game-memory dump](${dumpRelativePath})`,
@@ -185,17 +202,30 @@ export const writeIssueReport = async ({
   const imagesDirectory = path.resolve(issuesDirectory, 'images');
   const dumpsDirectory = path.resolve(issuesDirectory, 'dumps');
   const logsDirectory = path.resolve(issuesDirectory, 'logs');
+  const recordingsDirectory = path.resolve(issuesDirectory, 'recordings');
   if (path.relative(projectRoot, issuesDirectory) !== 'issues') {
     throw new Error('The issue report directory is outside the project root.');
   }
   if (
     path.relative(issuesDirectory, imagesDirectory) !== 'images' ||
     path.relative(issuesDirectory, dumpsDirectory) !== 'dumps' ||
-    path.relative(issuesDirectory, logsDirectory) !== 'logs'
+    path.relative(issuesDirectory, logsDirectory) !== 'logs' ||
+    path.relative(issuesDirectory, recordingsDirectory) !== 'recordings'
   ) {
     throw new Error('An issue report artifact directory is outside issues.');
   }
 
+  let videoBytes = null;
+  if (data.recording) {
+    const match = /^data:video\/webm;base64,([A-Za-z0-9+/]+={0,2})$/.exec(
+      data.recording.dataUrl
+    );
+    if (!match) throw new Error('The recording is not a valid WebM data URL.');
+    videoBytes = nodeBuffer.Buffer.from(match[1], 'base64');
+    if (videoBytes.length < 4 || videoBytes.readUInt32BE(0) !== 0x1a45dfa3) {
+      throw new Error('The recording is not a valid WebM video.');
+    }
+  }
   const pngBytes = getScreenshotPngBytes(data.screenshotDataUrl);
   const dumpJson = `${JSON.stringify(data.runtimeDump, null, 2)}\n`;
   const consoleLogText = formatConsoleLogs(data.consoleLogs);
@@ -203,6 +233,9 @@ export const writeIssueReport = async ({
     fs.promises.mkdir(imagesDirectory, { recursive: true }),
     fs.promises.mkdir(dumpsDirectory, { recursive: true }),
     fs.promises.mkdir(logsDirectory, { recursive: true }),
+    ...(data.recording
+      ? [fs.promises.mkdir(recordingsDirectory, { recursive: true })]
+      : []),
   ]);
 
   const baseStem = getIssueReportFileStem(data.createdAt);
@@ -221,7 +254,25 @@ export const writeIssueReport = async ({
     logsDirectory,
     `.${temporaryToken}.log.tmp`
   );
+  const temporaryVideoPath = path.join(
+    recordingsDirectory,
+    `.${temporaryToken}.webm.tmp`
+  );
+  const temporaryInputsPath = path.join(
+    recordingsDirectory,
+    `.${temporaryToken}.inputs.json.tmp`
+  );
   try {
+    if (data.recording) {
+      await fs.promises.writeFile(temporaryVideoPath, videoBytes, {
+        flag: 'wx',
+      });
+      await fs.promises.writeFile(
+        temporaryInputsPath,
+        JSON.stringify(data.recording.inputs, null, 2) + '\n',
+        { flag: 'wx' }
+      );
+    }
     await fs.promises.writeFile(temporaryScreenshotPath, pngBytes, {
       flag: 'wx',
     });
@@ -247,6 +298,12 @@ export const writeIssueReport = async ({
         issuesDirectory,
         `.${temporaryToken}-${suffix}.md.tmp`
       );
+      const videoFilename = `${stem}.webm`;
+      const inputsFilename = `${stem}-inputs.json`;
+      const videoPath = path.join(recordingsDirectory, videoFilename);
+      const inputsPath = path.join(recordingsDirectory, inputsFilename);
+      let videoWasCreated = false;
+      let inputsWereCreated = false;
       let screenshotWasCreated = false;
       let dumpWasCreated = false;
       let logWasCreated = false;
@@ -258,10 +315,22 @@ export const writeIssueReport = async ({
         await fs.promises.link(temporaryLogPath, logPath);
         logWasCreated = true;
 
+        if (data.recording) {
+          await fs.promises.link(temporaryVideoPath, videoPath);
+          videoWasCreated = true;
+          await fs.promises.link(temporaryInputsPath, inputsPath);
+          inputsWereCreated = true;
+        }
         const markdown = buildIssueReportMarkdown(data, {
           screenshotRelativePath: `images/${screenshotFilename}`,
           dumpRelativePath: `dumps/${dumpFilename}`,
           logRelativePath: `logs/${logFilename}`,
+          recordingRelativePath: data.recording
+            ? `recordings/${videoFilename}`
+            : null,
+          inputsRelativePath: data.recording
+            ? `recordings/${inputsFilename}`
+            : null,
         });
         await fs.promises.writeFile(temporaryMarkdownPath, markdown, {
           encoding: 'utf8',
@@ -274,6 +343,8 @@ export const writeIssueReport = async ({
         return reportPath;
       } catch (error) {
         await removeFileIfCreated(temporaryMarkdownPath);
+        if (inputsWereCreated) await removeFileIfCreated(inputsPath);
+        if (videoWasCreated) await removeFileIfCreated(videoPath);
         if (logWasCreated) await removeFileIfCreated(logPath);
         if (dumpWasCreated) await removeFileIfCreated(dumpPath);
         if (screenshotWasCreated) await removeFileIfCreated(screenshotPath);
@@ -287,6 +358,12 @@ export const writeIssueReport = async ({
       removeFileIfCreated(temporaryScreenshotPath),
       removeFileIfCreated(temporaryDumpPath),
       removeFileIfCreated(temporaryLogPath),
+      ...(data.recording
+        ? [
+            removeFileIfCreated(temporaryVideoPath),
+            removeFileIfCreated(temporaryInputsPath),
+          ]
+        : []),
     ]);
   }
 };

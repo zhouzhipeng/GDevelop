@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { t } from '@lingui/macro';
 import { I18n } from '@lingui/react';
-import Drawer from '@material-ui/core/Drawer';
+import Drawer from '../UI/Drawer';
 import HistoryIcon from '../UI/CustomSvgIcons/History';
 import DrawerTopBar from '../UI/DrawerTopBar';
 import {

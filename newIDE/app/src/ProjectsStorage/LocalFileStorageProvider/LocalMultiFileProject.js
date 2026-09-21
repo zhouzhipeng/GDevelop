@@ -678,61 +678,25 @@ const discoverOwnedSettingsUris = async (
         discovered
       );
       const externalEventsRoot = path.join(sceneRoot, 'external-events');
+      await discoverDirectEventsFiles(
+        externalEventsRoot,
+        ['scenes', sceneSegment, 'external-events'],
+        discovered
+      );
       if (fs.existsSync(externalEventsRoot)) {
-        const externalEventEntries = await fs.readdir(externalEventsRoot, {
+        const entries = await fs.readdir(externalEventsRoot, {
           withFileTypes: true,
         });
-        for (const externalEventEntry of externalEventEntries) {
-          if (!externalEventEntry.isDirectory()) continue;
-          const externalEventSegment = physicalNameToGameUriSegment(
-            externalEventEntry.name
-          );
-          const externalEventRoot = path.join(
-            externalEventsRoot,
-            externalEventEntry.name
-          );
-          await discoverDirectSettingsFiles(
-            externalEventRoot,
-            ['scenes', sceneSegment, 'external-events', externalEventSegment],
-            discovered
-          );
-          const externalFunctionsRoot = path.join(
-            externalEventRoot,
-            'functions'
-          );
-          await discoverDirectSettingsFiles(
-            externalFunctionsRoot,
-            [
-              'scenes',
-              sceneSegment,
-              'external-events',
-              externalEventSegment,
-              'functions',
-            ],
-            discovered
-          );
-          await discoverDirectEventsFiles(
-            externalFunctionsRoot,
-            [
-              'scenes',
-              sceneSegment,
-              'external-events',
-              externalEventSegment,
-              'functions',
-            ],
-            discovered
-          );
-          await discoverRetiredFunctionSettings(
-            externalFunctionsRoot,
-            [
-              'scenes',
-              sceneSegment,
-              'external-events',
-              externalEventSegment,
-              'functions',
-            ],
-            discovered
-          );
+        for (const entry of entries) {
+          if (entry.isDirectory() || entry.name.endsWith('.settings')) {
+            throw new MultiFileProjectError(
+              'MULTIFILE_INVALID_EXTERNAL_SOURCE',
+              'External events must be flat .events fragments without settings or function directories.',
+              `game://scenes/${sceneSegment}/external-events/${physicalNameToGameUriSegment(
+                entry.name
+              )}`
+            );
+          }
         }
       }
       await discoverDirectSettingsFiles(

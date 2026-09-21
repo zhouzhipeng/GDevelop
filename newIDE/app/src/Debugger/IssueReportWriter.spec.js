@@ -47,6 +47,104 @@ describe('IssueReportWriter', () => {
     });
   });
 
+  test('saves video and timed inputs with collision-safe links', async () => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'gdevelop-recording-')
+    );
+    temporaryDirectories.push(directory);
+    const video = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3]);
+    const inputs = [{ timeMs: 12, type: 'keydown', code: 'KeyA' }];
+    const data = {
+      ...makeReportData(),
+      recording: {
+        dataUrl: 'data:video/webm;base64,' + video.toString('base64'),
+        inputs,
+      },
+    };
+    const projectFile = path.join(directory, 'game.json');
+    for (let index = 0; index < 2; index++) {
+      const report = await writeIssueReport({ projectFile, data });
+      const stem = path.basename(report, '.md');
+      const markdown = fs.readFileSync(report, 'utf8');
+      expect(markdown).toContain(`recordings/${stem}.webm`);
+      expect(markdown).toContain(`recordings/${stem}-inputs.json`);
+      expect(
+        fs.readFileSync(
+          path.join(directory, 'issues', 'recordings', stem + '.webm')
+        )
+      ).toEqual(video);
+      expect(
+        JSON.parse(
+          fs.readFileSync(
+            path.join(directory, 'issues', 'recordings', stem + '-inputs.json'),
+            'utf8'
+          )
+        )
+      ).toEqual(inputs);
+    }
+    expect(
+      fs
+        .readdirSync(path.join(directory, 'issues', 'recordings'))
+        .some(name => name.endsWith('.tmp'))
+    ).toBe(false);
+  });
+
+  test('rolls back recording artifacts if publishing the report fails', async () => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'gdevelop-recording-failure-')
+    );
+    temporaryDirectories.push(directory);
+    const originalLink = fs.promises.link;
+    const link = jest
+      .spyOn(fs.promises, 'link')
+      .mockImplementation((source, target) => {
+        if (target.endsWith('.md'))
+          return Promise.reject(new Error('Disk full'));
+        return originalLink(source, target);
+      });
+    try {
+      await expect(
+        writeIssueReport({
+          projectFile: path.join(directory, 'game.json'),
+          data: {
+            ...makeReportData(),
+            recording: {
+              dataUrl: 'data:video/webm;base64,GkXfow==',
+              inputs: [],
+            },
+          },
+        })
+      ).rejects.toThrow('Disk full');
+    } finally {
+      link.mockRestore();
+    }
+    for (const name of ['recordings', 'images', 'logs', 'dumps']) {
+      expect(fs.readdirSync(path.join(directory, 'issues', name))).toEqual([]);
+    }
+    expect(
+      fs
+        .readdirSync(path.join(directory, 'issues'))
+        .some(name => name.endsWith('.md') || name.endsWith('.tmp'))
+    ).toBe(false);
+  });
+
+  test('rejects invalid recordings before publishing a report', async () => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'gdevelop-invalid-recording-')
+    );
+    temporaryDirectories.push(directory);
+    await expect(
+      writeIssueReport({
+        projectFile: path.join(directory, 'game.json'),
+        data: {
+          ...makeReportData(),
+          recording: { dataUrl: 'data:video/webm;base64,YmFk', inputs: [] },
+        },
+      })
+    ).rejects.toThrow('not a valid WebM');
+    expect(fs.existsSync(path.join(directory, 'issues'))).toBe(false);
+  });
+
   test('builds Markdown that links compact external artifacts', () => {
     const markdown = buildIssueReportMarkdown(makeReportData(), {
       screenshotRelativePath: 'images/issue-screenshot.png',

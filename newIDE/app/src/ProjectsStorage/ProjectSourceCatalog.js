@@ -23,7 +23,7 @@ const SCENE_LIFECYCLE_SOURCES = Object.freeze([
 
 export const PROJECT_SETTINGS_CATALOG_RELATIVE_PATH =
   '.gdevelop/settings-catalog.json';
-export const PROJECT_SETTINGS_CATALOG_FORMAT_VERSION = 2;
+export const PROJECT_SETTINGS_CATALOG_FORMAT_VERSION = 3;
 
 export class ProjectSourceCatalogError extends Error {
   code: string;
@@ -1673,15 +1673,6 @@ const SETTINGS_FILE_SCHEMAS = Object.freeze({
       'preserve unknown current Layout serializer fields except layout/lifecycle-function/object ownership fields',
   },
   sceneLifecycleFunction: lifecycleFunctionSchema,
-  externalEvents: {
-    rootFields: [
-      ...formatFields({ kind: 'externalEvents', ordered: true, name: true }),
-    ],
-    childTables: [rawJsonTable],
-    additionalFields:
-      'preserve unknown current ExternalEvents serializer metadata fields except association and lifecycle bodies',
-  },
-  externalLifecycleFunction: lifecycleFunctionSchema,
   externalLayout: {
     rootFields: [
       ...formatFields({ kind: 'externalLayout', ordered: true, name: true }),
@@ -1998,27 +1989,6 @@ const SETTINGS_FILE_KINDS = Object.freeze([
     schema: SETTINGS_FILE_SCHEMAS.sceneLifecycleFunction,
   },
   {
-    kind: 'external-events',
-    requiredMarker: { field: 'kind', value: 'externalEvents' },
-    path:
-      'scenes/<Scene>/external-events/<ExternalEvents>/external-events.settings',
-    mountedNamespace: 'scenes."<Scene>".externalEvents."<ExternalEvents>"',
-    tomlRoot: true,
-    requiredFields: ['kind', 'settingsFormatVersion', 'order', 'name'],
-    commonFields: ['External Events serializer metadata'],
-    forbiddenFields: [
-      'associatedLayout',
-      'linkedScene',
-      'unresolvedScene',
-      'events',
-      'functionFiles',
-      'sceneLifecycleFunctions',
-    ],
-    note:
-      'The associated scene and function ownership are derived from the physical directory.',
-    schema: SETTINGS_FILE_SCHEMAS.externalEvents,
-  },
-  {
     kind: 'external-layout',
     requiredMarker: { field: 'kind', value: 'externalLayout' },
     path: 'scenes/<Scene>/external-layout/<ExternalLayout>.settings',
@@ -2042,29 +2012,6 @@ const SETTINGS_FILE_KINDS = Object.freeze([
     note:
       'The associated scene is derived from the physical directory; layout is an embedded TOML subtree.',
     schema: SETTINGS_FILE_SCHEMAS.externalLayout,
-  },
-  {
-    kind: 'external-lifecycle-function',
-    requiredMarker: { field: 'kind', value: 'function' },
-    path:
-      'scenes/<Scene>/external-events/<ExternalEvents>/functions/<Role>.settings',
-    mountedNamespace:
-      'scenes."<Scene>".externalEvents."<ExternalEvents>".functions."<Role>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'folder',
-      'name',
-      'functionType',
-      'lifecycleRole',
-    ],
-    commonFields: ['fixed signature', 'parameters', 'objectGroups'],
-    forbiddenFields: ['mutable function identity', 'event body'],
-    note:
-      'Only sceneLoad, sceneSignal, sceneUpdate, and sceneUnload are valid. sceneUpdate is required; empty optional same-stem pairs are forbidden.',
-    schema: SETTINGS_FILE_SCHEMAS.externalLifecycleFunction,
   },
   {
     kind: 'scene-object',
@@ -2333,22 +2280,12 @@ const buildSettingsOwners = (serializedProject: Object): Array<Object> => {
     const name = String(externalEvents.name || '');
     const ownerBaseUri = `game://scenes/${encodeManagedName(
       sceneName
-    )}/external-events/${encodeManagedName(name)}`;
+    )}/external-events/${encodeManagedName(`${name}.events`)}`;
     owners.push({
       kind: 'external-events',
       scene: sceneName,
       name,
-      settingsUri: `${ownerBaseUri}/external-events.settings`,
-      lifecycleFunctions: SCENE_LIFECYCLE_SOURCES.map(source => ({
-        name: source.name,
-        lifecycleRole: source.name,
-        order: source.order,
-        materialized:
-          source.name === 'sceneUpdate' ||
-          !!(externalEvents[source.legacyField] || []).length,
-        settingsUri: `${ownerBaseUri}/functions/${source.name}.settings`,
-        eventsUri: `${ownerBaseUri}/functions/${source.name}.events`,
-      })),
+      eventsUri: ownerBaseUri,
     });
   });
   (serializedProject.externalLayouts || []).forEach(externalLayout => {
@@ -2457,15 +2394,15 @@ export const buildProjectSettingsCatalog = ({
         'Write component fields at the TOML root. Never repeat project, scene, extension, prefab, behavior, function, or object names in TOML table headers; the canonical physical path supplies that namespace.',
         'At load time the editor parses each local .settings document, mounts it at fileKinds.mountedNamespace, and strictly merges all mounted settings documents. constants.toml is loaded separately as editor-only Constants. Duplicate ownership is an error.',
         'Layout data is embedded below the reserved [layout] subtree of its owning settings file. Functions derive their same-stem .events sibling from the physical settings path; do not write layout or events URI fields.',
-        `Use kind and settingsFormatVersion=${MULTI_FILE_FORMAT_VERSION} exactly where the file-kind entry requires them. Ordinary owner order is contiguous and zero based. Lifecycle order is the fixed sparse semantic value sceneLoad=0, sceneSignal=1, sceneUpdate=2, sceneUnload=3. External Events and external-layout order are independently global.`,
-        'Scene and External Events bodies live in fixed functions/<Role>.settings plus same-stem <Role>.events sources. Function presence is inferred from these pairs; never write sceneLifecycleFunctions in an owner settings file. sceneUpdate is always materialized. Omit both files for empty sceneLoad, sceneSignal, and sceneUnload roles. Never rename, add, delete, reorder, duplicate, make async/public, or change the signature of a lifecycle function.',
-        'Store every External Events owner at scenes/<Scene>/external-events/<ExternalEvents>/external-events.settings and every external layout at scenes/<Scene>/external-layout/<ExternalLayout>.settings. Derive associatedLayout from that path; do not write associatedLayout, linkedScene, unresolvedScene, events, functionFiles, externalLayoutFiles, or layout URI fields.',
+        `Use kind and settingsFormatVersion=${MULTI_FILE_FORMAT_VERSION} exactly where the file-kind entry requires them. Ordinary owner order is contiguous and zero based. Lifecycle order is the fixed sparse semantic value sceneLoad=0, sceneSignal=1, sceneUpdate=2, sceneUnload=3. External-layout order is global; external event fragments are sorted by name within each scene.`,
+        'Scene lifecycle bodies live in fixed functions/<Role>.settings plus same-stem <Role>.events sources. Function presence is inferred from these pairs; never write sceneLifecycleFunctions in an owner settings file. sceneUpdate is always materialized. Omit both files for empty sceneLoad, sceneSignal, and sceneUnload roles. Never rename, add, delete, reorder, duplicate, make async/public, or change the signature of a lifecycle function.',
+        'External event fragments are single IfDo files at scenes/<Scene>/external-events/<Name>.events. They have no settings, function signature, lifecycle, or manifest. Name and associated scene come from the path; a Link expands the body in the caller context. External layouts use scenes/<Scene>/external-layout/<Name>.settings.',
         'Write every non-empty variable container as repeated [[variables]], [[globalVariables]], or [[sceneVariables]] records. Each record contains an explicit non-empty name and the complete descriptor fields, for example name = "Controllers", type = "array", and children = [...]. Write variables = [ ], globalVariables = [ ], or sceneVariables = [ ] only for an empty container. Keyed [variables] tables, whole-container inline tables, and non-empty inline descriptor arrays are forbidden.',
         'Write object groups only as an [objectGroups] TOML table whose keys are group names and whose values are arrays of object names, for example Buttons = ["PauseButton", "Retry"]. Preserve per-group requiredBehaviors in the optional [objectGroupRequiredBehaviors] companion table using the same group key and an array of behavior-type strings. Write objectGroups = { } when there are no groups. The retired objectsGroups field and array/table-descriptor forms are forbidden.',
         'Write Sprite originPoint and centerPoint as inline TOML tables. Write named points and customCollisionMask polygons as inline arrays of point tables. Never expand point data into dotted TOML headers.',
         'Never write a legacy *FolderStructure field or optional grouping directories. For an object or owner function, write its editor grouping as folder = ["Parent", "Child"] in that component settings file. Use folder = [] for the root.',
         'Each global, scene, default-prefab, or variant-prefab object definition and its attached behaviors belong in its dedicated objects/<Object>.settings source location; instances and per-instance behavior overrides belong in the owner settings [layout] subtree.',
-        'Each scene, External Events, extension, prefab, or behavior function owns its functions/<Function>.settings location and same-stem <Function>.events body. Function settings never store an events URI, and owner settings never embed function metadata.',
+        'Each scene, extension, prefab, or behavior function owns its functions/<Function>.settings location and same-stem <Function>.events body. Function settings never store an events URI, and owner settings never embed function metadata.',
         'Store all project and extension gameplay-test metadata in root tests.settings. Each file field is a scheme-free canonical tests/<Encoded basename>.js path to a direct child of root tests/. The retired source field, subfolders, game:// prefixes, inline JavaScript, and lastRunStatus/lastRunAt/lastRunDurationMs/lastRunFramesExecuted fields are forbidden.',
         'For an object, use objectTypes[type].properties for public generic-editor properties and objectTypes[type].schema for the complete known serialized TOML structure, including nested type-specific tables and repeated records. Preserve unlisted legacy or private serializer fields already present in an object definition.',
         'For an attached behavior, use behaviorTypes[].properties for author-writable fields. Editor-hidden and deprecated descriptors are intentionally absent from this catalog, but existing serialized fields not listed there are preserved verbatim because they may be configured by a specialized editor and required at runtime.',
@@ -2479,6 +2416,17 @@ export const buildProjectSettingsCatalog = ({
       variableDefinition:
         'Use one repeated [[variables]], [[globalVariables]], or [[sceneVariables]] record per variable. Every record contains name plus type, value or children, enum values, folded state, persistentUuid, mixed-value state, and unknown fields. Use a root field = [ ] assignment only for an empty container.',
     },
+    eventFileKinds: [
+      {
+        kind: 'external-events',
+        path: 'scenes/<Scene>/external-events/<Name>.events',
+        syntax: 'IfDo',
+        settingsRequired: false,
+        identity: 'Scene from parent path; name from decoded filename stem.',
+        execution:
+          'Expanded at each Link with caller conditions, object selection and lifecycle context.',
+      },
+    ],
     fileKinds: SETTINGS_FILE_KINDS,
     settingsOwners,
     objectTypes: registeredTypes.objectTypes,
@@ -3057,6 +3005,7 @@ const validateSettingsFileSchema = (schema: any, kind: string): void => {
 export const validateProjectSettingsCatalog = (catalog: any): Object => {
   const validated = validateBaseCatalog(catalog, 'gdevelop-settings-catalog', [
     'fileKinds',
+    'eventFileKinds',
     'settingsOwners',
     'objectTypes',
     'behaviorTypes',
@@ -3277,6 +3226,7 @@ const serializeCatalog = (
 export const serializeProjectSettingsCatalog = (catalog: Object): string =>
   serializeCatalog(validateProjectSettingsCatalog(catalog), [
     'fileKinds',
+    'eventFileKinds',
     'settingsOwners',
     'objectTypes',
     'behaviorTypes',

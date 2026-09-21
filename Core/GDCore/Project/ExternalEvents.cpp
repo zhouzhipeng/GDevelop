@@ -1,5 +1,7 @@
 #include "GDCore/Project/ExternalEvents.h"
 
+#include <stdexcept>
+
 #include "ExternalEvents.h"
 #include "GDCore/Events/Event.h"
 #include "GDCore/Events/Serialization.h"
@@ -24,21 +26,27 @@ ExternalEvents& ExternalEvents::operator=(const ExternalEvents& rhs) {
 void ExternalEvents::Init(const ExternalEvents& externalEvents) {
   name = externalEvents.GetName();
   associatedScene = externalEvents.GetAssociatedLayout();
-  lifecycleEventsFunctions = externalEvents.lifecycleEventsFunctions;
+  events = externalEvents.events;
 }
 
 void ExternalEvents::SerializeTo(SerializerElement& element) const {
   element.SetAttribute("name", name);
   element.SetAttribute("associatedLayout", associatedScene);
-  lifecycleEventsFunctions.SerializeEventBodiesTo(element);
+  events.SerializeTo(element.AddChild("events"));
 }
 
 void ExternalEvents::UnserializeFrom(gd::Project& project,
                                      const SerializerElement& element) {
-  name = element.GetStringAttribute("name", "", "Name");
-  associatedScene =
-      element.GetStringAttribute("associatedLayout", "", "AssociatedScene");
-  lifecycleEventsFunctions.UnserializeEventBodiesFrom(project, element);
+  if (element.HasChild("sceneLifecycleFunctions") ||
+      element.HasChild("sceneLoadEvents") ||
+      element.HasChild("sceneSignalEvents") ||
+      element.HasChild("sceneUnloadEvents")) {
+    throw std::logic_error(
+        "External events are single event fragments; lifecycle bodies are not supported.");
+  }
+  name = element.GetStringAttribute("name");
+  associatedScene = element.GetStringAttribute("associatedLayout");
+  events.UnserializeFrom(project, element.GetChild("events"));
 }
 
 }  // namespace gd

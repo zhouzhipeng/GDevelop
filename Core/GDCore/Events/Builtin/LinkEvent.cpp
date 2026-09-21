@@ -28,9 +28,7 @@ const EventsList* LinkEvent::GetLinkedEvents(
   const EventsList* events = nullptr;
   if (project.HasExternalEventsNamed(GetTarget())) {
     const gd::ExternalEvents& linkedExternalEvents = project.GetExternalEvents(GetTarget());
-    events = &linkedExternalEvents.GetLifecycleEventsFunctions()
-                  .GetByName(sceneLifecycleFunctionRole)
-                  .GetEvents();
+    events = &linkedExternalEvents.GetEvents();
   } else if (project.HasLayoutNamed(GetTarget())) {
     const gd::Layout& linkedLayout = project.GetLayout(GetTarget());
     events = &linkedLayout.GetLifecycleEventsFunctions()
@@ -71,9 +69,7 @@ void LinkEvent::ReplaceLinkByLinkedEvents(
   const EventsList* eventsToInclude =
       GetLinkedEvents(project, sceneLifecycleFunctionRole);
   if (eventsToInclude != NULL) {
-    // Linking an empty lifecycle function is a valid no-op. In particular,
-    // optional scene lifecycle functions are empty by default and must not
-    // turn an otherwise valid same-role Link into an invalid event.
+    // Empty fragments and empty scene lifecycle functions are valid no-ops.
     if (eventsToInclude->IsEmpty()) {
       eventList.RemoveEvent(indexOfTheEventInThisList);
       return;

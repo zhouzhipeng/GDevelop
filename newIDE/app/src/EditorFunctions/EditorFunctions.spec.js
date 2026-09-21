@@ -1838,6 +1838,8 @@ describe('editorFunctions', () => {
       expect(result).toMatchInlineSnapshot(`
         Object {
           "aiGeneratedEventId": "test-ai-event-id",
+          "lifecycleFunctionLabel": "Scene update",
+          "lifecycleFunctionName": "sceneUpdate",
           "message": "Successfully added explosion events.",
           "newlyAddedResources": Array [
             Object {
@@ -1857,6 +1859,7 @@ describe('editorFunctions', () => {
 
       expect(onSceneEventsModifiedOutsideEditor).toHaveBeenCalledWith({
         scene: testScene,
+        lifecycleFunctionName: 'sceneUpdate',
         newOrChangedAiGeneratedEventIds: new Set(['test-ai-event-id']),
       });
     });
@@ -3976,7 +3979,9 @@ describe('editorFunctions', () => {
       expect(instances[0].height).toBe(48);
       expect(instances[0].depth).toBe(64);
       expect(result.positionSemantics).toEqual(
-        expect.stringContaining('origin, NOT its center')
+        expect.stringContaining(
+          'The center point is the rotation pivot and need not be the geometric midpoint.'
+        )
       );
       expect(result.objectSizeInfo).toEqual({ Player: null });
     });

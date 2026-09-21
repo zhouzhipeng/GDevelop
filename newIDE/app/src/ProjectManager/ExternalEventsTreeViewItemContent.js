@@ -208,15 +208,7 @@ export class ExternalEventsTreeViewItemContent implements TreeViewItemContent {
   }
 
   moveAt(destinationIndex: number): void {
-    const originIndex = this.getIndex();
-    if (destinationIndex !== originIndex) {
-      this.props.project.moveExternalEvents(
-        originIndex,
-        // When moving the item down, it must not be counted.
-        destinationIndex + (destinationIndex <= originIndex ? 0 : -1)
-      );
-      this._onProjectItemModified();
-    }
+    // Fragment order is derived from names, not persisted independently.
   }
 
   copy(): void {

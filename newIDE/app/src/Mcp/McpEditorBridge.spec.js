@@ -50,6 +50,19 @@ const makeGlbModelBuffer = (json: Object): Uint8Array => {
 };
 
 describe('McpEditorBridge', () => {
+  it('routes create_project without an open project and reports invalid input', async () => {
+    const response = await makeBridge().handleRendererMcpRequest({
+      method: 'tools/call',
+      params: {
+        name: 'create_project',
+        arguments: { project_directory: 'relative', project_name: 'Game' },
+      },
+    });
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toContain('MCP_CREATE_PROJECT_FAILED');
+    expect(response.content[0].text).toContain('absolute local path');
+  });
+
   const serializeProjectWithConstants = (project: gdProject): Object => ({
     ...serializeToJSObject(project),
     constants: JSON.parse(project.getConstantsJson()),

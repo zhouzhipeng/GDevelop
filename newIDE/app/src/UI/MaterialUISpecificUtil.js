@@ -187,6 +187,7 @@ const hasVisibleInteractiveOverlayContent = (element: Element): boolean => {
 };
 
 const isKeepMountedTemporarySideMenuOverlay = (element: Element): boolean =>
+  element.getAttribute('data-gdevelop-drawer-open') !== null ||
   !!element.querySelector(keepMountedTemporarySideMenuPaperSelector);
 
 const neutralizeElement = (element: Element): boolean => {
@@ -343,8 +344,8 @@ export const captureMaterialUiOverlayCleanupCandidates = (): Array<Element> => {
  *    scroll-lock.
  *
  * This function neutralizes those leftovers. It keeps real open overlays and the
- * two hidden `keepMounted` temporary side-menu drawers that React must retain
- * so they can be reopened. Other hidden Paper overlays can belong to a
+ * controlled drawers and hidden `keepMounted` side-menu drawers that React must
+ * retain so they can be reopened. Other hidden Paper overlays can belong to a
  * destroyed pop-out and are neutralized. A backdrop by itself is not a real open
  * dialog; it is exactly the stale blocker that swallows input. Body styles are
  * cleared only when there is no real open modal left. Safe to call on every
@@ -452,6 +453,9 @@ export const cleanupLeakedOverlaysAfterPopOutClose = (
       );
       hiddenNodes.forEach(node => {
         if (node.getAttribute(staleOverlayAttribute) === 'true') return;
+        // A retained, closed drawer deliberately keeps aria-hidden/inert.
+        // Only restore editor roots, never undo an overlay's closed state.
+        if (isMaterialUiOverlayLike(node)) return;
         // Don't touch nodes that intentionally use aria-hidden for icons etc.
         // Top-level body children that are app roots/portals are what MUI hides.
         node.removeAttribute('aria-hidden');

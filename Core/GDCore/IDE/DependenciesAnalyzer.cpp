@@ -42,14 +42,19 @@ bool DependenciesAnalyzer::Analyze() {
     activePath.clear();
     return hasNoCircularDependency;
   } else if (externalEvents) {
-    externalEvents->GetLifecycleEventsFunctions().ForEach(
-        [&](gd::SceneLifecycleFunctionRole role,
-            const gd::EventsFunction& eventsFunction) {
-          if (!hasNoCircularDependency) return;
-          activePath = {{DependencyOwnerKind::ExternalEvents,
-                         externalEvents->GetName(), role}};
-          hasNoCircularDependency = Analyze(eventsFunction.GetEvents(), role);
-        });
+    // A fragment has no role of its own. Check all possible caller roles,
+    // because a nested Link to a scene still selects that scene's role.
+    for (auto role : {gd::SceneLifecycleFunctionRole::SceneLoad,
+                      gd::SceneLifecycleFunctionRole::SceneSignal,
+                      gd::SceneLifecycleFunctionRole::SceneUpdate,
+                      gd::SceneLifecycleFunctionRole::SceneUnload}) {
+      activePath = {{DependencyOwnerKind::ExternalEvents,
+                     externalEvents->GetName(), role}};
+      if (!Analyze(externalEvents->GetEvents(), role)) {
+        hasNoCircularDependency = false;
+        break;
+      }
+    }
     activePath.clear();
     return hasNoCircularDependency;
   }

@@ -335,15 +335,9 @@ const forEachProjectEventsList = (
 
   mapFor(0, project.getExternalEventsCount(), externalEventsIndex => {
     const externalEvents = project.getExternalEventsAt(externalEventsIndex);
-    sceneLifecycleFunctionDefinitions.forEach(({ name: role }) =>
-      callback(
-        {
-          label: `External events "${externalEvents.getName()}" / ${getSceneLifecycleFunctionDisplayName(
-            role
-          )}`,
-        },
-        getSceneLifecycleEvents(externalEvents, role)
-      )
+    callback(
+      { label: `External events "${externalEvents.getName()}"` },
+      externalEvents.getEvents()
     );
   });
 

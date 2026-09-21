@@ -424,27 +424,18 @@ describe('Local multi-file project storage', () => {
     expect(sceneSettings).not.toContain('externalLayoutFiles');
     expect(sceneSettings).not.toContain('sceneLifecycleFunctions');
     expect(
-      fs.readFileSync(
-        path.join(
-          temporaryDirectory,
-          'scenes/Main/external-events/Shared Combat/external-events.settings'
-        ),
-        'utf8'
-      )
-    ).not.toContain('sceneLifecycleFunctions');
-    expect(
       fs.existsSync(
         path.join(
           temporaryDirectory,
           'scenes/Main/external-events/Shared Combat/external-events.settings'
         )
       )
-    ).toBe(true);
+    ).toBe(false);
     expect(
       fs.existsSync(
         path.join(
           temporaryDirectory,
-          'scenes/Main/external-events/Shared Combat/functions/sceneUpdate.events'
+          'scenes/Main/external-events/Shared Combat.events'
         )
       )
     ).toBe(true);
@@ -481,52 +472,20 @@ describe('Local multi-file project storage', () => {
     });
   });
 
-  test('removes the retired combined external directory on the next save', async () => {
+  test('discovers flat fragments without settings and rejects nested function wrappers', async () => {
     const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
-    const project = JSON.parse(JSON.stringify(projectFixture));
-    project.externalEvents = [
-      { name: 'Shared Combat', associatedLayout: 'Main', events: [] },
-    ];
-    project.externalLayouts = [
-      {
-        name: 'Shared Combat',
-        associatedLayout: 'Main',
-        instances: [],
-        editionSettings: {},
-      },
-    ];
-    await writeLegacyProjectAsMultiFile(project, entryPath);
-
-    const sceneRoot = path.join(temporaryDirectory, 'scenes/Main');
-    const retiredOwnerRoot = path.join(sceneRoot, 'externals/Shared Combat');
-    fs.ensureDirSync(path.dirname(retiredOwnerRoot));
-    fs.moveSync(
-      path.join(sceneRoot, 'external-events/Shared Combat'),
-      retiredOwnerRoot,
-      { overwrite: true }
-    );
-    fs.moveSync(
-      path.join(sceneRoot, 'external-layout/Shared Combat.settings'),
-      path.join(retiredOwnerRoot, 'external-layout.settings'),
-      { overwrite: true }
-    );
-
-    await writeLegacyProjectAsMultiFile(project, entryPath);
-
-    expect(fs.existsSync(path.join(sceneRoot, 'externals'))).toBe(false);
-    expect(
-      fs.existsSync(
-        path.join(
-          sceneRoot,
-          'external-events/Shared Combat/external-events.settings'
-        )
-      )
-    ).toBe(true);
-    expect(
-      fs.existsSync(
-        path.join(sceneRoot, 'external-layout/Shared Combat.settings')
-      )
-    ).toBe(true);
+    await writeLegacyProjectAsMultiFile(projectFixture, entryPath);
+    const root = path.join(temporaryDirectory, 'scenes/Main/external-events');
+    fs.ensureDirSync(root);
+    fs.writeFileSync(path.join(root, 'New fragment.events'), '', 'utf8');
+    const project = await openMultiFileProject(entryPath);
+    expect(project.externalEvents).toEqual([
+      { name: 'New fragment', associatedLayout: 'Main', events: [] },
+    ]);
+    fs.ensureDirSync(path.join(root, 'Old/functions'));
+    await expect(openMultiFileProject(entryPath)).rejects.toMatchObject({
+      code: 'MULTIFILE_INVALID_EXTERNAL_SOURCE',
+    });
   });
 
   test('rejects retired external.settings without parsing it', async () => {
@@ -816,7 +775,7 @@ describe('Local multi-file project storage', () => {
     );
     expect(rebuiltSettingsCatalog).toMatchObject({
       format: 'gdevelop-settings-catalog',
-      formatVersion: 2,
+      formatVersion: 3,
       layoutAuthoring: {
         storage: 'embedded-settings',
         rootTable: 'layout',
@@ -1633,7 +1592,7 @@ describe('Local multi-file project storage', () => {
         fileKind => fileKind.kind === 'externals'
       )
     ).toBe(false);
-    expect(settingsCatalog.counts.fileKinds).toBe(19);
+    expect(settingsCatalog.counts.fileKinds).toBe(17);
     expect(settingsCatalog.counts.objectTypes).toBeGreaterThan(5);
     expect(settingsCatalog.counts.behaviorTypes).toBeGreaterThan(5);
     expect(settingsCatalog.layoutContexts).toEqual(

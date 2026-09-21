@@ -95,6 +95,9 @@ type State = {|
   isIssueReportStarting: boolean,
   isIssueReportSaving: boolean,
   issueReportDescription: string,
+  issueRecording: ?{| dataUrl: string, inputs: Array<Object> |},
+  isIssueRecording: boolean,
+  isIssueRecordingBusy: boolean,
   issueReportError: ?string,
   issueReportWarning: ?string,
   issueReportTool: IssueAnnotationTool,
@@ -127,6 +130,9 @@ export default class Debugger extends React.Component<Props, State> {
     isIssueReportStarting: false,
     isIssueReportSaving: false,
     issueReportDescription: '',
+    issueRecording: null,
+    isIssueRecording: false,
+    isIssueRecordingBusy: false,
     issueReportError: null,
     issueReportWarning: null,
     issueReportTool: 'freehand',
@@ -298,6 +304,13 @@ export default class Debugger extends React.Component<Props, State> {
             );
 
             return {
+              ...(isClosingActiveIssueReport
+                ? {
+                    issueRecording: null,
+                    isIssueRecording: false,
+                    isIssueRecordingBusy: false,
+                  }
+                : {}),
               debuggerIds,
               selectedId:
                 selectedId !== id
@@ -432,6 +445,13 @@ export default class Debugger extends React.Component<Props, State> {
     } else if (data.command === 'issueReport.shortcut') {
       if (id === this.state.selectedId) {
         this._startIssueReportFromShortcut();
+      }
+    } else if (data.command === 'issueReport.recordingEnded') {
+      if (
+        this.state.activeIssueReport &&
+        this.state.activeIssueReport.debuggerId === id
+      ) {
+        this._stopIssueRecording();
       }
     } else if (data.command === 'issueReport.annotationLimitReached') {
       if (
@@ -577,6 +597,9 @@ export default class Debugger extends React.Component<Props, State> {
           },
           isIssueReportStarting: false,
           issueReportDescription: '',
+          issueRecording: null,
+          isIssueRecording: false,
+          isIssueRecordingBusy: false,
           issueReportError: null,
           issueReportWarning: null,
           issueReportTool: 'freehand',
@@ -688,6 +711,82 @@ export default class Debugger extends React.Component<Props, State> {
     }
   };
 
+  _startIssueRecording = async (): Promise<void> => {
+    const report = this.state.activeIssueReport;
+    if (
+      !report ||
+      this.state.isIssueRecordingBusy ||
+      this.state.isIssueRecording
+    )
+      return;
+    this.setState({ isIssueRecordingBusy: true, issueReportError: null });
+    try {
+      this._validateIssueReportResponse(
+        await this.props.previewDebuggerServer.sendMessageToDebuggerWithResponse(
+          report.debuggerId,
+          { command: 'issueReport.startRecording' },
+          5000
+        ),
+        'issueReport.recordingStarted'
+      );
+      if (!this._isUnmounted && this.state.activeIssueReport === report) {
+        this.setState({
+          isIssueRecording: true,
+          issueRecording: null,
+          issueReportTool: 'freehand',
+        });
+      }
+    } catch (error) {
+      if (!this._isUnmounted)
+        this.setState({ issueReportError: error.message || String(error) });
+    } finally {
+      if (!this._isUnmounted) this.setState({ isIssueRecordingBusy: false });
+    }
+  };
+
+  _stopIssueRecording = async (): Promise<void> => {
+    const report = this.state.activeIssueReport;
+    if (
+      !report ||
+      this.state.isIssueRecordingBusy ||
+      !this.state.isIssueRecording
+    )
+      return;
+    this.setState({ isIssueRecordingBusy: true, issueReportError: null });
+    let didStop = false;
+    try {
+      const response = await this.props.previewDebuggerServer.sendMessageToDebuggerWithResponse(
+        report.debuggerId,
+        { command: 'issueReport.stopRecording' },
+        30000
+      );
+      didStop = response && response.command === 'issueReport.recording';
+      const recording = this._validateIssueReportResponse(
+        response,
+        'issueReport.recording'
+      );
+      if (!recording || !recording.dataUrl || !Array.isArray(recording.inputs))
+        throw new Error('The preview did not return a recording.');
+      if (!this._isUnmounted && this.state.activeIssueReport === report) {
+        this.setState({
+          issueRecording: {
+            dataUrl: recording.dataUrl,
+            inputs: recording.inputs,
+          },
+          isIssueRecording: false,
+        });
+      }
+    } catch (error) {
+      if (!this._isUnmounted)
+        this.setState({
+          issueReportError: error.message || String(error),
+          ...(didStop ? { isIssueRecording: false } : {}),
+        });
+    } finally {
+      if (!this._isUnmounted) this.setState({ isIssueRecordingBusy: false });
+    }
+  };
+
   _cleanupIssueReport = async (
     issueReport: ActiveIssueReport
   ): Promise<?string> => {
@@ -724,7 +823,12 @@ export default class Debugger extends React.Component<Props, State> {
 
   _cancelIssueReport = async (): Promise<void> => {
     const { activeIssueReport, isIssueReportSaving } = this.state;
-    if (!activeIssueReport || isIssueReportSaving) return;
+    if (
+      !activeIssueReport ||
+      isIssueReportSaving ||
+      this.state.isIssueRecordingBusy
+    )
+      return;
     this.setState({ isIssueReportSaving: true });
     const cleanupWarning = await this._cleanupIssueReport(activeIssueReport);
     if (this._isUnmounted) return;
@@ -733,6 +837,9 @@ export default class Debugger extends React.Component<Props, State> {
         activeIssueReport: null,
         isIssueReportSaving: false,
         issueReportDescription: '',
+        issueRecording: null,
+        isIssueRecording: false,
+        isIssueRecordingBusy: false,
         issueReportError: null,
         issueReportWarning: null,
       },
@@ -757,7 +864,9 @@ export default class Debugger extends React.Component<Props, State> {
     if (
       !activeIssueReport ||
       isIssueReportSaving ||
-      !issueReportDescription.trim()
+      !issueReportDescription.trim() ||
+      this.state.isIssueRecording ||
+      this.state.isIssueRecordingBusy
     ) {
       return;
     }
@@ -780,14 +889,33 @@ export default class Debugger extends React.Component<Props, State> {
         throw new Error('The preview did not return an annotated screenshot.');
       }
 
+      // Refresh at the final paused frame, including after an unsuccessful recording.
+      const runtimeDump = this._validateIssueReportResponse(
+        await this.props.previewDebuggerServer.sendMessageToDebuggerWithResponse(
+          activeIssueReport.debuggerId,
+          { command: 'refresh' },
+          15000
+        ),
+        'dump'
+      );
+      const status = this._validateIssueReportResponse(
+        await this.props.previewDebuggerServer.sendMessageToDebuggerWithResponse(
+          activeIssueReport.debuggerId,
+          { command: 'getStatus' },
+          5000
+        ),
+        'status'
+      );
+      const sceneName = status.sceneName;
       const reportData: IssueReportData = {
         createdAt: new Date(),
         projectName: this.props.project.getName(),
-        sceneName: activeIssueReport.sceneName,
+        sceneName,
         debuggerId: activeIssueReport.debuggerId,
         description: issueReportDescription,
         screenshotDataUrl: screenshot.dataUrl,
-        runtimeDump: activeIssueReport.runtimeDump,
+        runtimeDump,
+        recording: this.state.issueRecording,
         consoleLogs: this._getLogsManager(
           activeIssueReport.debuggerId
         ).getAllLogs(),
@@ -800,6 +928,9 @@ export default class Debugger extends React.Component<Props, State> {
           // cleanup finish, but close the modal so this work is non-blocking.
           isIssueReportSaving: true,
           issueReportDescription: '',
+          issueRecording: null,
+          isIssueRecording: false,
+          isIssueRecordingBusy: false,
           issueReportError: null,
           issueReportWarning: null,
         },
@@ -1040,6 +1171,13 @@ export default class Debugger extends React.Component<Props, State> {
           onToolChange={this._setIssueAnnotationTool}
           onCancel={this._cancelIssueReport}
           onSave={this._saveIssueReport}
+          isRecording={this.state.isIssueRecording}
+          recordingDataUrl={
+            this.state.issueRecording ? this.state.issueRecording.dataUrl : null
+          }
+          onStartRecording={this._startIssueRecording}
+          onStopRecording={this._stopIssueRecording}
+          isRecordingBusy={this.state.isIssueRecordingBusy}
           isSaving={isIssueReportSaving}
           error={issueReportError}
           warning={issueReportWarning}

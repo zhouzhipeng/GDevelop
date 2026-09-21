@@ -28,41 +28,39 @@ export const isSceneLifecycleFunctionName = (name: ?string): boolean =>
   name === 'sceneUnload';
 
 export const getSceneLifecycleEventsFunction = (
-  owner: gdLayout | gdExternalEvents,
+  owner: gdLayout,
   name: SceneLifecycleFunctionName
 ): gdEventsFunction => {
-  // Cast locally while older GDevelop.js declarations are still accepted by
-  // the IDE. The lifecycle API is supplied by the Core model.
-  const lifecycleEventsFunctions = (owner: any).getLifecycleEventsFunctions();
+  const lifecycleEventsFunctions = owner.getLifecycleEventsFunctions();
   return lifecycleEventsFunctions.getByName(name);
 };
 
 export const hasSceneLifecycleEventsFunction = (
-  owner: gdLayout | gdExternalEvents,
+  owner: gdLayout,
   name: SceneLifecycleFunctionName
 ): boolean => {
-  const lifecycleEventsFunctions = (owner: any).getLifecycleEventsFunctions();
+  const lifecycleEventsFunctions = owner.getLifecycleEventsFunctions();
   return lifecycleEventsFunctions.hasByName(name);
 };
 
 export const insertSceneLifecycleEventsFunction = (
-  owner: gdLayout | gdExternalEvents,
+  owner: gdLayout,
   name: SceneLifecycleFunctionName
 ): gdEventsFunction => {
-  const lifecycleEventsFunctions = (owner: any).getLifecycleEventsFunctions();
+  const lifecycleEventsFunctions = owner.getLifecycleEventsFunctions();
   return lifecycleEventsFunctions.insertByName(name);
 };
 
 export const removeSceneLifecycleEventsFunction = (
-  owner: gdLayout | gdExternalEvents,
+  owner: gdLayout,
   name: SceneLifecycleFunctionName
 ): boolean => {
-  const lifecycleEventsFunctions = (owner: any).getLifecycleEventsFunctions();
+  const lifecycleEventsFunctions = owner.getLifecycleEventsFunctions();
   return lifecycleEventsFunctions.removeByName(name);
 };
 
 export const getSceneLifecycleEvents = (
-  owner: gdLayout | gdExternalEvents,
+  owner: gdLayout,
   name: SceneLifecycleFunctionName
 ): gdEventsList => getSceneLifecycleEventsFunction(owner, name).getEvents();
 

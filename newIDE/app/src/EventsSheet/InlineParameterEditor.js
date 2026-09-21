@@ -9,7 +9,7 @@ import { type EventsScope } from '../InstructionOrExpression/EventsScope';
 import { setupInstructionParameters } from '../InstructionOrExpression/SetupInstructionParameters';
 import { getObjectParameterIndex } from '../InstructionOrExpression/EnumerateInstructions';
 import { type ParameterFieldInterface } from './ParameterFields/ParameterFieldCommons';
-import Drawer from '@material-ui/core/Drawer';
+import Drawer from '../UI/Drawer';
 import { Column, Line } from '../UI/Grid';
 import { isNativeMobileApp } from '../Utils/Platform';
 import {

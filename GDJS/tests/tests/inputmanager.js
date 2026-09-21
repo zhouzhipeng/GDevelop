@@ -29,6 +29,20 @@ describe('gdjs.InputManager', () => {
     expect(inputManager.anyKeyPressed()).to.be(false);
   });
 
+  it('releases only held keys and does not replay historical releases', () => {
+    inputManager.onKeyPressed(66);
+    inputManager.onKeyReleased(66);
+    inputManager.onFrameEnded();
+    inputManager.onKeyPressed(82);
+    inputManager.releaseAllPressedKeys();
+    expect(inputManager.wasKeyReleased(66)).to.be(false);
+    expect(inputManager.wasKeyReleased(82)).to.be(true);
+    expect(inputManager.isKeyPressed(82)).to.be(false);
+    inputManager.onFrameEnded();
+    inputManager.releaseAllPressedKeys();
+    expect(inputManager.anyKeyReleased()).to.be(false);
+  });
+
   it('should handle keyboards events', () => {
     expect(inputManager.anyKeyPressed()).to.be(false);
     expect(inputManager.anyKeyReleased()).to.be(false);
@@ -449,6 +463,18 @@ describe('gdjs.evtTools.scene3d', () => {
       expect(results[0].pointX).to.be.within(49.99, 50.01);
       expect(results[0].pointY).to.be.within(-0.001, 0.001);
       expect(results[0].pointZ).to.be.within(-0.001, 0.001);
+
+      // Events can move a mesh or its parent before the next render pass.
+      mesh.position.x = 200;
+      const movedResults = gdjs.evtTools.scene3d.raycastObjects(
+        -100, 0, 0, 1, 0, 0, [object]
+      );
+      expect(movedResults[0].distance).to.be.within(249.99, 250.01);
+      threeGroup.position.x = 50;
+      const parentMovedResults = gdjs.evtTools.scene3d.raycastObjects(
+        -100, 0, 0, 1, 0, 0, [object]
+      );
+      expect(parentMovedResults[0].distance).to.be.within(299.99, 300.01);
     } finally {
       mesh.removeFromParent();
       geometry.dispose();

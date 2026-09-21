@@ -1,0 +1,55 @@
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--theme-text-field-disabled-color);
+}
+
+.toolRow,
+.annotationTools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolRow {
+  flex-wrap: wrap;
+}
+
+.annotationTools {
+  flex-wrap: nowrap;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.annotationTools > button {
+  flex-shrink: 0;
+}
+
+.recording {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.video {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  max-height: min(240px, 30vh);
+  border-radius: 8px;
+  background: #000;
+}
+
+.help {
+  color: var(--theme-text-default-color);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.help summary {
+  cursor: pointer;
+  padding: 8px 0;
+}

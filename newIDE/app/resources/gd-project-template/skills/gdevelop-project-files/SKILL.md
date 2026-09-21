@@ -1,6 +1,6 @@
 ---
 name: gdevelop-project-files
-description: Create, inspect, modify, refactor, and verify GDevelop games through the version 5 multi-file project sources (`project.gdevelop`, `constants.toml`, `.settings`, `.events`, `tests.settings`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
+description: Create, inspect, modify, refactor, and verify GDevelop games through the version 6 multi-file project sources (`project.gdevelop`, `constants.toml`, `.settings`, `.events`, `tests.settings`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
 ---
 
 # GDevelop Project Files
@@ -8,11 +8,32 @@ description: Create, inspect, modify, refactor, and verify GDevelop games throug
 ## Source of truth
 
 Treat project files as authoritative. Modify them directly; do not use MCP to
-author the game. The sole authoring-related exception is `import_extension`:
-use it once to import and convert an official legacy extension into canonical
-multi-file sources, then continue by editing those generated files directly.
+author the game after initialization. Use `create_project` to initialize a new
+game, and `import_extension` to import and convert an official legacy extension
+into canonical multi-file sources. Continue by editing generated sources directly.
 There are no dedicated Constants MCP tools. Read and modify `constants.toml`
 directly.
+
+## Create a new game
+
+When no project exists, call `create_project` with `project_directory` (an
+absolute path to a directory that does not exist) and `project_name`. Its parent
+directory must already exist. Optional integer `width` and `height` range from
+1 to 16384 and default to 1280 and 720. For example:
+
+```json
+{"project_directory":"D:/Games/MyGame","project_name":"My Game","width":1280,"height":720}
+```
+
+The tool saves a canonical multi-file project with a default `Game` scene,
+generated authoring catalogs/declarations, and bundled template/skill files.
+It works without an open project and leaves the current editor project alone.
+Require `created: true`, then call `open_project` with `project_path` equal to
+the returned `projectFile`. Existing unsaved editor changes are protected by
+`open_project`; save them or obtain authorization before explicitly discarding.
+Read the new project's sources and generated catalogs before further edits.
+Creation refuses all existing target directories. If it fails, inspect any
+partial files before retrying with a fresh destination.
 
 ## Engine-level bugs
 
@@ -170,7 +191,7 @@ generated compatibility/runtime output, not multi-file source.
   `layoutContexts` entry and `layoutTables` definitions.
 - `.events`: IfDo DSL only. Do not embed TOML or raw event JSON.
 - `tests.settings`: the single root manifest for project and extension gameplay
-  tests. Keep `kind = "tests"` and `settingsFormatVersion = 5`. Each `[[tests]]`
+  tests. Keep `kind = "tests"` and `settingsFormatVersion = 6`. Each `[[tests]]`
   record has `scope`, container-local contiguous `order`, `name`, `type`,
   `description`, and a scheme-free canonical `file`; extension-owned records
   also have `extension`. Use `tests = [ ]` for no tests. Never write the retired
@@ -234,14 +255,15 @@ author-writable properties present in `settings-catalog.json`; preserve
 unlisted fields verbatim because specialized editors may own runtime-required
 configuration that the generic catalog intentionally hides.
 
-Give every scene, External Events resource, prefab, and behavior function one
-flat same-stem `functions/<Function>.settings` and
-`functions/<Function>.events` pair. Function settings never contain an events
-URI. Scene and External Events owners have exactly four fixed
-functions: `sceneLoad`, `sceneSignal`, `sceneUpdate`, and `sceneUnload`.
-`sceneUpdate` is required; empty optional lifecycle functions may be absent from
-disk. Infer lifecycle presence only from these settings/events pairs; never add
-`sceneLifecycleFunctions` to `scene.settings` or `external-events.settings`.
+Give each real scene, extension, prefab, or behavior function one same-stem
+`functions/<Function>.settings` and `functions/<Function>.events` pair. Function
+settings never contain an events URI. Scenes use the reserved lifecycle roles
+`sceneLoad`, `sceneSignal`, `sceneUpdate`, and `sceneUnload`; infer their presence
+from settings/events pairs, never from a `sceneLifecycleFunctions` settings key.
+External Events are plain event fragments, not functions. Each is just
+`scenes/<Scene>/external-events/<Fragment>.events`. Read `eventFileKinds` in
+`settings-catalog.json` for this source contract. Never create fragment settings,
+function folders, parameter declarations, or a registration manifest.
 Store editable prefab/behavior grouping in the function settings `folder` array.
 Lifecycle function names, order, roles, types, and parameters are fixed and must
 not be edited.
@@ -261,11 +283,7 @@ scenes/<Scene>/functions/sceneUpdate.settings
 scenes/<Scene>/functions/sceneUpdate.events
 scenes/<Scene>/functions/<OptionalLifecycle>.settings # only when non-empty
 scenes/<Scene>/functions/<OptionalLifecycle>.events
-scenes/<Scene>/external-events/<External>/external-events.settings
-scenes/<Scene>/external-events/<External>/functions/sceneUpdate.settings
-scenes/<Scene>/external-events/<External>/functions/sceneUpdate.events
-scenes/<Scene>/external-events/<External>/functions/<OptionalLifecycle>.settings
-scenes/<Scene>/external-events/<External>/functions/<OptionalLifecycle>.events
+scenes/<Scene>/external-events/<Fragment>.events
 scenes/<Scene>/external-layout/<External>.settings
 extensions/<Extension>/extension.settings
 extensions/<Extension>/functions/<Function>.settings
@@ -293,11 +311,14 @@ Do not create optional grouping folders. Canonical component directories are
 fixed; object/function grouping belongs in each settings file's `folder`
 array. Settings files never reference other settings files.
 
-In format version 5, declare each External Events resource with
-`scenes/<Scene>/external-events/<External>/external-events.settings`; its
-physical scene owner supplies `associatedLayout`, and its lifecycle logic lives
-in that owner's flat same-stem `functions/` pairs. Every managed `.events`
-body has a matching function `.settings` file. Declare an external layout
+In format version 6, each direct `.events` child of `external-events/` declares
+a fragment. Its decoded filename supplies its project-unique NFC name; the
+physical scene supplies its authoring context. Names must also be unique ignoring
+case. There is no fragment `order`: display is sorted by name, while execution
+follows Link positions. `link external "Name"` expands the same body in every
+caller lifecycle and inherits parent conditions, picked objects and local
+variables. Empty, comment-only and unreferenced fragments are valid. Only real
+functions require matching `.settings` files. Declare an external layout
 independently with `scenes/<Scene>/external-layout/<External>.settings`; it owns
 its identity, project-wide contiguous `order`, and embedded `[layout]` subtree.
 Do not write `externalEventFiles`, `externalLayoutFiles`, layout URIs,
@@ -325,7 +346,7 @@ Load only the references required by the task:
 - Read
   [references/gameplay-test-harness.md](references/gameplay-test-harness.md)
   in full before creating or materially modifying `tests.settings` or any
-  `tests/*.js` script. Use the exact flat version 5 file identity, read the
+  `tests/*.js` script. Use the exact flat version 6 file identity, read the
   generated `.gdevelop/harness-api.d.ts` contract, and complete its
   validation, reload, run, and result-polling workflow.
 - Read [references/tsl-materials.md](references/tsl-materials.md) in full
@@ -601,7 +622,7 @@ The complete public protocol surface is the following allowlist:
   `verify_project_change`, `simulate_preview_input`, `control_preview`,
   `set_runtime_state`, and `capture_preview_screenshot`.
 - Gameplay tests: `run_gameplay_tests` and `get_gameplay_test_results`.
-- Public write operation: `import_extension`.
+- Public write operations: `create_project` and `import_extension`.
 
 No other MCP tool name is supported, introspectable, or callable, even when
 write/command permissions are enabled. The two gameplay-test tools are always
@@ -615,9 +636,9 @@ below and authors project source directly.
 Constants are outside this MCP surface. The AI model must author them by
 reading and editing `constants.toml` directly.
 
+- Initializing a new local game with `create_project` as described above.
 - Importing and converting an official legacy extension with
-  `import_extension`. This is the only MCP tool allowed to create project
-  source. It must return the generated source paths; all later adaptation is a
+  `import_extension`. It must return the generated source paths; all later adaptation is a
   direct file edit.
 - Opening a specific local project entry in the editor with `open_project`.
 - Reloading direct disk edits into the editor with `reload_project`.
@@ -648,7 +669,8 @@ reading and editing `constants.toml` directly.
   layer/group/camera/mesh/visibility/texture-failure/rejection information;
   they never serialize raw Three.js, Pixi, renderer, canvas, or DOM objects.
 
-Except for the single `import_extension` conversion transaction, never use MCP
+Except for `create_project` initialization and the single `import_extension`
+conversion transaction, never use MCP
 to create scenes, objects, resources, variables, instances, extensions,
 behaviors, prefabs, or events. Never use generic editor-call, command, patch,
 sync, or save tools for authoring.

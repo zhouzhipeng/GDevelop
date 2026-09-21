@@ -63,6 +63,7 @@ import {
   validateTSLFileForMcp,
 } from './McpTSLMaterialValidator';
 import optionalRequire from '../Utils/OptionalRequire';
+import { createLocalProject } from './McpCreateProject';
 
 const gd: libGDevelop = global.gd;
 const fs = optionalRequire('fs');
@@ -4814,6 +4815,16 @@ const callMcpTool = async ({
         context.getPreviewLaunchState ? context.getPreviewLaunchState() : null
       )
     );
+  }
+
+  if (toolName === 'create_project') {
+    try {
+      return textResult(await createLocalProject(args || {}));
+    } catch (error) {
+      return errorResult(error.message || String(error), {
+        code: 'MCP_CREATE_PROJECT_FAILED',
+      });
+    }
   }
 
   if (toolName === 'open_project') {

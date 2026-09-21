@@ -656,6 +656,10 @@ namespace gdjs {
             raycastersByScene.set(runtimeScene, raycastContext);
           }
           const { raycaster, worldScale } = raycastContext;
+          // Raycasts also run between render passes (including unpaced tests).
+          // Refresh parents and descendants so newly moved objects are queried
+          // at their current transforms instead of the previous rendered frame.
+          rendererObject.updateWorldMatrix(true, true);
           raycaster
             .intersectObject(rendererObject, recursive)
             .slice(0, 16)

@@ -153,16 +153,11 @@ TEST_CASE("SceneLifecycleEventsFunctions", "[common]") {
     REQUIRE(functions.GetOrEmptyByName("sceneUpdate").GetEvents().IsEmpty());
   }
 
-  SECTION("layout and External Events keep GetEvents as the update alias") {
+  SECTION("only layouts use GetEvents as the update alias") {
     gd::Layout layout;
-    gd::ExternalEvents externalEvents;
 
     REQUIRE(&layout.GetEvents() ==
             &layout.GetLifecycleEventsFunctions()
-                 .GetSceneUpdateFunction()
-                 .GetEvents());
-    REQUIRE(&externalEvents.GetEvents() ==
-            &externalEvents.GetLifecycleEventsFunctions()
                  .GetSceneUpdateFunction()
                  .GetEvents());
   }
@@ -187,11 +182,10 @@ TEST_CASE("SceneLifecycleEventsFunctions", "[common]") {
                 .GetEventsCount() == 1);
 
     gd::ExternalEvents externalEvents;
-    externalEvents.GetLifecycleEventsFunctions() =
-        copiedLayout.GetLifecycleEventsFunctions();
+    externalEvents.GetEvents() = copiedLayout.GetEvents();
     gd::ExternalEvents copiedExternalEvents(externalEvents);
-    RequireOneEventInEveryLifecycleFunction(
-        copiedExternalEvents.GetLifecycleEventsFunctions());
+    externalEvents.GetEvents().Clear();
+    REQUIRE(copiedExternalEvents.GetEvents().GetEventsCount() == 1);
   }
 
   SECTION("layout 3D renderer world scale is normalized and serialized") {
@@ -324,29 +318,50 @@ TEST_CASE("SceneLifecycleEventsFunctions", "[common]") {
     REQUIRE_FALSE(functions.HasByName("sceneUnload"));
   }
 
-  SECTION("External Events use the same legacy lifecycle-body keys") {
+  SECTION("External Events serialize a single fragment body") {
     gd::Platform platform;
     gd::Project project;
     SetupProjectWithDummyPlatform(project, platform);
 
     gd::ExternalEvents externalEvents;
-    auto& functions = externalEvents.GetLifecycleEventsFunctions();
-    InsertOneEvent(functions.GetSceneLoadFunction());
-    InsertOneEvent(functions.GetSceneSignalFunction());
-    InsertOneEvent(functions.GetSceneUpdateFunction());
-    InsertOneEvent(functions.GetSceneUnloadFunction());
+    externalEvents.SetName("Fragment");
+    externalEvents.SetAssociatedLayout("Scene");
+    gd::StandardEvent event;
+    event.SetType("BuiltinCommonInstructions::Standard");
+    externalEvents.GetEvents().InsertEvent(event);
 
     gd::SerializerElement element;
     externalEvents.SerializeTo(element);
-    REQUIRE(element.HasChild("sceneLoadEvents"));
-    REQUIRE(element.HasChild("sceneSignalEvents"));
+    REQUIRE_FALSE(element.HasChild("sceneLoadEvents"));
+    REQUIRE_FALSE(element.HasChild("sceneSignalEvents"));
     REQUIRE(element.HasChild("events"));
-    REQUIRE(element.HasChild("sceneUnloadEvents"));
+    REQUIRE_FALSE(element.HasChild("sceneUnloadEvents"));
+    REQUIRE_FALSE(element.HasChild("sceneLifecycleFunctions"));
 
     gd::ExternalEvents roundTrippedExternalEvents;
     roundTrippedExternalEvents.UnserializeFrom(project, element);
-    RequireOneEventInEveryLifecycleFunction(
-        roundTrippedExternalEvents.GetLifecycleEventsFunctions());
+    REQUIRE(roundTrippedExternalEvents.GetName() == "Fragment");
+    REQUIRE(roundTrippedExternalEvents.GetAssociatedLayout() == "Scene");
+    REQUIRE(roundTrippedExternalEvents.GetEvents().GetEventsCount() == 1);
+  }
+
+  SECTION("Links expand the same fragment in every caller lifecycle") {
+    gd::Project project;
+    auto& fragment = project.InsertNewExternalEvents("Fragment", 0);
+    gd::StandardEvent event;
+    event.SetType("BuiltinCommonInstructions::Standard");
+    fragment.GetEvents().InsertEvent(event);
+    for (const auto& role : {"sceneLoad", "sceneSignal", "sceneUpdate", "sceneUnload"}) {
+      gd::LinkEvent link;
+      link.SetTarget("Fragment");
+      REQUIRE(link.GetLinkedEvents(project, role) == &fragment.GetEvents());
+      gd::EventsList source;
+      source.InsertEvent(link);
+      link.ReplaceLinkByLinkedEvents(project, source, 0, role);
+      REQUIRE(source.GetEventsCount() == 2); // preprocessing placeholder + body
+      source.Clear();
+      REQUIRE(fragment.GetEvents().GetEventsCount() == 1);
+    }
   }
 
   SECTION("empty same-role Links are valid no-ops") {
@@ -376,20 +391,16 @@ TEST_CASE("SceneLifecycleEventsFunctions", "[common]") {
     externalEvents.SetAssociatedLayout("Scene");
     auto& layoutFunctions =
         project.GetLayout("Scene").GetLifecycleEventsFunctions();
-    auto& externalFunctions = externalEvents.GetLifecycleEventsFunctions();
     layoutFunctions.InsertByName("sceneLoad");
     layoutFunctions.InsertByName("sceneSignal");
     layoutFunctions.InsertByName("sceneUnload");
-    externalFunctions.InsertByName("sceneLoad");
-    externalFunctions.InsertByName("sceneSignal");
-    externalFunctions.InsertByName("sceneUnload");
 
     LifecycleScopeRecordingWorker worker;
     gd::ProjectBrowserHelper::ExposeProjectEventsWithoutExtensions(project,
                                                                     worker);
 
     const auto& observations = worker.GetObservations();
-    REQUIRE(observations.size() == 8);
+    REQUIRE(observations.size() == 5);
 
     std::map<gd::String, std::size_t> countsByLifecycleFunction;
     std::size_t externalEventsObservationCount = 0;
@@ -403,14 +414,15 @@ TEST_CASE("SceneLifecycleEventsFunctions", "[common]") {
       if (!observation.externalEventsName.empty()) {
         externalEventsObservationCount++;
         REQUIRE(observation.externalEventsName == "ExternalEvents");
+        REQUIRE(observation.lifecycleFunctionName.empty());
       }
     }
 
-    REQUIRE(countsByLifecycleFunction["sceneLoad"] == 2);
-    REQUIRE(countsByLifecycleFunction["sceneSignal"] == 2);
-    REQUIRE(countsByLifecycleFunction["sceneUpdate"] == 2);
-    REQUIRE(countsByLifecycleFunction["sceneUnload"] == 2);
-    REQUIRE(externalEventsObservationCount == 4);
+    REQUIRE(countsByLifecycleFunction["sceneLoad"] == 1);
+    REQUIRE(countsByLifecycleFunction["sceneSignal"] == 1);
+    REQUIRE(countsByLifecycleFunction["sceneUpdate"] == 1);
+    REQUIRE(countsByLifecycleFunction["sceneUnload"] == 1);
+    REQUIRE(externalEventsObservationCount == 1);
   }
 
   SECTION("dependency traversal uses the linked lifecycle parameter scope") {
@@ -419,7 +431,6 @@ TEST_CASE("SceneLifecycleEventsFunctions", "[common]") {
     auto& externalEvents =
         project.InsertNewExternalEvents("ExternalEvents", 0);
     externalEvents.SetAssociatedLayout("Scene");
-    externalEvents.GetLifecycleEventsFunctions().InsertByName("sceneSignal");
 
     gd::LinkEvent linkEvent;
     linkEvent.SetTarget("ExternalEvents");

@@ -118,7 +118,7 @@ export const useNavigationToEvent = ({
                   setPendingEventNavigation(null);
                 }
               } else if (
-                locationType !== 'extension' &&
+                locationType === 'scene' &&
                 lifecycleFunctionName &&
                 // $FlowFixMe[method-unbinding]
                 ref.selectLifecycleFunctionByName

@@ -89,7 +89,7 @@ The exact resource schema comes from `settings-catalog.json`; a minimal entry is
 
 ```toml
 kind = "resources"
-settingsFormatVersion = 5
+settingsFormatVersion = 6
 
 [[resources]]
 kind = "tslMaterial"

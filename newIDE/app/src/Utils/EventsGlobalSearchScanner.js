@@ -43,7 +43,6 @@ export type ExternalEventsSearchGroup = {|
   ...BaseGroup,
   targetType: 'external-events',
   name: string,
-  lifecycleFunctionName: SceneLifecycleFunctionName,
 |};
 
 export type ExtensionSearchGroup = {|
@@ -425,24 +424,18 @@ const scanEvents = ({
     mapFor(0, project.getExternalEventsCount(), index => {
       const externalEvents = project.getExternalEventsAt(index);
       const name = externalEvents.getName();
-      sceneLifecycleFunctionDefinitions.forEach(({ name: role }) => {
-        const matches = searchInEventsList(
-          getSceneLifecycleEvents(externalEvents, role),
-          inputs
-        );
-        pushIfMatches(
-          groups,
-          matches => ({
-            id: `${where}:${name}:${role}`,
-            label: `${name} / ${getSceneLifecycleFunctionDisplayName(role)}`,
-            targetType: where,
-            name,
-            lifecycleFunctionName: role,
-            matches,
-          }),
-          matches
-        );
-      });
+      const matches = searchInEventsList(externalEvents.getEvents(), inputs);
+      pushIfMatches(
+        groups,
+        matches => ({
+          id: `${where}:${name}`,
+          label: name,
+          targetType: where,
+          name,
+          matches,
+        }),
+        matches
+      );
     });
   }
 };

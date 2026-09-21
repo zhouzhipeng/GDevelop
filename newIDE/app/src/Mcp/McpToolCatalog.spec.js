@@ -50,7 +50,10 @@ const expectedAlwaysAvailableTools = [
   'capture_preview_screenshot',
 ].sort();
 
-const expectedAlwaysAvailableWriteTools = ['import_extension'];
+const expectedAlwaysAvailableWriteTools = [
+  'create_project',
+  'import_extension',
+];
 
 describe('McpToolCatalog', () => {
   it('publishes the exact file-first tool surface under all permissions', () => {
@@ -151,6 +154,7 @@ describe('McpToolCatalog', () => {
       'Extension import',
       'Gameplay tests',
       'Preview runtime',
+      'Project creation',
       'Project opening',
       'Project-file validation',
       'Tool discovery',

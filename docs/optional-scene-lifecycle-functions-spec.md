@@ -1,5 +1,17 @@
 # Optional Scene and External Lifecycle Functions Specification
 
+> **Current scope amendment, approved 2026-09-20:** lifecycle functions apply
+> to scenes only. External Events are a single `gd::EventsList` saved as
+> `scenes/<Scene>/external-events/<Fragment>.events`. They have no lifecycle
+> functions, settings, parameter editor or independent order. Links expand the
+> same body in the actual caller scope. All External Events lifecycle designs,
+> directory examples, migration and UI rules below are retained as historical
+> design discussion and are superseded by
+> [external-events-snippets-spec.md](external-events-snippets-spec.md).
+> This task does not change scene lifecycle presence or timing. Production format
+> 6 rejects retired external function trees; there is no compatibility reader.
+
+
 - **Status:** Proposed; awaiting approval before implementation
 - **Date:** 2026-08-09
 - **Amends:** [Scene and External Lifecycle Functions Specification](scene-event-phases-spec.md)

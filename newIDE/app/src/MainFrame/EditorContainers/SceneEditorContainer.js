@@ -18,6 +18,7 @@ import {
   type ObjectsOutsideEditorChanges,
   type ObjectGroupsOutsideEditorChanges,
   type WillDeleteObjectChanges,
+  type ExtensionsOutsideEditorChanges,
 } from '../../EditorFunctions/OutsideEditorChanges';
 import { ProjectScopedContainersAccessor } from '../../InstructionOrExpression/EventsScope';
 import { type ObjectWithContext } from '../../ObjectsList/EnumerateObjects';
@@ -236,7 +237,7 @@ export class SceneEditorContainer extends React.Component<RenderEditorContainerP
   }
 
   onInstancesModifiedOutsideEditor(changes: InstancesOutsideEditorChanges) {
-    if (changes.scene !== this.getLayout()) {
+    if (changes.externalLayout || changes.scene !== this.getLayout()) {
       return;
     }
 
@@ -262,6 +263,26 @@ export class SceneEditorContainer extends React.Component<RenderEditorContainerP
 
     if (this.editor) {
       this.editor.onWillDeleteObject(changes);
+    }
+  }
+
+  onExtensionsModifiedOutsideEditor(changes: ExtensionsOutsideEditorChanges) {
+    const { project } = this.props;
+    const { editor } = this;
+    if (!project || !editor) return;
+
+    // The custom objects of the changed extensions may be rendered differently
+    // now (children, area or properties changed).
+    for (const extensionName of changes.extensionNames) {
+      if (!project.hasEventsFunctionsExtensionNamed(extensionName)) continue;
+      const eventsBasedObjects = project
+        .getEventsFunctionsExtension(extensionName)
+        .getEventsBasedObjects();
+      for (let index = 0; index < eventsBasedObjects.getCount(); index++) {
+        editor.forceUpdateCustomObjectRenderedInstances(
+          eventsBasedObjects.getAt(index)
+        );
+      }
     }
   }
 

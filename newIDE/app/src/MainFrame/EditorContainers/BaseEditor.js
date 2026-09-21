@@ -31,6 +31,8 @@ import type {
   WillDeleteSceneChanges,
   WillDeleteGameplayTestChanges,
   WillDeleteObjectChanges,
+  ExtensionsOutsideEditorChanges,
+  WillDeleteExtensionItemChanges,
 } from '../../EditorFunctions/OutsideEditorChanges';
 
 export type EditorContainerExtraProps = {|
@@ -130,6 +132,7 @@ export type RenderEditorContainerProps = {|
   onOpenExternalEvents: string => void,
   onOpenLayout: OpenLayoutHandler,
   onOpenEvents: (sceneName: string) => void,
+  onOpenExternalLayout: (externalLayoutName: string) => void,
   openInstructionOrExpression: (type: string) => void,
   onOpenCustomObjectEditor: (
     gdEventsFunctionsExtension,
@@ -304,6 +307,12 @@ export type RenderEditorContainerProps = {|
     changes: WillDeleteGameplayTestChanges
   ) => Promise<void>,
   onWillDeleteObject: (changes: WillDeleteObjectChanges) => void,
+  onExtensionsModifiedOutsideEditor: (
+    changes: ExtensionsOutsideEditorChanges
+  ) => void,
+  onWillDeleteExtensionItem: (
+    changes: WillDeleteExtensionItemChanges
+  ) => Promise<void>,
 
   // Events editing
   onSceneEventsModifiedOutsideEditor: (

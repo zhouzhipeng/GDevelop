@@ -12,7 +12,7 @@ describe('libGD.js - GDJS Scene Code Generation integration tests', function () 
     gd = await initializeGDevelopJs();
   });
 
-  it('generates ordered scene lifecycle helpers with same-role external links', function () {
+  it('expands external fragments in scene lifecycle helpers', function () {
     const project = new gd.ProjectHelper.createNewGDJSProject();
     const layout = project.insertNewLayout('Scene', 0);
     layout.getVariables().insertNew('Log', 0).setString('');
@@ -44,17 +44,22 @@ describe('libGD.js - GDJS Scene Code Generation integration tests', function () 
     ]);
     setEvents(lifecycle.getSceneSignalFunction(), [
       append('SignalName + ":" + Payload'),
+      { type: 'BuiltinCommonInstructions::Link', target: 'Shared lifecycle' },
     ]);
-    setEvents(lifecycle.getSceneUpdateFunction(), [append('"U"')]);
-    setEvents(lifecycle.getSceneUnloadFunction(), [append('"X"')]);
+    setEvents(lifecycle.getSceneUpdateFunction(), [
+      append('"U"'),
+      { type: 'BuiltinCommonInstructions::Link', target: 'Shared lifecycle' },
+    ]);
+    setEvents(lifecycle.getSceneUnloadFunction(), [
+      append('"X"'),
+      { type: 'BuiltinCommonInstructions::Link', target: 'Shared lifecycle' },
+    ]);
 
     const externalEvents = project.insertNewExternalEvents(
       'Shared lifecycle',
       0
     );
-    const externalLifecycle = externalEvents.getLifecycleEventsFunctions();
-    setEvents(externalLifecycle.getSceneLoadFunction(), [append('"E"')]);
-    setEvents(externalLifecycle.getSceneUpdateFunction(), [append('"WRONG"')]);
+    setEvents(externalEvents, [append('"E"')]);
 
     const serializedProjectElement = new gd.SerializerElement();
     project.serializeTo(serializedProjectElement);
@@ -81,7 +86,7 @@ describe('libGD.js - GDJS Scene Code Generation integration tests', function () 
 
     module.func(runtimeScene);
     expect(runtimeScene.getVariables().get('Log').getAsString()).toBe(
-      'LEPing:dataU'
+      'LEPing:dataEUE'
     );
     expect(runtimeScene._currentSceneSignal).toBe(null);
 
@@ -90,7 +95,7 @@ describe('libGD.js - GDJS Scene Code Generation integration tests', function () 
     module.func(runtimeScene);
     module.sceneUnload(runtimeScene);
     expect(runtimeScene.getVariables().get('Log').getAsString()).toBe(
-      'LEPing:dataUUX'
+      'LEPing:dataEUEUEXE'
     );
 
     serializedProjectElement.delete();
@@ -98,7 +103,7 @@ describe('libGD.js - GDJS Scene Code Generation integration tests', function () 
     project.delete();
   });
 
-  it('exposes scene signal parameters through eventsFunctionContext', function () {
+  it('inherits scene signal parameters in an external fragment', function () {
     const project = new gd.ProjectHelper.createNewGDJSProject();
     const layout = project.insertNewLayout('Scene', 0);
     layout.getVariables().insertNew('Log', 0).setString('');
@@ -120,11 +125,14 @@ describe('libGD.js - GDJS Scene Code Generation integration tests', function () 
         events: [],
       },
     ]);
-    layout
+    const fragment = project.insertNewExternalEvents('Signal body', 0);
+    fragment.getEvents().unserializeFrom(project, serializedEvents);
+    const link = layout
       .getLifecycleEventsFunctions()
       .getSceneSignalFunction()
       .getEvents()
-      .unserializeFrom(project, serializedEvents);
+      .insertNewEvent(project, 'BuiltinCommonInstructions::Link', 0);
+    gd.asLinkEvent(link).setTarget(fragment.getName());
 
     const serializedProjectElement = new gd.SerializerElement();
     project.serializeTo(serializedProjectElement);

@@ -699,12 +699,12 @@ requested.
 | ------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Single JSON               | arbitrary `*.json`                              | Legacy input/output path supported by the serializer/storage layer.                                                |
 | Split JSON folder project | a JSON entry plus referenced `*.json` fragments | Legacy format using `ObjectSplitter` and `__REFERENCE_TO_SPLIT_OBJECT`. Still readable; not the new source format. |
-| Multi-file source project | `project.gdevelop`                              | Primary local authoring format; version 5 TOML settings with embedded layouts, IfDo events, and flat gameplay-test JavaScript sources. |
+| Multi-file source project | `project.gdevelop`                              | Primary local authoring format; version 6 TOML settings with embedded layouts, IfDo events, and flat gameplay-test JavaScript sources. |
 
 Opening a legacy single-JSON project normalizes it through the current libGD
-serializer, decomposes it directly to version 5 next to the source, verifies a
+serializer, decomposes it directly to version 6 next to the source, verifies a
 compose round trip, and redirects the open file metadata to
-`project.gdevelop`. Production does not read version 3 or 4 folder projects.
+`project.gdevelop`. Production accepts only version 6 multi-file projects; earlier source trees need an explicit one-time conversion.
 
 Packaged desktop builds associate `.gdevelop` with GDevelop. Windows and Linux
 open the selected document through the positional project argument; macOS
@@ -736,10 +736,7 @@ scenes/<encoded-name>/
   objects/<encoded-name>.settings
   functions/<lifecycle>.settings
   functions/<lifecycle>.events
-  external-events/<encoded-name>/
-    external-events.settings
-    functions/<lifecycle>.settings
-    functions/<lifecycle>.events
+  external-events/<encoded-name>.events
   external-layout/<encoded-name>.settings
 extensions/<encoded-name>/extension.settings
 extensions/<encoded-name>/functions/<encoded-name>.settings|.events
@@ -1053,19 +1050,24 @@ authoring system itself.
 
 ### Scene lifecycle event functions
 
-Each `gd::Layout` and `gd::ExternalEvents` owns four fixed, real
-`gd::EventsFunction` bodies: `sceneLoad`, `sceneSignal`, `sceneUpdate`, and
-`sceneUnload`. `Layout::GetEvents()` and `ExternalEvents::GetEvents()` remain
-compatibility aliases for `sceneUpdate`. Project walkers, refactorers, search,
-validation, code generation, and source tooling traverse all four functions
-with `(owner, lifecycle role)` identity.
+`gd::Layout` owns scene lifecycle functions with reserved roles `sceneLoad`,
+`sceneSignal`, `sceneUpdate`, and `sceneUnload`. `Layout::GetEvents()` refers to
+scene update events. `gd::ExternalEvents` instead owns a single `gd::EventsList`;
+its `GetEvents()` is the fragment body, without a signature or lifecycle role.
+Structural search and refactoring visit each fragment once. Semantic validation
+expands Links in a copy of the caller tree to inherit parent conditions, local
+variables and lifecycle restrictions while retaining fragment source locations.
 
 At runtime, load executes once before the first logical update; queued scene
 signals invoke signal once per delivered broadcast before update; update runs
 once per logical frame; unload runs once, synchronously, before scene-owned
-state is destroyed. Links preserve the caller lifecycle role when resolving a
-scene or External Events target. The normative design and migration contract is
-in `docs/scene-event-phases-spec.md`.
+state is destroyed. A scene Link selects the caller's role in the target scene.
+An external Link expands the same fragment body in every role, at the Link's
+position and with its current object selection. Association alone never executes
+it. External source files are discovered directly as
+`scenes/<Scene>/external-events/<Fragment>.events`, without settings, function
+folders or a manifest. See `docs/external-events-snippets-spec.md` for the
+version 6 contract and `docs/scene-event-phases-spec.md` for scene timing.
 
 ---
 
