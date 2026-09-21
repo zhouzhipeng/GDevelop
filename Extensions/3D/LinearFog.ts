@@ -62,6 +62,7 @@ namespace gdjs {
             if (!scene || scene.fog === undefined) {
               return false;
             }
+            if (scene.fog === this.fog) return true;
             scene.fog = this.fog;
             this._invalidateTSLMaterials();
             return true;
@@ -74,6 +75,7 @@ namespace gdjs {
             if (!scene || scene.fog === undefined) {
               return false;
             }
+            if (scene.fog === null) return true;
             scene.fog = null;
             this._invalidateTSLMaterials();
             return true;
@@ -83,9 +85,11 @@ namespace gdjs {
           }
           updateDoubleParameter(parameterName: string, value: number): void {
             if (parameterName === 'near') {
+              if (this._near === value) return;
               this._near = value;
               this._applyWorldScale();
             } else if (parameterName === 'far') {
+              if (this._far === value) return;
               this._far = value;
               this._applyWorldScale();
             }
@@ -106,14 +110,15 @@ namespace gdjs {
           }
           updateStringParameter(parameterName: string, value: string): void {
             if (parameterName === 'color') {
-              this.fog.color = new THREE.Color(
-                gdjs.rgbOrHexStringToNumber(value)
-              );
+              const color = gdjs.rgbOrHexStringToNumber(value);
+              if (this.fog.color.getHex() === color) return;
+              this.fog.color.setHex(color);
               if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
           }
           updateColorParameter(parameterName: string, value: number): void {
             if (parameterName === 'color') {
+              if (this.fog.color.getHex() === value) return;
               this.fog.color.setHex(value);
               if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
@@ -135,6 +140,12 @@ namespace gdjs {
           updateFromNetworkSyncData(
             data: LinearFogFilterNetworkSyncData
           ): void {
+            if (
+              this._near === data.n &&
+              this._far === data.f &&
+              this.fog.color.getHex() === data.c
+            )
+              return;
             this._near = data.n;
             this._far = data.f;
             this._applyWorldScale();
