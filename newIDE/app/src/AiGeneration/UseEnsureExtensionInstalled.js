@@ -13,12 +13,13 @@ import { type ExtensionShortHeader } from '../Utils/GDevelopServices/Extension';
 
 export type EnsureExtensionInstalledOptions = {|
   extensionName: string,
+  preflightExtension?: Object => Promise<Object>,
   onWillInstallExtension: (extensionNames: Array<string>) => void,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
 |};
 
 type _UseEnsureExtensionInstalledReturnType = {
-  ensureExtensionInstalled: EnsureExtensionInstalledOptions => Promise<void>,
+  ensureExtensionInstalled: EnsureExtensionInstalledOptions => Promise<?Object>,
 };
 export const useEnsureExtensionInstalled = ({
   project,
@@ -37,6 +38,7 @@ export const useEnsureExtensionInstalled = ({
     ensureExtensionInstalled: React.useCallback(
       async ({
         extensionName,
+        preflightExtension,
         onExtensionInstalled,
         onWillInstallExtension,
       }: EnsureExtensionInstalledOptions) => {
@@ -81,7 +83,8 @@ export const useEnsureExtensionInstalled = ({
             extensionShortHeadersByName: extensionShortHeadersByNameToUse,
           }
         );
-        await installExtension({
+        const preflightReceipts = [];
+        const installed = await installExtension({
           project,
           requiredExtensionInstallation,
           importedSerializedExtensions: [],
@@ -89,7 +92,15 @@ export const useEnsureExtensionInstalled = ({
           onExtensionInstalled,
           updateMode: 'safeOnly',
           reason: 'extension',
+          preflightExtension: preflightExtension
+            ? async candidate => {
+                const receipt = await preflightExtension(candidate);
+                preflightReceipts.push(receipt);
+                return receipt;
+              }
+            : undefined,
         });
+        return { installed, preflightReceipts };
       },
       [
         extensionShortHeadersByName,
