@@ -22,6 +22,187 @@ namespace gdjs {
     error: console.error,
   };
 
+  /** Bounded local recording; input coordinates are normalized to the game canvas. */
+  class IssueRecording {
+    private recorder: MediaRecorder;
+    private stream: MediaStream;
+    private timer = 0;
+    private deadline = 0;
+    private startedAt = performance.now();
+    private events: Object[] = [];
+    private listeners: Array<{ type: string; listener: EventListener }> = [];
+    private result: Promise<{ dataUrl: string; inputs: Object[] }>;
+    private failure: string | null = null;
+
+    constructor(
+      canvas: HTMLCanvasElement,
+      render: () => void,
+      onEnded: () => void
+    ) {
+      if (typeof MediaRecorder === 'undefined' || !canvas.captureStream)
+        throw new Error('Game recording is not supported by this preview.');
+      const output = document.createElement('canvas');
+      const scale = Math.min(1, 1280 / canvas.width, 720 / canvas.height);
+      output.width = Math.max(1, Math.round(canvas.width * scale));
+      output.height = Math.max(1, Math.round(canvas.height * scale));
+      const context = output.getContext('2d');
+      if (!context) throw new Error('Unable to create the recording canvas.');
+      this.stream = output.captureStream(30);
+      try {
+        this.recorder = new MediaRecorder(this.stream, {
+          mimeType: 'video/webm',
+          videoBitsPerSecond: 1500000,
+        });
+      } catch (error) {
+        this.release();
+        throw error;
+      }
+      let chunks: Blob[] = [];
+      let bytes = 0;
+      let label = '';
+      let labelTime = 0;
+      let pointer: { x: number; y: number } | null = null;
+      this.result = new Promise((resolve) => {
+        this.recorder.ondataavailable = (event) => {
+          if (event.data.size) {
+            chunks.push(event.data);
+            bytes += event.data.size;
+            if (bytes >= 16 * 1024 * 1024) this.stop();
+          }
+        };
+        this.recorder.onerror = () => {
+          this.failure = 'Unable to encode the recording.';
+          this.stop();
+        };
+        this.recorder.onstop = () => {
+          this.release();
+          const reader = new FileReader();
+          reader.onload = () =>
+            resolve({ dataUrl: String(reader.result), inputs: this.events });
+          reader.onerror = () => {
+            this.failure = 'Unable to read the recording.';
+            resolve({ dataUrl: '', inputs: this.events });
+          };
+          reader.readAsDataURL(new Blob(chunks, { type: 'video/webm' }));
+          chunks = [];
+          onEnded();
+        };
+      });
+      try {
+        this.recorder.start(250);
+        const input = (event: Event) => {
+          if (this.events.length >= 20000) {
+            this.stop();
+            return;
+          }
+          const record: { [key: string]: unknown } = {
+            timeMs: Math.round(performance.now() - this.startedAt),
+            type: event.type,
+          };
+          if (event instanceof KeyboardEvent) {
+            record.code = event.code;
+            record.repeat = event.repeat;
+            label = event.type + ': ' + event.code;
+          } else if (event instanceof PointerEvent) {
+            const rect = canvas.getBoundingClientRect();
+            record.x = (event.clientX - rect.left) / rect.width;
+            record.y = (event.clientY - rect.top) / rect.height;
+            record.button = event.button;
+            record.buttons = event.buttons;
+            record.pointerType = event.pointerType;
+            record.pointerId = event.pointerId;
+            pointer = {
+              x: Number(record.x) * output.width,
+              y: Number(record.y) * output.height,
+            };
+            if (event.type !== 'pointermove')
+              label =
+                event.pointerType + ' ' + event.type + ': ' + event.button;
+          } else if (event instanceof WheelEvent) {
+            record.deltaX = event.deltaX;
+            record.deltaY = event.deltaY;
+            record.deltaMode = event.deltaMode;
+            label = 'Wheel: ' + event.deltaX + ', ' + event.deltaY;
+          } else {
+            label = 'Preview lost focus';
+          }
+          if (event.type !== 'pointermove') labelTime = performance.now();
+          this.events.push(record);
+        };
+        [
+          'keydown',
+          'keyup',
+          'pointerdown',
+          'pointerup',
+          'pointermove',
+          'pointercancel',
+          'wheel',
+          'blur',
+        ].forEach((type) => {
+          window.addEventListener(type, input, {
+            capture: true,
+            passive: true,
+          });
+          this.listeners.push({ type, listener: input });
+        });
+        this.timer = window.setInterval(() => {
+          try {
+            // WebGL may discard its drawing buffer after presentation.
+            render();
+            context.drawImage(canvas, 0, 0, output.width, output.height);
+            if (pointer) {
+              context.strokeStyle = '#ffcf33';
+              context.lineWidth = 3;
+              context.beginPath();
+              context.arc(pointer.x, pointer.y, 10, 0, Math.PI * 2);
+              context.stroke();
+            }
+            context.fillStyle = 'rgba(0,0,0,0.75)';
+            context.fillRect(0, output.height - 32, output.width, 32);
+            context.fillStyle = '#ffffff';
+            context.font = '16px sans-serif';
+            context.fillText(
+              ((performance.now() - this.startedAt) / 1000).toFixed(1) +
+                's  ' +
+                (performance.now() - labelTime < 1500 ? label : ''),
+              8,
+              output.height - 10
+            );
+          } catch (error) {
+            this.failure = 'Unable to capture the game canvas.';
+            this.stop();
+          }
+        }, 1000 / 30);
+        this.deadline = window.setTimeout(() => this.stop(), 60000);
+      } catch (error) {
+        this.release();
+        throw error;
+      }
+    }
+    private release(): void {
+      window.clearInterval(this.timer);
+      window.clearTimeout(this.deadline);
+      this.listeners.forEach(({ type, listener }) =>
+        window.removeEventListener(type, listener, true)
+      );
+      this.listeners = [];
+      this.stream.getTracks().forEach((track) => track.stop());
+    }
+    isActive(): boolean {
+      return this.recorder.state !== 'inactive';
+    }
+    stop(): void {
+      if (this.recorder.state !== 'inactive') this.recorder.stop();
+      this.release();
+    }
+    async finish(): Promise<{ dataUrl: string; inputs: Object[] }> {
+      this.stop();
+      const result = await this.result;
+      if (this.failure) throw new Error(this.failure);
+      return result;
+    }
+  }
+
   type IssueAnnotationPoint = {
     x: number;
     y: number;
@@ -693,6 +874,7 @@ namespace gdjs {
     _hotReloader: gdjs.HotReloader;
     _originalConsole = originalConsole;
     _inGameDebugger: gdjs.InGameDebugger;
+    private _issueRecording: IssueRecording | null = null;
     private _issueAnnotationLayer: IssueAnnotationLayer | null = null;
     private _lastReportIssueShortcutPressTime: number | null = null;
 
@@ -1207,6 +1389,10 @@ namespace gdjs {
           if (inGameEditor) {
             this.sendContentAABB(data.messageId);
           }
+        } else if (data.command === 'issueReport.startRecording') {
+          this.startIssueRecording(data.messageId);
+        } else if (data.command === 'issueReport.stopRecording') {
+          void this.stopIssueRecording(data.messageId);
         } else if (data.command === 'issueReport.startAnnotation') {
           this.startIssueAnnotation(data.messageId);
         } else if (data.command === 'issueReport.setAnnotationTool') {
@@ -1984,6 +2170,67 @@ namespace gdjs {
       );
     }
 
+    startIssueRecording(messageId?: number): void {
+      try {
+        if (
+          !this._issueAnnotationLayer ||
+          (this._issueRecording && this._issueRecording.isActive())
+        )
+          throw new Error('No idle issue report is available.');
+        const canvas = this._runtimegame.getRenderer().getCanvas();
+        if (!canvas) throw new Error('No game canvas is available.');
+        const recording = new IssueRecording(
+          canvas,
+          () => {
+            this._runtimegame.getSceneStack().renderWithoutStep();
+          },
+          () => {
+            if (this._issueRecording !== recording) return;
+            this.startIssueAnnotation();
+            this._sendIssueAnnotationResponse(
+              'issueReport.recordingEnded',
+              undefined,
+              null
+            );
+          }
+        );
+        this._issueRecording = recording;
+        this._issueAnnotationLayer.destroy();
+        this._issueAnnotationLayer = null;
+        this._runtimegame.pause(false);
+        this._sendIssueAnnotationResponse(
+          'issueReport.recordingStarted',
+          messageId,
+          null
+        );
+      } catch (error) {
+        this._sendIssueAnnotationResponse(
+          'issueReport.recordingStarted',
+          messageId,
+          (error as Error).message
+        );
+      }
+    }
+    async stopIssueRecording(messageId?: number): Promise<void> {
+      try {
+        if (!this._issueRecording)
+          throw new Error('No recording is available.');
+        const recording = await this._issueRecording.finish();
+        this._sendIssueAnnotationResponse(
+          'issueReport.recording',
+          messageId,
+          null,
+          recording
+        );
+      } catch (error) {
+        this._sendIssueAnnotationResponse(
+          'issueReport.recording',
+          messageId,
+          (error as Error).message
+        );
+      }
+    }
+
     startIssueAnnotation(messageId?: number): void {
       let error: string | null = null;
       try {
@@ -2079,6 +2326,12 @@ namespace gdjs {
     }
 
     stopIssueAnnotation(messageId?: number): void {
+      if (this._issueRecording) {
+        const recording = this._issueRecording;
+        this._issueRecording = null;
+        recording.stop();
+        this._runtimegame.pause(true);
+      }
       let error: string | null = null;
       try {
         if (this._issueAnnotationLayer) {

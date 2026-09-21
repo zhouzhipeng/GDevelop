@@ -538,3 +538,24 @@ Implementation can begin once these first-version choices are approved:
    capture dialog closes, with a toast reporting success or failure.
 8. A successful save copies the project-relative Markdown path to the system
    clipboard.
+
+## Gameplay recording
+
+The report dialog can start, stop, preview, and replace a gameplay recording.
+Starting clears annotations and resumes the selected preview. Stopping pauses
+it again and restores annotation tools. Cancel/save restores the pause state
+from before the report was opened, including when cancelled during recording.
+
+Capture uses a local WebM video, at up to 1280 × 720 and 30 fps, with no audio.
+The video overlays elapsed time, pointer location, and keyboard/pointer/wheel
+actions. A separate JSON input log stores relative `timeMs`, physical keyboard
+`code`, repeat state, pointer type/id/buttons, normalized canvas coordinates,
+wheel deltas and blur events. Input listeners are passive and restricted to the
+preview window. Recording stops at 60 seconds, 16 MiB of encoded chunks, or
+20,000 input events, whichever happens first; the final encoder chunk may put
+video size slightly above that threshold.
+
+Reports link `issues/recordings/<stem>.webm` and `<stem>-inputs.json`.
+Both artifacts participate in the existing collision avoidance, temporary-file
+cleanup and publish-Markdown-last workflow. The screenshot and runtime dump
+are captured from the final paused state after recording. Nothing is uploaded.

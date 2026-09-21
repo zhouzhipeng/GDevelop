@@ -29,6 +29,11 @@ type Props = {|
   onCancel: () => void | Promise<void>,
   onSave: () => void | Promise<void>,
   isSaving: boolean,
+  isRecording?: boolean,
+  isRecordingBusy?: boolean,
+  recordingDataUrl?: ?string,
+  onStartRecording?: () => void | Promise<void>,
+  onStopRecording?: () => void | Promise<void>,
   error: ?string,
   warning: ?string,
 |};
@@ -44,6 +49,11 @@ const IssueReportDialog = ({
   onCancel,
   onSave,
   isSaving,
+  isRecording = false,
+  isRecordingBusy = false,
+  recordingDataUrl,
+  onStartRecording,
+  onStopRecording,
   error,
   warning,
 }: Props): React.Node => (
@@ -51,10 +61,12 @@ const IssueReportDialog = ({
     open={open}
     title={<Trans>Report an issue</Trans>}
     subtitle={
-      <Trans>Describe the problem and draw directly on the paused game.</Trans>
+      <Trans>
+        Describe the problem, annotate the game, or record a reproduction.
+      </Trans>
     }
     onRequestClose={onCancel}
-    cannotBeDismissed={isSaving}
+    cannotBeDismissed={isSaving || isRecordingBusy}
     maxWidth="sm"
     id="issue-report-dialog"
     actions={[
@@ -62,14 +74,16 @@ const IssueReportDialog = ({
         key="cancel"
         label={<Trans>Cancel</Trans>}
         onClick={onCancel}
-        disabled={isSaving}
+        disabled={isSaving || isRecordingBusy}
       />,
       <DialogPrimaryButton
         key="save"
         primary
         label={isSaving ? <Trans>Saving...</Trans> : <Trans>Save report</Trans>}
         onClick={onSave}
-        disabled={isSaving || !description.trim()}
+        disabled={
+          isSaving || isRecordingBusy || isRecording || !description.trim()
+        }
       />,
     ]}
     secondaryActions={[
@@ -79,7 +93,7 @@ const IssueReportDialog = ({
             tooltip={t`Undo last annotation`}
             aria-label={i18n._(t`Undo last annotation`)}
             onClick={onUndo}
-            disabled={isSaving}
+            disabled={isSaving || isRecordingBusy || isRecording}
           >
             <UndoIcon />
           </IconButton>
@@ -91,7 +105,7 @@ const IssueReportDialog = ({
             tooltip={t`Clear annotations`}
             aria-label={i18n._(t`Clear annotations`)}
             onClick={onClear}
-            disabled={isSaving}
+            disabled={isSaving || isRecordingBusy || isRecording}
           >
             <TrashIcon />
           </IconButton>
@@ -100,12 +114,54 @@ const IssueReportDialog = ({
     ]}
   >
     <ColumnStackLayout noMargin>
-      <Text noMargin>
-        <Trans>
-          Use the mouse, a pen, or touch in the game preview to mark the
-          problem. Game input is blocked while the annotation layer is active.
-        </Trans>
-      </Text>
+      {onStartRecording && onStopRecording && (
+        <>
+          <FlatButton
+            label={
+              isRecording ? (
+                <Trans>Stop recording</Trans>
+              ) : recordingDataUrl ? (
+                <Trans>Record again</Trans>
+              ) : (
+                <Trans>Start recording</Trans>
+              )
+            }
+            onClick={isRecording ? onStopRecording : onStartRecording}
+            disabled={isSaving || isRecordingBusy}
+          />
+          <Text noMargin>
+            {isRecording ? (
+              <Trans>
+                Recording — interact with the game preview. Recording stops
+                automatically after 60 seconds.
+              </Trans>
+            ) : (
+              <Trans>
+                Record up to 60 seconds of gameplay with keyboard, mouse, and
+                touch input shown in the video and saved as a timed input log.
+                Starting clears existing annotations. Game audio is not
+                recorded.
+              </Trans>
+            )}
+          </Text>
+          {recordingDataUrl && (
+            <video
+              controls
+              src={recordingDataUrl}
+              style={{ width: '100%', maxHeight: 240 }}
+              aria-label="Game recording"
+            />
+          )}
+        </>
+      )}
+      {!isRecording && (
+        <Text noMargin>
+          <Trans>
+            Use the mouse, a pen, or touch in the game preview to mark the
+            problem. Game input is blocked while the annotation layer is active.
+          </Trans>
+        </Text>
+      )}
       <CompactToggleButtons
         id="issue-report-annotation-tools"
         expand
@@ -119,7 +175,7 @@ const IssueReportDialog = ({
               onToolChange('freehand');
             },
             isActive: selectedTool === 'freehand',
-            disabled: isSaving,
+            disabled: isSaving || isRecordingBusy || isRecording,
           },
           {
             id: 'issue-report-rectangle-tool',
@@ -130,7 +186,7 @@ const IssueReportDialog = ({
               onToolChange('rectangle');
             },
             isActive: selectedTool === 'rectangle',
-            disabled: isSaving,
+            disabled: isSaving || isRecordingBusy || isRecording,
           },
           {
             id: 'issue-report-arrow-tool',
@@ -141,7 +197,7 @@ const IssueReportDialog = ({
               onToolChange('arrow');
             },
             isActive: selectedTool === 'arrow',
-            disabled: isSaving,
+            disabled: isSaving || isRecordingBusy || isRecording,
           },
         ]}
       />
@@ -158,7 +214,7 @@ const IssueReportDialog = ({
         fullWidth
         required
         autoFocus="desktop"
-        disabled={isSaving}
+        disabled={isSaving || isRecordingBusy}
       />
     </ColumnStackLayout>
   </Dialog>
