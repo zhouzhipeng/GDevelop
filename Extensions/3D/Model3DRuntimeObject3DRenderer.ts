@@ -956,6 +956,9 @@ namespace gdjs {
     }
 
     updateAnimation(timeDelta: float) {
+      // Pausing only the current action leaves outgoing crossfade actions and
+      // mixer-time fade weights running. Freeze the entire pose until resumed.
+      if (this._model3DRuntimeObject.isAnimationPaused()) return;
       this._animationMixer.update(timeDelta);
     }
 
