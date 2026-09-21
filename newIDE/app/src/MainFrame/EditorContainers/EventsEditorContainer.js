@@ -20,6 +20,7 @@ import {
   type ObjectsOutsideEditorChanges,
   type ObjectGroupsOutsideEditorChanges,
   type WillDeleteObjectChanges,
+  type ExtensionsOutsideEditorChanges,
 } from '../../EditorFunctions/OutsideEditorChanges';
 import { ProjectScopedContainersAccessor } from '../../InstructionOrExpression/EventsScope';
 import { type ObjectWithContext } from '../../ObjectsList/EnumerateObjects';
@@ -250,7 +251,7 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
   }
 
   onSceneEventsModifiedOutsideEditor(changes: SceneEventsOutsideEditorChanges) {
-    if (this.getLayout() === changes.scene) {
+    if (changes.scene && this.getLayout() === changes.scene) {
       const lifecycleFunctionName: SceneLifecycleFunctionName = isSceneLifecycleFunctionName(
         changes.lifecycleFunctionName
       )
@@ -282,6 +283,10 @@ export class EventsEditorContainer extends React.Component<RenderEditorContainer
   }
 
   onWillDeleteObject(changes: WillDeleteObjectChanges) {
+    // No thing to be done.
+  }
+
+  onExtensionsModifiedOutsideEditor(changes: ExtensionsOutsideEditorChanges) {
     // No thing to be done.
   }
 

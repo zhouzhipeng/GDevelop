@@ -282,8 +282,7 @@ describe('libGD.js', function() {
       );
       lifecycleFunctions.insert(gd.SceneLifecycleEventsFunctions.SceneSignal);
       expect(
-        lifecycleFunctions.get(gd.SceneLifecycleEventsFunctions.SceneSignal)
-          .ptr
+        lifecycleFunctions.get(gd.SceneLifecycleEventsFunctions.SceneSignal).ptr
       ).toBe(lifecycleFunctions.getSceneSignalFunction().ptr);
       expect(lifecycleFunctions.getSceneUpdateFunction().getName()).toBe(
         'sceneUpdate'
@@ -4519,6 +4518,54 @@ describe('libGD.js', function() {
       expect(layout.getInitialInstances().hasInstancesOfObject('Object3')).toBe(
         false
       );
+    });
+    it('should reset the objects using a removed variant to the default variant', function() {
+      const project = new gd.ProjectHelper.createNewGDJSProject();
+      const extension = project.insertNewEventsFunctionsExtension('UI', 0);
+      const eventsBasedObject = extension
+        .getEventsBasedObjects()
+        .insertNew('Dialog', 0);
+      eventsBasedObject.getVariants().insertNewVariant('Dark', 0);
+      const parentEventsBasedObject = extension
+        .getEventsBasedObjects()
+        .insertNew('Parent', 1);
+
+      const layout = project.insertNewLayout('Scene', 0);
+      const objects = [
+        layout
+          .getObjects()
+          .insertNewObject(project, 'UI::Dialog', 'SceneObject', 0),
+        project
+          .getObjects()
+          .insertNewObject(project, 'UI::Dialog', 'GlobalObject', 0),
+        parentEventsBasedObject
+          .getObjects()
+          .insertNewObject(project, 'UI::Dialog', 'Child', 0),
+      ];
+      objects.forEach(object =>
+        gd
+          .asCustomObjectConfiguration(object.getConfiguration())
+          .setVariantName('Dark')
+      );
+
+      gd.WholeProjectRefactorer.removeEventsBasedObjectVariant(
+        project,
+        extension,
+        eventsBasedObject,
+        'Dark'
+      );
+
+      expect(eventsBasedObject.getVariants().hasVariantNamed('Dark')).toBe(
+        false
+      );
+      objects.forEach(object =>
+        expect(
+          gd
+            .asCustomObjectConfiguration(object.getConfiguration())
+            .getVariantName()
+        ).toBe('')
+      );
+      project.delete();
     });
     // See other tests in WholeProjectRefactorer.cpp
   });

@@ -17,6 +17,7 @@ import {
   type ObjectsOutsideEditorChanges,
   type ObjectGroupsOutsideEditorChanges,
   type WillDeleteObjectChanges,
+  type ExtensionsOutsideEditorChanges,
 } from '../../EditorFunctions/OutsideEditorChanges';
 import ExternalPropertiesDialog, {
   type ExternalProperties,
@@ -250,6 +251,10 @@ export class ExternalEventsEditorContainer extends React.Component<
   }
 
   onWillDeleteObject(changes: WillDeleteObjectChanges) {
+    // No thing to be done.
+  }
+
+  onExtensionsModifiedOutsideEditor(changes: ExtensionsOutsideEditorChanges) {
     // No thing to be done.
   }
 

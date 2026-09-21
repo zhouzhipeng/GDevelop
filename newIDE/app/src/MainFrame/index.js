@@ -103,6 +103,7 @@ import { getEditorTabKey } from './EditorTabs/EditorTabKey';
 import { getProjectGameplayTestRecentEditorItems } from './GameplayTestRecentEditorItems';
 import {
   getRenamedLayoutTabProjectItemName,
+  getRenamedEventsBasedObjectTabProjectItemName,
   getRenamedExternalLayoutTabProjectItemName,
   getRenamedExternalEventsTabProjectItemName,
   getRenamedGameplayTestTabProjectItemName,
@@ -167,6 +168,8 @@ import {
   type WillDeleteSceneChanges,
   type WillDeleteGameplayTestChanges,
   type WillDeleteObjectChanges,
+  type ExtensionsOutsideEditorChanges,
+  type WillDeleteExtensionItemChanges,
 } from '../EditorFunctions/OutsideEditorChanges';
 import { type Exporter } from '../ExportAndShare/ShareDialog';
 import ResourcesLoader from '../ResourcesLoader/index';
@@ -5990,12 +5993,21 @@ const MainFrame = (props: Props): React.MixedElement => {
           editorRef.onInstancesModifiedOutsideEditor(changes);
         }
       }
+      // Children of a custom object moved: refresh its rendered instances.
+      if (changes.eventsBasedObject) {
+        onEventsBasedObjectChildrenEdited(changes.eventsBasedObject);
+      }
     },
-    [state.editorTabs]
+    [state.editorTabs, onEventsBasedObjectChildrenEdited]
   );
 
   const onObjectsModifiedOutsideEditor = React.useCallback(
     (changes: ObjectsOutsideEditorChanges) => {
+      // Children of a custom object changed: the named variants follow the
+      // default one, and every rendered instance is refreshed.
+      if (changes.eventsBasedObject) {
+        onEventsBasedObjectChildrenEdited(changes.eventsBasedObject);
+      }
       for (const editor of getAllEditorTabs(state.editorTabs)) {
         const { editorRef } = editor;
         if (editorRef) {
@@ -6006,7 +6018,7 @@ const MainFrame = (props: Props): React.MixedElement => {
         isNewObjectTypeUsed: changes.isNewObjectTypeUsed,
       });
     },
-    [state.editorTabs, onObjectListsModified]
+    [state.editorTabs, onObjectListsModified, onEventsBasedObjectChildrenEdited]
   );
 
   const onObjectGroupsModifiedOutsideEditor = React.useCallback(
@@ -6021,39 +6033,151 @@ const MainFrame = (props: Props): React.MixedElement => {
     [state.editorTabs]
   );
 
-  // The project model is already renamed (e.g. by an AI editor function). The
-  // matching layout tab is closed to avoid it holding a stale project-item name
-  // (mirrors our own `renameLayout` flow, which closes tabs on rename).
+  // Re-select in the open extension tab an item that was renamed outside of the
+  // editor, so the user keeps working on what they were looking at.
+  const reselectRenamedExtensionItem = (
+    changes: ProjectItemRenamedOutsideEditorChanges
+  ) => {
+    const { currentProject } = state;
+    const { kind, newName, extensionName } = changes;
+    if (!currentProject || !extensionName) return;
+    if (!currentProject.hasEventsFunctionsExtensionNamed(extensionName)) return;
+
+    const foundTab = getEventsFunctionsExtensionEditor(
+      state.editorTabs,
+      currentProject.getEventsFunctionsExtension(extensionName)
+    );
+    if (!foundTab) return;
+
+    if (kind === 'custom-behavior') {
+      foundTab.editor.selectEventsBasedBehaviorByName(newName);
+    } else if (kind === 'function') {
+      foundTab.editor.selectEventsFunctionByName(
+        newName,
+        changes.behaviorName,
+        changes.objectName
+      );
+    }
+  };
+
+  // The project model is already updated; just keep open tabs alive by renaming
+  // their project item.
   const onProjectItemRenamedOutsideEditor = (
     changes: ProjectItemRenamedOutsideEditorChanges
   ) => {
     const { kind, oldName, newName } = changes;
-    const { currentProject } = state;
-    if (!currentProject) return;
-    if (kind === 'scene' && currentProject.hasLayoutNamed(newName)) {
-      setState(state => ({
-        ...state,
-        editorTabs: closeLayoutTabs(
-          state.editorTabs,
-          currentProject.getLayout(newName)
-        ),
-      }));
+    if (kind === 'custom-behavior' || kind === 'function') {
+      // No tab is named after these: only the selection has to follow.
+      reselectRenamedExtensionItem(changes);
+      return;
     }
-    if (kind === 'gameplay-test') {
-      setState(state => ({
-        ...state,
-        editorTabs: getEditorTabsWithRenamedProjectItem(
-          state.editorTabs,
+    if (kind === 'extension') {
+      const { currentProject } = state;
+      if (currentProject) {
+        // The generated extension is still registered under its old name.
+        eventsFunctionsExtensionsState.unloadProjectEventsFunctionsExtension(
           currentProject,
-          editorTab =>
-            getRenamedGameplayTestTabProjectItemName(
-              editorTab,
-              oldName,
-              newName
-            )
-        ),
-      }));
+          oldName
+        );
+      }
     }
+    setState(state => {
+      const { currentProject } = state;
+      if (!currentProject) return state;
+      if (kind === 'extension') {
+        return {
+          ...state,
+          editorTabs: getEditorTabsWithRenamedProjectItem(
+            state.editorTabs,
+            currentProject,
+            editorTab =>
+              getRenamedExtensionTabProjectItemName(editorTab, oldName, newName)
+          ),
+        };
+      }
+      if (kind === 'custom-object') {
+        const { extensionName } = changes;
+        if (!extensionName) return state;
+        return {
+          ...state,
+          editorTabs: getEditorTabsWithRenamedProjectItem(
+            state.editorTabs,
+            currentProject,
+            editorTab =>
+              getRenamedEventsBasedObjectTabProjectItemName(
+                editorTab,
+                extensionName,
+                oldName,
+                newName
+              )
+          ),
+        };
+      }
+      if (kind === 'scene') {
+        return {
+          ...state,
+          editorTabs: getEditorTabsWithRenamedProjectItem(
+            state.editorTabs,
+            currentProject,
+            editorTab =>
+              getRenamedLayoutTabProjectItemName(editorTab, oldName, newName)
+          ),
+        };
+      }
+      if (kind === 'external-layout') {
+        return {
+          ...state,
+          editorTabs: getEditorTabsWithRenamedProjectItem(
+            state.editorTabs,
+            currentProject,
+            editorTab =>
+              getRenamedExternalLayoutTabProjectItemName(
+                editorTab,
+                oldName,
+                newName
+              )
+          ),
+        };
+      }
+      if (kind === 'gameplay-test') {
+        return {
+          ...state,
+          editorTabs: getEditorTabsWithRenamedProjectItem(
+            state.editorTabs,
+            currentProject,
+            editorTab =>
+              getRenamedGameplayTestTabProjectItemName(
+                editorTab,
+                oldName,
+                newName
+              )
+          ),
+        };
+      }
+      return state;
+    }).then(() => {
+      if (kind === 'external-layout') {
+        // The events creating its objects now name it differently.
+        notifyChangesToInGameEditor({
+          shouldReloadProjectData: true,
+          shouldReloadLibraries: false,
+          shouldReloadResources: false,
+          shouldHardReload: false,
+          reasons: ['renamed-external-layout'],
+        });
+      }
+      if (kind === 'extension' || kind === 'custom-object') {
+        // The renamed extension (or custom object) is used by the game under
+        // its new name.
+        notifyChangesToInGameEditor({
+          shouldReloadProjectData: true,
+          shouldReloadLibraries: true,
+          shouldReloadResources: false,
+          shouldHardReload: false,
+          reasons: ['renamed-extension-item'],
+        });
+      }
+    });
   };
 
   // Called before the scene is actually deleted from the project, so the
@@ -6066,9 +6190,14 @@ const MainFrame = (props: Props): React.MixedElement => {
   const onWillDeleteScene = async (
     changes: WillDeleteSceneChanges
   ): Promise<void> => {
+    const { scene, externalLayout } = changes;
     await setState(state => ({
       ...state,
-      editorTabs: closeLayoutTabs(state.editorTabs, changes.scene),
+      editorTabs: externalLayout
+        ? closeExternalLayoutTabs(state.editorTabs, externalLayout)
+        : scene
+        ? closeLayoutTabs(state.editorTabs, scene)
+        : state.editorTabs,
     }));
   };
 
@@ -6083,6 +6212,85 @@ const MainFrame = (props: Props): React.MixedElement => {
         state.editorTabs,
         changes.gameplayTestProjectItemName
       ),
+    }));
+  };
+
+  // Called once the extensions changed outside of the editor were regenerated:
+  // refresh every editor showing them and reload the game.
+  const onExtensionsModifiedOutsideEditor = React.useCallback(
+    (changes: ExtensionsOutsideEditorChanges) => {
+      for (const editor of getAllEditorTabs(state.editorTabs)) {
+        const { editorRef } = editor;
+        if (editorRef) {
+          editorRef.onExtensionsModifiedOutsideEditor(changes);
+        }
+      }
+      notifyChangesToInGameEditor({
+        shouldReloadProjectData: true,
+        shouldReloadLibraries: true,
+        shouldReloadResources: false,
+        // The generated code changed: the running game must start over.
+        shouldHardReload: changes.needsCodeRegeneration,
+        reasons: ['ai-extension-change'],
+      });
+    },
+    [state.editorTabs, notifyChangesToInGameEditor]
+  );
+
+  // Called before an extension (or one of its items) is actually deleted from
+  // the project, so the tabs bound to it are closed and the selections holding
+  // it are released while it's still valid.
+  // The caller MUST await this: `setState` (`useStateWithCallback`) resolves
+  // once the tab-closing update is applied.
+  const onWillDeleteExtensionItem = async (
+    changes: WillDeleteExtensionItemChanges
+  ): Promise<void> => {
+    const { kind, extensionName, objectName, variantName } = changes;
+    const { currentProject } = state;
+
+    if (kind !== 'extension') {
+      // The extension editor keeps a pointer to the selected behavior, object
+      // or function: release it before it becomes dangling.
+      if (
+        currentProject &&
+        currentProject.hasEventsFunctionsExtensionNamed(extensionName)
+      ) {
+        const foundTab = getEventsFunctionsExtensionEditor(
+          state.editorTabs,
+          currentProject.getEventsFunctionsExtension(extensionName)
+        );
+        if (foundTab) foundTab.editor.onWillDeleteExtensionItem(changes);
+      }
+      if (kind === 'custom-behavior' || kind === 'function') {
+        // No tab is bound to these.
+        return;
+      }
+    } else if (currentProject) {
+      // Unload the Platform extension that was generated from it, as the
+      // reload only unloads the extensions still in the project.
+      eventsFunctionsExtensionsState.unloadProjectEventsFunctionsExtension(
+        currentProject,
+        extensionName
+      );
+    }
+
+    await setState(state => ({
+      ...state,
+      editorTabs:
+        kind === 'extension'
+          ? closeEventsFunctionsExtensionTabs(state.editorTabs, extensionName)
+          : kind === 'custom-object'
+          ? closeCustomObjectTab(
+              state.editorTabs,
+              extensionName,
+              objectName || ''
+            )
+          : closeEventsBasedObjectVariantTab(
+              state.editorTabs,
+              extensionName,
+              objectName || '',
+              variantName || ''
+            ),
     }));
   };
 
@@ -9018,6 +9226,7 @@ const MainFrame = (props: Props): React.MixedElement => {
     setPreviewedLayout: setPreviewedLayout,
     openExternalEvents: openExternalEvents,
     openLayout: openLayout,
+    openExternalLayout: openExternalLayout,
     openTemplateFromTutorial: openTemplateFromTutorial,
     openTemplateFromCourseChapter: openTemplateFromCourseChapter,
     previewDebuggerServer: previewDebuggerServer,
@@ -9077,6 +9286,8 @@ const MainFrame = (props: Props): React.MixedElement => {
     onWillDeleteScene: onWillDeleteScene,
     onWillDeleteGameplayTest: onWillDeleteGameplayTest,
     onWillDeleteObject: onWillDeleteObject,
+    onExtensionsModifiedOutsideEditor: onExtensionsModifiedOutsideEditor,
+    onWillDeleteExtensionItem: onWillDeleteExtensionItem,
     onWillInstallExtension: onWillInstallExtension,
     onExtensionInstalled: onExtensionInstalled,
     onCreateNewExtensionWithBehavior: onCreateNewExtensionWithBehavior,

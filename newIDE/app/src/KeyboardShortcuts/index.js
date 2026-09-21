@@ -241,7 +241,9 @@ export const getShortcutMetadataFromEvent = (
 export const useShortcutMap = (): ShortcutMap => {
   const preferences = React.useContext(PreferencesContext);
   const userShortcutMap = preferences.values.userShortcutMap;
-  return { ...defaultShortcuts, ...userShortcutMap };
+  return React.useMemo(() => ({ ...defaultShortcuts, ...userShortcutMap }), [
+    userShortcutMap,
+  ]);
 };
 
 type UseKeyboardShortcutsProps = {|
@@ -294,7 +296,12 @@ export const useKeyboardShortcuts = ({
         const commandName = getCommandNameForShortcut(
           shortcutData.shortcutString
         );
-        if (!commandName) return;
+        if (
+          !commandName ||
+          !commandsList[commandName] ||
+          commandsList[commandName].handledByInGameEditor
+        )
+          return;
         if (
           !shortcutData.isValid &&
           !(
