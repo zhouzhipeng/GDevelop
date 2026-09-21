@@ -89,6 +89,7 @@
           // Keep more live materials than the device has UBO binding points.
           // Revisit them in reverse order to catch incorrectly shared buffers.
           const materials = [];
+          const programsBefore = renderer.info.programs.length;
           const count = context.getParameter(context.MAX_UNIFORM_BUFFER_BINDINGS) + 8;
           for (let i = 0; i < count; i++) {
             const item = new THREE.MeshBasicNodeMaterial();
@@ -101,9 +102,33 @@
             context.readPixels(32, 32, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
             passed = passed && (index % 2 ? pixel[0] > 200 && pixel[1] < 10 : pixel[1] > 200 && pixel[0] < 10);
           }
+          const sharedPrograms = renderer.info.programs.length - programsBefore;
+          if (sharedPrograms !== 1) throw new Error(`Equivalent uniform graphs compiled ${sharedPrograms} programs instead of 1.`);
+          // Rebuild the same material with a new uniform node and identical GLSL.
+          // Sharing a GPU program must not restore the old graph's bindings.
+          mesh.material = materials[0];
+          materials[0].colorNode = THREE.GDevelopTSL.uniform(new THREE.Color(0x0000ff));
+          materials[0].needsUpdate = true;
+          renderer.render(scene, camera);
+          context.readPixels(32, 32, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+          passed = passed && pixel[2] > 200 && pixel[0] < 10 && pixel[1] < 10;
+          passed = passed && renderer.info.programs.length === programsBefore + 1;
+          // A different expression needs a different program.
+          materials[0].colorNode = THREE.GDevelopTSL.uniform(new THREE.Color(0xff0000)).mul(0.5);
+          materials[0].needsUpdate = true;
+          renderer.render(scene, camera);
+          context.readPixels(32, 32, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+          passed = passed && pixel[0] > 100 && pixel[1] < 10 && pixel[2] < 10;
+          passed = passed && renderer.info.programs.length === programsBefore + 2;
+          // Dispose one owner and verify a surviving owner keeps its own uniforms.
+          materials[0].dispose();
+          mesh.material = materials[1];
+          renderer.render(scene, camera);
+          context.readPixels(32, 32, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+          passed = passed && pixel[0] > 200 && pixel[1] < 10;
           passed = passed && context.getError() === context.NO_ERROR;
           materials.forEach(item => item.dispose());
-          finish(passed ? "passed" : "failed", Array.from(pixel).join(","));
+          finish(passed ? "passed" : "failed", `sharedPrograms=${sharedPrograms}; pixel=${Array.from(pixel).join(",")}`);
 
           material.dispose();
           geometry.dispose();
