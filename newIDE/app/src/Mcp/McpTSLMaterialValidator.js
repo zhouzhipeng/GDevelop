@@ -1,6 +1,7 @@
 // @flow
 
 import optionalRequire from '../Utils/OptionalRequire';
+import parseToml from '@iarna/toml/parse-string';
 import {
   PROJECT_TSL_API_RELATIVE_PATH,
   PROJECT_TSL_CATALOG_RELATIVE_PATH,
@@ -322,12 +323,45 @@ const getRegisteredResourceName = (
     .getAllResourceNames()
     .toJSArray()
     .sort();
-  const realProjectRoot = fs.realpathSync(projectRoot);
-  for (const name of names) {
+  // File-first authoring registers resources before reloading editor memory.
+  // When present, the saved registry is authoritative (including removals).
+  const registryPath = path.join(projectRoot, 'resources.settings');
+  let resources = names.map(name => {
     const resource = resourcesManager.getResource(name);
-    if (resource.getKind() !== 'tslMaterial') continue;
-    const file = resource.getFile();
-    if (!file || /^[a-z][a-z0-9+.-]*:/i.test(file)) continue;
+    return { name, kind: resource.getKind(), file: resource.getFile() };
+  });
+  if (fs.existsSync(registryPath)) {
+    try {
+      const registry = parseToml(
+        readBoundedText(
+          registryPath,
+          maximumCatalogBytes,
+          'TSL-MCP-RESOURCE-REGISTRY-INVALID'
+        ).source
+      );
+      if (registry.kind !== 'resources' || !Array.isArray(registry.resources)) {
+        throw new Error('Expected a resources settings document.');
+      }
+      resources = registry.resources;
+    } catch (error) {
+      throw new TSLMcpValidationError(
+        'TSL-MCP-RESOURCE-REGISTRY-INVALID',
+        'Cannot read the saved resources.settings registry. Validate project files before retrying.'
+      );
+    }
+  }
+  const realProjectRoot = fs.realpathSync(projectRoot);
+  for (const resource of resources) {
+    if (!resource || resource.kind !== 'tslMaterial') continue;
+    const { name, file } = resource;
+    if (
+      typeof name !== 'string' ||
+      !name ||
+      typeof file !== 'string' ||
+      !file ||
+      /^[a-z][a-z0-9+.-]*:/i.test(file)
+    )
+      continue;
     const lexicalResourcePath = path.isAbsolute(file)
       ? path.resolve(file)
       : path.resolve(projectRoot, file);
