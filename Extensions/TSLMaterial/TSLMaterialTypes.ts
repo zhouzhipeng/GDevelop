@@ -136,13 +136,13 @@ namespace gdjs {
   export interface TSLMaterialBehaviorData extends BehaviorData {
     name: string;
     type: 'TSLMaterial::Material';
-    Material: string;
-    BindingName: string;
-    SelectorMode: TSLMaterialSelectorMode;
-    MeshName: string;
-    MaterialName: string;
-    Priority: integer;
-    Enabled: boolean;
-    Fallback: 'KeepOriginal';
+    material: string;
+    bindingName: string;
+    selectorMode: TSLMaterialSelectorMode;
+    meshName: string;
+    materialName: string;
+    priority: integer;
+    enabled: boolean;
+    fallback: 'KeepOriginal';
   }
 }

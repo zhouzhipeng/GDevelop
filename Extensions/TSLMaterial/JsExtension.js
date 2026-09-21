@@ -2,14 +2,14 @@
 /// <reference path="../JsExtensionTypes.d.ts" />
 
 const defaults = {
-  Material: '',
-  BindingName: 'Default',
-  SelectorMode: 'All',
-  MeshName: '',
-  MaterialName: '',
-  Priority: 0,
-  Enabled: true,
-  Fallback: 'KeepOriginal',
+  material: '',
+  bindingName: 'Default',
+  selectorMode: 'All',
+  meshName: '',
+  materialName: '',
+  priority: 0,
+  enabled: true,
+  fallback: 'KeepOriginal',
 };
 
 const includeFiles = [
@@ -53,40 +53,40 @@ module.exports = {
 
     const implementation = new gd.BehaviorJsImplementation();
     implementation.initializeContent = function (content) {
-      content.setStringAttribute('Material', defaults.Material);
-      content.setStringAttribute('BindingName', defaults.BindingName);
-      content.setStringAttribute('SelectorMode', defaults.SelectorMode);
-      content.setStringAttribute('MeshName', defaults.MeshName);
-      content.setStringAttribute('MaterialName', defaults.MaterialName);
-      content.setDoubleAttribute('Priority', defaults.Priority);
-      content.setBoolAttribute('Enabled', defaults.Enabled);
-      content.setStringAttribute('Fallback', defaults.Fallback);
+      content.setStringAttribute('material', defaults.material);
+      content.setStringAttribute('bindingName', defaults.bindingName);
+      content.setStringAttribute('selectorMode', defaults.selectorMode);
+      content.setStringAttribute('meshName', defaults.meshName);
+      content.setStringAttribute('materialName', defaults.materialName);
+      content.setDoubleAttribute('priority', defaults.priority);
+      content.setBoolAttribute('enabled', defaults.enabled);
+      content.setStringAttribute('fallback', defaults.fallback);
     };
     implementation.updateProperty = function (content, propertyName, value) {
       if (!Object.prototype.hasOwnProperty.call(defaults, propertyName)) {
         return false;
       }
-      if (propertyName === 'Priority') {
+      if (propertyName === 'priority') {
         const number = Number(value);
         content.setDoubleAttribute(
           propertyName,
-          Number.isFinite(number) ? Math.trunc(number) : defaults.Priority
+          Number.isFinite(number) ? Math.trunc(number) : defaults.priority
         );
-      } else if (propertyName === 'Enabled') {
+      } else if (propertyName === 'enabled') {
         content.setBoolAttribute(
           propertyName,
           value === 'true' || value === '1'
         );
-      } else if (propertyName === 'SelectorMode') {
+      } else if (propertyName === 'selectorMode') {
         content.setStringAttribute(
           propertyName,
           ['All', 'MeshName', 'MaterialName', 'MeshAndMaterialName'].includes(
             value
           )
             ? value
-            : defaults.SelectorMode
+            : defaults.selectorMode
         );
-      } else if (propertyName === 'Fallback') {
+      } else if (propertyName === 'fallback') {
         content.setStringAttribute(propertyName, 'KeepOriginal');
       } else {
         content.setStringAttribute(propertyName, value);
@@ -96,8 +96,8 @@ module.exports = {
     implementation.getProperties = function (content) {
       const properties = new gd.MapStringPropertyDescriptor();
       properties
-        .getOrCreate('Material')
-        .setValue(content.getStringAttribute('Material'))
+        .getOrCreate('material')
+        .setValue(content.getStringAttribute('material'))
         .setType('Resource')
         .addExtraInfo('tslMaterial')
         .setLabel(_('TSL material'))
@@ -107,13 +107,13 @@ module.exports = {
           )
         );
       properties
-        .getOrCreate('BindingName')
-        .setValue(content.getStringAttribute('BindingName'))
+        .getOrCreate('bindingName')
+        .setValue(content.getStringAttribute('bindingName'))
         .setType('String')
         .setLabel(_('Binding name'));
       properties
-        .getOrCreate('SelectorMode')
-        .setValue(content.getStringAttribute('SelectorMode'))
+        .getOrCreate('selectorMode')
+        .setValue(content.getStringAttribute('selectorMode'))
         .setType('Choice')
         .addChoice('All', _('All material slots'))
         .addChoice('MeshName', _('Mesh name'))
@@ -121,27 +121,27 @@ module.exports = {
         .addChoice('MeshAndMaterialName', _('Mesh and material name'))
         .setLabel(_('Selector'));
       properties
-        .getOrCreate('MeshName')
-        .setValue(content.getStringAttribute('MeshName'))
+        .getOrCreate('meshName')
+        .setValue(content.getStringAttribute('meshName'))
         .setType('String')
         .setLabel(_('Mesh name'));
       properties
-        .getOrCreate('MaterialName')
-        .setValue(content.getStringAttribute('MaterialName'))
+        .getOrCreate('materialName')
+        .setValue(content.getStringAttribute('materialName'))
         .setType('String')
         .setLabel(_('Material name'));
       properties
-        .getOrCreate('Priority')
-        .setValue(String(content.getDoubleAttribute('Priority')))
+        .getOrCreate('priority')
+        .setValue(String(content.getDoubleAttribute('priority')))
         .setType('Number')
         .setLabel(_('Priority'));
       properties
-        .getOrCreate('Enabled')
-        .setValue(content.getBoolAttribute('Enabled') ? 'true' : 'false')
+        .getOrCreate('enabled')
+        .setValue(content.getBoolAttribute('enabled') ? 'true' : 'false')
         .setType('Boolean')
         .setLabel(_('Enabled'));
       properties
-        .getOrCreate('Fallback')
+        .getOrCreate('fallback')
         .setValue('KeepOriginal')
         .setType('Choice')
         .addChoice('KeepOriginal', _('Keep the original material'))

@@ -261,29 +261,29 @@ namespace gdjs {
     }
 
     private _applyData(data: Partial<gdjs.TSLMaterialBehaviorData>): void {
-      if (typeof data.Material === 'string') {
-        this._materialResourceName = data.Material;
+      if (typeof data.material === 'string') {
+        this._materialResourceName = data.material;
       }
-      if (typeof data.BindingName === 'string' && data.BindingName) {
-        this._bindingName = data.BindingName;
+      if (typeof data.bindingName === 'string' && data.bindingName) {
+        this._bindingName = data.bindingName;
       }
       if (
-        data.SelectorMode === 'All' ||
-        data.SelectorMode === 'MeshName' ||
-        data.SelectorMode === 'MaterialName' ||
-        data.SelectorMode === 'MeshAndMaterialName'
+        data.selectorMode === 'All' ||
+        data.selectorMode === 'MeshName' ||
+        data.selectorMode === 'MaterialName' ||
+        data.selectorMode === 'MeshAndMaterialName'
       ) {
-        this._selectorMode = data.SelectorMode;
+        this._selectorMode = data.selectorMode;
       }
-      if (typeof data.MeshName === 'string') this._meshName = data.MeshName;
-      if (typeof data.MaterialName === 'string') {
-        this._materialName = data.MaterialName;
+      if (typeof data.meshName === 'string') this._meshName = data.meshName;
+      if (typeof data.materialName === 'string') {
+        this._materialName = data.materialName;
       }
-      if (typeof data.Priority === 'number' && Number.isFinite(data.Priority)) {
-        this._priority = Math.trunc(data.Priority);
+      if (typeof data.priority === 'number' && Number.isFinite(data.priority)) {
+        this._priority = Math.trunc(data.priority);
       }
-      if (typeof data.Enabled === 'boolean') {
-        this._configuredEnabled = data.Enabled;
+      if (typeof data.enabled === 'boolean') {
+        this._configuredEnabled = data.enabled;
       }
     }
 

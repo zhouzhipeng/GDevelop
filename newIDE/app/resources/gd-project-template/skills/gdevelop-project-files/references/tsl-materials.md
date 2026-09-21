@@ -467,14 +467,14 @@ The built-in `TSLMaterial::Material` behavior has these properties:
 
 | Property       | Values/meaning                                               |
 | -------------- | ------------------------------------------------------------ |
-| `Material`     | Registered `tslMaterial` resource name.                      |
-| `BindingName`  | Stable binding identity; default `Default`.                  |
-| `SelectorMode` | `All`, `MeshName`, `MaterialName`, or `MeshAndMaterialName`. |
-| `MeshName`     | Exact mesh `Object3D.name` for mesh selectors.               |
-| `MaterialName` | Exact source material name for material selectors.           |
-| `Priority`     | Integer conflict priority. Higher priority wins.             |
-| `Enabled`      | Enables the default binding.                                 |
-| `Fallback`     | `KeepOriginal` only in version one.                          |
+| `material`     | Registered `tslMaterial` resource name.                      |
+| `bindingName`  | Stable binding identity; default `Default`.                  |
+| `selectorMode` | `All`, `MeshName`, `MaterialName`, or `MeshAndMaterialName`. |
+| `meshName`     | Exact mesh `Object3D.name` for mesh selectors.               |
+| `materialName` | Exact source material name for material selectors.           |
+| `priority`     | Integer conflict priority. Higher priority wins.             |
+| `enabled`      | Enables the default binding.                                 |
+| `fallback`     | `KeepOriginal` only in version one.                          |
 
 For direct multi-file edits, the behavior record belongs in the Model3D object's
 own `.settings` file, not in the layout subtree. Use the current
@@ -485,14 +485,14 @@ conceptual record is:
 [[behaviors]]
 name = "TSLMaterial"
 type = "TSLMaterial::Material"
-Material = "Hologram"
-BindingName = "Default"
-SelectorMode = "MeshAndMaterialName"
-MeshName = "Body"
-MaterialName = "BodyMaterial"
-Priority = 0
-Enabled = true
-Fallback = "KeepOriginal"
+material = "Hologram"
+bindingName = "Default"
+selectorMode = "MeshAndMaterialName"
+meshName = "Body"
+materialName = "BodyMaterial"
+priority = 0
+enabled = true
+fallback = "KeepOriginal"
 ```
 
 Selectors are structured and exact; they are not a query language:
@@ -505,7 +505,7 @@ Selectors are structured and exact; they are not a query language:
 | `MeshAndMaterialName` | The intersection of the exact mesh and material names.                       |
 
 Duplicate names match all duplicates. Multiple named bindings are resolved by
-higher `Priority`, then later insertion order. Removing or disabling the winner
+higher `priority`, then later insertion order. Removing or disabling the winner
 reveals the next matching binding or restores the original material. Failures are
 isolated and use `KeepOriginal`; the system never clears a valid slot to `null`.
 
