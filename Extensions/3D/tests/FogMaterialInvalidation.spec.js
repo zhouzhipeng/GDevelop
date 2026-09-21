@@ -2,7 +2,7 @@
 describe('Fog material invalidation', function () {
   ['LinearFog', 'ExponentialFog'].forEach(function (name) {
     it(
-      name + ' ignores repeated weather values but invalidates real changes',
+      name + ' updates animated fog uniforms without rebuilding materials',
       function () {
         const scene = new THREE.Scene();
         const runtimeScene = {
@@ -36,18 +36,39 @@ describe('Fog material invalidation', function () {
           }
           expect(invalidate.callCount).to.be(1);
           filter.updateDoubleParameter(parameter, value + 1);
-          expect(invalidate.callCount).to.be(2);
+          expect(invalidate.callCount).to.be(1);
           filter.updateStringParameter('color', '12;34;56');
-          expect(invalidate.callCount).to.be(3);
+          expect(invalidate.callCount).to.be(1);
           filter.updateColorParameter('color', 0x123456);
-          expect(invalidate.callCount).to.be(4);
+          expect(invalidate.callCount).to.be(1);
+          const fog = scene.fog;
+          const color = fog.color;
+          for (let i = 0; i < 120; i++) {
+            const next = value + (i + 1) / 100;
+            filter.updateDoubleParameter(parameter, next);
+            if (name === 'LinearFog') filter.updateDoubleParameter('far', 1000 + i);
+            filter.updateColorParameter('color', 0x123456 + i);
+            const sync = filter.getNetworkSyncData();
+            sync.c = 0x234567 + i;
+            if (name === 'LinearFog') { sync.n += 0.1; sync.f += 1; }
+            else sync.d += 0.01;
+            filter.updateFromNetworkSyncData(sync);
+            expect(scene.fog).to.be(fog);
+            expect(fog.color).to.be(color);
+            expect(fog.color.getHex()).to.be(sync.c);
+            if (name === 'LinearFog') {
+              expect(fog.near).to.be(sync.n * 0.01);
+              expect(fog.far).to.be(sync.f * 0.01);
+            } else expect(fog.density).to.be(sync.d * 100);
+          }
+          expect(invalidate.callCount).to.be(1);
           filter.removeEffect(target);
           filter.removeEffect(target);
-          expect(invalidate.callCount).to.be(5);
+          expect(invalidate.callCount).to.be(2);
           filter.updateDoubleParameter(parameter, value + 2);
-          expect(invalidate.callCount).to.be(5);
+          expect(invalidate.callCount).to.be(2);
           filter.applyEffect(target);
-          expect(invalidate.callCount).to.be(6);
+          expect(invalidate.callCount).to.be(3);
         } finally {
           invalidate.restore();
         }

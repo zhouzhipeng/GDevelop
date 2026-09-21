@@ -5,13 +5,14 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { patchUniformsGroups } from "./patch-uniforms-groups.mjs";
+import { patchNodeFogUniforms } from "./patch-node-fog-uniforms.mjs";
 import { patchNodeProgramRenderer, patchNodeProgramHandler } from "./patch-node-program-cache.mjs";
 
 const expectedWebGLNodesHandlerSha256 =
   "0e7e1a4161793982748359e910434b304d3bfa518e8feafa6c6fe7f5b50c95a1";
 const expectedThreeVersion = "0.185.1";
 const expectedTSLRuntimeSha256 =
-  "f65c42b96386c826315f8ac06275ce6d00dcd60acd355332acd77dd1bd345ec9";
+  "e569f3fe5a7a175a638857dbc26a28b82deb4ec8ccbc16fad7fd72e0694caefe";
 const tslRuntimeBanner =
   "/*! three.js v0.185.1 | Copyright 2010-2026 three.js authors | MIT License */";
 const requiredTSLRuntimeExports = [
@@ -96,7 +97,7 @@ const verifyAndTrackNodesHandler = () => ({
   },
   transform(code, id) {
     if (/[\\/]three[\\/]examples[\\/]jsm[\\/]tsl[\\/]WebGLNodesHandler\.js$/.test(id)) {
-      return { code: patchNodeProgramHandler(code), map: null };
+      return { code: patchNodeFogUniforms(patchNodeProgramHandler(code)), map: null };
     }
     if (/[\\/]three[\\/]src[\\/]renderers[\\/]webgl[\\/]WebGLUniformsGroups\.js$/.test(id)) {
       return { code: patchUniformsGroups(code), map: null };

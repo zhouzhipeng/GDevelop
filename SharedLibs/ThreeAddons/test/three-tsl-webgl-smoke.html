@@ -128,13 +128,42 @@
           passed = passed && pixel[0] > 200 && pixel[1] < 10;
           passed = passed && context.getError() === context.NO_ERROR;
           materials.forEach(item => item.dispose());
+          // Weather animates fog uniforms for thousands of frames. Verify actual
+          // pixels change without disposing/rebuilding the installed material.
+          for (const exponential of [false, true]) {
+            const fogMaterial = new THREE.MeshBasicNodeMaterial();
+            fogMaterial.colorNode = THREE.GDevelopTSL.color(0xff0000);
+            mesh.material = fogMaterial;
+            scene.fog = exponential
+              ? new THREE.FogExp2(0x0000ff, 0)
+              : new THREE.Fog(0x0000ff, 5, 10);
+            renderer.render(scene, camera);
+            context.readPixels(32, 32, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+            if (!(pixel[0] > 200 && pixel[2] < 10)) throw new Error('Clear fog baseline failed');
+            const programCount = renderer.info.programs.length;
+            const version = fogMaterial.version;
+            for (let frame = 0; frame < 120; frame++) {
+              if (exponential) scene.fog.density = (frame + 1) / 60;
+              else { scene.fog.near = 0; scene.fog.far = 10 - (frame + 1) / 15; }
+              renderer.render(scene, camera);
+            }
+            context.readPixels(32, 32, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+            if (!(pixel[2] > 200 && pixel[0] < 10)) throw new Error('Animated fog range/density did not update');
+            scene.fog.color.setHex(0x00ff00);
+            renderer.render(scene, camera);
+            context.readPixels(32, 32, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+            if (!(pixel[1] > 200 && pixel[2] < 10)) throw new Error('Animated fog color did not update');
+            if (renderer.info.programs.length !== programCount || fogMaterial.version !== version)
+              throw new Error('Fog uniform animation rebuilt a shader');
+            fogMaterial.dispose();
+          }
           finish(passed ? "passed" : "failed", `sharedPrograms=${sharedPrograms}; pixel=${Array.from(pixel).join(",")}`);
 
           material.dispose();
           geometry.dispose();
           renderer.dispose();
         } catch (error) {
-          finish("failed", error && error.message ? error.message : error);
+          finish("failed", error && error.stack ? error.stack : error);
         }
       })();
     </script>
