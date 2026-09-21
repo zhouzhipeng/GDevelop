@@ -463,6 +463,18 @@ describe('gdjs.evtTools.scene3d', () => {
       expect(results[0].pointX).to.be.within(49.99, 50.01);
       expect(results[0].pointY).to.be.within(-0.001, 0.001);
       expect(results[0].pointZ).to.be.within(-0.001, 0.001);
+
+      // Events can move a mesh or its parent before the next render pass.
+      mesh.position.x = 200;
+      const movedResults = gdjs.evtTools.scene3d.raycastObjects(
+        -100, 0, 0, 1, 0, 0, [object]
+      );
+      expect(movedResults[0].distance).to.be.within(249.99, 250.01);
+      threeGroup.position.x = 50;
+      const parentMovedResults = gdjs.evtTools.scene3d.raycastObjects(
+        -100, 0, 0, 1, 0, 0, [object]
+      );
+      expect(parentMovedResults[0].distance).to.be.within(299.99, 300.01);
     } finally {
       mesh.removeFromParent();
       geometry.dispose();
