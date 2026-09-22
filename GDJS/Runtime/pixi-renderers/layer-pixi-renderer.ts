@@ -227,6 +227,8 @@ namespace gdjs {
     private _threePlaneMeshDebugOutline: THREE.LineSegments | null = null;
     private _rejected3DRendererObjectCount: integer = 0;
     private _didWarnAboutRejected3DRendererObject: boolean = false;
+    private _pendingRejected3DRendererObjects: Set<THREE.Object3D> | null =
+      null;
 
     /**
      * Pixi doesn't sort children with zIndex == 0.
@@ -1302,14 +1304,24 @@ namespace gdjs {
 
     add3DRendererObject(object: THREE.Object3D): void {
       if (!this._threeGroup) {
-        this._rejected3DRendererObjectCount++;
-        if (!this._didWarnAboutRejected3DRendererObject) {
-          this._didWarnAboutRejected3DRendererObject = true;
-          console.warn(
-            `[RUNTIME_3D_RENDERER_OBJECT_REJECTED] A 3D renderer object could not be attached to layer "${this._layer.getName()}" ` +
-              `because its Three.js group is unavailable (rendering type: ${this._layer.getRenderingType()}).`
-          );
+        // Constructors attach to the base layer before instance initialization
+        // or creation events move the object to its destination layer. Diagnose
+        // only objects still rejected after this synchronous initialization.
+        if (!this._pendingRejected3DRendererObjects) {
+          const pending = (this._pendingRejected3DRendererObjects = new Set());
+          Promise.resolve().then(() => {
+            this._pendingRejected3DRendererObjects = null;
+            this._rejected3DRendererObjectCount += pending.size;
+            if (pending.size && !this._didWarnAboutRejected3DRendererObject) {
+              this._didWarnAboutRejected3DRendererObject = true;
+              console.warn(
+                `[RUNTIME_3D_RENDERER_OBJECT_REJECTED] A 3D renderer object could not be attached to layer "${this._layer.getName()}" ` +
+                  `because its Three.js group is unavailable (rendering type: ${this._layer.getRenderingType()}).`
+              );
+            }
+          });
         }
+        this._pendingRejected3DRendererObjects.add(object);
         return;
       }
 
@@ -1317,6 +1329,7 @@ namespace gdjs {
     }
 
     remove3DRendererObject(object: THREE.Object3D): void {
+      this._pendingRejected3DRendererObjects?.delete(object);
       if (!this._threeGroup) return;
 
       this._threeGroup.remove(object);
