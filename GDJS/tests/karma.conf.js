@@ -224,6 +224,7 @@ module.exports = function (config) {
       './newIDE/app/resources/GDJS/Runtime/Extensions/3D/Base3DBehavior.js',
       './newIDE/app/resources/GDJS/Runtime/Extensions/3D/LinearFog.js',
       './newIDE/app/resources/GDJS/Runtime/Extensions/3D/ExponentialFog.js',
+      './newIDE/app/resources/GDJS/Runtime/Extensions/3D/SilhouetteEffect.js',
       './newIDE/app/resources/GDJS/Runtime/Extensions/3D/Model3DRuntimeObject3DRenderer.js',
       './newIDE/app/resources/GDJS/Runtime/Extensions/3D/Model3DRuntimeObject.js',
       './newIDE/app/resources/GDJS/Runtime/Extensions/TSLMaterial/TSLMaterialTypes.js',

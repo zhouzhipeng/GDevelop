@@ -242,6 +242,14 @@ namespace gdjs {
                 threeRenderer.render(threeScene, threeCamera);
               }
 
+              if (gdjs.Scene3DSilhouetteFilter) {
+                gdjs.Scene3DSilhouetteFilter.renderLayer(
+                  threeRenderer,
+                  threeScene,
+                  threeCamera
+                );
+              }
+
               this._layerRenderingMetrics.rendered3DLayersCount++;
 
               lastRenderWas3D = true;

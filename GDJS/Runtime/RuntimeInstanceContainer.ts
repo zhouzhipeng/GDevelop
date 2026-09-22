@@ -513,13 +513,16 @@ namespace gdjs {
         const rendererObject = object.getRendererObject();
         if (rendererObject) {
           rendererObject.visible = !object.isHidden();
+        }
 
-          // Update effects, only for visible objects.
-          if (rendererObject.visible) {
-            this.getGame()
-              .getEffectsManager()
-              .updatePreRender(object.getRendererEffects(), object);
-          }
+        // 3D objects have no Pixi display object, but still own effects.
+        if (
+          !object.isHidden() &&
+          (rendererObject || object.get3DRendererObject())
+        ) {
+          this.getGame()
+            .getEffectsManager()
+            .updatePreRender(object.getRendererEffects(), object);
         }
 
         // Perform pre-render update.

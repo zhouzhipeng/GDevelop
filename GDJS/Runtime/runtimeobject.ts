@@ -351,7 +351,7 @@ namespace gdjs {
      */
     onCreated(): void {
       const rendererObject = this.getRendererObject();
-      if (rendererObject) {
+      if (rendererObject || this.get3DRendererObject()) {
         for (const effectName in this._rendererEffects) {
           this._rendererEffects[effectName].applyEffect(this);
         }
@@ -1408,7 +1408,7 @@ namespace gdjs {
      */
     addEffect(effectData: EffectData): boolean {
       const rendererObject = this.getRendererObject();
-      if (!rendererObject) {
+      if (!rendererObject && !this.get3DRendererObject()) {
         return false;
       }
 
@@ -1424,7 +1424,7 @@ namespace gdjs {
      */
     removeEffect(effectName: string): boolean {
       const rendererObject = this.getRendererObject();
-      if (!rendererObject) return false;
+      if (!rendererObject && !this.get3DRendererObject()) return false;
 
       return this._runtimeScene
         .getGame()
@@ -1437,9 +1437,15 @@ namespace gdjs {
      */
     clearEffects(): boolean {
       const rendererObject = this.getRendererObject();
-      if (!rendererObject) return false;
+      if (!rendererObject && !this.get3DRendererObject()) return false;
+
+      const effectsManager = this._runtimeScene.getGame().getEffectsManager();
+      for (const effectName in this._rendererEffects) {
+        effectsManager.removeEffect(this._rendererEffects, this, effectName);
+      }
 
       this._rendererEffects = {};
+      if (!rendererObject) return true;
       return (
         this._runtimeScene
           .getGame()
