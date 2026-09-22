@@ -368,7 +368,9 @@ namespace gdjs {
     // intensity/scale and Three's exact r185 material semantics without
     // exposing the mutable source material to the authored build function.
     return {
-      baseColor: tsl.materialColor,
+      // materialColor can resolve to vec4 when a map is present. The public
+      // input contract is RGB; alpha is exposed separately through opacity.
+      baseColor: tsl.materialColor.rgb,
       opacity: tsl.materialOpacity,
       emissive: tsl.materialEmissive,
       roughness: tsl.materialRoughness,
