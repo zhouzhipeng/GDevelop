@@ -375,6 +375,7 @@ module.exports = {
         .addDefaultBehavior('ScalableCapability::ScalableBehavior')
         .addDefaultBehavior('FlippableCapability::FlippableBehavior')
         .addDefaultBehavior('AnimatableCapability::AnimatableBehavior')
+        .addDefaultBehavior('EffectCapability::EffectBehavior')
         .addDefaultBehavior('Scene3D::Base3DBehavior')
         .markAsRenderedIn3D()
         .setIncludeFile('Extensions/3D/A_RuntimeObject3D.js')
