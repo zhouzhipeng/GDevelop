@@ -227,7 +227,7 @@ generated compatibility/runtime output, not multi-file source.
 Preserve component order, stable names, existing unknown fields, and ownership
 boundaries. Make the smallest coherent patch. When adding a component, create
 its physical component directory and every referenced source file in the same
-change. Never write optional grouping directories or `eventsFunctionsFolderStructure`,
+change. Never write optional component-grouping directories or `eventsFunctionsFolderStructure`,
 `objectsFolderStructure`, `propertiesFolderStructure`, or
 `sharedPropertiesFolderStructure`. Object and owner-function settings store
 editor grouping as `folder = ["Parent", "Child"]`; use `folder = []` for the
@@ -270,6 +270,9 @@ not be edited.
 
 ## Project layout
 
+The following paths are the engine's canonical component contract. Auxiliary
+production and documentation directories are described separately below.
+
 ```text
 project.gdevelop
 resources.settings
@@ -307,7 +310,7 @@ extensions/<Extension>/behaviors/<Behavior>/functions/<Function>.events
 .gdevelop/tsl-catalog.json
 ```
 
-Do not create optional grouping folders. Canonical component directories are
+Do not create optional component-grouping folders. Canonical component directories are
 fixed; object/function grouping belongs in each settings file's `folder`
 array. Settings files never reference other settings files.
 
@@ -324,6 +327,48 @@ its identity, project-wide contiguous `order`, and embedded `[layout]` subtree.
 Do not write `externalEventFiles`, `externalLayoutFiles`, layout URIs,
 `associatedLayout`, `linkedScene`, or `unresolvedScene`, and never create a
 root `externals/external.settings`.
+
+### Auxiliary directories and outputs
+
+For project initialization, directory organization, resource production, or
+verification output, follow [the project directory conventions](../../docs/PROJECT_STRUCTURE.md).
+These conventions supplement, rather than replace, the component contract:
+
+```text
+README.md                              # current game entry and documentation index
+assets/                                # runtime resources and companion notices
+sources/                               # editable art/model/audio production files
+materials/                             # optional TSL runtime source
+tools/                                 # project-specific production/maintenance scripts
+docs/                                  # maintained design and development documents
+docs/history/                          # optional superseded descriptions
+artifacts/verification/<task-version>/  # reviewed reports and related screenshots
+artifacts/previews/                     # standalone display screenshots
+artifacts/local/                        # ignored local results
+tmp/                                   # ignored intermediate output
+builds/                                # ignored exported packages
+issues/                                # ignored local diagnostics
+skills/                                # bundled authoring workflows
+```
+
+Create optional directories only when used. `sources/` contains production
+inputs, not GDevelop scenes or events. Keep `tests/*.js` flat and reserve
+`.gdevelop/` for generated/editor files. Do not create competing root
+`preview/` or `docs/verification/` output directories. Project tools belong in
+`tools/`; bundled helpers remain in their owning skill's `scripts/` directory.
+
+Preserve registered runtime paths during auxiliary reorganization and update
+only affected production-tool, document and external-dependency references.
+For source-only moves, verify file preservation and dependency resolution;
+apply the usual source validation and runtime gates whenever game data or
+runtime assets change. A documentation-only change does not require starting
+or reloading the game.
+
+New verification reports identify their source commit, scope, actual results
+and unverified areas. Store report file paths relative to `project.gdevelop`;
+Markdown links remain document-relative. Historical evidence applies only to
+its recorded revision; moving it does not rerun tests. Keep temporary runs
+ignored and commit selected evidence rather than all generated output.
 
 ## Task references
 

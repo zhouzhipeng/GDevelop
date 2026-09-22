@@ -6,3 +6,8 @@ issues/
 __pycache__/
 *.py[cod]
 *.blend1
+
+# Disposable local outputs; reviewed evidence under artifacts/ is tracked.
+/tmp/
+/builds/
+/artifacts/local/
