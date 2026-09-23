@@ -364,6 +364,20 @@ TEST_CASE("SceneLifecycleEventsFunctions", "[common]") {
     }
   }
 
+  SECTION("Links do not resolve scene event sheets") {
+    gd::Project project;
+    auto& layout = project.InsertNewLayout("Scene", 0);
+    gd::StandardEvent event;
+    event.SetType("BuiltinCommonInstructions::Standard");
+    layout.GetLifecycleEventsFunctions()
+        .GetSceneUpdateFunction()
+        .GetEvents()
+        .InsertEvent(event);
+    gd::LinkEvent link;
+    link.SetTarget("Scene");
+    REQUIRE(link.GetLinkedEvents(project, "sceneUpdate") == nullptr);
+  }
+
   SECTION("empty same-role Links are valid no-ops") {
     gd::Project project;
     project.InsertNewExternalEvents("EmptyExternalEvents", 0);

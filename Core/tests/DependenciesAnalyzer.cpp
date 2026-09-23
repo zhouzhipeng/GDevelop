@@ -3,139 +3,65 @@
  * Copyright 2008-2016 Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-/**
- * @file Tests covering common features of GDevelop Core.
- */
 #include "GDCore/IDE/DependenciesAnalyzer.h"
 #include "GDCore/Events/Builtin/LinkEvent.h"
-#include "GDCore/Events/Event.h"
 #include "GDCore/Project/ExternalEvents.h"
 #include "GDCore/Project/Layout.h"
 #include "GDCore/Project/Project.h"
-#include "GDCore/Project/Variable.h"
 #include "catch.hpp"
 
 TEST_CASE("DependenciesAnalyzer", "[common]") {
-  SECTION("Can detect a simple scene dependency") {
+  SECTION("Scene names are not Link dependencies") {
     gd::Project project;
     auto& layout1 = project.InsertNewLayout("Layout1", 0);
-    auto& layout2 = project.InsertNewLayout("Layout2", 0);
+    project.InsertNewLayout("Layout2", 1);
 
-    gd::LinkEvent linkEvent1;
-    linkEvent1.SetTarget("Layout2");
-    layout1.GetEvents().InsertEvent(linkEvent1);
+    gd::LinkEvent link;
+    link.SetTarget("Layout2");
+    layout1.GetEvents().InsertEvent(link);
 
     DependenciesAnalyzer analyzer(project, layout1);
-    analyzer.Analyze();
-
-    REQUIRE(analyzer.GetScenesDependencies().size() == 1);
-    REQUIRE(analyzer.GetScenesDependencies().find("Layout2") !=
-            analyzer.GetScenesDependencies().end());
-    REQUIRE(analyzer.GetExternalEventsDependencies().size() == 0);
+    REQUIRE(analyzer.Analyze());
+    REQUIRE(analyzer.GetExternalEventsDependencies().empty());
   }
 
-  SECTION("Can detect a simple external events dependency") {
+  SECTION("Finds transitive external event dependencies") {
     gd::Project project;
-    auto& layout1 = project.InsertNewLayout("Layout1", 0);
-    auto& layout2 = project.InsertNewLayout("Layout2", 0);
-    auto& externalEvents1 =
-        project.InsertNewExternalEvents("ExternalEvents1", 0);
-    auto& externalEvents2 =
-        project.InsertNewExternalEvents("ExternalEvents2", 0);
+    auto& layout = project.InsertNewLayout("Layout", 0);
+    auto& first = project.InsertNewExternalEvents("First", 0);
+    project.InsertNewExternalEvents("Second", 1);
 
-    gd::LinkEvent linkEvent1;
-    linkEvent1.SetTarget("ExternalEvents1");
-    layout1.GetEvents().InsertEvent(linkEvent1);
+    gd::LinkEvent toFirst;
+    toFirst.SetTarget("First");
+    layout.GetEvents().InsertEvent(toFirst);
+    gd::LinkEvent toSecond;
+    toSecond.SetTarget("Second");
+    first.GetEvents().InsertEvent(toSecond);
 
-    DependenciesAnalyzer analyzer(project, layout1);
-    analyzer.Analyze();
-
-    REQUIRE(analyzer.GetScenesDependencies().size() == 0);
-    REQUIRE(analyzer.GetExternalEventsDependencies().size() == 1);
-    REQUIRE(analyzer.GetExternalEventsDependencies().find("ExternalEvents1") !=
-            analyzer.GetExternalEventsDependencies().end());
+    DependenciesAnalyzer analyzer(project, layout);
+    REQUIRE(analyzer.Analyze());
+    REQUIRE(analyzer.GetExternalEventsDependencies().size() == 2);
+    REQUIRE(analyzer.GetExternalEventsDependencies().count("First") == 1);
+    REQUIRE(analyzer.GetExternalEventsDependencies().count("Second") == 1);
   }
 
-  SECTION("Can detect a transitive scene and external events dependency") {
+  SECTION("Detects circular external event dependencies") {
     gd::Project project;
-    auto& layout1 = project.InsertNewLayout("Layout1", 0);
-    auto& layout2 = project.InsertNewLayout("Layout2", 0);
-    auto& layout3 = project.InsertNewLayout("Layout3", 0);
-    auto& externalEvents1 =
-        project.InsertNewExternalEvents("ExternalEvents1", 0);
+    auto& layout = project.InsertNewLayout("Layout", 0);
+    auto& first = project.InsertNewExternalEvents("First", 0);
+    auto& second = project.InsertNewExternalEvents("Second", 1);
 
-    gd::LinkEvent linkEvent1;
-    linkEvent1.SetTarget("Layout2");
-    layout1.GetEvents().InsertEvent(linkEvent1);
-    gd::LinkEvent linkEvent2;
-    linkEvent2.SetTarget("ExternalEvents1");
-    layout2.GetEvents().InsertEvent(linkEvent2);
-    gd::LinkEvent linkEvent3;
-    linkEvent3.SetTarget("Layout3");
-    externalEvents1.GetEvents().InsertEvent(linkEvent3);
+    gd::LinkEvent toFirst;
+    toFirst.SetTarget("First");
+    layout.GetEvents().InsertEvent(toFirst);
+    gd::LinkEvent toSecond;
+    toSecond.SetTarget("Second");
+    first.GetEvents().InsertEvent(toSecond);
+    gd::LinkEvent backToFirst;
+    backToFirst.SetTarget("First");
+    second.GetEvents().InsertEvent(backToFirst);
 
-    DependenciesAnalyzer analyzer(project, layout1);
-    analyzer.Analyze();
-
-    REQUIRE(analyzer.GetScenesDependencies().size() == 2);
-    REQUIRE(analyzer.GetScenesDependencies().find("Layout2") !=
-            analyzer.GetScenesDependencies().end());
-    REQUIRE(analyzer.GetScenesDependencies().find("Layout3") !=
-            analyzer.GetScenesDependencies().end());
-    REQUIRE(analyzer.GetExternalEventsDependencies().size() == 1);
-    REQUIRE(analyzer.GetExternalEventsDependencies().find("ExternalEvents1") !=
-            analyzer.GetExternalEventsDependencies().end());
-  }
-
-  SECTION("Can detect a (nested) circular dependency with scenes") {
-    gd::Project project;
-    auto& layout1 = project.InsertNewLayout("Layout1", 0);
-    auto& layout2 = project.InsertNewLayout("Layout2", 0);
-    auto& layout3 = project.InsertNewLayout("Layout3", 0);
-
-    gd::LinkEvent linkEvent1;
-    linkEvent1.SetTarget("Layout2");
-    layout1.GetEvents().InsertEvent(linkEvent1);
-    gd::LinkEvent linkEvent2;
-    linkEvent2.SetTarget("Layout3");
-    layout2.GetEvents().InsertEvent(linkEvent2);
-    gd::LinkEvent linkEvent3;
-    linkEvent3.SetTarget("Layout1");
-    layout3.GetEvents().InsertEvent(linkEvent3);
-
-    DependenciesAnalyzer analyzer(project, layout1);
-    REQUIRE(analyzer.Analyze() == false);
-  }
-
-  SECTION(
-      "Can detect a (nested) circular dependency with scenes and external "
-      "events") {
-    gd::Project project;
-    auto& layout1 = project.InsertNewLayout("Layout1", 0);
-    auto& layout2 = project.InsertNewLayout("Layout2", 0);
-    auto& layout3 = project.InsertNewLayout("Layout3", 0);
-    auto& externalEvents1 =
-        project.InsertNewExternalEvents("ExternalEvents1", 0);
-    auto& externalEvents2 =
-        project.InsertNewExternalEvents("ExternalEvents2", 0);
-
-    gd::LinkEvent linkEvent1;
-    linkEvent1.SetTarget("Layout2");
-    layout1.GetEvents().InsertEvent(linkEvent1);
-    gd::LinkEvent linkEvent2;
-    linkEvent2.SetTarget("ExternalEvents1");
-    layout2.GetEvents().InsertEvent(linkEvent2);
-    gd::LinkEvent linkEvent3;
-    linkEvent3.SetTarget("Layout3");
-    externalEvents1.GetEvents().InsertEvent(linkEvent3);
-    gd::LinkEvent linkEvent4;
-    linkEvent4.SetTarget("ExternalEvents2");
-    layout3.GetEvents().InsertEvent(linkEvent4);
-    gd::LinkEvent linkEvent5;
-    linkEvent5.SetTarget("Layout1");
-    externalEvents2.GetEvents().InsertEvent(linkEvent5);
-
-    DependenciesAnalyzer analyzer(project, layout3);
-    REQUIRE(analyzer.Analyze() == false);
+    DependenciesAnalyzer analyzer(project, layout);
+    REQUIRE_FALSE(analyzer.Analyze());
   }
 }

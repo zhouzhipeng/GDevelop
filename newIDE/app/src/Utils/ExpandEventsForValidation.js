@@ -67,7 +67,7 @@ export const expandEventsForValidation = ({
         const link = gd.asLinkEvent(event);
         const target = link.getTarget();
         const external = project.hasExternalEventsNamed(target);
-        const targetKey = `${external ? 'external-events' : 'scene'}:${target}`;
+        const targetKey = `external-events:${target}`;
         const invalid = (message: string) =>
           errors.push({
             type: 'invalid-link',
@@ -85,20 +85,14 @@ export const expandEventsForValidation = ({
           );
           continue;
         }
-        if (!external && !project.hasLayoutNamed(target)) {
-          invalid(`Event Link target does not exist: ${target}`);
+        if (!external) {
+          invalid(`External events Link target does not exist: ${target}`);
           continue;
         }
-        let linkedEvents = external
-          ? project.getExternalEvents(target).getEvents()
-          : project
-              .getLayout(target)
-              .getLifecycleEventsFunctions()
-              .getByName(role)
-              .getEvents();
-        if (external) referencedFragments.add(target);
+        let linkedEvents = project.getExternalEvents(target).getEvents();
+        referencedFragments.add(target);
         const linkedLocation = {
-          locationType: external ? 'external-events' : 'scene',
+          locationType: 'external-events',
           locationName: target,
         };
         let linkedParentPath = [];

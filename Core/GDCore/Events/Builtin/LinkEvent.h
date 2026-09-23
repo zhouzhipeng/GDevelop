@@ -126,7 +126,7 @@ class GD_CORE_API LinkEvent : public gd::BaseEvent {
 
  private:
   gd::String
-      target;  ///< The name of the external events (or scene) to be included
+      target;  ///< The name of the external events to be included
 
   IncludeConfig
       includeConfig;  ///< Defines which events are included by this link

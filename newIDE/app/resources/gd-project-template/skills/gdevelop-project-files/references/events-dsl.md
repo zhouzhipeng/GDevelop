@@ -260,11 +260,10 @@ Every AI-authored `while` requires a positive safety `limit=` and must visibly
 progress toward termination. Use `and while` and `@while` only when preserving
 existing exact while-event structure.
 
-Link an existing event-sheet target with a leaf event:
+Link an external event fragment with a leaf event:
 
 ```events
-link external "Shared Combat"
-link scene "Base Level"
+link "Shared Combat"
 ```
 
 Links cannot own locals, actions, or children. Use them in scene lifecycle
@@ -318,8 +317,7 @@ explicitly permitted.
   in `sceneUpdate`.
 - `sceneUnload` is terminal and synchronous. Never author awaited/future-frame
   actions, deferred signal emission, or scene-stack transitions there.
-- A `link scene` resolves the target scene's matching lifecycle function.
-  A `link external` expands the same fragment body at the call site regardless
+- A `link` expands the same external fragment body at the call site regardless
   of lifecycle, inheriting parent conditions, picked objects, local variables
   and lifecycle restrictions. An empty body is a valid no-op.
 - Actions executed in sceneUpdate need an effective condition in the event or

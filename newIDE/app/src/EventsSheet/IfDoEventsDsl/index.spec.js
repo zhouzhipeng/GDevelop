@@ -318,16 +318,6 @@ const allEventTypesFixture = [
     include: { includeConfig: 0 },
   },
   {
-    type: 'BuiltinCommonInstructions::Link',
-    target: 'Shared Combat',
-    include: { includeConfig: 1, eventsGroup: 'Damage' },
-  },
-  {
-    type: 'BuiltinCommonInstructions::Link',
-    target: 'Shared Combat',
-    include: { includeConfig: 2, start: 2, end: 8 },
-  },
-  {
     type: 'BuiltinCommonInstructions::JsCode',
     inlineCode: 'const value = 1;\nruntimeScene.test = value;',
     parameterObjects: 'Enemy',
@@ -1087,6 +1077,21 @@ do Y
         () => compileIfDoToLegacyEventsJson('>> event\n'),
         'IFDO_DEPTH'
       );
+    });
+
+    test('links accept only one quoted external events name', () => {
+      expect(parseIfDoEvents('link "Shared Combat"\n')[0].target).toBe(
+        'Shared Combat'
+      );
+      for (const source of [
+        'link external "Shared Combat"\n',
+        'link scene "Base Level"\n',
+        'link SharedCombat\n',
+        'link "Shared Combat" group="Damage"\n',
+        'link "Shared Combat" range=2..8\n',
+      ]) {
+        expectCode(() => compileIfDoToLegacyEventsJson(source), 'IFDO_SYNTAX');
+      }
     });
 
     test('rejects removed exact syntax and unterminated blocks', () => {

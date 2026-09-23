@@ -32,11 +32,11 @@ Nested directories, fragment `.settings`, `functions/`, TOML headers and
 registration arrays are invalid. Empty, comment-only and unused files are valid.
 
 A fragment is a `gd::EventsList`. It has no function metadata, parameters, return
-value or lifecycle role. `link external "Name"` expands it at the Link position,
+value or lifecycle role. `link "Name"` expands it at the Link position,
 with the caller's conditions, picked objects, local variables and lifecycle
 restrictions. Every lifecycle role expands the same body. Merely owning a file
-never executes it. A Link to a scene still selects the caller's lifecycle role.
-Existing group/range selection and disabled Links retain their semantics.
+never executes it. A Link target must be an external event fragment.
+Disabled Links retain their semantics. IfDo Links include the whole fragment.
 
 Fragments are displayed by name and composed in scene order then name order.
 There is no persisted fragment order; Link positions determine execution order.

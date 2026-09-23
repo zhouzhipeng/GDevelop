@@ -318,7 +318,7 @@ In format version 6, each direct `.events` child of `external-events/` declares
 a fragment. Its decoded filename supplies its project-unique NFC name; the
 physical scene supplies its authoring context. Names must also be unique ignoring
 case. There is no fragment `order`: display is sorted by name, while execution
-follows Link positions. `link external "Name"` expands the same body in every
+follows Link positions. `link "Name"` expands the same body in every
 caller lifecycle and inherits parent conditions, picked objects and local
 variables. Empty, comment-only and unreferenced fragments are valid. Only real
 functions require matching `.settings` files. Declare an external layout

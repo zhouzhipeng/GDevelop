@@ -313,15 +313,6 @@ void ProjectBrowserHelper::ExposeLayoutEventsAndDependencies(
        dependenciesAnalyzer.GetExternalEventsDependencies()) {
     worker.Launch(project.GetExternalEvents(externalEventName).GetEvents());
   }
-  layout.GetLifecycleEventsFunctions().ForEach(
-      [&](gd::SceneLifecycleFunctionRole role, gd::EventsFunction&) {
-        for (const gd::String& sceneName :
-             dependenciesAnalyzer.GetScenesDependencies(role)) {
-          auto& dependencyLayout = project.GetLayout(sceneName);
-          worker.Launch(dependencyLayout.GetLifecycleEventsFunctions()
-                            .GetEvents(role));
-        }
-      });
 }
 
 void ProjectBrowserHelper::ExposeLayoutEventsAndDependencies(
@@ -353,18 +344,6 @@ void ProjectBrowserHelper::ExposeLayoutEventsAndDependencies(
           dependencyScopedContainers.AddParameters(
               callerFunction.GetParameters());
           worker.Launch(externalEvents.GetEvents(),
-                        dependencyScopedContainers);
-        }
-        for (const gd::String& sceneName :
-             dependenciesAnalyzer.GetScenesDependencies(role)) {
-          auto& dependencyLayout = project.GetLayout(sceneName);
-          auto& dependencyEventsFunction =
-              dependencyLayout.GetLifecycleEventsFunctions().Get(role);
-          auto dependencyScopedContainers = projectScopedContainers;
-          dependencyScopedContainers.SetScopeSceneLifecycleFunctionRole(role);
-          dependencyScopedContainers.AddParameters(
-              dependencyEventsFunction.GetParameters());
-          worker.Launch(dependencyEventsFunction.GetEvents(),
                         dependencyScopedContainers);
         }
       });

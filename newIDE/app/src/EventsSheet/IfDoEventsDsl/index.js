@@ -1724,35 +1724,11 @@ const variableFromExact = (
 };
 
 const parseLink = (text: string, line: number): Object => {
-  const source = text.slice('link '.length).replace(/^(external|scene)\s+/, '');
+  const source = text.slice('link '.length);
   const reader = new ValueReader(source);
   const target = reader.readString();
-  const remainder = source.slice(reader.index);
-  const range = /^\s*range=(-?\d+)\.\.(-?\d+)\s*$/.exec(remainder);
-  if (range) {
-    return {
-      target,
-      include: {
-        includeConfig: 2,
-        start: Number(range[1]),
-        end: Number(range[2]),
-      },
-    };
-  }
-  const args = parseNamedArguments(remainder);
-  Object.keys(args).forEach(key => {
-    if (key !== 'group') {
-      fail('IFDO_SYNTAX', `Unknown link argument ${key}.`, line);
-    }
-  });
-  if (args.group !== undefined && typeof args.group !== 'string') {
-    fail('IFDO_SYNTAX', 'link group must be a string.', line);
-  }
-  if (args.group !== undefined) {
-    return {
-      target,
-      include: { includeConfig: 1, eventsGroup: String(args.group) },
-    };
+  if (!target || source.slice(reader.index).trim()) {
+    fail('IFDO_SYNTAX', 'Link requires only a quoted external events name.', line);
   }
   return { target, include: { includeConfig: 0 } };
 };
@@ -2067,22 +2043,16 @@ const normalizeEvent = (value: any, label: string): Object => {
     );
     assertOnlyKeys(
       include,
-      new Set(['includeConfig', 'eventsGroup', 'start', 'end']),
+      new Set(['includeConfig']),
       `${label}.include`
     );
+    if (Number(include.includeConfig || 0) !== 0) {
+      fail('IFDO_INVALID_JSON', `${label}.include must include all events.`);
+    }
     return {
       ...common,
       target: String(event.target || ''),
-      include: {
-        includeConfig: Number(include.includeConfig || 0),
-        ...(include.eventsGroup !== undefined
-          ? { eventsGroup: String(include.eventsGroup) }
-          : {}),
-        ...(include.start !== undefined
-          ? { start: Number(include.start) }
-          : {}),
-        ...(include.end !== undefined ? { end: Number(include.end) } : {}),
-      },
+      include: { includeConfig: 0 },
     };
   }
   return {
@@ -2449,13 +2419,7 @@ const formatEvents = (
       return;
     }
     if (event.type === EVENT_TYPES.link) {
-      const include = event.include || { includeConfig: 0 };
-      let suffix = '';
-      if (include.includeConfig === 1)
-        suffix = ` group=${quote(include.eventsGroup || '')}`;
-      else if (include.includeConfig === 2)
-        suffix = ` range=${include.start || 0}..${include.end || 0}`;
-      lines.push(`${depthPrefix(depth)}link ${quote(event.target)}${suffix}`);
+      lines.push(`${depthPrefix(depth)}link ${quote(event.target)}`);
       return;
     }
     if (event.type === EVENT_TYPES.js) {
