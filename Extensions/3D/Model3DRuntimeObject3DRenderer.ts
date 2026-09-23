@@ -1504,6 +1504,10 @@ namespace gdjs {
       if (cachedNames) return cachedNames;
 
       const names = new Set<string>();
+      let meshCount = 0;
+      modelRoot.traverse((node) => {
+        if ((node as THREE.Mesh).isMesh) meshCount++;
+      });
       modelRoot.traverse((node) => {
         const bone = node as THREE.Bone;
         let isRootBone: boolean = bone.isBone;
@@ -1519,6 +1523,17 @@ namespace gdjs {
         }
 
         if (node.parent !== modelRoot && !isRootBone) return;
+
+        // A glTF scene can have several root-level meshes (for example, a
+        // boat's hull and oars). Their individual transforms are part of the
+        // animation, not motion of the whole model through the world.
+        if (node.parent === modelRoot && !isRootBone) {
+          let subtreeMeshCount = 0;
+          node.traverse((descendant) => {
+            if ((descendant as THREE.Mesh).isMesh) subtreeMeshCount++;
+          });
+          if (meshCount === 0 || subtreeMeshCount !== meshCount) return;
+        }
 
         let rootMotionNode: THREE.Object3D | null = node;
         while (rootMotionNode && rootMotionNode !== modelRoot) {
