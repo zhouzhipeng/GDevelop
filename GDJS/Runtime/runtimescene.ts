@@ -506,11 +506,8 @@ namespace gdjs {
         this._profiler.end('callbacks and extensions (post-events)');
       }
 
-      this.render();
+      this.render(true);
       this._isJustResumed = false;
-      if (this._profiler) {
-        this._profiler.end('render');
-      }
       if (this._profiler) {
         const threeRenderer = this._runtimeGame
           .getRenderer()
@@ -526,24 +523,27 @@ namespace gdjs {
     }
     /**
      * Render the scene (but do not execute the game logic).
+     * @param profileFrame Include rendering in the open renderAndStep frame.
+     * Standalone paused-preview redraws must not mutate its completed measures.
      */
-    render() {
-      if (this._profiler) {
-        this._profiler.begin('objects (pre-render, effects update)');
+    render(profileFrame: boolean = false) {
+      const profiler = profileFrame ? this._profiler : null;
+      if (profiler) {
+        profiler.begin('objects (pre-render, effects update)');
       }
       this._updateObjectsPreRender();
-      if (this._profiler) {
-        this._profiler.end('objects (pre-render, effects update)');
+      if (profiler) {
+        profiler.end('objects (pre-render, effects update)');
       }
-      if (this._profiler) {
-        this._profiler.begin('layers (effects update)');
+      if (profiler) {
+        profiler.begin('layers (effects update)');
       }
       this._updateLayersPreRender();
-      if (this._profiler) {
-        this._profiler.end('layers (effects update)');
+      if (profiler) {
+        profiler.end('layers (effects update)');
       }
-      if (this._profiler) {
-        this._profiler.begin('render');
+      if (profiler) {
+        profiler.begin('render');
       }
 
       // Set to true to enable debug rendering (look for the implementation in the renderer
@@ -584,6 +584,9 @@ namespace gdjs {
       );
 
       this._renderer.render();
+      if (profiler) {
+        profiler.end('render');
+      }
     }
 
     /**
