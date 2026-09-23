@@ -9,15 +9,17 @@ const path = optionalRequire('path');
 const process = optionalRequire('process');
 var isDarwin = process && /^darwin/.test(process.platform);
 
-const tryPath = (
-  path /*: string*/,
-  onExists /*: string => void*/,
-  onNoAccess /*: Function*/
-) =>
-  fs.access(path, fs.constants.R_OK, err => {
-    if (!err) onExists(path);
-    else onNoAccess();
-  });
+const canReadPath = path => {
+  try {
+    // Keep the lookup on the renderer's JS turn. An asynchronous fs callback
+    // can be lost when an Electron debugger pop-out is being destroyed,
+    // leaving preview preparation waiting forever.
+    fs.accessSync(path, fs.constants.R_OK);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
 
 const findGDJS = () /*: Promise<{|gdjsRoot: string|}> */ => {
   if (!path || !process || !fs) return Promise.reject(new Error('Unsupported'));
@@ -29,28 +31,18 @@ const findGDJS = () /*: Promise<{|gdjsRoot: string|}> */ => {
   const pathToRoot = isDarwin ? '../../../../' : path.join('..', '..');
   const rootPath = path.join(appPath, pathToRoot);
 
-  return new Promise((resolve, reject) => {
-    // $FlowFixMe[missing-local-annot]
-    const onFound = gdjsRoot => resolve({ gdjsRoot });
-    const onNotFound = () => reject(new Error('Could not find GDJS'));
-
-    // First try to find GDJS in the parent folder (when newIDE is inside IDE)
-    tryPath(path.join(rootPath, '..', 'JsPlatform'), onFound, () => {
-      // Or in the resources (for a standalone newIDE)
-      tryPath(path.join(appPath, '..', 'GDJS'), onFound, () => {
-        // Or in the resources when developing with Electron
-        const devPath = path.join(
-          appPath,
-          '..',
-          '..',
-          'app',
-          'resources',
-          'GDJS'
-        );
-        tryPath(devPath, onFound, onNotFound);
-      });
-    });
-  });
+  const candidates = [
+    // newIDE inside IDE.
+    path.join(rootPath, '..', 'JsPlatform'),
+    // Standalone newIDE.
+    path.join(appPath, '..', 'GDJS'),
+    // Electron development.
+    path.join(appPath, '..', '..', 'app', 'resources', 'GDJS'),
+  ];
+  const gdjsRoot = candidates.find(canReadPath);
+  return gdjsRoot
+    ? Promise.resolve({ gdjsRoot })
+    : Promise.reject(new Error('Could not find GDJS'));
 };
 
 module.exports = {
