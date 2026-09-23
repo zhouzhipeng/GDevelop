@@ -1,8 +1,8 @@
 # GDevelop Multi-file Project Format
 
-## Version 6 TOML settings and IfDo event source files
+## Version 7 TOML settings and IfDo event source files
 
-**Status:** Version 6 format contract. The version 3/4/5 material
+**Status:** Version 7 format contract. The version 3/4/5/6 material
 later in this document is retained only as migration history and is not an
 authoring contract.
 **Entry file:** `project.gdevelop`
@@ -14,32 +14,34 @@ authoring contract.
 [gameplay-tests-multifile-serialization-spec.md](gameplay-tests-multifile-serialization-spec.md)
 
 The controlling ownership contracts are
-[external-events-snippets-spec.md](external-events-snippets-spec.md) for version 6
-fragments and [embedded-layout-settings-format-spec.md](embedded-layout-settings-format-spec.md)
-for embedded layouts and other settings. Production accepts version 6 only. In particular:
+[external-events-settings-project-module-map-spec.md](external-events-settings-project-module-map-spec.md)
+for version 7 fragments and [embedded-layout-settings-format-spec.md](embedded-layout-settings-format-spec.md)
+for embedded layouts and other settings. Production accepts version 7 only. In particular:
 
 - scenes and default prefabs embed their layout below `[layout]` in
   `scene.settings` or `prefab.settings`;
 - named variants use
   `variants/<Variant>/variant.settings` and retain
   `variants/<Variant>/objects/<Object>.settings`;
-- External Events are directly discovered from
-  `scenes/<Scene>/external-events/<Fragment>.events`, with no settings, child
-  directories, lifecycle functions or registration manifest;
+- External Events are directly discovered from same-stem
+  `scenes/<Scene>/external-events/<Fragment>.settings` and `.events` pairs,
+  with no child directories, lifecycle functions or registration manifest;
 - external layouts use
   `scenes/<Scene>/external-layout/<External>.settings`;
 - all functions use one same-stem
   `functions/<Function>.settings` + `functions/<Function>.events` pair;
-- only real functions require a same-stem `.settings` owner; external event
-  fragments are plain IfDo lists expanded at their Link positions;
+- external event fragments remain plain IfDo lists expanded at their Link
+  positions; their settings hold identity and logic descriptions only;
 - root `tests.settings` owns all project and extension gameplay-test metadata,
   with JavaScript bodies stored as direct children of root `tests/` and
   referenced by scheme-free root-relative paths;
 - no managed `.layout` file, layout URI, events URI, nested variant manifest,
-  or `externalLayoutFiles` manifest is valid in version 6.
-- `.gdevelop/settings-catalog.json` format version 3 contains settings,
-  embedded-layout contracts and `eventFileKinds` for settings-free fragments; the independent layout catalog is
+  or `externalLayoutFiles` manifest is valid in version 7.
+- `.gdevelop/settings-catalog.json` format version 4 contains settings,
+  embedded-layout contracts and `eventFileKinds` for fragment pairs; the independent layout catalog is
   retired and deleted during generation.
+- `.gdevelop/project-module-map.json` is generated beside catalogs from
+  settings and static event relationships for code navigation.
 
 When any historical example below conflicts with that contract, it describes
 an unsupported pre-v6 tree and must not be used for direct authoring.

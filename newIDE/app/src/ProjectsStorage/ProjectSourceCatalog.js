@@ -23,7 +23,7 @@ const SCENE_LIFECYCLE_SOURCES = Object.freeze([
 
 export const PROJECT_SETTINGS_CATALOG_RELATIVE_PATH =
   '.gdevelop/settings-catalog.json';
-export const PROJECT_SETTINGS_CATALOG_FORMAT_VERSION = 3;
+export const PROJECT_SETTINGS_CATALOG_FORMAT_VERSION = 4;
 
 export class ProjectSourceCatalogError extends Error {
   code: string;
@@ -1673,6 +1673,14 @@ const SETTINGS_FILE_SCHEMAS = Object.freeze({
       'preserve unknown current Layout serializer fields except layout/lifecycle-function/object ownership fields',
   },
   sceneLifecycleFunction: lifecycleFunctionSchema,
+  externalEvents: {
+    rootFields: [
+      ...formatFields({ kind: 'externalEvents', name: true }),
+      settingsField('description', 'string'),
+      settingsField('eventsLogic', 'string'),
+    ],
+    childTables: [],
+  },
   externalLayout: {
     rootFields: [
       ...formatFields({ kind: 'externalLayout', ordered: true, name: true }),
@@ -1989,6 +1997,19 @@ const SETTINGS_FILE_KINDS = Object.freeze([
     schema: SETTINGS_FILE_SCHEMAS.sceneLifecycleFunction,
   },
   {
+    kind: 'external-events',
+    requiredMarker: { field: 'kind', value: 'externalEvents' },
+    path: 'scenes/<Scene>/external-events/<Fragment>.settings',
+    mountedNamespace: 'scenes."<Scene>".externalEvents."<Fragment>"',
+    tomlRoot: true,
+    requiredFields: ['kind', 'settingsFormatVersion', 'name'],
+    commonFields: ['description', 'eventsLogic'],
+    forbiddenFields: ['events', 'associatedLayout', 'functions'],
+    note:
+      'Requires a same-stem .events file. The parent scene comes from the path.',
+    schema: SETTINGS_FILE_SCHEMAS.externalEvents,
+  },
+  {
     kind: 'external-layout',
     requiredMarker: { field: 'kind', value: 'externalLayout' },
     path: 'scenes/<Scene>/external-layout/<ExternalLayout>.settings',
@@ -2285,6 +2306,7 @@ const buildSettingsOwners = (serializedProject: Object): Array<Object> => {
       kind: 'external-events',
       scene: sceneName,
       name,
+      settingsUri: ownerBaseUri.replace(/\.events$/, '.settings'),
       eventsUri: ownerBaseUri,
     });
   });
@@ -2421,8 +2443,10 @@ export const buildProjectSettingsCatalog = ({
         kind: 'external-events',
         path: 'scenes/<Scene>/external-events/<Name>.events',
         syntax: 'IfDo',
-        settingsRequired: false,
-        identity: 'Scene from parent path; name from decoded filename stem.',
+        settingsRequired: true,
+        settingsPath: 'scenes/<Scene>/external-events/<Name>.settings',
+        identity:
+          'Scene from parent path; name from matching settings and filename stem.',
         execution:
           'Expanded at each Link with caller conditions, object selection and lifecycle context.',
       },

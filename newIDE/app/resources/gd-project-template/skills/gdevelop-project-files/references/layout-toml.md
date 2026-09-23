@@ -6,7 +6,7 @@ owner identifies the scene, prefab, variant, or external layout. It is the
 generated authority for resolvable objects, attached behaviors, layers,
 effects, and writable properties; `layoutTables` is the structural schema.
 
-Version 6 has no managed `.layout` files. Layout-bearing owner settings embed
+Version 7 has no managed `.layout` files. Layout-bearing owner settings embed
 placement and editor-layout data below `[layout]`; object definitions and
 attached behaviors remain in dedicated `objects/<Object>.settings`, and logic
 remains in `.events`.

@@ -1,6 +1,6 @@
 # IfDo Events DSL
 
-**Status:** Current syntax contract for multi-file project format 6.
+**Status:** Current syntax contract for multi-file project format 7.
 **Source:** UTF-8 `.events` files.
 **Implementation:** `newIDE/app/src/EventsSheet/IfDoEventsDsl/index.js` and
 `ProjectInstructionCatalog.js`. The parser's coverage version is `3.0`.
@@ -15,9 +15,10 @@ The event DSL version and instruction catalog version are separate values.
 
 An `.events` file contains only event statements. It has no TOML front matter,
 function declaration, or raw event JSON. Scene lifecycle and function settings
-live in same-stem `.settings` files; external event fragments are standalone
-`scenes/<Scene>/external-events/<Fragment>.events` files. A fragment has no own
-settings or lifecycle. `link "Fragment"` expands the whole external fragment
+live in same-stem `.settings` files. External event fragments use a same-stem
+`scenes/<Scene>/external-events/<Fragment>.settings` and `.events` pair. The
+settings hold identity and logic descriptions; a fragment has no lifecycle.
+`link "Fragment"` expands the whole external fragment
 in the caller's scope and lifecycle. Empty and unreferenced fragments are valid.
 
 ## A current example

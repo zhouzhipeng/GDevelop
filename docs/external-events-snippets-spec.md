@@ -1,5 +1,9 @@
 # External Events 事件片段重构规格
 
+> Version 7 amendment: fragment execution semantics remain, but every
+> `.events` fragment now has a same-stem `.settings` description owner. See
+> [external-events-settings-project-module-map-spec.md](external-events-settings-project-module-map-spec.md).
+
 - 状态：用户已于 2026-09-20 批准实施；按随后指示取消兼容性支持，先验证引擎，再一次性迁移 JurassicWorld。
 - 日期：2026-09-20。
 - 请求：将 External Events 定位为拆分场景事件的代码片段，每份片段只保存一个 `.events` 文件。

@@ -28,6 +28,7 @@ import {
 } from '../../UI/Alert/AlertContext';
 import {
   stripGameplayTestResultsFromLegacyProject,
+  readMultiFileSourceTree,
   writeLegacyProjectAsMultiFile,
   writeMultiFileSourceTree,
 } from './LocalMultiFileProject';
@@ -49,6 +50,7 @@ import {
   mergeProjectInstructionCatalogs,
   normalizeLegacyProjectInstructionParameters,
   serializeProjectInstructionCatalog,
+  validateProjectInstructionCatalog,
 } from '../../EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog';
 import { getLocalProjectLastModifiedDate } from './LocalProjectFileModificationTime';
 import {
@@ -57,6 +59,11 @@ import {
   buildProjectSettingsCatalog,
   serializeProjectSettingsCatalog,
 } from '../ProjectSourceCatalog';
+import {
+  PROJECT_MODULE_MAP_RELATIVE_PATH,
+  buildProjectModuleMap,
+  serializeProjectModuleMap,
+} from '../ProjectModuleMap';
 import {
   PROJECT_API_RELATIVE_PATH,
   PROJECT_HARNESS_API_RELATIVE_PATH,
@@ -480,6 +487,38 @@ export const writeProjectSettingsCatalog = async (
       ...RETIRED_PROJECT_LAYOUT_CATALOG_RELATIVE_PATH.split('/')
     )
   );
+  const entryPath = path.join(projectPath, MULTI_FILE_ENTRY_NAME);
+  if (fs.existsSync(entryPath)) {
+    const { files } = await readMultiFileSourceTree(entryPath);
+    const readInstructionCatalog = (relativePath: string) => {
+      const catalogPath = path.join(projectPath, ...relativePath.split('/'));
+      return fs.existsSync(catalogPath)
+        ? validateProjectInstructionCatalog(fs.readJsonSync(catalogPath))
+        : null;
+    };
+    const instructionCatalog = readInstructionCatalog(
+      PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH
+    );
+    const deprecatedCatalog = readInstructionCatalog(
+      PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH
+    );
+    const resolver = instructionCatalog
+      ? createCatalogInstructionResolver(
+          deprecatedCatalog
+            ? mergeProjectInstructionCatalogs(
+                instructionCatalog,
+                deprecatedCatalog
+              )
+            : instructionCatalog
+        )
+      : undefined;
+    writeAndCheckGeneratedFileSync(
+      serializeProjectModuleMap(
+        buildProjectModuleMap(serializedProject, files, resolver)
+      ),
+      path.join(projectPath, ...PROJECT_MODULE_MAP_RELATIVE_PATH.split('/'))
+    );
+  }
   reportCatalogProgress(options, 'catalog-settings-written');
   return catalog;
 };
@@ -820,6 +859,17 @@ const writeProjectFiles = async ({
         projectPath,
         ...PROJECT_SETTINGS_CATALOG_RELATIVE_PATH.split('/')
       )
+    );
+    const { files: moduleMapFiles } = await readMultiFileSourceTree(filePath);
+    await writeAndCheckFile(
+      serializeProjectModuleMap(
+        buildProjectModuleMap(
+          authoringSerializedProjectObject,
+          moduleMapFiles,
+          createCatalogInstructionResolver(serializationCatalog)
+        )
+      ),
+      path.join(projectPath, ...PROJECT_MODULE_MAP_RELATIVE_PATH.split('/'))
     );
     fs.removeSync(
       path.join(

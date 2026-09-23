@@ -16,7 +16,7 @@ const gd: libGDevelop = global.gd;
 
 const baseSettingsCatalog = () => ({
   format: 'gdevelop-settings-catalog',
-  formatVersion: 3,
+  formatVersion: 4,
   project: { name: 'Test', uuid: 'test' },
   authoring: { rules: [] },
   layoutAuthoring: {
@@ -542,7 +542,12 @@ describe('project source catalogs', () => {
     ).not.toContain('events');
     expect(
       catalog.fileKinds.find(kind => kind.kind === 'external-events')
-    ).toBeUndefined();
+    ).toEqual(
+      expect.objectContaining({
+        path: 'scenes/<Scene>/external-events/<Fragment>.settings',
+        requiredFields: expect.arrayContaining(['kind', 'name']),
+      })
+    );
     expect(
       catalog.fileKinds.find(
         kind => kind.kind === 'external-lifecycle-function'
@@ -552,7 +557,7 @@ describe('project source catalogs', () => {
       expect.objectContaining({
         kind: 'external-events',
         path: 'scenes/<Scene>/external-events/<Name>.events',
-        settingsRequired: false,
+        settingsRequired: true,
       })
     );
     expect(

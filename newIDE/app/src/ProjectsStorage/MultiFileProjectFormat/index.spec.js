@@ -2312,7 +2312,7 @@ objects = [ "Player" ]
     filesWithMovedSource[movedUri] = filesWithMovedSource[canonicalUri];
     delete filesWithMovedSource[canonicalUri];
     expect(() => composeLegacyProjectFromFiles(filesWithMovedSource)).toThrow(
-      expect.objectContaining({ code: 'MULTIFILE_OWNERSHIP_CONFLICT' })
+      expect.objectContaining({ code: 'MULTIFILE_MISSING_FILE' })
     );
   });
 
@@ -2549,12 +2549,14 @@ describe('External event fragment source identity', () => {
     const fragmentUris = Object.keys(files).filter(uri =>
       uri.includes('/external-events/')
     );
-    expect(fragmentUris).toHaveLength(names.length);
+    expect(fragmentUris).toHaveLength(names.length * 2);
     names.forEach(name =>
-      expect(fragmentUris).toContain(
-        `game://scenes/Main/external-events/${encodeManagedName(
-          `${name}.events`
-        )}`
+      ['settings', 'events'].forEach(extension =>
+        expect(fragmentUris).toContain(
+          `game://scenes/Main/external-events/${encodeManagedName(
+            `${name}.${extension}`
+          )}`
+        )
       )
     );
     const reversed = Object.fromEntries(Object.entries(files).reverse());
@@ -2583,8 +2585,8 @@ describe('External event fragment source identity', () => {
   test('rejects the retired format version instead of reading it as fragments', () => {
     const files = decomposeLegacyProjectToFiles(projectFixture);
     files[MULTI_FILE_ENTRY_URI] = files[MULTI_FILE_ENTRY_URI].replace(
-      'combinedSettingsFormatVersion = 6',
-      'combinedSettingsFormatVersion = 5'
+      'combinedSettingsFormatVersion = 7',
+      'combinedSettingsFormatVersion = 6'
     );
     expect(() => composeLegacyProjectFromFiles(files)).toThrow();
   });

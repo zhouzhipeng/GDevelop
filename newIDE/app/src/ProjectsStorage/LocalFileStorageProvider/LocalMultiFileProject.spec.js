@@ -439,6 +439,23 @@ describe('Local multi-file project storage', () => {
         )
       )
     ).toBe(true);
+    const fragmentSettingsPath = path.join(
+      temporaryDirectory,
+      'scenes/Main/external-events/Shared Combat.settings'
+    );
+    expect(fs.readFileSync(fragmentSettingsPath, 'utf8')).toContain(
+      'kind = "externalEvents"'
+    );
+    fs.writeFileSync(
+      fragmentSettingsPath,
+      fs
+        .readFileSync(fragmentSettingsPath, 'utf8')
+        .replace('description = ""', 'description = "Reusable combat"')
+    );
+    await writeLegacyProjectAsMultiFile(project, entryPath);
+    expect(fs.readFileSync(fragmentSettingsPath, 'utf8')).toContain(
+      'description = "Reusable combat"'
+    );
     expect(
       fs.existsSync(
         path.join(
@@ -472,12 +489,20 @@ describe('Local multi-file project storage', () => {
     });
   });
 
-  test('discovers flat fragments without settings and rejects nested function wrappers', async () => {
+  test('requires fragment settings and rejects nested function wrappers', async () => {
     const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
     await writeLegacyProjectAsMultiFile(projectFixture, entryPath);
     const root = path.join(temporaryDirectory, 'scenes/Main/external-events');
     fs.ensureDirSync(root);
     fs.writeFileSync(path.join(root, 'New fragment.events'), '', 'utf8');
+    await expect(openMultiFileProject(entryPath)).rejects.toMatchObject({
+      code: 'MULTIFILE_ORPHAN_EVENTS',
+    });
+    fs.writeFileSync(
+      path.join(root, 'New fragment.settings'),
+      'kind = "externalEvents"\nsettingsFormatVersion = 7\nname = "New fragment"\ndescription = ""\neventsLogic = ""\n',
+      'utf8'
+    );
     const project = await openMultiFileProject(entryPath);
     expect(project.externalEvents).toEqual([
       { name: 'New fragment', associatedLayout: 'Main', events: [] },
@@ -775,7 +800,7 @@ describe('Local multi-file project storage', () => {
     );
     expect(rebuiltSettingsCatalog).toMatchObject({
       format: 'gdevelop-settings-catalog',
-      formatVersion: 3,
+      formatVersion: 4,
       layoutAuthoring: {
         storage: 'embedded-settings',
         rootTable: 'layout',
@@ -1592,7 +1617,7 @@ describe('Local multi-file project storage', () => {
         fileKind => fileKind.kind === 'externals'
       )
     ).toBe(false);
-    expect(settingsCatalog.counts.fileKinds).toBe(17);
+    expect(settingsCatalog.counts.fileKinds).toBe(18);
     expect(settingsCatalog.counts.objectTypes).toBeGreaterThan(5);
     expect(settingsCatalog.counts.behaviorTypes).toBeGreaterThan(5);
     expect(settingsCatalog.layoutContexts).toEqual(
@@ -1878,6 +1903,17 @@ describe('Local multi-file project storage', () => {
       ...GENERATED_LEGACY_PROJECT_RELATIVE_PATH.split('/')
     );
     expect(fs.existsSync(generatedPath)).toBe(true);
+    const moduleMap = JSON.parse(
+      fs.readFileSync(
+        path.join(temporaryDirectory, '.gdevelop/project-module-map.json'),
+        'utf8'
+      )
+    );
+    expect(moduleMap).toMatchObject({
+      format: 'gdevelop-project-module-map',
+      sourceFormatVersion: 7,
+      project: { name: 'Generated compatibility project' },
+    });
     const generatedProject = JSON.parse(fs.readFileSync(generatedPath, 'utf8'));
     expect(generatedProject.properties.name).toBe(
       'Generated compatibility project'
