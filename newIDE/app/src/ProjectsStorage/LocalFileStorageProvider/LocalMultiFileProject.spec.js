@@ -1779,6 +1779,39 @@ describe('Local multi-file project storage', () => {
     project.delete();
   });
 
+  test('accepts identical catalog bytes written by a competing renderer', async () => {
+    const gd: libGDevelop = global.gd;
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    ensureProjectHasDefaultScene(project);
+    const target = path.join(
+      temporaryDirectory,
+      '.gdevelop/instructions-catalog.json'
+    );
+    fs.removeSync(target);
+    const realMoveSync = fs.moveSync;
+    let raced = false;
+    const moveSpy = jest
+      .spyOn(fs, 'moveSync')
+      .mockImplementation((src, dest, options) => {
+        if (!raced && dest === target) {
+          raced = true;
+          fs.writeFileSync(dest, fs.readFileSync(src));
+          const error: any = new Error('Destination was written concurrently.');
+          error.code = 'EEXIST';
+          throw error;
+        }
+        return realMoveSync(src, dest, options);
+      });
+    try {
+      await writeProjectInstructionCatalog(project, temporaryDirectory);
+      expect(raced).toBe(true);
+      expect(fs.readFileSync(target, 'utf8')).toContain('"actions"');
+    } finally {
+      moveSpy.mockRestore();
+      project.delete();
+    }
+  });
+
   test('regenerates project source catalogs with scene signal events', async () => {
     const gd: libGDevelop = global.gd;
     const project = gd.ProjectHelper.createNewGDJSProject();

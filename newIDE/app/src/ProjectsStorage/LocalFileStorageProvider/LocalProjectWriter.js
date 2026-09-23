@@ -266,13 +266,46 @@ const writeAndCheckGeneratedFileSync = (
     throw new Error('The content to save on disk is empty. Aborting.');
 
   fs.ensureDirSync(path.dirname(filePath));
+  // Catalog regeneration often produces identical bytes. Another renderer may
+  // also be regenerating the same file, so avoid a redundant replacement.
+  if (fs.pathExistsSync(filePath)) {
+    try {
+      checkFileContentSync(filePath, content, expectedSha256);
+      return;
+    } catch (error) {
+      // Existing bytes are stale or incomplete: replace them below.
+    }
+  }
   const temporaryPath = `${filePath}.tmp-${Date.now()}-${Math.random()
     .toString(16)
     .slice(2)}`;
   try {
     fs.writeFileSync(temporaryPath, content);
     checkFileContentSync(temporaryPath, content);
-    fs.moveSync(temporaryPath, filePath, { overwrite: true });
+    // fs-extra can fall back from rename to link/copy on Windows. If a second
+    // renderer wins the destination between remove and link, it reports EEXIST.
+    // Accept the winner only when its bytes match, otherwise retry the move.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        fs.moveSync(temporaryPath, filePath, { overwrite: true });
+        break;
+      } catch (error) {
+        if (
+          !['EEXIST', 'EPERM', 'EBUSY'].includes(error.code) ||
+          !fs.pathExistsSync(temporaryPath)
+        )
+          throw error;
+        if (fs.pathExistsSync(filePath)) {
+          try {
+            checkFileContentSync(filePath, content, expectedSha256);
+            break;
+          } catch (mismatch) {
+            // A partial/stale competing write must be replaced.
+          }
+        }
+        if (attempt === 2) throw error;
+      }
+    }
     if (onVerifying) onVerifying();
     checkFileContentSync(filePath, content, expectedSha256);
   } finally {
