@@ -834,6 +834,9 @@ const MainFrame = (props: Props): React.MixedElement => {
       try {
         const shouldBlockAllDiagnosticErrors = preferences.getBlockPreviewAndExportOnDiagnosticErrors();
         const validationErrors = scanProjectForValidationErrors(project);
+        const blockingValidationErrors = validationErrors.filter(
+          error => error.severity !== 'warning'
+        );
         const unsafeExternalLayoutCreationErrors = validationErrors.filter(
           error => error.type === 'unsafe-external-layout-creation'
         );
@@ -865,7 +868,8 @@ const MainFrame = (props: Props): React.MixedElement => {
 
         if (
           mustBlockForSpecificValidationErrors ||
-          (shouldBlockAllDiagnosticErrors && validationErrors.length > 0)
+          (shouldBlockAllDiagnosticErrors &&
+            blockingValidationErrors.length > 0)
         ) {
           const title = mustBlockForUnsafeExternalLayoutCreation
             ? t`External layout action needs a condition`
@@ -888,10 +892,10 @@ const MainFrame = (props: Props): React.MixedElement => {
               : t`This export cannot run because one or more events are not allowed in their scene lifecycle function. Open the diagnostic report to move or replace them.`
             : actionType === 'preview'
             ? t`Your project has ${
-                validationErrors.length
+                blockingValidationErrors.length
               } diagnostic error(s). Please fix them before launching a preview.`
             : t`Your project has ${
-                validationErrors.length
+                blockingValidationErrors.length
               } diagnostic error(s). Please fix them before exporting.`;
           let shouldIgnoreDiagnosticErrors = false;
           const openReport = await showConfirmation({

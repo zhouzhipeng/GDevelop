@@ -1728,7 +1728,11 @@ const parseLink = (text: string, line: number): Object => {
   const reader = new ValueReader(source);
   const target = reader.readString();
   if (!target || source.slice(reader.index).trim()) {
-    fail('IFDO_SYNTAX', 'Link requires only a quoted external events name.', line);
+    fail(
+      'IFDO_SYNTAX',
+      'Link requires only a quoted external events name.',
+      line
+    );
   }
   return { target, include: { includeConfig: 0 } };
 };
@@ -2041,11 +2045,7 @@ const normalizeEvent = (value: any, label: string): Object => {
       event.include || { includeConfig: 0 },
       `${label}.include`
     );
-    assertOnlyKeys(
-      include,
-      new Set(['includeConfig']),
-      `${label}.include`
-    );
+    assertOnlyKeys(include, new Set(['includeConfig']), `${label}.include`);
     if (Number(include.includeConfig || 0) !== 0) {
       fail('IFDO_INVALID_JSON', `${label}.include must include all events.`);
     }
@@ -2208,6 +2208,31 @@ const appendInstructionEventBody = (
   );
 };
 
+const needsEventBoundary = (event: Object, previous: ?Object): boolean => {
+  if (Object.keys(eventMetadata(event)).length) return true;
+  if (!previous) return false;
+  if (
+    previous.type === EVENT_TYPES.group ||
+    previous.type === EVENT_TYPES.comment ||
+    previous.type === EVENT_TYPES.link ||
+    previous.type === EVENT_TYPES.js
+  )
+    return false;
+  if (
+    event.type !== EVENT_TYPES.else &&
+    event.variables &&
+    event.variables.length
+  )
+    return true;
+  if (event.type !== EVENT_TYPES.standard) return false;
+  if (!event.conditions.length && !event.actions.length) return false;
+  if (!event.conditions.length) return true;
+  return !(
+    (previous.actions && previous.actions.length) ||
+    (previous.events && previous.events.length)
+  );
+};
+
 const formatEvents = (
   events: Array<Object>,
   depth: number = 0,
@@ -2219,7 +2244,8 @@ const formatEvents = (
     if (
       event.type !== EVENT_TYPES.group &&
       event.type !== EVENT_TYPES.comment &&
-      event.type !== EVENT_TYPES.js
+      event.type !== EVENT_TYPES.js &&
+      needsEventBoundary(event, events[eventIndex - 1])
     ) {
       lines.push(
         `${depthPrefix(depth)}${formatMetadata('@event', eventMetadata(event))}`
@@ -2344,11 +2370,8 @@ const formatEvents = (
           )}`
         )
       );
-      lines.push(
-        `${depthPrefix(depth)}${formatMetadata('@while', {
-          ...(event.infiniteLoopWarning ? { infiniteLoopWarning: true } : {}),
-        })}`
-      );
+      if (event.infiniteLoopWarning)
+        lines.push(`${depthPrefix(depth)}@while infiniteLoopWarning=true`);
       const whileConditions = event.whileConditions || [];
       if (!whileConditions.length) {
         lines.push(

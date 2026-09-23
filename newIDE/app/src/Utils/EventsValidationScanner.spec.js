@@ -212,7 +212,101 @@ describe('EventsValidationScanner', () => {
         );
 
         expect(targetError).toBeDefined();
-        if (targetError) expect(targetError.type).toBe('lifecycle-redundant');
+        if (targetError) {
+          expect(targetError.type).toBe('lifecycle-redundant');
+          expect(targetError.severity).toBe('warning');
+        }
+      });
+
+      it('warns when SceneJustBegins is used in sceneSignal', () => {
+        const { project, testLayout } = makeTestProject(gd);
+        addCondition(
+          project,
+          testLayout
+            .getLifecycleEventsFunctions()
+            .insertByName('sceneSignal')
+            .getEvents(),
+          'SceneJustBegins',
+          ['']
+        );
+
+        const warning = scanProjectForValidationErrors(project).find(
+          error =>
+            error.diagnosticCode === 'SCENE_JUST_BEGINS_OUTSIDE_SCENE_LOAD'
+        );
+
+        expect(warning).toBeDefined();
+        if (warning) {
+          expect(warning.severity).toBe('warning');
+          expect(warning.lifecycleFunctionName).toBe('sceneSignal');
+        }
+      });
+
+      it('warns about first-frame checks in unlinked external events', () => {
+        const { project, testExternalEvents1 } = makeTestProject(gd);
+        addCondition(
+          project,
+          testExternalEvents1.getEvents(),
+          'SceneJustBegins',
+          ['']
+        );
+
+        const warning = scanProjectForValidationErrors(project).find(
+          error =>
+            error.diagnosticCode === 'SCENE_JUST_BEGINS_OUTSIDE_SCENE_LOAD'
+        );
+
+        expect(warning).toBeDefined();
+        if (warning) {
+          expect(warning.severity).toBe('warning');
+          expect(warning.locationType).toBe('external-events');
+        }
+      });
+
+      it('warns about first-frame checks in sceneUpdate and linked fragments', () => {
+        const { project, testLayout, testExternalEvents1 } = makeTestProject(
+          gd
+        );
+        const functions = testLayout.getLifecycleEventsFunctions();
+        addCondition(
+          project,
+          functions.insertByName('sceneLoad').getEvents(),
+          'SceneJustBegins',
+          ['']
+        );
+        addCondition(
+          project,
+          functions.insertByName('sceneUpdate').getEvents(),
+          'SceneJustBegins',
+          ['']
+        );
+        addCondition(
+          project,
+          testExternalEvents1.getEvents(),
+          'SceneJustBegins',
+          ['']
+        );
+        const link = functions
+          .getByName('sceneUpdate')
+          .getEvents()
+          .insertNewEvent(project, 'BuiltinCommonInstructions::Link', 1);
+        gd.asLinkEvent(link).setTarget(testExternalEvents1.getName());
+
+        const warnings = scanProjectForValidationErrors(project).filter(
+          error =>
+            error.diagnosticCode === 'SCENE_JUST_BEGINS_IN_PER_FRAME_EVENTS'
+        );
+
+        expect(warnings).toHaveLength(2);
+        expect(warnings.every(error => error.severity === 'warning')).toBe(
+          true
+        );
+        expect(
+          warnings.every(error => error.lifecycleFunctionName === 'sceneUpdate')
+        ).toBe(true);
+        expect(warnings.map(error => error.locationType)).toEqual(
+          expect.arrayContaining(['scene', 'external-events'])
+        );
       });
 
       it('inherits parent conditions and local variables without modifying source events', () => {

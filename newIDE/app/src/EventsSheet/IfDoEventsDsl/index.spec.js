@@ -363,6 +363,60 @@ describe('IfDo events DSL', () => {
       expect(first.endsWith('\n')).toBe(true);
     });
 
+    test('omits redundant event and while metadata without merging events', () => {
+      const events = [
+        standard({
+          conditions: [instruction('FirstCondition')],
+          actions: [instruction('FirstAction')],
+        }),
+        standard({
+          conditions: [instruction('SecondCondition')],
+          actions: [instruction('SecondAction')],
+        }),
+        standard({ actions: [instruction('ThirdAction')] }),
+        standard({ actions: [instruction('FourthAction')] }),
+        standard({ conditions: [instruction('ConditionOnly')] }),
+        standard({ conditions: [instruction('AnotherConditionOnly')] }),
+        standard({
+          variables: [{ name: 'count', type: 'number', value: 1 }],
+          actions: [instruction('WithLocal')],
+        }),
+        standard(),
+        standard({ conditions: [instruction('AfterEmpty')] }),
+        {
+          type: 'BuiltinCommonInstructions::While',
+          whileConditions: [instruction('KeepGoing')],
+          conditions: [],
+          actions: [],
+          events: [],
+          variables: [],
+        },
+        standard({ conditions: [instruction('AfterWhile')] }),
+        {
+          type: 'BuiltinCommonInstructions::While',
+          infiniteLoopWarning: true,
+          whileConditions: [instruction('WarnAboutLoop')],
+          conditions: [],
+          actions: [],
+          events: [],
+          variables: [],
+        },
+      ];
+      const input = JSON.stringify(events);
+      const { dsl, output } = roundTripWithTestCatalog(input);
+      expect(areLegacyEventsEquivalent(input, output)).toBe(true);
+      expect(dsl).toContain('do FirstAction\n\nif SecondCondition');
+      expect(dsl).toContain('do ThirdAction\n\n@event\ndo FourthAction');
+      expect(dsl).toContain(
+        'if ConditionOnly\n\n@event\nif AnotherConditionOnly'
+      );
+      expect(dsl).toContain('@event\nlocal count =');
+      expect(dsl).toContain('\nevent\n\n@event\nif AfterEmpty');
+      expect(dsl).toContain('while KeepGoing\n\n@event\nif AfterWhile');
+      expect(dsl).not.toContain('@while\n');
+      expect(dsl).toContain('@while infiniteLoopWarning=true');
+    });
+
     test('does not hardcode aliases for built-in instructions', () => {
       const events = [
         standard({

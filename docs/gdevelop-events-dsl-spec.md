@@ -23,16 +23,14 @@ in the caller's scope and lifecycle. Empty and unreferenced fragments are valid.
 ## A current example
 
 ```events
-@event
+@event folded=true
 if CollisionNP first_object="Player" second_object="Coin"
 do Delete object="Coin"
 do SetNumberVariable variable="Score" modification_sign="+" value=1
 
-@event
 if SceneJustBegins
 do DebuggerTools::ConsoleLog message_to_log="scene started"
 
-> @event
 > if CollisionNP first_object="Player" second_object="Enemy"
 > do Delete object="Enemy"
 ```
@@ -83,7 +81,6 @@ group, so the following means `(collision with Enemy OR collision with Coin)
 AND scene just began`:
 
 ```events
-@event
 if CollisionNP first_object="Player" second_object="Enemy"
 or CollisionNP first_object="Player" second_object="Coin"
 if SceneJustBegins
@@ -94,17 +91,19 @@ Conditions precede actions; actions keep source order. An event may have
 actions without conditions. `event` denotes an empty Standard event or one
 that owns only locals or child events.
 
-The canonical formatter writes `@event` before each Standard, Else, loop, or
-Link event, including events with default metadata. It can carry `disabled`,
-`folded`, and `aiGeneratedEventId`. `@instruction` immediately before an
-instruction can carry `disabled`, `inverted`, and `awaited`. An awaited action
-may use `do await`; conflicting awaited annotations are rejected.
+`@event` carries `disabled`, `folded`, and `aiGeneratedEventId`. The canonical
+formatter writes it when these fields are non-default or when a Standard event
+would otherwise merge into its preceding sibling. It omits an empty `@event`
+before an unambiguous event. `@instruction` immediately before an instruction
+carries non-default `disabled`, `inverted`, or `awaited`; it is omitted when
+those flags are false. An awaited action may use `do await`; conflicting
+awaited annotations are rejected.
 
-Instruction trees use `?` for child instruction lines. Repeat `?` for each
-instruction depth and put child metadata at that depth:
+Instruction trees use `?` for child instruction lines. A child line has the
+same instruction kind as its parent, so it does not repeat `if` or `do`.
+Repeat `?` for each instruction depth and put child metadata at that depth:
 
 ```text
-@event
 if Or
 ? A
 ? @instruction disabled=true
@@ -112,10 +111,12 @@ if Or
 do X
 ```
 
-This structure preserves the serializer's `subInstructions`. A plain `or`
-line is a convenient way to form a logical OR of sibling conditions; it is
-not a substitute for every instruction tree. The names in this tree are
-schematic; an actual file uses catalog types and named parameters.
+This structure preserves the serializer's ordered `subInstructions`. `??`
+marks a grandchild. The child metadata line applies only to the next `?`
+instruction. A plain `or` line is a convenient way to form a logical OR of
+sibling conditions; it is not a substitute for every instruction tree. The
+names in this tree are schematic; an actual file uses catalog types and named
+parameters.
 
 ## Event boundaries and depth
 
@@ -126,11 +127,9 @@ Repeat the complete prefix on every line in a child event; a depth jump may
 increase by only one. Parent actions must precede child events.
 
 ```events
-@event
 if SceneJustBegins
 do DebuggerTools::ConsoleLog message_to_log="ready"
 
-> @event
 > if CollisionNP first_object="Player" second_object="Enemy"
 > do Delete object="Enemy"
 ```
@@ -141,7 +140,19 @@ precede its conditions/actions. A dedent closes a child event. Structural
 headers (loops, groups, comments, links, and code blocks) start distinct
 events. The current parser decides the Standard event boundary from the next
 header, metadata line, or an `if` after actions/children; blank lines alone do
-not start another Standard event. Use `@event` to make that boundary explicit.
+not start another Standard event. For example, a second `do` joins the first
+event, even across a blank line. Put `@event` before a second action-only event,
+before a condition-only event following another condition-only event, or before
+locals following a sibling that remains open. The explicit `event` keyword
+already starts a new empty Standard event. Existing source may keep redundant
+`@event` lines; the formatter removes them when it can infer the boundary.
+
+```events
+do DebuggerTools::ConsoleLog message_to_log="first event"
+
+@event
+do DebuggerTools::ConsoleLog message_to_log="second event"
+```
 
 ## Locals and structural events
 
@@ -158,21 +169,16 @@ The current structural spellings are:
 @comment "Handle contact" background=[255,230,109] text=[0,0,0]
 @end group
 
-@event
 for each Enemy index="i" order_by="Enemy.Variable(HP)" order="desc" limit="10"
 
-@event
 for each child "inventory" value="item" key="itemKey" index="i"
 
-@event
 repeat "5" index="i"
 
-@event
-@while infiniteLoopWarning=false
+@while infiniteLoopWarning=true
 while NumberVariable variable="QueueSize" comparison_sign=">" value=0 index="i"
 and while AnotherCondition
 
-@event
 link "Shared Combat"
 ```
 
@@ -184,7 +190,9 @@ simple values in these structural positions. A `for each` sort may use
 `key=` form or `as <alias>`. `@while` carries `infiniteLoopWarning`.
 `and while` preserves a separate condition in `whileConditions` and must appear
 before ordinary `if`, `do`, or child statements. A bare `while` represents an
-empty `whileConditions` list.
+empty `whileConditions` list. The formatter emits `@while` only when
+`infiniteLoopWarning` is true; an empty `@while` is accepted but omitted on
+round-trip.
 
 `while ... limit=<value>` is a source-only safety guard. The context-free
 parser needs the project-aware `lowerWhileLimit` callback to compile it; the

@@ -742,13 +742,15 @@ export const validateSerializedProject = (
       ...collectProjectSemanticDiagnostics(serializedProject),
       ...semanticEventErrors.map(error => ({
         code: error.diagnosticCode,
-        severity: 'error',
+        severity: error.severity || 'error',
         stage: 'semantic',
-        message: `Invalid keyboard key literal ${String(
-          error.parameterValue || ''
-        )}.`,
+        message:
+          error.diagnosticMessage ||
+          `Invalid keyboard key literal ${String(error.parameterValue || '')}.`,
         remediation:
-          'Use a canonical GDevelop key name such as Num1, or a supported alias such as "1" or Digit1.',
+          error.diagnosticCode === 'INPUT_UNKNOWN_KEY_NAME'
+            ? 'Use a canonical GDevelop key name such as Num1, or a supported alias such as "1" or Digit1.'
+            : undefined,
         details: error,
       })),
     ];

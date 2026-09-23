@@ -161,6 +161,12 @@ Never place a parent action after its first child. A conditional event requires
 an action or child event. Child events inherit ancestor conditions, locals, and
 picked instances.
 
+Blank lines do not end events. A second `do` joins the open event, and a second
+`if` joins an open condition header. Use `@event` to start a new action-only
+event, to separate condition-only siblings, or before locals following an open
+sibling. Structural headers and `event` start their own events. The formatter
+omits `@event` when the next boundary is already unambiguous.
+
 ## Metadata, groups, and comments
 
 Use `@event` immediately before the event whose current metadata it preserves:
@@ -174,6 +180,9 @@ do DebuggerTools::ConsoleLog message_to_log="initializing"
 Use `@instruction` immediately before its condition or action only when
 preserving instruction metadata such as `disabled`, `inverted`, or `awaited`.
 Do not move event metadata onto an instruction or vice versa.
+Nested instruction children use `?` at the same event depth, with one `?` per
+instruction depth. They omit `if` and `do`; write `? @instruction ...` directly
+before the child when that child has metadata. Use `??` for a grandchild.
 
 A group uses one header and a typed terminator. Group event metadata belongs on
 the `@group` line:

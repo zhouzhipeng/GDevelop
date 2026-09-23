@@ -592,8 +592,8 @@ describe('GDevelop multi-file project format', () => {
     );
     expect(files['game://scenes/Main/scene.settings']).toContain('order = 0');
     expect(files['game://scenes/Main/Main.layout']).toBeUndefined();
-    expect(files['game://scenes/Main/functions/sceneUpdate.events']).toContain(
-      '@event'
+    expect(files['game://scenes/Main/functions/sceneUpdate.events']).toBe(
+      'event\n'
     );
     expect(files['game://scenes/Main/scene.settings']).not.toContain(
       'externalEventFiles'
@@ -604,7 +604,7 @@ describe('GDevelop multi-file project format', () => {
     expect(files['game://externals/external.settings']).toBeUndefined();
     expect(
       files['game://scenes/Main/external-events/Shared%20Combat.events']
-    ).toContain('@event');
+    ).toBe('event\n');
     expect(
       files[
         'game://scenes/Main/external-events/Shared%20Combat/external-events.settings'
@@ -628,13 +628,13 @@ describe('GDevelop multi-file project format', () => {
       files[
         'game://extensions/Combat/prefabs/Enemy/functions/TakeDamage.events'
       ]
-    ).toContain('@event');
+    ).toBe('event\n');
     expect(
       files['game://extensions/Combat/behaviors/Health/functions/Heal.settings']
     ).toContain('name = "Heal"');
     expect(
       files['game://extensions/Combat/behaviors/Health/functions/Heal.events']
-    ).toContain('@event');
+    ).toBe('event\n');
     expect(
       files['game://extensions/Combat/prefabs/Enemy/prefab.settings']
     ).not.toContain('.functions.');
@@ -690,8 +690,8 @@ describe('GDevelop multi-file project format', () => {
       expect(files[`game://scenes/Main/functions/${role}.settings`]).toContain(
         `lifecycleRole = "${role}"`
       );
-      expect(files[`game://scenes/Main/functions/${role}.events`]).toContain(
-        '@event'
+      expect(files[`game://scenes/Main/functions/${role}.events`]).toBe(
+        'event\n'
       );
     }
     expect(
