@@ -533,7 +533,8 @@ const summarizeProjectSemanticDiff = (
 
 const collectExtensionFunctionLintResults = (
   project: gdProject,
-  includeGeneratedCode: boolean
+  includeGeneratedCode: boolean,
+  projectValidationErrors: Array<Object>
 ): Array<Object> => {
   const results: Array<Object> = [];
   for (
@@ -555,20 +556,24 @@ const collectExtensionFunctionLintResults = (
       ) {
         const eventsFunction = container.getEventsFunctionAt(functionIndex);
         try {
-          const result = lintExtensionFunctionEvents(project, {
-            extension_name: extensionName,
-            parent_kind: parentKind,
-            parent_name: parentName || undefined,
-            function_name: eventsFunction.getName(),
-            require_root_groups: false,
-            include_generated_code: includeGeneratedCode,
-            // Store extensions are reviewed, versioned dependencies and can
-            // intentionally retain hidden legacy instructions for backwards
-            // compatibility. Still compile and parse their generated code,
-            // while reserving semantic authoring lint for local extensions.
-            generated_code_only:
-              extension.getOriginName() === 'gdevelop-extension-store',
-          });
+          const result = lintExtensionFunctionEvents(
+            project,
+            {
+              extension_name: extensionName,
+              parent_kind: parentKind,
+              parent_name: parentName || undefined,
+              function_name: eventsFunction.getName(),
+              require_root_groups: false,
+              include_generated_code: includeGeneratedCode,
+              // Store extensions are reviewed, versioned dependencies and can
+              // intentionally retain hidden legacy instructions for backwards
+              // compatibility. Still compile and parse their generated code,
+              // while reserving semantic authoring lint for local extensions.
+              generated_code_only:
+                extension.getOriginName() === 'gdevelop-extension-store',
+            },
+            projectValidationErrors
+          );
           if (!result.valid) results.push(result);
         } catch (error) {
           results.push({
@@ -757,7 +762,11 @@ export const validateSerializedProject = (
     const extensionLintFailures =
       args.include_generated_code === false
         ? []
-        : collectExtensionFunctionLintResults(validationProject, true);
+        : collectExtensionFunctionLintResults(
+            validationProject,
+            true,
+            projectValidationErrors
+          );
     const extensionErrors: Array<Object> = [];
     extensionLintFailures.forEach(result => {
       if (Array.isArray(result.errors)) {
