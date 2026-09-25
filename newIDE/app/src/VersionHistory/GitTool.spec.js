@@ -2,9 +2,21 @@
 import * as React from 'react';
 import renderer from 'react-test-renderer';
 import { CommitRow, parseUnifiedDiff } from './GitTool';
-import { type GitCommit } from './GitToolApi';
+import { type GitCommit, withGitStatusTimeout } from './GitToolApi';
 
 describe('GitTool', () => {
+  it('stops waiting when the Git status IPC request never responds', async () => {
+    jest.useFakeTimers();
+    try {
+      const pendingRequest: any = new Promise(() => {});
+      const result = withGitStatusTimeout(pendingRequest, 100);
+      jest.advanceTimersByTime(100);
+      await expect(result).rejects.toThrow('Git status did not respond.');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('opens the selected commit diff from the commit title button', () => {
     const commit = {
       hash: '0123456789abcdef0123456789abcdef01234567',
