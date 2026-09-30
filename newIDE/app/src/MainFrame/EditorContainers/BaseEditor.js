@@ -344,6 +344,7 @@ export type RenderEditorContainerProps = {|
     variant: gdEventsBasedObjectVariant
   ) => void,
   onEffectAdded: () => void,
+  onLayerRenamedOrRemoved: () => void,
   onObjectListsModified: ({ isNewObjectTypeUsed: boolean }) => void,
   onExternalAssociationChanged: () => void,
 |};

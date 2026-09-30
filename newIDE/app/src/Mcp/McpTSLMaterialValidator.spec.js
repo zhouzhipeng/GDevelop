@@ -122,6 +122,41 @@ describe('MCP single-file TSL material validator', () => {
     expect(result.graph_validated).toBe(true);
   });
 
+  test('uses disk registrations and removals before editor reload', async () => {
+    const registryPath = path.join(root, 'resources.settings');
+    fs.writeFileSync(
+      registryPath,
+      'kind = "resources"\nsettingsFormatVersion = 6\n[[resources]]\nkind = "tslMaterial"\nname = "DiskTint"\nfile = "materials/Tint.tsl.ts"\n'
+    );
+    const validate = () =>
+      validateTSLFileForMcp({
+        project,
+        projectRoot: root,
+        args: { file_path: 'materials/Tint.tsl.ts', validation_level: 'graph' },
+      });
+    expect((await validate()).registered_resource_name).toBe('DiskTint');
+    expect(
+      project
+        .getResourcesManager()
+        .getAllResourceNames()
+        .toJSArray()
+    ).not.toContain('DiskTint');
+    const resource = new global.gd.TSLMaterialResource();
+    resource.setName('StaleTint');
+    resource.setFile('materials/Tint.tsl.ts');
+    project.getResourcesManager().addResource(resource);
+    resource.delete();
+    fs.writeFileSync(
+      registryPath,
+      'kind = "resources"\nsettingsFormatVersion = 6\nresources = []\n'
+    );
+    expect((await validate()).registered_resource_name).toBeNull();
+    fs.writeFileSync(registryPath, 'invalid [');
+    await expect(validate()).rejects.toMatchObject({
+      code: 'TSL-MCP-RESOURCE-REGISTRY-INVALID',
+    });
+  });
+
   test.each([
     ['../Tint.tsl.ts', 'TSL-MCP-FILE-PATH-INVALID'],
     ['materials/Tint.ts', 'TSL-MCP-FILE-EXTENSION-INVALID'],

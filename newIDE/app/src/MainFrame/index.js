@@ -834,6 +834,9 @@ const MainFrame = (props: Props): React.MixedElement => {
       try {
         const shouldBlockAllDiagnosticErrors = preferences.getBlockPreviewAndExportOnDiagnosticErrors();
         const validationErrors = scanProjectForValidationErrors(project);
+        const blockingValidationErrors = validationErrors.filter(
+          error => error.severity !== 'warning'
+        );
         const unsafeExternalLayoutCreationErrors = validationErrors.filter(
           error => error.type === 'unsafe-external-layout-creation'
         );
@@ -865,7 +868,8 @@ const MainFrame = (props: Props): React.MixedElement => {
 
         if (
           mustBlockForSpecificValidationErrors ||
-          (shouldBlockAllDiagnosticErrors && validationErrors.length > 0)
+          (shouldBlockAllDiagnosticErrors &&
+            blockingValidationErrors.length > 0)
         ) {
           const title = mustBlockForUnsafeExternalLayoutCreation
             ? t`External layout action needs a condition`
@@ -888,10 +892,10 @@ const MainFrame = (props: Props): React.MixedElement => {
               : t`This export cannot run because one or more events are not allowed in their scene lifecycle function. Open the diagnostic report to move or replace them.`
             : actionType === 'preview'
             ? t`Your project has ${
-                validationErrors.length
+                blockingValidationErrors.length
               } diagnostic error(s). Please fix them before launching a preview.`
             : t`Your project has ${
-                validationErrors.length
+                blockingValidationErrors.length
               } diagnostic error(s). Please fix them before exporting.`;
           let shouldIgnoreDiagnosticErrors = false;
           const openReport = await showConfirmation({
@@ -3435,6 +3439,20 @@ const MainFrame = (props: Props): React.MixedElement => {
         shouldReloadResources: false,
         shouldHardReload: false,
         reasons: ['effect-added'],
+      });
+    },
+    [notifyChangesToInGameEditor]
+  );
+
+  const onLayerRenamedOrRemoved = React.useCallback(
+    () => {
+      // Instances can have been moved to another layer or deleted.
+      notifyChangesToInGameEditor({
+        shouldReloadProjectData: true,
+        shouldReloadLibraries: false,
+        shouldReloadResources: false,
+        shouldHardReload: false,
+        reasons: ['layer-renamed-or-removed'],
       });
     },
     [notifyChangesToInGameEditor]
@@ -6927,7 +6945,7 @@ const MainFrame = (props: Props): React.MixedElement => {
             onStartSaving: () =>
               _replaceSnackMessage(i18n._(t`Saving...`), null),
             onMoveResources: async ({ newFileMetadata }) => {
-              if (currentFileMetadata)
+              if (currentFileMetadata) {
                 await ensureResourcesAreMoved({
                   project: upToDateProject,
                   newFileMetadata,
@@ -6938,6 +6956,16 @@ const MainFrame = (props: Props): React.MixedElement => {
                   oldStorageProviderOperations,
                   authenticatedUser,
                 });
+              }
+              // Resources can be only in memory (files added by the AI in a
+              // project not saved yet, or opened from a URL): store them.
+              await ensureResourcesAreFetched(() => ({
+                project: upToDateProject,
+                fileMetadata: newFileMetadata,
+                storageProvider: newStorageProvider,
+                storageProviderOperations: newStorageProviderOperations,
+                authenticatedUser,
+              }));
             },
           }
         );
@@ -7035,6 +7063,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       getStorageProvider,
       preferences,
       ensureResourcesAreMoved,
+      ensureResourcesAreFetched,
       authenticatedUser,
       currentlyRunningInAppTutorial,
       showAlert,
@@ -8570,9 +8599,11 @@ const MainFrame = (props: Props): React.MixedElement => {
     async ({
       name,
       exampleSlug,
+      projectFileUrl,
     }: {|
       name: string,
       exampleSlug: string | null,
+      projectFileUrl?: string | null,
     |}) => {
       // On desktop, create the project with the local-file storage provider and
       // a default path so it is WRITTEN to disk immediately (createProject calls
@@ -8609,6 +8640,7 @@ const MainFrame = (props: Props): React.MixedElement => {
         storageProvider,
         saveAsLocation,
         creationSource: 'ai-agent-request',
+        projectFileUrl,
       };
 
       if (exampleSlug) {
@@ -9292,6 +9324,7 @@ const MainFrame = (props: Props): React.MixedElement => {
     onExtensionInstalled: onExtensionInstalled,
     onCreateNewExtensionWithBehavior: onCreateNewExtensionWithBehavior,
     onEffectAdded: onEffectAdded,
+    onLayerRenamedOrRemoved: onLayerRenamedOrRemoved,
     onObjectListsModified: onObjectListsModified,
     onExternalAssociationChanged,
     gamesList: gamesList,

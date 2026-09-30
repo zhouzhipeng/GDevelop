@@ -167,7 +167,8 @@ The following behavior is normative whenever a role is absent:
 
 Missing-role equivalence is not a fallback to another role. A missing
 `sceneLoad` never executes `sceneUpdate`, and a Link in `sceneUnload` never
-resolves to an external update body.
+resolves to an update body from another lifecycle. It expands the external
+fragment in the caller's unload role.
 
 ## 6. Editor experience
 

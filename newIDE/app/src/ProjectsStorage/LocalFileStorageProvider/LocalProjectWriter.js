@@ -28,6 +28,7 @@ import {
 } from '../../UI/Alert/AlertContext';
 import {
   stripGameplayTestResultsFromLegacyProject,
+  readMultiFileSourceTree,
   writeLegacyProjectAsMultiFile,
   writeMultiFileSourceTree,
 } from './LocalMultiFileProject';
@@ -49,6 +50,7 @@ import {
   mergeProjectInstructionCatalogs,
   normalizeLegacyProjectInstructionParameters,
   serializeProjectInstructionCatalog,
+  validateProjectInstructionCatalog,
 } from '../../EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog';
 import { getLocalProjectLastModifiedDate } from './LocalProjectFileModificationTime';
 import {
@@ -57,6 +59,11 @@ import {
   buildProjectSettingsCatalog,
   serializeProjectSettingsCatalog,
 } from '../ProjectSourceCatalog';
+import {
+  PROJECT_MODULE_MAP_RELATIVE_PATH,
+  buildProjectModuleMap,
+  serializeProjectModuleMap,
+} from '../ProjectModuleMap';
 import {
   PROJECT_API_RELATIVE_PATH,
   PROJECT_HARNESS_API_RELATIVE_PATH,
@@ -266,13 +273,46 @@ const writeAndCheckGeneratedFileSync = (
     throw new Error('The content to save on disk is empty. Aborting.');
 
   fs.ensureDirSync(path.dirname(filePath));
+  // Catalog regeneration often produces identical bytes. Another renderer may
+  // also be regenerating the same file, so avoid a redundant replacement.
+  if (fs.pathExistsSync(filePath)) {
+    try {
+      checkFileContentSync(filePath, content, expectedSha256);
+      return;
+    } catch (error) {
+      // Existing bytes are stale or incomplete: replace them below.
+    }
+  }
   const temporaryPath = `${filePath}.tmp-${Date.now()}-${Math.random()
     .toString(16)
     .slice(2)}`;
   try {
     fs.writeFileSync(temporaryPath, content);
     checkFileContentSync(temporaryPath, content);
-    fs.moveSync(temporaryPath, filePath, { overwrite: true });
+    // fs-extra can fall back from rename to link/copy on Windows. If a second
+    // renderer wins the destination between remove and link, it reports EEXIST.
+    // Accept the winner only when its bytes match, otherwise retry the move.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        fs.moveSync(temporaryPath, filePath, { overwrite: true });
+        break;
+      } catch (error) {
+        if (
+          !['EEXIST', 'EPERM', 'EBUSY'].includes(error.code) ||
+          !fs.pathExistsSync(temporaryPath)
+        )
+          throw error;
+        if (fs.pathExistsSync(filePath)) {
+          try {
+            checkFileContentSync(filePath, content, expectedSha256);
+            break;
+          } catch (mismatch) {
+            // A partial/stale competing write must be replaced.
+          }
+        }
+        if (attempt === 2) throw error;
+      }
+    }
     if (onVerifying) onVerifying();
     checkFileContentSync(filePath, content, expectedSha256);
   } finally {
@@ -447,6 +487,38 @@ export const writeProjectSettingsCatalog = async (
       ...RETIRED_PROJECT_LAYOUT_CATALOG_RELATIVE_PATH.split('/')
     )
   );
+  const entryPath = path.join(projectPath, MULTI_FILE_ENTRY_NAME);
+  if (fs.existsSync(entryPath)) {
+    const { files } = await readMultiFileSourceTree(entryPath);
+    const readInstructionCatalog = (relativePath: string) => {
+      const catalogPath = path.join(projectPath, ...relativePath.split('/'));
+      return fs.existsSync(catalogPath)
+        ? validateProjectInstructionCatalog(fs.readJsonSync(catalogPath))
+        : null;
+    };
+    const instructionCatalog = readInstructionCatalog(
+      PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH
+    );
+    const deprecatedCatalog = readInstructionCatalog(
+      PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH
+    );
+    const resolver = instructionCatalog
+      ? createCatalogInstructionResolver(
+          deprecatedCatalog
+            ? mergeProjectInstructionCatalogs(
+                instructionCatalog,
+                deprecatedCatalog
+              )
+            : instructionCatalog
+        )
+      : undefined;
+    writeAndCheckGeneratedFileSync(
+      serializeProjectModuleMap(
+        buildProjectModuleMap(serializedProject, files, resolver)
+      ),
+      path.join(projectPath, ...PROJECT_MODULE_MAP_RELATIVE_PATH.split('/'))
+    );
+  }
   reportCatalogProgress(options, 'catalog-settings-written');
   return catalog;
 };
@@ -787,6 +859,17 @@ const writeProjectFiles = async ({
         projectPath,
         ...PROJECT_SETTINGS_CATALOG_RELATIVE_PATH.split('/')
       )
+    );
+    const { files: moduleMapFiles } = await readMultiFileSourceTree(filePath);
+    await writeAndCheckFile(
+      serializeProjectModuleMap(
+        buildProjectModuleMap(
+          authoringSerializedProjectObject,
+          moduleMapFiles,
+          createCatalogInstructionResolver(serializationCatalog)
+        )
+      ),
+      path.join(projectPath, ...PROJECT_MODULE_MAP_RELATIVE_PATH.split('/'))
     );
     fs.removeSync(
       path.join(

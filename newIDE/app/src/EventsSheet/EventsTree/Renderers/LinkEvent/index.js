@@ -90,14 +90,12 @@ export default class LinkEvent extends React.Component<
   };
 
   openTarget = (i18n: I18nType) => {
-    const { project, event, onOpenLayout, onOpenExternalEvents } = this.props;
+    const { project, event, onOpenExternalEvents } = this.props;
     const linkEvent = gd.asLinkEvent(event);
     const target = linkEvent.getTarget();
 
     if (project.hasExternalEventsNamed(target)) {
       onOpenExternalEvents(target);
-    } else if (project.hasLayoutNamed(target)) {
-      onOpenLayout(target);
     } else {
       showWarningBox(
         i18n._(
@@ -149,8 +147,7 @@ export default class LinkEvent extends React.Component<
     const { project } = this.props.scope;
     return (
       target.length > 0 &&
-      !project.hasExternalEventsNamed(target) &&
-      !project.hasLayoutNamed(target)
+      !project.hasExternalEventsNamed(target)
     );
   };
 

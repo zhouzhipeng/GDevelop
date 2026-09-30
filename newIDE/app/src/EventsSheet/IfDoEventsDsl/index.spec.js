@@ -318,16 +318,6 @@ const allEventTypesFixture = [
     include: { includeConfig: 0 },
   },
   {
-    type: 'BuiltinCommonInstructions::Link',
-    target: 'Shared Combat',
-    include: { includeConfig: 1, eventsGroup: 'Damage' },
-  },
-  {
-    type: 'BuiltinCommonInstructions::Link',
-    target: 'Shared Combat',
-    include: { includeConfig: 2, start: 2, end: 8 },
-  },
-  {
     type: 'BuiltinCommonInstructions::JsCode',
     inlineCode: 'const value = 1;\nruntimeScene.test = value;',
     parameterObjects: 'Enemy',
@@ -371,6 +361,60 @@ describe('IfDo events DSL', () => {
       );
       expect(second).toBe(first);
       expect(first.endsWith('\n')).toBe(true);
+    });
+
+    test('omits redundant event and while metadata without merging events', () => {
+      const events = [
+        standard({
+          conditions: [instruction('FirstCondition')],
+          actions: [instruction('FirstAction')],
+        }),
+        standard({
+          conditions: [instruction('SecondCondition')],
+          actions: [instruction('SecondAction')],
+        }),
+        standard({ actions: [instruction('ThirdAction')] }),
+        standard({ actions: [instruction('FourthAction')] }),
+        standard({ conditions: [instruction('ConditionOnly')] }),
+        standard({ conditions: [instruction('AnotherConditionOnly')] }),
+        standard({
+          variables: [{ name: 'count', type: 'number', value: 1 }],
+          actions: [instruction('WithLocal')],
+        }),
+        standard(),
+        standard({ conditions: [instruction('AfterEmpty')] }),
+        {
+          type: 'BuiltinCommonInstructions::While',
+          whileConditions: [instruction('KeepGoing')],
+          conditions: [],
+          actions: [],
+          events: [],
+          variables: [],
+        },
+        standard({ conditions: [instruction('AfterWhile')] }),
+        {
+          type: 'BuiltinCommonInstructions::While',
+          infiniteLoopWarning: true,
+          whileConditions: [instruction('WarnAboutLoop')],
+          conditions: [],
+          actions: [],
+          events: [],
+          variables: [],
+        },
+      ];
+      const input = JSON.stringify(events);
+      const { dsl, output } = roundTripWithTestCatalog(input);
+      expect(areLegacyEventsEquivalent(input, output)).toBe(true);
+      expect(dsl).toContain('do FirstAction\n\nif SecondCondition');
+      expect(dsl).toContain('do ThirdAction\n\n@event\ndo FourthAction');
+      expect(dsl).toContain(
+        'if ConditionOnly\n\n@event\nif AnotherConditionOnly'
+      );
+      expect(dsl).toContain('@event\nlocal count =');
+      expect(dsl).toContain('\nevent\n\n@event\nif AfterEmpty');
+      expect(dsl).toContain('while KeepGoing\n\n@event\nif AfterWhile');
+      expect(dsl).not.toContain('@while\n');
+      expect(dsl).toContain('@while infiniteLoopWarning=true');
     });
 
     test('does not hardcode aliases for built-in instructions', () => {
@@ -1087,6 +1131,21 @@ do Y
         () => compileIfDoToLegacyEventsJson('>> event\n'),
         'IFDO_DEPTH'
       );
+    });
+
+    test('links accept only one quoted external events name', () => {
+      expect(parseIfDoEvents('link "Shared Combat"\n')[0].target).toBe(
+        'Shared Combat'
+      );
+      for (const source of [
+        'link external "Shared Combat"\n',
+        'link scene "Base Level"\n',
+        'link SharedCombat\n',
+        'link "Shared Combat" group="Damage"\n',
+        'link "Shared Combat" range=2..8\n',
+      ]) {
+        expectCode(() => compileIfDoToLegacyEventsJson(source), 'IFDO_SYNTAX');
+      }
     });
 
     test('rejects removed exact syntax and unterminated blocks', () => {

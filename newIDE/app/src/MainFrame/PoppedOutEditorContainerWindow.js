@@ -413,6 +413,7 @@ const PoppedOutEditorContainerWindow = (props: Props): React.Node => {
                         onCreateNewExtensionWithBehavior:
                           props.onCreateNewExtensionWithBehavior,
                         onEffectAdded: props.onEffectAdded,
+                        onLayerRenamedOrRemoved: props.onLayerRenamedOrRemoved,
                         onObjectListsModified: props.onObjectListsModified,
                         onExternalAssociationChanged:
                           props.onExternalAssociationChanged,

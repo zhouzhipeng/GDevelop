@@ -1345,6 +1345,10 @@ namespace gdjs {
           if (inGameEditor) {
             inGameEditor.zoomToFitContent(data.payload.visibleScreenArea);
           }
+        } else if (data.command === 'setVisibleScreenArea') {
+          if (inGameEditor) {
+            inGameEditor.setVisibleScreenArea(data.payload.visibleScreenArea);
+          }
         } else if (data.command === 'setSelectedLayer') {
           if (inGameEditor) {
             inGameEditor.setSelectedLayerName(data.payload.layerName);
@@ -1924,6 +1928,23 @@ namespace gdjs {
           command: 'updateInstances',
           editorId: inGameEditor.getEditorId(),
           payload: changes,
+        })
+      );
+    }
+
+    sendObjectPropertiesChanges(
+      objectName: string,
+      properties: { [propertyName: string]: string }
+    ): void {
+      const inGameEditor = this._runtimegame.getInGameEditor();
+      if (!inGameEditor) {
+        return;
+      }
+      this._sendMessage(
+        circularSafeStringify({
+          command: 'updateObjectProperties',
+          editorId: inGameEditor.getEditorId(),
+          payload: { objectName, properties },
         })
       );
     }

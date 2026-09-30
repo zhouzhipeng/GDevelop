@@ -13,6 +13,8 @@ import {
   McpGameplayTestOperationError,
 } from './McpGameplayTestOperations';
 import { inspectTSLMaterialModelBytes } from '../TSLMaterial/TSLMaterialBrowserValidator';
+import { validateSerializedProject } from './McpProjectTools';
+import * as EventsValidationScanner from '../Utils/EventsValidationScanner';
 
 jest.mock('../TSLMaterial/TSLMaterialBrowserValidator', () => ({
   ensureTSLMaterialBrowserValidatorRegistered: jest.fn(),
@@ -50,6 +52,30 @@ const makeGlbModelBuffer = (json: Object): Uint8Array => {
 };
 
 describe('McpEditorBridge', () => {
+  it('scans project validation errors once for multiple extension functions', () => {
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    const extension = project.insertNewEventsFunctionsExtension(
+      'ValidationReuse',
+      0
+    );
+    const functions = extension.getEventsFunctions();
+    functions.insertNewEventsFunction('First', 0);
+    functions.insertNewEventsFunction('Second', 1);
+    const scan = jest.spyOn(
+      EventsValidationScanner,
+      'scanProjectForValidationErrors'
+    );
+    try {
+      validateSerializedProject(serializeProjectWithConstants(project), {
+        include_generated_code: true,
+      });
+      expect(scan).toHaveBeenCalledTimes(1);
+    } finally {
+      scan.mockRestore();
+      project.delete();
+    }
+  });
+
   it('routes create_project without an open project and reports invalid input', async () => {
     const response = await makeBridge().handleRendererMcpRequest({
       method: 'tools/call',

@@ -213,7 +213,9 @@ const createOwnedNodeMaterial = (source: any, requestedBase: string): any => {
 
 const createInheritedInputs = (_source: any): Object => {
   return {
-    baseColor: TSL.materialColor,
+    // Keep the validator and runtime's public RGB input contract identical,
+    // including textured materials whose materialColor accessor is vec4.
+    baseColor: TSL.materialColor.rgb,
     opacity: TSL.materialOpacity,
     emissive: TSL.materialEmissive,
     roughness: TSL.materialRoughness,

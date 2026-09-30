@@ -30,6 +30,11 @@ import {
 import path from 'path-browserify';
 import newNameGenerator from '../../Utils/NewNameGenerator';
 import { serializeConstantsToToml } from '../MultiFileProjectFormat';
+import {
+  isBlobURL,
+  parseLocalFilePathOrExtensionFromMetadata,
+} from '../../ResourcesList/ResourceUtils';
+import { sanitizeFilename } from '../../Utils/Filename';
 const gd: libGDevelop = global.gd;
 
 const PROJECT_JSON_FILENAME = 'game.json';
@@ -94,6 +99,19 @@ export const downloadResourcesAsBlobs = async ({
                 url: resourceFile,
                 filename: extractDecodedFilenameFromProjectResourceUrl(
                   resourceFile
+                ),
+              };
+            } else if (isBlobURL(resourceFile)) {
+              // Only in memory (a project not saved yet): named like when
+              // uploaded to the cloud.
+              const { extension } = parseLocalFilePathOrExtensionFromMetadata(
+                resource
+              );
+              return {
+                resource,
+                url: resourceFile,
+                filename: sanitizeFilename(
+                  resource.getName() + (extension || '')
                 ),
               };
             } else {

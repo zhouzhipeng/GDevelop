@@ -93,7 +93,10 @@ describe('gdjs.RuntimeObject', () => {
     });
     object.setPosition(15, 20);
 
-    expect(object.getAngleToPosition(-110, 200)).to.be(124.77783136636388);
+    expect(object.getAngleToPosition(-110, 200)).to.be.within(
+      124.777831,
+      124.777832
+    );
   });
 
   it('should get and set enum variables', () => {

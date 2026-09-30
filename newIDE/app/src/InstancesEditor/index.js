@@ -3,6 +3,7 @@ import React, { Component } from 'react';
 import debounce from 'lodash/debounce';
 import panable, { type PanMoveEvent } from '../Utils/PixiSimpleGesture/pan';
 import KeyboardShortcuts, { MID_MOUSE_BUTTON } from '../UI/KeyboardShortcuts';
+import isUserTyping from '../KeyboardShortcuts/IsUserTyping';
 import InstancesRenderer from './InstancesRenderer';
 import ViewPosition from './ViewPosition';
 import SelectedInstances from './SelectedInstances';
@@ -236,6 +237,7 @@ export default class InstancesEditor extends Component<Props, State> {
   nextFrame: AnimationFrameID;
   contextMenuLongTouchTimeoutID: TimeoutID;
   hasCursorMovedSinceItIsDown = false;
+  _isPointerOverCanvas = false;
   _showObjectInstancesIn3D: boolean = false;
   _canvasResolution: number = 1;
   _previousToolBeforePicker: ?TileMapTileSelection = null;
@@ -289,6 +291,7 @@ export default class InstancesEditor extends Component<Props, State> {
     const { onMouseMove, onMouseLeave } = this.props;
 
     this.keyboardShortcuts = new KeyboardShortcuts({
+      isActive: this._shouldHandleKeyboardShortcuts,
       shortcutCallbacks: {
         onMove: this.moveSelection,
         ...this.props.instancesEditorShortcutsCallbacks,
@@ -388,14 +391,13 @@ export default class InstancesEditor extends Component<Props, State> {
       event.preventDefault();
     };
     this.pixiRenderer.view.setAttribute('tabIndex', -1);
-    this.pixiRenderer.view.addEventListener(
-      'keydown',
-      this.keyboardShortcuts.onKeyDown
-    );
-    this.pixiRenderer.view.addEventListener(
-      'keyup',
-      this.keyboardShortcuts.onKeyUp
-    );
+    // Listened on the window (in the capture phase, as tree views stop the propagation)
+    // so that shortcuts also work when the canvas is only hovered, like the wheel zoom.
+    window.addEventListener('keydown', this.keyboardShortcuts.onKeyDown, true);
+    // Key releases are always handled, so that a key released outside the canvas or
+    // while the window is blurred is not considered as still pressed.
+    window.addEventListener('keyup', this.keyboardShortcuts.onKeyUp, true);
+    window.addEventListener('blur', this.keyboardShortcuts.resetModifiers);
     this.pixiRenderer.view.addEventListener(
       'mousedown',
       this.keyboardShortcuts.onMouseDown
@@ -404,14 +406,14 @@ export default class InstancesEditor extends Component<Props, State> {
       'mouseup',
       this.keyboardShortcuts.onMouseUp
     );
-    if (onMouseMove)
-      this.pixiRenderer.view.addEventListener('mousemove', event => {
-        onMouseMove(event);
-      });
-    if (onMouseLeave)
-      this.pixiRenderer.view.addEventListener('mouseout', event => {
-        onMouseLeave(event);
-      });
+    this.pixiRenderer.view.addEventListener('mousemove', event => {
+      this._isPointerOverCanvas = true;
+      if (onMouseMove) onMouseMove(event);
+    });
+    this.pixiRenderer.view.addEventListener('mouseout', event => {
+      this._isPointerOverCanvas = false;
+      if (onMouseLeave) onMouseLeave(event);
+    });
     this.pixiRenderer.view.addEventListener('focusout', event => {
       if (this.keyboardShortcuts) {
         this.keyboardShortcuts.resetModifiers();
@@ -713,6 +715,22 @@ export default class InstancesEditor extends Component<Props, State> {
     this.backgroundPixiContainer.addChild(this.background.getPixiObject());
   }
 
+  /**
+   * Keyboard shortcuts are handled when the canvas is hovered by the cursor, or when it
+   * is focused - so that they can be used without having to click on the canvas first,
+   * consistently with the mouse wheel zoom that already works when only hovering.
+   */
+  _shouldHandleKeyboardShortcuts = (): boolean =>
+    !!this.pixiRenderer &&
+    // Don't handle shortcuts while a text is edited or a dialog is opened.
+    !isUserTyping() &&
+    !(
+      document.activeElement &&
+      document.activeElement.closest('[role="dialog"]')
+    ) &&
+    (this._isPointerOverCanvas ||
+      document.activeElement === this.pixiRenderer.view);
+
   componentWillUnmount() {
     // This is an antipattern and is theoretically not needed, but help
     // to protect against renders after the component is unmounted.
@@ -722,6 +740,12 @@ export default class InstancesEditor extends Component<Props, State> {
     if (this._stopNativeAppActivity) {
       this._stopNativeAppActivity();
       this._stopNativeAppActivity = null;
+    }
+    if (this.keyboardShortcuts) {
+      const { onKeyDown, onKeyUp, resetModifiers } = this.keyboardShortcuts;
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+      window.removeEventListener('blur', resetModifiers);
     }
 
     // We've seen all those elements being undefined in some cases, so

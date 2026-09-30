@@ -92,10 +92,10 @@ namespace gdjs {
       style.miterLimit = 3;
       this.updatePosition();
 
-      // Manually ask the PIXI object to re-render as we changed a style property
-      // see http://www.html5gamedevs.com/topic/16924-change-text-style-post-render/
-      // @ts-ignore
-      this._text.dirty = true;
+      // Pixi 7 TextStyle setters invalidate changed values through styleID.
+      // updatePosition reads the current metrics, which already rasterizes a
+      // changed style. Marking it dirty again redraws it a second time and also
+      // forces every unchanged per-frame HUD style assignment to rasterize.
     }
 
     updatePosition(): void {

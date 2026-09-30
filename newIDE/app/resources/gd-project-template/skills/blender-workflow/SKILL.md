@@ -23,6 +23,27 @@ Read [references/blender-to-gdevelop.md](references/blender-to-gdevelop.md) in f
 
 When the task also changes GDevelop project sources, read [the GDevelop project-files skill](../gdevelop-project-files/SKILL.md) in full. Let this skill govern Blender and GLB work; let that skill govern GDevelop source authoring, validation, Git commit, reload, and preview-verification gates.
 
+## Project paths
+
+Follow [the project directory conventions](../../docs/PROJECT_STRUCTURE.md).
+Keep editable `.blend` and other production inputs in `sources/` (for example
+`sources/models/hero.blend`), runtime GLB and texture exports in `assets/`, and
+project-specific generators in `tools/`. Bundled helpers stay in this skill's
+`scripts/` directory. Create asset categories only when needed.
+
+Use `tmp/` for intermediate conversion/export candidates. If a helper produces
+both an editable source and a GLB in one output directory, inspect them there
+and install each into its respective final directory. Document inputs,
+outputs, dependencies and overwrite behavior in `tools/README.md`.
+
+When reorganizing existing files, preserve runtime resource paths and check
+Blender's relative image and linked-library paths after moving a source.
+Update producer scripts so the next run saves to the new source directory.
+Keep companion inputs where required by an existing workflow and document
+their location. Save reviewed reports and images together under
+`artifacts/verification/<task-or-version>/`, using project-relative report
+paths; use `artifacts/previews/` for independent presentation images.
+
 ## Work in Blender
 
 1. Inspect the current file, objects, linked data, missing files, and target asset before changing anything. Use bounded summaries or focused queries instead of dumping the entire scene.

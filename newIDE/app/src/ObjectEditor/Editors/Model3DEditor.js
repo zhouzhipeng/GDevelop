@@ -51,6 +51,7 @@ import {
 } from '../../ResourcesList/ResourcePreview/Model3DRigUtils';
 import Resource3DPreviewContext from '../../ResourcesList/ResourcePreview/Resource3DPreviewContext';
 import { Accordion, AccordionBody, AccordionHeader } from '../../UI/Accordion';
+import { renameObjectAnimationReferences } from '../../Utils/ObjectAnimationsRefactoring';
 
 const gd: libGDevelop = global.gd;
 
@@ -919,24 +920,17 @@ const Model3DEditor = ({
 
       animation.setName(newName);
       if (object) {
-        if (layout) {
-          gd.WholeProjectRefactorer.renameObjectAnimationInScene(
+        renameObjectAnimationReferences(
+          {
             project,
-            layout,
             object,
-            currentName,
-            newName
-          );
-        } else if (eventsFunctionsExtension && eventsBasedObject) {
-          gd.WholeProjectRefactorer.renameObjectAnimationInEventsBasedObject(
-            project,
+            layout,
             eventsFunctionsExtension,
             eventsBasedObject,
-            object,
-            currentName,
-            newName
-          );
-        }
+          },
+          currentName,
+          newName
+        );
       }
       forceUpdate();
       if (onObjectUpdated) onObjectUpdated();

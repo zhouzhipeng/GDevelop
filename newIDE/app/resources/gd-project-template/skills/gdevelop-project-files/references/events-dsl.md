@@ -1,8 +1,9 @@
 # Author Events DSL
 
-Read the scene or function settings and generated instruction catalog before
-editing an `.events` file. External fragments have no own settings: inspect their
-owning scene and Link callers to determine inherited conditions and scope.
+Read the scene, external-fragment, or function settings and generated
+instruction catalog before editing an `.events` file. For external fragments,
+inspect the owning scene and Link callers to determine inherited conditions
+and scope; its own settings describe purpose but do not create a function scope.
 For real functions, the same-stem settings define the function context;
 `.events` contains only IfDo DSL event logic. Never put TOML, a function
 declaration, or raw GDevelop event JSON in this file.
@@ -29,16 +30,29 @@ and event scope:
 - `scene.settings` owns four fixed lifecycle functions below
   `scenes/<Scene>/functions/`: `sceneLoad`, `sceneSignal`, `sceneUpdate`, and
   `sceneUnload`. Each has a flat same-stem `.settings` and `.events` pair.
-- `scenes/<Scene>/external-events/<Fragment>.events` is a plain event fragment.
-  The filename supplies its name and its location supplies the scene. It has no
-  settings, parameters or lifecycle functions; its Link caller supplies scope.
+- `scenes/<Scene>/external-events/<Fragment>.settings` and `.events` form a
+  same-stem fragment pair. Settings declare `kind = "externalEvents"`, the
+  matching `name`, `description`, and `eventsLogic`. Set
+  `settingsFormatVersion = 7`. For example:
+
+  ```toml
+  kind = "externalEvents"
+  settingsFormatVersion = 7
+  name = "CameraVisibility"
+  description = "Resolve camera visibility after movement updates"
+  eventsLogic = "Read the requested orbit, then apply collision response."
+  ```
+
+  The parent path supplies
+  the scene. The fragment has no parameters or lifecycle functions; its Link
+  caller supplies scope.
 - A dedicated `<Function>.settings` owns every extension, prefab, or behavior
   function body. Its sibling `<Function>.events` uses the same stem; editor
   grouping is the `folder` array in the settings file.
 
-A body in `functions/` must have a same-stem `.settings` file. A direct
-`external-events/*.events` fragment stands alone, including when empty or unused.
-Do not create child directories, settings or manifests for fragments.
+A body in `functions/` or `external-events/` must have a same-stem `.settings`
+file. An empty or unused fragment is valid. Do not create child directories
+or manifests for fragments.
 
 Read `.gdevelop/instructions-catalog.json` before writing instructions. It is
 regenerated on project save and is read-only. Search it narrowly instead of
@@ -161,6 +175,12 @@ Never place a parent action after its first child. A conditional event requires
 an action or child event. Child events inherit ancestor conditions, locals, and
 picked instances.
 
+Blank lines do not end events. A second `do` joins the open event, and a second
+`if` joins an open condition header. Use `@event` to start a new action-only
+event, to separate condition-only siblings, or before locals following an open
+sibling. Structural headers and `event` start their own events. The formatter
+omits `@event` when the next boundary is already unambiguous.
+
 ## Metadata, groups, and comments
 
 Use `@event` immediately before the event whose current metadata it preserves:
@@ -174,6 +194,9 @@ do DebuggerTools::ConsoleLog message_to_log="initializing"
 Use `@instruction` immediately before its condition or action only when
 preserving instruction metadata such as `disabled`, `inverted`, or `awaited`.
 Do not move event metadata onto an instruction or vice versa.
+Nested instruction children use `?` at the same event depth, with one `?` per
+instruction depth. They omit `if` and `do`; write `? @instruction ...` directly
+before the child when that child has metadata. Use `??` for a grandchild.
 
 A group uses one header and a typed terminator. Group event metadata belongs on
 the `@group` line:
@@ -260,11 +283,10 @@ Every AI-authored `while` requires a positive safety `limit=` and must visibly
 progress toward termination. Use `and while` and `@while` only when preserving
 existing exact while-event structure.
 
-Link an existing event-sheet target with a leaf event:
+Link an external event fragment with a leaf event:
 
 ```events
-link external "Shared Combat"
-link scene "Base Level"
+link "Shared Combat"
 ```
 
 Links cannot own locals, actions, or children. Use them in scene lifecycle
@@ -318,8 +340,7 @@ explicitly permitted.
   in `sceneUpdate`.
 - `sceneUnload` is terminal and synchronous. Never author awaited/future-frame
   actions, deferred signal emission, or scene-stack transitions there.
-- A `link scene` resolves the target scene's matching lifecycle function.
-  A `link external` expands the same fragment body at the call site regardless
+- A `link` expands the same external fragment body at the call site regardless
   of lifecycle, inheriting parent conditions, picked objects, local variables
   and lifecycle restrictions. An empty body is a valid no-op.
 - Actions executed in sceneUpdate need an effective condition in the event or

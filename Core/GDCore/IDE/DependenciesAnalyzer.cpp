@@ -22,9 +22,7 @@ DependenciesAnalyzer::DependenciesAnalyzer(const gd::Project& project_,
     : project(project_), layout(NULL), externalEvents(&externalEvents_) {}
 
 bool DependenciesAnalyzer::Analyze() {
-  scenesDependencies.clear();
   externalEventsDependencies.clear();
-  for (auto& dependencies : scenesDependenciesByRole) dependencies.clear();
   for (auto& dependencies : externalEventsDependenciesByRole)
     dependencies.clear();
   activePath.clear();
@@ -42,8 +40,8 @@ bool DependenciesAnalyzer::Analyze() {
     activePath.clear();
     return hasNoCircularDependency;
   } else if (externalEvents) {
-    // A fragment has no role of its own. Check all possible caller roles,
-    // because a nested Link to a scene still selects that scene's role.
+    // A fragment has no role of its own. Check all possible caller roles so
+    // nested fragments are analyzed in each caller context.
     for (auto role : {gd::SceneLifecycleFunctionRole::SceneLoad,
                       gd::SceneLifecycleFunctionRole::SceneSignal,
                       gd::SceneLifecycleFunctionRole::SceneUpdate,
@@ -101,11 +99,6 @@ bool DependenciesAnalyzer::Analyze(
         externalEventsDependencies.insert(linked);
         externalEventsDependenciesByRole[GetRoleIndex(role)].insert(linked);
         dependencyNode = {DependencyOwnerKind::ExternalEvents, linked, role};
-        hasDependency = true;
-      } else if (project.HasLayoutNamed(linked)) {
-        scenesDependencies.insert(linked);
-        scenesDependenciesByRole[GetRoleIndex(role)].insert(linked);
-        dependencyNode = {DependencyOwnerKind::Scene, linked, role};
         hasDependency = true;
       }
 

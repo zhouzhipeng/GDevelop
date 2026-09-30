@@ -2359,11 +2359,15 @@ const summarizeExtensionLintIssues = (issues: Array<Object>): Object => {
 const lintExtensionFunctionTarget = (
   project: gdProject,
   target: ExtensionFunctionTarget,
-  args: Object = {}
+  args: Object = {},
+  precomputedProjectValidationErrors?: Array<Object>
 ): Object => {
   const issues: Array<Object> = [];
   if (!args.generated_code_only) {
-    scanProjectForValidationErrors(project)
+    const projectValidationErrors = precomputedProjectValidationErrors
+      ? precomputedProjectValidationErrors
+      : scanProjectForValidationErrors(project);
+    projectValidationErrors
       .filter(error => isProjectValidationErrorForTarget(error, target))
       .forEach(error => {
         issues.push({
@@ -2441,12 +2445,14 @@ const assertExtensionFunctionEventsAreValid = (
 
 export const lintExtensionFunctionEvents = (
   project: gdProject,
-  args: Object
+  args: Object,
+  precomputedProjectValidationErrors?: Array<Object>
 ): Object => {
   return lintExtensionFunctionTarget(
     project,
     getExtensionFunctionTarget(project, args),
-    args || {}
+    args || {},
+    precomputedProjectValidationErrors
   );
 };
 

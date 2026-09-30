@@ -103,7 +103,9 @@ const InvalidParameterRow = ({
   backgroundColor,
 }: InvalidParameterRowProps) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
-  const typeLabel = error.isCondition ? 'Condition' : 'Action';
+  const typeLabel = `${error.severity === 'warning' ? 'Warning: ' : ''}${
+    error.isCondition ? 'Condition' : 'Action'
+  }`;
   const displayedSentence = error.diagnosticMessage
     ? `${error.diagnosticMessage} (${error.instructionSentence})`
     : error.instructionSentence;
@@ -178,12 +180,22 @@ const InvalidParametersSection = ({
   return (
     <ColumnStackLayout noMargin>
       <Text size="block-title">
-        <Trans>Invalid events</Trans> ({invalidParametersCount})
+        <Trans>Event diagnostics</Trans> ({invalidParametersCount})
       </Text>
-      <AlertMessage kind="error">
+      <AlertMessage
+        kind={
+          validationErrors.some(
+            error =>
+              error.type !== 'missing-instruction' &&
+              error.severity !== 'warning'
+          )
+            ? 'error'
+            : 'warning'
+        }
+      >
         <Trans>
-          The following events have validation errors. Click a location to
-          navigate there.
+          The following events have validation errors or warnings. Click a
+          location to navigate there.
         </Trans>
       </AlertMessage>
       {/* $FlowFixMe[incompatible-type] */}

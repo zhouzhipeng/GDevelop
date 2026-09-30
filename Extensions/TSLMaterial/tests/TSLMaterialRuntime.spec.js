@@ -198,6 +198,9 @@ describe('TSL material runtime', function () {
       get b() {
         return new FakeNode(this.value);
       }
+      get rgb() {
+        return new FakeNode(this.value + '.rgb');
+      }
     }
 
     class FakeWebGLNodesHandler {}
@@ -441,7 +444,7 @@ describe('TSL material runtime', function () {
       apply(system, host, 'Default', 'Inherited');
       system.flush();
 
-      expect(inheritedInputs.baseColor.value).to.be('materialColor');
+      expect(inheritedInputs.baseColor.value).to.be('materialColor.rgb');
       expect(inheritedInputs.opacity.value).to.be('materialOpacity');
       expect(inheritedInputs.emissive.value).to.be('materialEmissive');
       expect(inheritedInputs.roughness.value).to.be('materialRoughness');

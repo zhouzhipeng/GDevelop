@@ -1936,14 +1936,14 @@ Serialized behavior properties are:
 
 | Property       | Type                   | Default        | Meaning                                     |
 | -------------- | ---------------------- | -------------- | ------------------------------------------- |
-| `Material`     | `tslMaterial` resource | Empty          | Definition to apply.                        |
-| `BindingName`  | String                 | `Default`      | Stable runtime binding identity.            |
-| `SelectorMode` | Enum                   | `All`          | One of the structured selector modes.       |
-| `MeshName`     | String                 | Empty          | Used by mesh selector modes.                |
-| `MaterialName` | String                 | Empty          | Used by material selector modes.            |
-| `Priority`     | Integer                | `0`            | Conflict priority.                          |
-| `Enabled`      | Boolean                | `true`         | Whether the default binding is active.      |
-| `Fallback`     | Enum                   | `KeepOriginal` | Version one exposes only the safe fallback. |
+| `material`     | `tslMaterial` resource | Empty          | Definition to apply.                        |
+| `bindingName`  | String                 | `Default`      | Stable runtime binding identity.            |
+| `selectorMode` | Enum                   | `All`          | One of the structured selector modes.       |
+| `meshName`     | String                 | Empty          | Used by mesh selector modes.                |
+| `materialName` | String                 | Empty          | Used by material selector modes.            |
+| `priority`     | Integer                | `0`            | Conflict priority.                          |
+| `enabled`      | Boolean                | `true`         | Whether the default binding is active.      |
+| `fallback`     | Enum                   | `KeepOriginal` | Version one exposes only the safe fallback. |
 
 The behavior creates or updates its binding when the object and scene are ready.
 It does not duplicate the GLB resource or own the Model3D hierarchy.

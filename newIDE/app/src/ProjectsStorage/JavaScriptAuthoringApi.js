@@ -352,6 +352,15 @@ declare namespace GDevelopGameplayTests {
     readonly owner: number | null;
   }
 
+  /** A variable of a result's final state, without its content: the value of
+   * a number, a boolean or a (cut) text, the size of a structure or an array. */
+  export interface GameplayTestVariableSummary {
+    readonly name: string;
+    readonly type: GameplayTestVariableType;
+    readonly value?: string | number | boolean;
+    readonly childrenCount?: number;
+  }
+
   /** Values evaluated from public object and behavior state inspectors. */
   export interface GameplayTestEvaluatedState {
     readonly [conditionOrExpressionName: string]: boolean | number | string;
@@ -390,6 +399,16 @@ declare namespace GDevelopGameplayTests {
     readonly flippedY?: boolean;
     readonly children?: {
       readonly [objectName: string]: GameplayTestObjectSnapshot[];
+    };
+  }
+
+  /** An object snapshot of a result's final state: its variables are
+   * summarized. */
+  export interface GameplayTestSummarizedObjectSnapshot
+    extends Omit<GameplayTestObjectSnapshot, "variables" | "children"> {
+    readonly variables: GameplayTestVariableSummary[];
+    readonly children?: {
+      readonly [objectName: string]: GameplayTestSummarizedObjectSnapshot[];
     };
   }
 
@@ -541,11 +560,16 @@ declare namespace GDevelopGameplayTests {
       readonly sceneName: string;
       readonly objectCounts: { readonly [objectName: string]: number };
       readonly watchedObjects: {
-        readonly [objectName: string]: GameplayTestObjectSnapshot[];
+        readonly [objectName: string]: GameplayTestSummarizedObjectSnapshot[];
       };
-      readonly sceneVariables: GameplayTestVariableSnapshot[];
+      readonly sceneVariables: GameplayTestVariableSummary[];
+      /** Says how to read what the summaries leave out. */
+      readonly sceneVariablesNote?: string;
+      readonly watchedObjectsNote?: string;
     };
     readonly screenshots: GameplayTestScreenshot[];
+    /** Screenshots taken, including the ones not kept in screenshots. */
+    readonly screenshotsTakenCount?: number;
     readonly profiles: GameplayTestProfilingResult[];
     readonly performance: {
       readonly avgStepMs: number;

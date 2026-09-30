@@ -150,7 +150,9 @@ const writeCliGameplayTestResults = (
 const runners: { [commandName: string]: CliCommandRunner } = {
   EXPORT_HTML5_EXTERNAL: async (project, i18n, { preferences }) => {
     if (shouldBlockOnDiagnosticErrorsForCli(preferences)) {
-      const errors = scanProjectForValidationErrors(project);
+      const errors = scanProjectForValidationErrors(project).filter(
+        error => error.severity !== 'warning'
+      );
       if (errors.length > 0) {
         console.error(
           `[CLI] Diagnostic report has ${
@@ -233,7 +235,7 @@ const runners: { [commandName: string]: CliCommandRunner } = {
     const results = await runProjectGameplayTests({
       project,
       tests: filteredTests,
-      options: { screenshots: 'on-failure' },
+      options: { screenshots: 'on' },
     });
     let failedCount = 0;
     for (const result of results) {

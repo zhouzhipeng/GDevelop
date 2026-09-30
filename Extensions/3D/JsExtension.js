@@ -375,6 +375,7 @@ module.exports = {
         .addDefaultBehavior('ScalableCapability::ScalableBehavior')
         .addDefaultBehavior('FlippableCapability::FlippableBehavior')
         .addDefaultBehavior('AnimatableCapability::AnimatableBehavior')
+        .addDefaultBehavior('EffectCapability::EffectBehavior')
         .addDefaultBehavior('Scene3D::Base3DBehavior')
         .markAsRenderedIn3D()
         .setIncludeFile('Extensions/3D/A_RuntimeObject3D.js')
@@ -1085,7 +1086,7 @@ module.exports = {
             'Enabling texture transparency has an impact on rendering performance.'
           )
         )
-        .setGroup(_('Texture'));
+        .setGroup(_('Textures'));
 
       objectProperties
         .getOrCreate('facesOrientation')
@@ -1130,7 +1131,7 @@ module.exports = {
         .setValue(objectContent.tint || '255;255;255')
         .setType('Color')
         .setLabel(_('Tint'))
-        .setGroup(_('Texture'));
+        .setGroup(_('Textures'));
 
       objectProperties
         .getOrCreate('frontFaceResourceName')
@@ -2548,6 +2549,34 @@ module.exports = {
         .setLabel(_('Contrast'))
         .setType('number')
         .setDescription(_('Between -1 and 1'));
+    }
+    {
+      const effect = extension
+        .addEffect('Silhouette')
+        .setFullName(_('3D silhouette outline'))
+        .setDescription(
+          _(
+            'Draw only the outer geometric silhouette of a 3D object, including all its meshes, over the scenery on its layer.'
+          )
+        )
+        .markAsOnlyWorkingFor3D()
+        .addIncludeFile('Extensions/3D/SilhouetteEffect.js');
+      const properties = effect.getProperties();
+      properties
+        .getOrCreate('color')
+        .setValue('143;255;232')
+        .setLabel(_('Color'))
+        .setType('color');
+      properties
+        .getOrCreate('thickness')
+        .setValue('2')
+        .setLabel(_('Thickness (0 to 8 pixels)'))
+        .setType('number');
+      properties
+        .getOrCreate('opacity')
+        .setValue('1')
+        .setLabel(_('Opacity (0 to 1)'))
+        .setType('number');
     }
     // Don't forget to update the alert condition in Model3DEditor.js when
     // adding a new light.

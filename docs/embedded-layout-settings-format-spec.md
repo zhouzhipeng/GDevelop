@@ -1,10 +1,17 @@
 # Embedded layout settings and flattened source paths
 
+> Version 7 amendment: External Events now require same-stem
+> `external-events/<Fragment>.settings` and `.events` files. Their settings
+> contain `kind = "externalEvents"`, `name`, `description`, and `eventsLogic`.
+> See [external-events-settings-project-module-map-spec.md](external-events-settings-project-module-map-spec.md).
+> Statements below describing settings-free fragments document version 6.
+
 
 > Version 6 amendment (2026-09-20): embedded layouts and real function pairs
 > retain this schema. External Events are now single
 > `scenes/<Scene>/external-events/<Fragment>.events` files without settings,
-> functions, order or manifests. Production accepts version 6 only; settings
+> functions, order or manifests. This is version 6 history; production accepts
+> version 7 only. Settings
 > catalog version 3 adds `eventFileKinds`. Version 4/5 migration procedures below
 > are historical, not a compatibility reader. See
 > [external-events-snippets-spec.md](external-events-snippets-spec.md).

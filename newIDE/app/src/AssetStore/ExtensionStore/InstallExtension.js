@@ -31,6 +31,7 @@ import {
 import InAppTutorialContext from '../../InAppTutorial/InAppTutorialContext';
 import PromisePool from '@supercharge/promise-pool';
 import { retryIfFailed } from '../../Utils/RetryIfFailed';
+import { preflightExtensionBatch } from './PreflightExtensionBatch';
 
 const gd: libGDevelop = global.gd;
 
@@ -345,6 +346,7 @@ export const getRequiredExtensions = (
 };
 
 export const useInstallExtension = (): (({
+  preflightExtension?: Object => Promise<Object>,
   importedSerializedExtensions: Array<SerializedExtension>,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
   onWillInstallExtension: (extensionNames: Array<string>) => void,
@@ -367,7 +369,9 @@ export const useInstallExtension = (): (({
     onExtensionInstalled,
     updateMode,
     reason,
+    preflightExtension,
   }: {|
+    preflightExtension?: Object => Promise<Object>,
     project: gdProject,
     requiredExtensionInstallation: RequiredExtensionInstallation,
     importedSerializedExtensions: Array<SerializedExtension>,
@@ -402,6 +406,7 @@ export const useInstallExtension = (): (({
       return false;
     }
     await installRequiredExtensions({
+      preflightExtension,
       requiredExtensionInstallation,
       shouldUpdateExtension: extensionUpdateAction === 'update',
       eventsFunctionsExtensionsState,
@@ -431,6 +436,7 @@ const filterMissingExtensions = (
 };
 
 export type InstallRequiredExtensionsArgs = {|
+  preflightExtension?: Object => Promise<Object>,
   requiredExtensionInstallation: RequiredExtensionInstallation,
   shouldUpdateExtension: boolean,
   eventsFunctionsExtensionsState: EventsFunctionsExtensionsState,
@@ -441,6 +447,7 @@ export type InstallRequiredExtensionsArgs = {|
 |};
 
 export const installRequiredExtensions = async ({
+  preflightExtension,
   requiredExtensionInstallation,
   shouldUpdateExtension,
   eventsFunctionsExtensionsState,
@@ -486,6 +493,11 @@ export const installRequiredExtensions = async ({
   ];
   const installedExtensionNames = installedExtensions.map(
     extensions => extensions.name
+  );
+  await preflightExtensionBatch(
+    installedExtensions,
+    neededExtensions,
+    preflightExtension
   );
   onWillInstallExtension(installedExtensionNames);
   await addSerializedExtensionsToProject(

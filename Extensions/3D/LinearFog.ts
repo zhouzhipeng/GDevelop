@@ -84,6 +84,9 @@ namespace gdjs {
             this._applyWorldScale();
           }
           updateDoubleParameter(parameterName: string, value: number): void {
+            // The TSL backend references this fog object's live uniforms.
+            // Only replacing/enabling/disabling fog changes the shader graph;
+            // animated weather values must not recreate every bound material.
             if (parameterName === 'near') {
               if (this._near === value) return;
               this._near = value;
@@ -92,12 +95,6 @@ namespace gdjs {
               if (this._far === value) return;
               this._far = value;
               this._applyWorldScale();
-            }
-            if (
-              (parameterName === 'near' || parameterName === 'far') &&
-              this.isEnabled(target)
-            ) {
-              this._invalidateTSLMaterials();
             }
           }
           getDoubleParameter(parameterName: string): number {
@@ -113,14 +110,12 @@ namespace gdjs {
               const color = gdjs.rgbOrHexStringToNumber(value);
               if (this.fog.color.getHex() === color) return;
               this.fog.color.setHex(color);
-              if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
           }
           updateColorParameter(parameterName: string, value: number): void {
             if (parameterName === 'color') {
               if (this.fog.color.getHex() === value) return;
               this.fog.color.setHex(value);
-              if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
           }
           getColorParameter(parameterName: string): number {
@@ -150,7 +145,6 @@ namespace gdjs {
             this._far = data.f;
             this._applyWorldScale();
             this.fog.color.setHex(data.c);
-            if (this.isEnabled(target)) this._invalidateTSLMaterials();
           }
         })();
       }

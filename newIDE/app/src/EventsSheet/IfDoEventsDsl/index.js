@@ -1724,35 +1724,15 @@ const variableFromExact = (
 };
 
 const parseLink = (text: string, line: number): Object => {
-  const source = text.slice('link '.length).replace(/^(external|scene)\s+/, '');
+  const source = text.slice('link '.length);
   const reader = new ValueReader(source);
   const target = reader.readString();
-  const remainder = source.slice(reader.index);
-  const range = /^\s*range=(-?\d+)\.\.(-?\d+)\s*$/.exec(remainder);
-  if (range) {
-    return {
-      target,
-      include: {
-        includeConfig: 2,
-        start: Number(range[1]),
-        end: Number(range[2]),
-      },
-    };
-  }
-  const args = parseNamedArguments(remainder);
-  Object.keys(args).forEach(key => {
-    if (key !== 'group') {
-      fail('IFDO_SYNTAX', `Unknown link argument ${key}.`, line);
-    }
-  });
-  if (args.group !== undefined && typeof args.group !== 'string') {
-    fail('IFDO_SYNTAX', 'link group must be a string.', line);
-  }
-  if (args.group !== undefined) {
-    return {
-      target,
-      include: { includeConfig: 1, eventsGroup: String(args.group) },
-    };
+  if (!target || source.slice(reader.index).trim()) {
+    fail(
+      'IFDO_SYNTAX',
+      'Link requires only a quoted external events name.',
+      line
+    );
   }
   return { target, include: { includeConfig: 0 } };
 };
@@ -2065,24 +2045,14 @@ const normalizeEvent = (value: any, label: string): Object => {
       event.include || { includeConfig: 0 },
       `${label}.include`
     );
-    assertOnlyKeys(
-      include,
-      new Set(['includeConfig', 'eventsGroup', 'start', 'end']),
-      `${label}.include`
-    );
+    assertOnlyKeys(include, new Set(['includeConfig']), `${label}.include`);
+    if (Number(include.includeConfig || 0) !== 0) {
+      fail('IFDO_INVALID_JSON', `${label}.include must include all events.`);
+    }
     return {
       ...common,
       target: String(event.target || ''),
-      include: {
-        includeConfig: Number(include.includeConfig || 0),
-        ...(include.eventsGroup !== undefined
-          ? { eventsGroup: String(include.eventsGroup) }
-          : {}),
-        ...(include.start !== undefined
-          ? { start: Number(include.start) }
-          : {}),
-        ...(include.end !== undefined ? { end: Number(include.end) } : {}),
-      },
+      include: { includeConfig: 0 },
     };
   }
   return {
@@ -2238,6 +2208,31 @@ const appendInstructionEventBody = (
   );
 };
 
+const needsEventBoundary = (event: Object, previous: ?Object): boolean => {
+  if (Object.keys(eventMetadata(event)).length) return true;
+  if (!previous) return false;
+  if (
+    previous.type === EVENT_TYPES.group ||
+    previous.type === EVENT_TYPES.comment ||
+    previous.type === EVENT_TYPES.link ||
+    previous.type === EVENT_TYPES.js
+  )
+    return false;
+  if (
+    event.type !== EVENT_TYPES.else &&
+    event.variables &&
+    event.variables.length
+  )
+    return true;
+  if (event.type !== EVENT_TYPES.standard) return false;
+  if (!event.conditions.length && !event.actions.length) return false;
+  if (!event.conditions.length) return true;
+  return !(
+    (previous.actions && previous.actions.length) ||
+    (previous.events && previous.events.length)
+  );
+};
+
 const formatEvents = (
   events: Array<Object>,
   depth: number = 0,
@@ -2249,7 +2244,8 @@ const formatEvents = (
     if (
       event.type !== EVENT_TYPES.group &&
       event.type !== EVENT_TYPES.comment &&
-      event.type !== EVENT_TYPES.js
+      event.type !== EVENT_TYPES.js &&
+      needsEventBoundary(event, events[eventIndex - 1])
     ) {
       lines.push(
         `${depthPrefix(depth)}${formatMetadata('@event', eventMetadata(event))}`
@@ -2374,11 +2370,8 @@ const formatEvents = (
           )}`
         )
       );
-      lines.push(
-        `${depthPrefix(depth)}${formatMetadata('@while', {
-          ...(event.infiniteLoopWarning ? { infiniteLoopWarning: true } : {}),
-        })}`
-      );
+      if (event.infiniteLoopWarning)
+        lines.push(`${depthPrefix(depth)}@while infiniteLoopWarning=true`);
       const whileConditions = event.whileConditions || [];
       if (!whileConditions.length) {
         lines.push(
@@ -2449,13 +2442,7 @@ const formatEvents = (
       return;
     }
     if (event.type === EVENT_TYPES.link) {
-      const include = event.include || { includeConfig: 0 };
-      let suffix = '';
-      if (include.includeConfig === 1)
-        suffix = ` group=${quote(include.eventsGroup || '')}`;
-      else if (include.includeConfig === 2)
-        suffix = ` range=${include.start || 0}..${include.end || 0}`;
-      lines.push(`${depthPrefix(depth)}link ${quote(event.target)}${suffix}`);
+      lines.push(`${depthPrefix(depth)}link ${quote(event.target)}`);
       return;
     }
     if (event.type === EVENT_TYPES.js) {

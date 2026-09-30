@@ -283,20 +283,6 @@ void EventsVariablesFinder::FindArgumentsInEventsAndDependencies(
           eventWorker.Launch(externalEvents.GetEvents(),
                              externalEventsScopedContainers);
         }
-        for (const gd::String& sceneName :
-             dependenciesAnalyzer.GetScenesDependencies(role)) {
-          const auto& dependencyLayout = project.GetLayout(sceneName);
-          const auto& dependencyEventsFunction =
-              dependencyLayout.GetLifecycleEventsFunctions().Get(role);
-          auto dependencyScopedContainers = gd::ProjectScopedContainers::
-              MakeNewProjectScopedContainersForProjectAndLayout(
-                  project, dependencyLayout);
-          dependencyScopedContainers.SetScopeSceneLifecycleFunctionRole(role);
-          dependencyScopedContainers.AddParameters(
-              dependencyEventsFunction.GetParameters());
-          eventWorker.Launch(dependencyEventsFunction.GetEvents(),
-                             dependencyScopedContainers);
-        }
       });
 }
 

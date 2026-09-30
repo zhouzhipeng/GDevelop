@@ -54,6 +54,7 @@ const getPortalContainerThemeProps = (portalContainer: ?HTMLElement) => {
     MuiMenu: { container: portalContainer },
     MuiDrawer: { container: portalContainer },
     MuiTooltip: {
+      // Replaced by any Tooltip passing its own PopperProps: those must also set the container.
       PopperProps: { container: portalContainer },
     },
   };

@@ -56,22 +56,6 @@ class GD_CORE_API DependenciesAnalyzer {
   bool Analyze();
 
   /**
-   * \brief Return the scenes being dependencies of the scene or external events
-   * passed in the constructor.
-   */
-  const std::set<gd::String>& GetScenesDependencies() const {
-    return scenesDependencies;
-  };
-
-  /**
-   * \brief Return scene dependencies reachable from one lifecycle role.
-   */
-  const std::set<gd::String>& GetScenesDependencies(
-      gd::SceneLifecycleFunctionRole role) const {
-    return scenesDependenciesByRole[GetRoleIndex(role)];
-  }
-
-  /**
    * \brief Return the external events being dependencies of the scene or
    * external events passed in the constructor.
    */
@@ -126,9 +110,7 @@ class GD_CORE_API DependenciesAnalyzer {
   bool Analyze(const gd::EventsList& events,
                gd::SceneLifecycleFunctionRole role);
 
-  std::set<gd::String> scenesDependencies;
   std::set<gd::String> externalEventsDependencies;
-  std::array<std::set<gd::String>, 4> scenesDependenciesByRole;
   std::array<std::set<gd::String>, 4> externalEventsDependenciesByRole;
   std::vector<DependencyNode> activePath;
   std::set<DependencyNode> visitedDependencies;

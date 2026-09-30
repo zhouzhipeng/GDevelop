@@ -592,8 +592,8 @@ describe('GDevelop multi-file project format', () => {
     );
     expect(files['game://scenes/Main/scene.settings']).toContain('order = 0');
     expect(files['game://scenes/Main/Main.layout']).toBeUndefined();
-    expect(files['game://scenes/Main/functions/sceneUpdate.events']).toContain(
-      '@event'
+    expect(files['game://scenes/Main/functions/sceneUpdate.events']).toBe(
+      'event\n'
     );
     expect(files['game://scenes/Main/scene.settings']).not.toContain(
       'externalEventFiles'
@@ -604,7 +604,7 @@ describe('GDevelop multi-file project format', () => {
     expect(files['game://externals/external.settings']).toBeUndefined();
     expect(
       files['game://scenes/Main/external-events/Shared%20Combat.events']
-    ).toContain('@event');
+    ).toBe('event\n');
     expect(
       files[
         'game://scenes/Main/external-events/Shared%20Combat/external-events.settings'
@@ -628,13 +628,13 @@ describe('GDevelop multi-file project format', () => {
       files[
         'game://extensions/Combat/prefabs/Enemy/functions/TakeDamage.events'
       ]
-    ).toContain('@event');
+    ).toBe('event\n');
     expect(
       files['game://extensions/Combat/behaviors/Health/functions/Heal.settings']
     ).toContain('name = "Heal"');
     expect(
       files['game://extensions/Combat/behaviors/Health/functions/Heal.events']
-    ).toContain('@event');
+    ).toBe('event\n');
     expect(
       files['game://extensions/Combat/prefabs/Enemy/prefab.settings']
     ).not.toContain('.functions.');
@@ -690,8 +690,8 @@ describe('GDevelop multi-file project format', () => {
       expect(files[`game://scenes/Main/functions/${role}.settings`]).toContain(
         `lifecycleRole = "${role}"`
       );
-      expect(files[`game://scenes/Main/functions/${role}.events`]).toContain(
-        '@event'
+      expect(files[`game://scenes/Main/functions/${role}.events`]).toBe(
+        'event\n'
       );
     }
     expect(
@@ -2312,7 +2312,7 @@ objects = [ "Player" ]
     filesWithMovedSource[movedUri] = filesWithMovedSource[canonicalUri];
     delete filesWithMovedSource[canonicalUri];
     expect(() => composeLegacyProjectFromFiles(filesWithMovedSource)).toThrow(
-      expect.objectContaining({ code: 'MULTIFILE_OWNERSHIP_CONFLICT' })
+      expect.objectContaining({ code: 'MULTIFILE_MISSING_FILE' })
     );
   });
 
@@ -2549,12 +2549,14 @@ describe('External event fragment source identity', () => {
     const fragmentUris = Object.keys(files).filter(uri =>
       uri.includes('/external-events/')
     );
-    expect(fragmentUris).toHaveLength(names.length);
+    expect(fragmentUris).toHaveLength(names.length * 2);
     names.forEach(name =>
-      expect(fragmentUris).toContain(
-        `game://scenes/Main/external-events/${encodeManagedName(
-          `${name}.events`
-        )}`
+      ['settings', 'events'].forEach(extension =>
+        expect(fragmentUris).toContain(
+          `game://scenes/Main/external-events/${encodeManagedName(
+            `${name}.${extension}`
+          )}`
+        )
       )
     );
     const reversed = Object.fromEntries(Object.entries(files).reverse());
@@ -2583,8 +2585,8 @@ describe('External event fragment source identity', () => {
   test('rejects the retired format version instead of reading it as fragments', () => {
     const files = decomposeLegacyProjectToFiles(projectFixture);
     files[MULTI_FILE_ENTRY_URI] = files[MULTI_FILE_ENTRY_URI].replace(
-      'combinedSettingsFormatVersion = 6',
-      'combinedSettingsFormatVersion = 5'
+      'combinedSettingsFormatVersion = 7',
+      'combinedSettingsFormatVersion = 6'
     );
     expect(() => composeLegacyProjectFromFiles(files)).toThrow();
   });

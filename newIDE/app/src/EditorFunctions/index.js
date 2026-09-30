@@ -74,6 +74,12 @@ import {
 } from '../ProjectCreation/CreateProject';
 import { retryIfFailed } from '../Utils/RetryIfFailed';
 import newNameGenerator from '../Utils/NewNameGenerator';
+import {
+  type AttachmentsForResources,
+  type AttachmentResourceAddition,
+  type AttachmentResourceReplacement,
+  addOrReplaceResourcesFromAttachments,
+} from './AttachmentResources';
 import getObjectByName from '../Utils/GetObjectByName';
 import { getAllVisibleBehaviorNames } from '../Utils/Behavior';
 import type {
@@ -148,6 +154,19 @@ import {
   type ToolScopeType,
   type ToolScope,
 } from './Scope';
+import {
+  getInstanceRawJson,
+  getChangedInstancesObjectNames,
+  loadTileMapAtlases,
+  applyInstancesRawJson,
+} from './InstancesRawJson';
+import {
+  applyRawObjectConfiguration,
+  renameObjectAnimationsAndPoints,
+  getFrameImageSizes,
+  getModelAnimationSources,
+  getRawJsonNote,
+} from './RawObjectConfiguration';
 import {
   createExtension,
   changeExtensionProperties,
@@ -328,6 +347,12 @@ export type EditorFunctionGenericOutput = {|
   callForms?: Array<string>,
   reminder?: string,
   animationNames?: string,
+  // `inspect_object_properties_effects` with `include_raw_json`.
+  rawJson?: Object,
+  frameImageSizes?: {
+    [imageName: string]: {| width: number, height: number |},
+  },
+  modelAnimationSources?: Array<string>,
   // EventScript source view (see `read_events_source`):
   eventScript?: string,
   selectedEventIds?: Array<string>,
@@ -467,6 +492,26 @@ export type AssetSearchAndInstallOptions = {|
   lastAssistantMessages?: string[],
 |};
 
+// An asset that is an effect, installed on a layer.
+// Install an effect of the asset store on a layer, by its id. The
+// effect takes the type of the asset: `effectType`, when given, must match.
+export type EffectAssetSearchAndInstallOptions = {|
+  effectsContainer: gdEffectsContainer,
+  effectName: string,
+  effectType: string | null,
+  exactOrPartialAssetId: string,
+  relatedAiRequestId?: string | null,
+  lastUserMessage?: string | null,
+  lastAssistantMessages?: string[],
+|};
+
+export type EffectAssetSearchAndInstallResult = {|
+  status: 'asset-installed' | 'nothing-found' | 'error',
+  message: string,
+  effect: gdEffect | null,
+  assetShortHeader: AssetShortHeader | null,
+|};
+
 export type EditorCallbacks = {|
   onOpenLayout: (
     sceneName: string,
@@ -487,6 +532,7 @@ export type EditorCallbacks = {|
   onCreateProject: ({|
     name: string,
     exampleSlug: string | null,
+    projectFileUrl?: string | null,
   |}) => Promise<{|
     createdProject: gdProject | null,
     exampleSlug: string | null,
@@ -554,6 +600,8 @@ export type LaunchFunctionOptionsWithoutProject = {|
   onObjectsModifiedOutsideEditor: (
     changes: ObjectsOutsideEditorChanges
   ) => void,
+  // The effects of a layer changed: the game shown by the editor reloads them.
+  onEffectsModifiedOutsideEditor: () => void,
   onObjectGroupsModifiedOutsideEditor: (
     changes: ObjectGroupsOutsideEditorChanges
   ) => void,
@@ -588,9 +636,13 @@ export type LaunchFunctionOptionsWithoutProject = {|
   searchAndInstallAsset: (
     options: AssetSearchAndInstallOptions
   ) => Promise<AssetSearchAndInstallResult>,
+  searchAndInstallEffectAsset: (
+    options: EffectAssetSearchAndInstallOptions
+  ) => Promise<EffectAssetSearchAndInstallResult>,
   searchAndInstallResources: (
     options: ResourceSearchAndInstallOptions
   ) => Promise<ResourceSearchAndInstallResult>,
+  attachmentsForResources: AttachmentsForResources,
   /**
    * Returns the asset store tag for a given object type, when the type is
    * mainly meant to be picked from the asset store (e.g. premade UI objects).
@@ -751,6 +803,14 @@ const getOccupiedSpaceDescription = (
     .join(', ');
 };
 
+const isModel3DObjectWithoutModel = (object: gdObject): boolean => {
+  const properties = object.getConfiguration().getProperties();
+  return (
+    properties.has('modelResourceName') &&
+    !properties.get('modelResourceName').getValue()
+  );
+};
+
 /**
  * The anchor a `put_2d_instances`/`put_3d_instances` call asks for, checked
  * against the anchors of that brush and against what is known of the object:
@@ -796,14 +856,17 @@ const resolveInstanceAnchor = ({
 
   const isModelRead = !object || isModel3DObjectMeasured(object, project);
   if (!size || !isModelRead || !getAnchorOffset(anchor, size, objectSizeInfo)) {
+    const unknownBoxReason = isModelRead
+      ? ''
+      : object && isModel3DObjectWithoutModel(object)
+      ? ' (it has no 3D model: set its `modelResourceName` property first)'
+      : ' (its 3D model could not be read)';
     return {
       success: false,
       failure: makeGenericFailure(
         `\`brush_position_anchor: "${anchor}"\` needs the box of ${
           objectName ? `"${objectName}"` : 'the object'
-        }, which is unknown${
-          isModelRead ? '' : ' (its 3D model could not be read)'
-        }. Give the instances a size with \`instances_size\`, or place them by their \`origin\` (the default anchor).`
+        }, which is unknown${unknownBoxReason}. Give the instances a size with \`instances_size\`, or place them by their \`origin\` (the default anchor).`
       ),
     };
   }
@@ -1436,8 +1499,9 @@ const createOrReplaceObject: EditorFunction = {
     const getPropertiesText = (object: gdObject): string => {
       const properties = object.getConfiguration().getProperties();
       const propertiesList = formatPropertiesList(properties);
-      return propertiesList
-        ? `Properties: ${propertiesList}.`
+      if (propertiesList) return `Properties: ${propertiesList}.`;
+      return object.getType() === 'Sprite'
+        ? 'This object type has no editable object properties: its animations and their images are in its raw JSON (`inspect_object_properties_effects` with `include_raw_json`, then `raw_json` of `change_object_properties_effects`).'
         : 'This object type has no editable object properties.';
     };
 
@@ -1515,15 +1579,22 @@ const createOrReplaceObject: EditorFunction = {
 
       // If no search_terms or asset_id were provided but the object type has
       // an `assetStoreTag` (i.e. the type is mainly meant to be picked from
-      // the asset store, e.g. premade UI objects), use the tag as default
-      // search terms.
+      // the asset store, e.g. premade UI objects or particle emitters), use the
+      // tag as default search terms, with the object name which often tells
+      // what is wanted (e.g. "Rain_3D" for a 3D particle emitter).
       let effectiveSearchTerms = search_terms;
       let assetSearchMissed = false;
       let assetStoreTag: string | null = null;
       if (candidateType && !effectiveSearchTerms && !asset_id) {
         assetStoreTag = getAssetStoreTagForNewObject(candidateType);
         if (assetStoreTag) {
-          effectiveSearchTerms = `${assetStoreTag}, default`;
+          const objectNameWords = targetObjectName
+            .replace(/_/g, ' ')
+            .replace(/([a-z])([A-Z])/g, '$1 $2')
+            .trim();
+          effectiveSearchTerms = [assetStoreTag, objectNameWords, 'default']
+            .filter(Boolean)
+            .join(', ');
         }
       }
 
@@ -1622,7 +1693,7 @@ const createOrReplaceObject: EditorFunction = {
           } else {
             if (asset_id) {
               return makeGenericFailure(
-                `No asset found with id "${asset_id}". Object not created.`
+                `No object found with id "${asset_id}" (${message}). Object not created.`
               );
             }
 
@@ -2502,6 +2573,26 @@ const inspectObjectPropertiesEffects: EditorFunction = {
       output.animationNames = animationNames.join(', ');
     }
 
+    if (SafeExtractor.extractBooleanProperty(args, 'include_raw_json')) {
+      const rawJson = serializeToJSObject(objectConfiguration);
+      output.rawJson = rawJson;
+      output.message = getRawJsonNote(object, rawJson);
+      const frameImageSizes = await getFrameImageSizes(
+        project,
+        rawJson,
+        PixiResourcesLoader
+      );
+      if (frameImageSizes) output.frameImageSizes = frameImageSizes;
+      const modelAnimationSources = await getModelAnimationSources(
+        project,
+        rawJson,
+        PixiResourcesLoader
+      );
+      if (modelAnimationSources) {
+        output.modelAnimationSources = modelAnimationSources;
+      }
+    }
+
     if (objectSupportsEffects(object)) {
       const effectsContainer = object.getEffects();
       output.effects = mapFor(0, effectsContainer.getEffectsCount(), i => {
@@ -2559,6 +2650,31 @@ const changeObjectPropertiesEffects: EditorFunction = {
         text: (
           <Trans>
             Remove object <b>{object_name}</b> (in scene {scene_name}).
+          </Trans>
+        ),
+      };
+    }
+    if (args && args.raw_json !== undefined && args.raw_json !== null) {
+      return {
+        text: (
+          <Trans>
+            Update the animations and settings of <b>{object_name}</b> (in scene{' '}
+            {scene_name}).
+          </Trans>
+        ),
+      };
+    }
+    if (
+      (SafeExtractor.extractArrayProperty(args, 'renamed_animations') || [])
+        .length > 0 ||
+      (SafeExtractor.extractArrayProperty(args, 'renamed_points') || [])
+        .length > 0
+    ) {
+      return {
+        text: (
+          <Trans>
+            Rename animations or points of <b>{object_name}</b> (in scene{' '}
+            {scene_name}).
           </Trans>
         ),
       };
@@ -2707,12 +2823,16 @@ const changeObjectPropertiesEffects: EditorFunction = {
     onInstancesModifiedOutsideEditor,
     onWillDeleteObject,
     searchAndInstallResources,
+    PixiResourcesLoader,
   }) => {
     const object_name = extractRequiredString(args, 'object_name');
     const changed_properties =
       SafeExtractor.extractArrayProperty(args, 'changed_properties') || [];
     const changed_effects =
       SafeExtractor.extractArrayProperty(args, 'changed_effects') || [];
+    const raw_json = args ? args.raw_json : undefined;
+    const renamed_animations = args ? args.renamed_animations : undefined;
+    const renamed_points = args ? args.renamed_points : undefined;
 
     const resolvedScope = resolveScopeFromArgs(project, args, {
       allowedTypes: OBJECTS_SCOPE_TYPES,
@@ -2748,6 +2868,78 @@ const changeObjectPropertiesEffects: EditorFunction = {
       args,
       'delete_this_object'
     );
+    const isRawJsonMode = raw_json !== undefined && raw_json !== null;
+    // An empty list of renames is ignored; a value that is not a list is
+    // refused below.
+    const hasRenames = (renames: mixed) =>
+      renames !== undefined &&
+      renames !== null &&
+      (!Array.isArray(renames) || renames.length > 0);
+    const isRenamesMode =
+      hasRenames(renamed_animations) || hasRenames(renamed_points);
+    const isClassicMode =
+      changed_properties.length > 0 ||
+      changed_effects.length > 0 ||
+      !!deleteThisObject;
+    if (
+      [isRawJsonMode, isRenamesMode, isClassicMode].filter(Boolean).length > 1
+    ) {
+      return makeGenericFailure(
+        'Nothing was changed: `raw_json`, the renames (`renamed_animations`/`renamed_points`) and the other changes must be done in separate calls.'
+      );
+    }
+    if (isRawJsonMode && typeof raw_json !== 'string') {
+      return makeGenericFailure(
+        'Nothing was changed: `raw_json` must be a string: pass `JSON.stringify(rawJson)`.'
+      );
+    }
+    if (
+      isRenamesMode &&
+      (!Array.isArray(renamed_animations || []) ||
+        !Array.isArray(renamed_points || []))
+    ) {
+      return makeGenericFailure(
+        'Nothing was changed: `renamed_animations` and `renamed_points` must be arrays of {old_name, new_name}.'
+      );
+    }
+    if (isRawJsonMode || isRenamesMode) {
+      const result =
+        typeof raw_json === 'string'
+          ? await applyRawObjectConfiguration({
+              project,
+              resolvedScope,
+              object,
+              rawJson: raw_json,
+              PixiResourcesLoader,
+            })
+          : renameObjectAnimationsAndPoints({
+              project,
+              resolvedScope,
+              object,
+              renamedAnimations: renamed_animations || [],
+              renamedPoints: renamed_points || [],
+            });
+      if (!result.success) {
+        return makeGenericFailure(`Nothing was changed: ${result.message}`);
+      }
+      if (result.changes.length > 0) {
+        onObjectsModifiedOutsideEditor({
+          ...getOutsideEditorChangesTarget(resolvedScope),
+          isNewObjectTypeUsed: false,
+        });
+      }
+      if (result.haveInstancesChanged) {
+        onInstancesModifiedOutsideEditor({
+          ...getOutsideEditorChangesTarget(resolvedScope),
+        });
+      }
+      return makeMultipleChangesOutput(
+        result.changes,
+        result.warnings,
+        toolsVersion
+      );
+    }
+
     // Deleting a child object, or renaming it, changes the structure of the
     // custom object: only the default variant owns it.
     const isRenamingObject = changed_properties.some(changed_property => {
@@ -2915,6 +3107,15 @@ const changeObjectPropertiesEffects: EditorFunction = {
           });
         });
       }
+    }
+
+    // The 3D editor only sees the new properties when the objects are sent
+    // to it again.
+    if (changes.length > 0) {
+      onObjectsModifiedOutsideEditor({
+        ...getOutsideEditorChangesTarget(resolvedScope),
+        isNewObjectTypeUsed: false,
+      });
     }
 
     return {
@@ -4113,6 +4314,10 @@ const describeInstances: EditorFunction = {
 
     const filter_by_object_name =
       SafeExtractor.extractStringProperty(args, 'filter_by_object_name') || '';
+    const includeRawJson = !!SafeExtractor.extractBooleanProperty(
+      args,
+      'include_raw_json'
+    );
 
     const objectNames = new Set(
       filter_by_object_name
@@ -4178,7 +4383,15 @@ const describeInstances: EditorFunction = {
             ? sizeInfo
             : { width: 0, height: 0, depth: 0 };
 
-          instances.push(getSimplifiedInstance(instance, defaultSize));
+          const simplifiedInstance = getSimplifiedInstance(
+            instance,
+            defaultSize
+          );
+          instances.push(
+            includeRawJson
+              ? { ...simplifiedInstance, rawJson: getInstanceRawJson(instance) }
+              : simplifiedInstance
+          );
         }
       );
     });
@@ -4214,6 +4427,92 @@ const iterateOnInstances = (
   // $FlowFixMe[incompatible-type]
   initialInstances.iterateOverInstances(instanceGetter);
   instanceGetter.delete();
+};
+
+/**
+ * Changes the data of instances that `put_2d_instances`/`put_3d_instances`
+ * don't set (starting animation, tile map, text input values, flips), from
+ * the `rawJson` returned by `describe_instances` with `include_raw_json`.
+ */
+const changeInstancesRawJson: EditorFunction = {
+  renderForEditor: ({ args }) => {
+    const changes = SafeExtractor.extractArrayProperty(args, 'changes') || [];
+    return {
+      text: (
+        <Trans>
+          Change the starting animation, tiles, flips or other data of{' '}
+          {changes.length} instance(s) in {getScopeLabelFromArgs(args)}.
+        </Trans>
+      ),
+    };
+  },
+  launchFunction: async ({
+    project,
+    args,
+    toolsVersion,
+    PixiResourcesLoader,
+    onObjectsModifiedOutsideEditor,
+    onInstancesModifiedOutsideEditor,
+  }) => {
+    const resolvedScope = resolveScopeFromArgs(project, args, {
+      allowedTypes: INSTANCES_SCOPE_TYPES,
+    });
+    if (resolvedScope.success === false)
+      return makeScopeFailureOutput(resolvedScope);
+    const readOnlyRejection = getReadOnlyRejection(resolvedScope);
+    if (readOnlyRejection) return makeScopeFailureOutput(readOnlyRejection);
+    const containers = getInstancesScopeContainers(resolvedScope);
+    if (!containers)
+      return makeGenericFailure(
+        `${resolvedScope.label} has no instances to change.`
+      );
+    const changes = SafeExtractor.extractArrayProperty(args, 'changes');
+    if (!changes || changes.length === 0) {
+      return makeGenericFailure(
+        'Nothing was changed: `changes` must be a non-empty list of {instance_id, raw_json}.'
+      );
+    }
+    const getInstances = () => {
+      const instances = [];
+      iterateOnInstances(containers.initialInstances, instance => {
+        instances.push(instance);
+      });
+      return instances;
+    };
+    const tileMapAtlases = await loadTileMapAtlases({
+      project,
+      objectsContainer: containers.objectsContainer,
+      globalObjectsContainer: containers.globalObjectsContainer,
+      objectNames: getChangedInstancesObjectNames(getInstances(), changes),
+      PixiResourcesLoader,
+    });
+    // Read again: the instances may have changed while the atlases loaded.
+    const instances = getInstances();
+    const result = applyInstancesRawJson({
+      project,
+      objectsContainer: containers.objectsContainer,
+      globalObjectsContainer: containers.globalObjectsContainer,
+      instances,
+      changes,
+      tileMapAtlases,
+    });
+    if (!result.success) {
+      return makeGenericFailure(`Nothing was changed: ${result.message}`);
+    }
+    if (result.haveObjectsChanged) {
+      onObjectsModifiedOutsideEditor({
+        ...getOutsideEditorChangesTarget(resolvedScope),
+        isNewObjectTypeUsed: false,
+      });
+    }
+    if (result.changes.length > 0) {
+      onInstancesModifiedOutsideEditor({
+        ...getOutsideEditorChangesTarget(resolvedScope),
+      });
+    }
+    return makeMultipleChangesOutput(result.changes, [], toolsVersion);
+  },
+  modifiesProject: true,
 };
 
 // An id pointing at another object's instance is always a targeting mistake:
@@ -5387,12 +5686,39 @@ const put3dInstances: EditorFunction = {
       layersContainer,
     } = containers;
 
+    // An empty id would match every instance (`uuid.startsWith('')` is always
+    // true), so a trailing comma or a blank entry must never survive parsing.
+    const existingInstanceIds = existing_instance_ids
+      ? existing_instance_ids
+          .split(',')
+          .map(id => id.trim())
+          .filter(Boolean)
+      : [];
+
+    // Instances moved by their ids without `object_name` are sized (for the
+    // anchors and the space they occupy) by their object, when they share one.
+    const existingInstancesObjectNames = new Set<string>();
+    if (!object_name && existingInstanceIds.length > 0) {
+      iterateOnInstances(initialInstances, instance => {
+        if (
+          existingInstanceIds.some(id =>
+            instance.getPersistentUuid().startsWith(id)
+          )
+        )
+          existingInstancesObjectNames.add(instance.getObjectName());
+      });
+    }
+    const sizedObjectName =
+      object_name ||
+      (existingInstancesObjectNames.size === 1
+        ? Array.from(existingInstancesObjectNames)[0]
+        : null);
     const namedObject: gdObject | null =
-      (object_name &&
+      (sizedObjectName &&
         getObjectByName(
           globalObjectsContainer,
           objectsContainer,
-          object_name
+          sizedObjectName
         )) ||
       null;
     if (namedObject)
@@ -5422,15 +5748,6 @@ const put3dInstances: EditorFunction = {
         layersContainer
       );
     }
-
-    // An empty id would match every instance (`uuid.startsWith('')` is always
-    // true), so a trailing comma or a blank entry must never survive parsing.
-    const existingInstanceIds = existing_instance_ids
-      ? existing_instance_ids
-          .split(',')
-          .map(id => id.trim())
-          .filter(Boolean)
-      : [];
 
     if (brush_kind === 'erase') {
       const brushPosition = SafeExtractor.parseCommaSeparatedThreeFiniteNumbers(
@@ -5544,8 +5861,10 @@ const put3dInstances: EditorFunction = {
           .filter(Boolean)
           .join(' '),
       };
-      if (object_name && objectSizeInfo)
-        injectObjectSizeInfo(eraseResult, { [object_name]: objectSizeInfo });
+      if (sizedObjectName && objectSizeInfo)
+        injectObjectSizeInfo(eraseResult, {
+          [sizedObjectName]: objectSizeInfo,
+        });
       return eraseResult;
     } else {
       // An explicit `new_instances_count: 0` with no instances to modify means
@@ -5581,7 +5900,7 @@ const put3dInstances: EditorFunction = {
         args,
         allowedAnchors: INSTANCE_ANCHORS_3D,
         object: namedObject,
-        objectName: object_name,
+        objectName: sizedObjectName,
         project,
         objectSizeInfo,
         size: effectiveSize,
@@ -5977,10 +6296,29 @@ const put3dInstances: EditorFunction = {
       }
 
       if (movedPositionCount > 0) {
+        // Where a single moved instance ends up, so a wrong height (sunk or
+        // floating) shows without another describe_instances call.
+        const movedInstances = Array.from(existingInstanceStates.keys());
+        let occupiedSpace = '';
+        if (movedInstances.length === 1 && effectiveSize) {
+          const movedInstance = movedInstances[0];
+          const position = [
+            movedInstance.getX(),
+            movedInstance.getY(),
+            movedInstance.getZ(),
+          ];
+          occupiedSpace = ` (origin at ${position
+            .map(roundPosition)
+            .join(', ')}, it occupies ${getOccupiedSpaceDescription(
+            position,
+            getInstanceSize(movedInstance, effectiveSize),
+            objectSizeInfo
+          )})`;
+        }
         changes.push(
           `Repositioned ${movedPositionCount} instance${
             movedPositionCount > 1 ? 's' : ''
-          }${ofObjectsSuffix} using ${brush_kind} brush.`
+          }${ofObjectsSuffix} using ${brush_kind} brush${occupiedSpace}.`
         );
       }
 
@@ -6097,12 +6435,23 @@ const put3dInstances: EditorFunction = {
       onInstancesModifiedOutsideEditor({
         ...getOutsideEditorChangesTarget(resolvedScope),
       });
+      if (
+        namedObject &&
+        (newInstancesCount > 0 || movedPositionCount > 0) &&
+        isModel3DObjectWithoutModel(namedObject)
+      ) {
+        changes.push(
+          `"${namedObject.getName()}" has no 3D model yet: it shows as a box and its size is unknown. Set its \`modelResourceName\` property.`
+        );
+      }
       const put3dResult: EditorFunctionGenericOutput = {
         success: true,
         message: changes.join(' '),
       };
-      if (object_name && objectSizeInfo)
-        injectObjectSizeInfo(put3dResult, { [object_name]: objectSizeInfo });
+      if (sizedObjectName && objectSizeInfo)
+        injectObjectSizeInfo(put3dResult, {
+          [sizedObjectName]: objectSizeInfo,
+        });
       return put3dResult;
     }
   },
@@ -8448,6 +8797,28 @@ const applyEffectChange = ({
       }
 
       const lowercasedType = foundProperty.getType().toLowerCase();
+      if (lowercasedType === 'resource' && newValue) {
+        const resourcesManager = project.getResourcesManager();
+        if (!resourcesManager.hasResource(newValue)) {
+          warnings.push(
+            `"${propertyName}" of the "${currentEffectName}" effect -> "${newValue}": no such resource in the project (resources are listed by \`inspect_project_properties_resources\`, a file attached by the user must first be added with \`change_project_properties_resources\`). Skipped.`
+          );
+          return;
+        }
+        const expectedResourceKind = (
+          foundProperty.getExtraInfo().toJSArray()[0] || ''
+        ).toLowerCase();
+        const resourceKind = resourcesManager.getResource(newValue).getKind();
+        if (
+          expectedResourceKind &&
+          resourceKind.toLowerCase() !== expectedResourceKind
+        ) {
+          warnings.push(
+            `"${propertyName}" of the "${currentEffectName}" effect -> "${newValue}": the resource has kind "${resourceKind}" but expected "${expectedResourceKind}". Skipped.`
+          );
+          return;
+        }
+      }
       if (lowercasedType === 'number') {
         effect.setDoubleParameter(propertyName, parseFloat(newValue) || 0);
       } else if (lowercasedType === 'boolean') {
@@ -9069,9 +9440,13 @@ const changeScenePropertiesLayersEffectsGroups: EditorFunction = {
     args,
     toolsVersion,
     onInstancesModifiedOutsideEditor,
+    onEffectsModifiedOutsideEditor,
     onObjectGroupsModifiedOutsideEditor,
     onProjectItemRenamedOutsideEditor,
     onWillDeleteScene,
+    searchAndInstallEffectAsset,
+    relatedAiRequestId,
+    getRelatedAiRequestLastMessages,
   }) => {
     const resolvedScope = resolveScopeFromArgs(project, args, {
       allowedTypes: PROPERTIES_LAYERS_EFFECTS_SCOPE_TYPES,
@@ -9583,7 +9958,8 @@ const changeScenePropertiesLayersEffectsGroups: EditorFunction = {
     }
 
     if (changed_layer_effects) {
-      changed_layer_effects.forEach(changed_layer_effect => {
+      const changesCountBeforeLayerEffects = changes.length;
+      for (const changed_layer_effect of changed_layer_effects) {
         const layerName = SafeExtractor.extractStringProperty(
           changed_layer_effect,
           'layer_name'
@@ -9592,24 +9968,77 @@ const changeScenePropertiesLayersEffectsGroups: EditorFunction = {
           warnings.push(
             `Missing "layer_name" in changed_layer_effects item. Skipped.`
           );
-          return;
+          continue;
         }
         if (!layersContainer.hasLayerNamed(layerName)) {
           warnings.push(`Layer "${layerName}" not found. Effects skipped.`);
-          return;
+          continue;
         }
         const layer = layersContainer.getLayer(layerName);
+        const targetLabel = `layer "${layerName}"`;
+
+        // An effect taken from the store: install it first, then apply the
+        // rest of the change (rename, position, properties) on the effect.
+        let changedEffect = changed_layer_effect;
+        const asset_id = SafeExtractor.extractStringProperty(
+          changed_layer_effect,
+          'asset_id'
+        );
+        if (asset_id) {
+          const effectName = SafeExtractor.extractStringProperty(
+            changed_layer_effect,
+            'effect_name'
+          );
+          const effect_type = SafeExtractor.extractStringProperty(
+            changed_layer_effect,
+            'effect_type'
+          );
+          if (effectName === null) {
+            warnings.push(
+              `Missing "effect_name" in changed_layer_effects item. Skipped.`
+            );
+            continue;
+          }
+          const { status, message, effect } = await searchAndInstallEffectAsset(
+            {
+              effectsContainer: layer.getEffects(),
+              effectName,
+              effectType: effect_type || null,
+              exactOrPartialAssetId: asset_id,
+              relatedAiRequestId,
+              ...getRelatedAiRequestLastMessages(),
+            }
+          );
+          if (status !== 'asset-installed' || !effect) {
+            warnings.push(
+              `No effect could be added from the asset store on ${targetLabel} for "${effectName}": ${message}`
+            );
+            continue;
+          }
+          changes.push(
+            `Added the effect "${effect.getName()}" (${effect.getEffectType()}) from the asset store on ${targetLabel}, with its resources installed in the project.`
+          );
+          const {
+            effect_type: ignoredEffectType,
+            asset_id: ignoredAssetId,
+            ...remainingChange
+          } = changed_layer_effect;
+          changedEffect = { ...remainingChange, effect_name: effect.getName() };
+        }
 
         applyEffectChange({
           project,
           effectsContainer: layer.getEffects(),
-          changedEffect: changed_layer_effect,
-          targetLabel: `layer "${layerName}"`,
+          changedEffect,
+          targetLabel,
           changes,
           warnings,
           targetRenderingType: layer.getRenderingType(),
         });
-      });
+      }
+      if (changes.length > changesCountBeforeLayerEffects) {
+        onEffectsModifiedOutsideEditor();
+      }
     }
 
     if (changed_groups) {
@@ -10077,6 +10506,24 @@ const changeProjectPropertiesResources: EditorFunction = {
       (changed_properties && changed_properties.length) || 0;
     const changedResourcesCount =
       (changed_resources && changed_resources.length) || 0;
+    const added_resources = SafeExtractor.extractArrayProperty(
+      args,
+      'added_resources'
+    );
+
+    if (added_resources && added_resources.length > 0) {
+      return {
+        text:
+          added_resources.length === 1 ? (
+            <Trans>Add an attached file to the project resources.</Trans>
+          ) : (
+            <Trans>
+              Add {added_resources.length} attached files to the project
+              resources.
+            </Trans>
+          ),
+      };
+    }
 
     if (changedPropertiesCount > 0 && changedResourcesCount > 0) {
       return {
@@ -10094,8 +10541,17 @@ const changeProjectPropertiesResources: EditorFunction = {
           changed_resources[0],
           'delete_this_resource'
         );
+        const replacingAttachmentId = SafeExtractor.extractStringProperty(
+          changed_resources[0],
+          'replace_file_with_attachment_id'
+        );
         return {
-          text: deleteThisResource ? (
+          text: replacingAttachmentId ? (
+            <Trans>
+              Replace the file of resource <b>{resourceName}</b> by an attached
+              file.
+            </Trans>
+          ) : deleteThisResource ? (
             <Trans>
               Remove resource <b>{resourceName}</b>.
             </Trans>
@@ -10129,7 +10585,12 @@ const changeProjectPropertiesResources: EditorFunction = {
       text: <Trans>Change {changedPropertiesCount} project properties.</Trans>,
     };
   },
-  launchFunction: async ({ project, args, toolsVersion }) => {
+  launchFunction: async ({
+    project,
+    args,
+    toolsVersion,
+    attachmentsForResources,
+  }) => {
     const changed_properties = SafeExtractor.extractArrayProperty(
       args,
       'changed_properties'
@@ -10138,17 +10599,53 @@ const changeProjectPropertiesResources: EditorFunction = {
       args,
       'changed_resources'
     );
+    const added_resources = SafeExtractor.extractArrayProperty(
+      args,
+      'added_resources'
+    );
     if (
       (!changed_properties || changed_properties.length === 0) &&
-      (!changed_resources || changed_resources.length === 0)
+      (!changed_resources || changed_resources.length === 0) &&
+      (!added_resources || added_resources.length === 0)
     ) {
       return makeGenericFailure(
-        'Missing or empty "changed_properties" and "changed_resources" arguments: at least one change must be provided.'
+        'Missing or empty "changed_properties", "changed_resources" and "added_resources" arguments: at least one change must be provided.'
       );
     }
 
     const changes = [];
     const warnings = [];
+    const attachmentResourceAdditions: Array<AttachmentResourceAddition> = [];
+    const attachmentResourceReplacements: Array<AttachmentResourceReplacement> = [];
+
+    if (added_resources)
+      added_resources.forEach(added_resource => {
+        const attachmentId = SafeExtractor.extractStringProperty(
+          added_resource,
+          'attachment_id'
+        );
+        if (!attachmentId) {
+          warnings.push(
+            `Missing "attachment_id" in added_resources item: ${JSON.stringify(
+              added_resource
+            )}. Skipped.`
+          );
+          return;
+        }
+        attachmentResourceAdditions.push({
+          attachmentId,
+          resourceName:
+            SafeExtractor.extractStringProperty(
+              added_resource,
+              'resource_name'
+            ) || null,
+          resourceKind:
+            SafeExtractor.extractStringProperty(
+              added_resource,
+              'resource_kind'
+            ) || null,
+        });
+      });
 
     if (changed_properties)
       changed_properties.forEach(changed_property => {
@@ -10360,6 +10857,18 @@ const changeProjectPropertiesResources: EditorFunction = {
           return;
         }
 
+        const replacingAttachmentId = SafeExtractor.extractStringProperty(
+          changed_resource,
+          'replace_file_with_attachment_id'
+        );
+        if (replacingAttachmentId) {
+          attachmentResourceReplacements.push({
+            attachmentId: replacingAttachmentId,
+            resourceName,
+          });
+          return;
+        }
+
         const resourcesManager = project.getResourcesManager();
         if (!resourcesManager.hasResource(resourceName)) {
           warnings.push(
@@ -10452,6 +10961,22 @@ const changeProjectPropertiesResources: EditorFunction = {
           `Renamed resource "${resourceName}" to "${newResourceName}" (objects and events using it were updated).`
         );
       });
+
+    if (
+      attachmentResourceAdditions.length > 0 ||
+      attachmentResourceReplacements.length > 0
+    ) {
+      const resourceChangesFromAttachments = await addOrReplaceResourcesFromAttachments(
+        {
+          project,
+          additions: attachmentResourceAdditions,
+          replacements: attachmentResourceReplacements,
+          attachmentsForResources,
+        }
+      );
+      changes.push(...resourceChangesFromAttachments.changes);
+      warnings.push(...resourceChangesFromAttachments.warnings);
+    }
 
     return makeMultipleChangesOutput(changes, warnings, toolsVersion);
   },
@@ -10802,6 +11327,8 @@ const declareInstanceVariableOnObjects = ({
     });
 };
 
+const MAX_LISTED_VARIABLE_LINES = 20;
+
 const addOrEditVariable: EditorFunction = {
   renderForEditor: ({ args, shouldShowDetails }) => {
     const variable_scope = extractRequiredString(args, 'variable_scope');
@@ -11138,8 +11665,21 @@ const addOrEditVariable: EditorFunction = {
     }
 
     // One line per change (so a single variable keeps its original message),
-    // with any warnings appended below.
-    const message = [...changes, ...warnings].join('\n');
+    // with any warnings appended below. Hundreds of values set one by one
+    // would repeat the request (or the same error) line by line: only the
+    // first ones are listed.
+    const listFirstLines = (lines: Array<string>, kind: string) =>
+      lines.length > MAX_LISTED_VARIABLE_LINES
+        ? [
+            ...lines.slice(0, MAX_LISTED_VARIABLE_LINES),
+            `... and ${lines.length -
+              MAX_LISTED_VARIABLE_LINES} more ${kind}, not listed.`,
+          ]
+        : lines;
+    const message = [
+      ...listFirstLines(changes, 'changes'),
+      ...listFirstLines(warnings, 'warnings'),
+    ].join('\n');
     if (changes.length === 0) {
       return makeGenericFailure(message || `No variable was changed.`);
     }
@@ -11380,6 +11920,12 @@ const initializeProject: EditorFunctionWithoutProject = {
       args,
       'also_read_existing_events'
     );
+    // Set by the backend when the template is to be opened from another file
+    // (its copy re-skinned with a theme).
+    const project_file_url = SafeExtractor.extractStringProperty(
+      args,
+      'project_file_url'
+    );
 
     try {
       const requestedExampleSlug = ['', 'none', 'empty'].includes(
@@ -11393,6 +11939,7 @@ const initializeProject: EditorFunctionWithoutProject = {
           editorCallbacks.onCreateProject({
             name: project_name,
             exampleSlug: requestedExampleSlug,
+            projectFileUrl: requestedExampleSlug ? project_file_url : null,
           })
       );
 
@@ -11726,6 +12273,7 @@ export const editorFunctions: { [string]: EditorFunction } = {
   inspect_behavior_properties: inspectBehaviorProperties,
   change_behavior_property: changeBehaviorProperty,
   describe_instances: describeInstances,
+  change_instances_raw_json: changeInstancesRawJson,
   put_2d_instances: put2dInstances,
   put_3d_instances: put3dInstances,
   read_scene_events: readSceneEvents,

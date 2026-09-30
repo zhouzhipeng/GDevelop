@@ -81,11 +81,12 @@ namespace gdjs {
             this._applyWorldScale();
           }
           updateDoubleParameter(parameterName: string, value: number): void {
+            // Fog values are live TSL uniforms. Rebuild only when the fog
+            // object/graph changes, never for each frame of a weather fade.
             if (parameterName === 'density') {
               if (this._density === value) return;
               this._density = value;
               this._applyWorldScale();
-              if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
           }
           getDoubleParameter(parameterName: string): number {
@@ -99,14 +100,12 @@ namespace gdjs {
               const color = gdjs.rgbOrHexStringToNumber(value);
               if (this.fog.color.getHex() === color) return;
               this.fog.color.setHex(color);
-              if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
           }
           updateColorParameter(parameterName: string, value: number): void {
             if (parameterName === 'color') {
               if (this.fog.color.getHex() === value) return;
               this.fog.color.setHex(value);
-              if (this.isEnabled(target)) this._invalidateTSLMaterials();
             }
           }
           getColorParameter(parameterName: string): number {
@@ -133,7 +132,6 @@ namespace gdjs {
             this._density = syncData.d;
             this._applyWorldScale();
             this.fog.color.setHex(syncData.c);
-            if (this.isEnabled(target)) this._invalidateTSLMaterials();
           }
         })();
       }

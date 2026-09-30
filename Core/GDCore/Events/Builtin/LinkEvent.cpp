@@ -12,7 +12,6 @@
 #include "GDCore/Events/CodeGeneration/EventsCodeGenerator.h"
 #include "GDCore/Events/Tools/EventsCodeNameMangler.h"
 #include "GDCore/Project/ExternalEvents.h"
-#include "GDCore/Project/Layout.h"
 #include "GDCore/Project/Object.h"
 #include "GDCore/Project/Project.h"
 #include "GDCore/Serialization/SerializerElement.h"
@@ -24,20 +23,15 @@ namespace gd {
 
 const EventsList* LinkEvent::GetLinkedEvents(
     const gd::Project& project,
-    const gd::String& sceneLifecycleFunctionRole) const {
+    const gd::String&) const {
   const EventsList* events = nullptr;
   if (project.HasExternalEventsNamed(GetTarget())) {
     const gd::ExternalEvents& linkedExternalEvents = project.GetExternalEvents(GetTarget());
     events = &linkedExternalEvents.GetEvents();
-  } else if (project.HasLayoutNamed(GetTarget())) {
-    const gd::Layout& linkedLayout = project.GetLayout(GetTarget());
-    events = &linkedLayout.GetLifecycleEventsFunctions()
-                  .GetByName(sceneLifecycleFunctionRole)
-                  .GetEvents();
   }
 
   // If the link only includes an events group, search it inside the
-  // layout/external events
+  // external events fragment.
   if (events != nullptr && includeConfig == INCLUDE_EVENTS_GROUP) {
     std::size_t i = 0;
     std::size_t eventsCount = events->GetEventsCount();

@@ -1061,8 +1061,7 @@ variables and lifecycle restrictions while retaining fragment source locations.
 At runtime, load executes once before the first logical update; queued scene
 signals invoke signal once per delivered broadcast before update; update runs
 once per logical frame; unload runs once, synchronously, before scene-owned
-state is destroyed. A scene Link selects the caller's role in the target scene.
-An external Link expands the same fragment body in every role, at the Link's
+state is destroyed. A Link expands the same external fragment body in every role, at the Link's
 position and with its current object selection. Association alone never executes
 it. External source files are discovered directly as
 `scenes/<Scene>/external-events/<Fragment>.events`, without settings, function

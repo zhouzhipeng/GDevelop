@@ -21,10 +21,12 @@ export type ValidationErrorType =
   | 'unsafe-external-layout-creation'
   | 'unconditioned-action'
   | 'lifecycle-incompatible'
-  | 'lifecycle-redundant';
+  | 'lifecycle-redundant'
+  | 'scene-start-condition-outside-load';
 
 export type ValidationError = {|
   type: ValidationErrorType,
+  severity?: 'error' | 'warning',
   diagnosticCode?: string,
   diagnosticMessage?: string,
   isCondition: boolean,
@@ -356,9 +358,41 @@ const createValidationWorker = (
       return;
     }
 
-    if (structuralOnly) return;
-
     const lifecycleFunctionName = projectScopedContainers.getScopeSceneLifecycleFunctionName();
+    if (
+      isCondition &&
+      type === 'SceneJustBegins' &&
+      lifecycleFunctionName !== 'sceneLoad' &&
+      lifecycleFunctionName !== 'sceneUnload'
+    ) {
+      const isPerFrameScope =
+        (!projectScopedContainers.getScopeExtensionName() &&
+          !projectScopedContainers.getScopeExternalEventsName() &&
+          isSceneUpdateLifecycleScope(projectScopedContainers)) ||
+        isPerFrameLifecycleFunctionInProjectExtension(
+          project,
+          projectScopedContainers
+        );
+      errors.push({
+        type: 'scene-start-condition-outside-load',
+        severity: 'warning',
+        diagnosticCode: isPerFrameScope
+          ? 'SCENE_JUST_BEGINS_IN_PER_FRAME_EVENTS'
+          : 'SCENE_JUST_BEGINS_OUTSIDE_SCENE_LOAD',
+        diagnosticMessage: isPerFrameScope
+          ? '“At the beginning of the scene” runs in a per-frame event. Move one-time initialization to the matching startup lifecycle function, such as “On scene load”.'
+          : '“At the beginning of the scene” is used outside “On scene load”. Put one-time scene initialization in the startup lifecycle function instead.',
+        isCondition,
+        instructionType: type,
+        instructionSentence: renderInstructionSentenceAsPlainText(
+          instruction,
+          metadata
+        ),
+        eventPath: [...currentEventPath],
+        ...getCurrentLocation(projectScopedContainers),
+      });
+    }
+    if (structuralOnly) return;
     if (lifecycleFunctionName) {
       const instructionSentence = renderInstructionSentenceAsPlainText(
         instruction,
@@ -372,6 +406,9 @@ const createValidationWorker = (
       ) => {
         errors.push({
           type: validationType,
+          ...(validationType === 'lifecycle-redundant'
+            ? { severity: 'warning' }
+            : {}),
           diagnosticCode,
           diagnosticMessage,
           isCondition,

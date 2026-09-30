@@ -69,6 +69,8 @@ export type GameplayTestResult = {
   eventLog: Array<Object>,
   finalState: Object | null,
   screenshots: Array<{ label: string, frame: number, jpegBase64: string }>,
+  // Screenshots taken, including the ones not kept in `screenshots`.
+  screenshotsTakenCount?: number,
   // The `stopProfiling()` summaries captured during the run.
   profiles: Array<Object>,
   performance: Object | null,
@@ -84,7 +86,9 @@ export type GameplayTestToRun = {|
 
 export type GameplayTestRunOptions = {|
   timeoutMs?: number,
-  screenshots?: 'off' | 'on-failure',
+  // 'on': the first and last screenshots taken by the test, or one taken
+  // when it ends if it took none.
+  screenshots?: 'off' | 'on',
   // Automated callers do not need the frozen final game to remain visible.
   // Close and unload the floating gameplay-test frame when the batch ends.
   closeFrameWhenFinished?: boolean,
@@ -238,6 +242,7 @@ export const makeGameplayTestResultReadableOutput = (
   eventLog: result.eventLog,
   finalState: result.finalState,
   screenshots: result.screenshots,
+  screenshotsTakenCount: result.screenshotsTakenCount,
   profiles: result.profiles,
   performance: result.performance,
 });
@@ -451,7 +456,7 @@ const runSingleTest = async ({
   test: GameplayTestToRun,
   source: string,
   timeoutMs: number,
-  screenshots: 'off' | 'on-failure',
+  screenshots: 'off' | 'on',
   speedFactor: number | null,
   stateInspectors: GameplayTestStateInspectors,
   onProgress: ?(test: GameplayTestToRun, frame: number) => void,

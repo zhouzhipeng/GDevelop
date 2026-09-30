@@ -683,15 +683,20 @@ const discoverOwnedSettingsUris = async (
         ['scenes', sceneSegment, 'external-events'],
         discovered
       );
+      await discoverDirectSettingsFiles(
+        externalEventsRoot,
+        ['scenes', sceneSegment, 'external-events'],
+        discovered
+      );
       if (fs.existsSync(externalEventsRoot)) {
         const entries = await fs.readdir(externalEventsRoot, {
           withFileTypes: true,
         });
         for (const entry of entries) {
-          if (entry.isDirectory() || entry.name.endsWith('.settings')) {
+          if (entry.isDirectory()) {
             throw new MultiFileProjectError(
               'MULTIFILE_INVALID_EXTERNAL_SOURCE',
-              'External events must be flat .events fragments without settings or function directories.',
+              'External events must be flat .settings and .events pairs.',
               `game://scenes/${sceneSegment}/external-events/${physicalNameToGameUriSegment(
                 entry.name
               )}`
@@ -1394,8 +1399,23 @@ export const writeLegacyProjectAsMultiFile = async (
     );
     migration = document.migration;
   }
+  const externalEventSettingsByName: { [string]: Object } = {};
+  Object.keys(previousFiles)
+    .filter(uri =>
+      /^game:\/\/scenes\/[^/]+\/external-events\/[^/]+\.settings$/.test(uri)
+    )
+    .forEach(uri => {
+      const settings = parseTomlSource(previousFiles[uri], uri);
+      if (typeof settings.name === 'string') {
+        externalEventSettingsByName[settings.name] = {
+          description: settings.description,
+          eventsLogic: settings.eventsLogic,
+        };
+      }
+    });
   const files = decomposeLegacyProjectToFiles(legacyProject, {
     migration,
+    externalEventSettingsByName,
     ...decomposeOptions,
   });
   const verificationProject = composeLegacyProjectFromFiles(

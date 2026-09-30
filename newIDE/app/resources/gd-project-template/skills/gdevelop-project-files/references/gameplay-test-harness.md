@@ -1,7 +1,7 @@
 # Gameplay-test harness
 
 Read this guide in full before creating or materially changing a gameplay test.
-It describes the strict version 6 project layout and the harness shipped by
+It describes the strict version 7 project layout and the harness shipped by
 this branch. For exact, current signatures and result shapes, the generated
 `.gdevelop/harness-api.d.ts` file is authoritative.
 
@@ -32,7 +32,7 @@ Their JavaScript sources are flat files directly below `tests/`:
 
 ```toml
 kind = "tests"
-settingsFormatVersion = 6
+settingsFormatVersion = 7
 
 [[tests]]
 scope = "project"
@@ -63,7 +63,7 @@ The `file` is a canonical identity, not a URI:
 - It has no `game://` prefix, drive letter, absolute prefix, query, fragment,
   traversal segment, or nested directory.
 - The preferred basename is the test name for a project test and
-  `<Extension> - <Test>` for an extension test. The version 6 writer applies
+  `<Extension> - <Test>` for an extension test. The version 7 writer applies
   managed-name percent encoding and deterministic suffixes for normalized
   filename collisions.
 - Existing tests must use their exact recorded `file`; do not substitute the
