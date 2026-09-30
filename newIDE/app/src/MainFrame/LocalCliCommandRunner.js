@@ -235,7 +235,7 @@ const runners: { [commandName: string]: CliCommandRunner } = {
     const results = await runProjectGameplayTests({
       project,
       tests: filteredTests,
-      options: { screenshots: 'on-failure' },
+      options: { screenshots: 'on' },
     });
     let failedCount = 0;
     for (const result of results) {

@@ -11,7 +11,6 @@
 #include "GDCore/Events/Parsers/ExpressionParser2NodeWorker.h"
 #include "GDCore/Tools/MakeUnique.h"
 #include "GDCore/Tools/Localization.h"
-#include "GDCore/Extensions/Metadata/ExpressionMetadata.h"
 #include "GDCore/Project/ProjectScopedContainers.h"
 #include "GDCore/Project/JsonObjectPropertyTools.h"
 #include "GDCore/Project/VariablesContainersList.h"
@@ -22,8 +21,6 @@ class Expression;
 class ObjectsContainer;
 class VariablesContainer;
 class Platform;
-class ParameterMetadata;
-class ExpressionMetadata;
 class VariablesContainersList;
 class ProjectScopedContainers;
 }  // namespace gd
@@ -49,7 +46,7 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
         rootObjectName(rootObjectName_),
         childType(Type::Unknown),
         forbidsUsageOfBracketsBecauseParentIsObject(false),
-        currentParameterExtraInfo(&extraInfo_),
+        currentParameterExtraInfo(extraInfo_),
         variableObjectName(),
         variableObjectNameLocation() {};
   virtual ~ExpressionValidator(){};
@@ -95,10 +92,12 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
 
  protected:
   void OnVisitSubExpressionNode(SubExpressionNode& node) override {
+    isDirectChildOfVariableBracketAccessorNode = false;
     ReportAnyError(node);
     node.expression->Visit(*this);
   }
   void OnVisitOperatorNode(OperatorNode& node) override {
+    isDirectChildOfVariableBracketAccessorNode = false;
     ReportAnyError(node);
 
     // The "required" type ("parentType")  will be used when visiting the first operand.
@@ -106,7 +105,10 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
     node.leftHandSide->Visit(*this);
     const Type leftType = childType; // Store the type of the first operand.
 
-    if (parentType == Type::Variable || parentType == Type::ObjectVariable ||
+    if (parentType == Type::Variable ||
+        parentType == Type::VariableOrProperty ||
+        parentType == Type::VariableOrPropertyOrParameter ||
+        parentType == Type::ObjectVariable ||
         parentType == Type::LegacyVariable) {
       RaiseOperatorError(
           _("Operators (+, -, /, *) can't be used in variable names. Remove "
@@ -152,11 +154,15 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
     childType = ShouldTypeBeRefined(parentType) ? (ShouldTypeBeRefined(leftType) ? leftType : rightType) : parentType;
   }
   void OnVisitUnaryOperatorNode(UnaryOperatorNode& node) override {
+    isDirectChildOfVariableBracketAccessorNode = false;
     ReportAnyError(node);
     node.factor->Visit(*this);
     const Type rightType = childType;
 
-    if (parentType == Type::Variable || parentType == Type::ObjectVariable ||
+    if (parentType == Type::Variable ||
+        parentType == Type::VariableOrProperty ||
+        parentType == Type::VariableOrPropertyOrParameter ||
+        parentType == Type::ObjectVariable ||
         parentType == Type::LegacyVariable) {
       RaiseTypeError(
           _("Operators (+, -) can't be used in variable names. Remove "
@@ -186,6 +192,7 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
     }
   }
   void OnVisitNumberNode(NumberNode& node) override {
+    isDirectChildOfVariableBracketAccessorNode = false;
     ReportAnyError(node);
     childType = Type::Number;
     if (parentType == Type::String) {
@@ -193,6 +200,8 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
           _("You entered a number, but a text was expected (in quotes)."),
           node.location);
     } else if (parentType == Type::Variable ||
+               parentType == Type::VariableOrProperty ||
+               parentType == Type::VariableOrPropertyOrParameter ||
                parentType == Type::ObjectVariable ||
                parentType == Type::LegacyVariable) {
       RaiseTypeError(
@@ -208,12 +217,15 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
     }
   }
   void OnVisitTextNode(TextNode& node) override {
+    isDirectChildOfVariableBracketAccessorNode = false;
     ReportAnyError(node);
     childType = Type::String;
     if (parentType == Type::Number) {
       RaiseTypeError(_("You entered a text, but a number was expected."),
                      node.location);
     } else if (parentType == Type::Variable ||
+               parentType == Type::VariableOrProperty ||
+               parentType == Type::VariableOrPropertyOrParameter ||
                parentType == Type::ObjectVariable ||
                parentType == Type::LegacyVariable) {
       RaiseTypeError(
@@ -229,6 +241,7 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
     }
   }
   void OnVisitVariableNode(VariableNode& node) override {
+    isDirectChildOfVariableBracketAccessorNode = false;
     ReportAnyError(node);
     parentVariable = nullptr;
     variableChildDepth = 0;
@@ -356,6 +369,7 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
     }
   }
   void OnVisitVariableAccessorNode(VariableAccessorNode& node) override {
+    isDirectChildOfVariableBracketAccessorNode = false;
     ReportAnyError(node);
     // TODO Also check child-variables existence on a path with only VariableAccessor to raise non-fatal errors.
     if (!variableObjectName.empty()) {
@@ -430,8 +444,10 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
     Type currentChildType = childType;
     parentType = Type::NumberOrString;
     auto parentParameterExtraInfo = currentParameterExtraInfo;
-    currentParameterExtraInfo = nullptr;
+    currentParameterExtraInfo = "";
+    isDirectChildOfVariableBracketAccessorNode = true;
     node.expression->Visit(*this);
+    isDirectChildOfVariableBracketAccessorNode = false;
     currentParameterExtraInfo = parentParameterExtraInfo;
     parentType = currentParentType;
     childType = currentChildType;
@@ -441,6 +457,7 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
     }
   }
   void OnVisitIdentifierNode(IdentifierNode& node) override {
+    isDirectChildOfVariableBracketAccessorNode = false;
     ReportAnyError(node);
     if (parentType == Type::String) {
       if (!ValidateObjectVariableOrVariableOrProperty(node)) {
@@ -471,7 +488,7 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
       bool isRootVariableDeclared =
           CheckVariableExistence(node.location, node.identifierName,
                                  !node.childIdentifierName.empty());
-      if (isRootVariableDeclared && !node.childIdentifierName.empty()) {
+      if (isRootVariableDeclared) {
         ValidateObjectVariableOrVariableOrProperty(
             node.identifierName, node.identifierNameLocation,
             node.childIdentifierName, node.childIdentifierNameLocation, false);
@@ -520,9 +537,11 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
     }
   }
   void OnVisitObjectFunctionNameNode(ObjectFunctionNameNode& node) override {
+    isDirectChildOfVariableBracketAccessorNode = false;
     ReportAnyError(node);
   }
   void OnVisitFunctionCallNode(FunctionCallNode& node) override {
+    isDirectChildOfVariableBracketAccessorNode = false;
     childType = ValidateFunction(node);
   }
   void OnVisitEmptyNode(EmptyNode& node) override {
@@ -534,11 +553,15 @@ class GD_CORE_API ExpressionValidator : public ExpressionParser2NodeWorker {
       message = _(
           "You must enter a text (between quotes) or a valid expression call.");
     } else if (parentType == Type::Variable ||
+               parentType == Type::VariableOrProperty ||
+               parentType == Type::VariableOrPropertyOrParameter ||
                parentType == Type::ObjectVariable ||
                parentType == Type::LegacyVariable) {
       message = _("You must enter a variable name.");
     } else if (parentType == Type::Object) {
       message = _("You must enter a valid object name.");
+    } else if (isDirectChildOfVariableBracketAccessorNode) {
+      message = _("You must enter a valid expression inside the brackets.");
     } else {
       // It can't happen.
       message = _("You must enter a valid expression.");
@@ -580,8 +603,7 @@ private:
 
   bool CheckVariableExistence(const ExpressionParserLocation &location,
                               const gd::String &name, bool hasChild) {
-    if (!currentParameterExtraInfo ||
-        *currentParameterExtraInfo != "AllowUndeclaredVariable") {
+    if (currentParameterExtraInfo != "AllowUndeclaredVariable") {
       bool isRootVariableDeclared = false;
       projectScopedContainers.MatchIdentifierWithName<void>(
           name,
@@ -858,7 +880,8 @@ private:
   gd::ExpressionParserLocation variableObjectNameLocation;
   const gd::Variable *parentVariable = nullptr;
   size_t variableChildDepth = 0;
-  const gd::String *currentParameterExtraInfo;
+  gd::String currentParameterExtraInfo;
+  bool isDirectChildOfVariableBracketAccessorNode = false;
   const gd::Platform &platform;
   const gd::ProjectScopedContainers &projectScopedContainers;
 };

@@ -409,6 +409,7 @@ type Props = {|
     variant: gdEventsBasedObjectVariant
   ) => void,
   onEffectAdded: () => void,
+  onLayerRenamedOrRemoved: () => void,
   onObjectListsModified: ({ isNewObjectTypeUsed: boolean }) => void,
   triggerHotReloadInGameEditorIfNeeded: () => void,
 
@@ -671,6 +672,8 @@ export default class SceneEditor extends React.Component<Props, State> {
             }
             if (parsedMessage.command === 'updateInstances') {
               this.onReceiveInstanceChanges(parsedMessage.payload);
+            } else if (parsedMessage.command === 'updateObjectProperties') {
+              this.onReceiveObjectPropertiesChanges(parsedMessage.payload);
             } else if (parsedMessage.command === 'setCameraState') {
               setCameraState(parsedMessage.editorId, parsedMessage.payload);
             } else if (parsedMessage.command === 'openContextMenu') {
@@ -2426,6 +2429,38 @@ export default class SceneEditor extends React.Component<Props, State> {
       });
   };
 
+  onReceiveObjectPropertiesChanges = ({
+    objectName,
+    properties,
+  }: {|
+    objectName: string,
+    properties: { [propertyName: string]: string },
+  |}) => {
+    const { globalObjectsContainer, objectsContainer } = this.props;
+    const object = getObjectByName(
+      globalObjectsContainer,
+      objectsContainer,
+      objectName
+    );
+    if (!object) return;
+
+    const objectConfiguration = object.getConfiguration();
+    let hasChanged = false;
+    for (const propertyName in properties) {
+      hasChanged =
+        objectConfiguration.updateProperty(
+          propertyName,
+          properties[propertyName]
+        ) || hasChanged;
+    }
+    if (!hasChanged) return;
+
+    if (this.props.unsavedChanges)
+      this.props.unsavedChanges.triggerUnsavedChanges();
+    this.forceUpdatePropertiesEditor();
+    this._onObjectsModified([object]);
+  };
+
   _onObjectsModified = (objects: Array<gdObject>) => {
     this._hotReloadObjects({ updatedObjects: objects });
   };
@@ -3066,6 +3101,9 @@ export default class SceneEditor extends React.Component<Props, State> {
           }
 
           done(doRemove);
+          if (doRemove) {
+            this.props.onLayerRenamedOrRemoved();
+          }
           // /!\ Force the instances editor to destroy and mount again the
           // renderers to avoid keeping any references to existing instances
           if (this.editorDisplay)
@@ -3081,8 +3119,12 @@ export default class SceneEditor extends React.Component<Props, State> {
     });
   };
 
-  _onLayerRenamed = () => {
+  _onLayerRenamed = (oldName: string, newName: string) => {
     this.forceUpdatePropertiesEditor();
+    this.props.onLayerRenamedOrRemoved();
+    if (this.state.chosenLayer === oldName) {
+      this._onChooseLayer(newName);
+    }
   };
 
   _sendHotReloadLayers = () => {
@@ -4966,6 +5008,11 @@ export default class SceneEditor extends React.Component<Props, State> {
                       onObjectsAddedFromAssets={
                         this._onObjectsAddedFromAssetsFromNewObjectDialog
                       }
+                      onLayerEffectAddedFromAssets={() => {
+                        if (this.props.unsavedChanges)
+                          this.props.unsavedChanges.triggerUnsavedChanges();
+                        this.props.onEffectAdded();
+                      }}
                       project={project}
                       layout={layout}
                       eventsFunctionsExtension={eventsFunctionsExtension}

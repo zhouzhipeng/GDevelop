@@ -3444,6 +3444,20 @@ const MainFrame = (props: Props): React.MixedElement => {
     [notifyChangesToInGameEditor]
   );
 
+  const onLayerRenamedOrRemoved = React.useCallback(
+    () => {
+      // Instances can have been moved to another layer or deleted.
+      notifyChangesToInGameEditor({
+        shouldReloadProjectData: true,
+        shouldReloadLibraries: false,
+        shouldReloadResources: false,
+        shouldHardReload: false,
+        reasons: ['layer-renamed-or-removed'],
+      });
+    },
+    [notifyChangesToInGameEditor]
+  );
+
   const onObjectListsModified = React.useCallback(
     ({ isNewObjectTypeUsed }: { isNewObjectTypeUsed: boolean }) => {
       notifyChangesToInGameEditor({
@@ -6931,7 +6945,7 @@ const MainFrame = (props: Props): React.MixedElement => {
             onStartSaving: () =>
               _replaceSnackMessage(i18n._(t`Saving...`), null),
             onMoveResources: async ({ newFileMetadata }) => {
-              if (currentFileMetadata)
+              if (currentFileMetadata) {
                 await ensureResourcesAreMoved({
                   project: upToDateProject,
                   newFileMetadata,
@@ -6942,6 +6956,16 @@ const MainFrame = (props: Props): React.MixedElement => {
                   oldStorageProviderOperations,
                   authenticatedUser,
                 });
+              }
+              // Resources can be only in memory (files added by the AI in a
+              // project not saved yet, or opened from a URL): store them.
+              await ensureResourcesAreFetched(() => ({
+                project: upToDateProject,
+                fileMetadata: newFileMetadata,
+                storageProvider: newStorageProvider,
+                storageProviderOperations: newStorageProviderOperations,
+                authenticatedUser,
+              }));
             },
           }
         );
@@ -7039,6 +7063,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       getStorageProvider,
       preferences,
       ensureResourcesAreMoved,
+      ensureResourcesAreFetched,
       authenticatedUser,
       currentlyRunningInAppTutorial,
       showAlert,
@@ -8574,9 +8599,11 @@ const MainFrame = (props: Props): React.MixedElement => {
     async ({
       name,
       exampleSlug,
+      projectFileUrl,
     }: {|
       name: string,
       exampleSlug: string | null,
+      projectFileUrl?: string | null,
     |}) => {
       // On desktop, create the project with the local-file storage provider and
       // a default path so it is WRITTEN to disk immediately (createProject calls
@@ -8613,6 +8640,7 @@ const MainFrame = (props: Props): React.MixedElement => {
         storageProvider,
         saveAsLocation,
         creationSource: 'ai-agent-request',
+        projectFileUrl,
       };
 
       if (exampleSlug) {
@@ -9296,6 +9324,7 @@ const MainFrame = (props: Props): React.MixedElement => {
     onExtensionInstalled: onExtensionInstalled,
     onCreateNewExtensionWithBehavior: onCreateNewExtensionWithBehavior,
     onEffectAdded: onEffectAdded,
+    onLayerRenamedOrRemoved: onLayerRenamedOrRemoved,
     onObjectListsModified: onObjectListsModified,
     onExternalAssociationChanged,
     gamesList: gamesList,

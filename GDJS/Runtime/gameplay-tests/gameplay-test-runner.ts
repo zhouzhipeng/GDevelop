@@ -71,7 +71,9 @@ namespace gdjs {
        * as possible.
        */
       speedFactor?: number;
-      /** Maximum number of screenshots kept. Default: 5. */
+      /** Maximum number of screenshots kept: the first one and the last
+       * ones. When the script takes none, one is taken when it ends.
+       * 0 disables screenshots. Default: 4. */
       maxScreenshots?: number;
       /**
        * When true, the game is left paused and muted when the test finishes,
@@ -120,6 +122,15 @@ namespace gdjs {
         | 'unknown';
       /** For an `external` cause: where the change came from (call stack). */
       causeDetail?: string;
+    };
+
+    /** A variable without its content: the value of a number, a boolean or
+     * a (cut) text, the size of a structure or an array. */
+    export type GameplayTestVariableSummary = {
+      name: string;
+      type: VariableType;
+      value?: string | float | boolean;
+      childrenCount?: integer;
     };
 
     export type GameplayTestScreenshot = {
@@ -177,7 +188,8 @@ namespace gdjs {
       animation?: string;
       text?: string;
       opacity?: float;
-      variables: Array<Object>;
+      /** In full, except in the final state of a result (summarized). */
+      variables: Array<VariableNetworkSyncData | GameplayTestVariableSummary>;
       /** The object's own conditions/expressions, evaluated (see
        * `GameplayTestEvaluatedState`). */
       state: GameplayTestEvaluatedState;
@@ -420,9 +432,14 @@ namespace gdjs {
         watchedObjects: {
           [objectName: string]: Array<GameplayTestObjectSnapshot>;
         };
-        sceneVariables: Array<Object>;
+        sceneVariables: Array<GameplayTestVariableSummary>;
+        /** Says how to read what the summaries leave out. */
+        sceneVariablesNote?: string;
+        watchedObjectsNote?: string;
       };
       screenshots: Array<GameplayTestScreenshot>;
+      /** Screenshots taken, including the ones not kept in `screenshots`. */
+      screenshotsTakenCount: integer;
       /** The `stopProfiling()` summaries captured during the run. */
       profiles: Array<GameplayTestProfilingResult>;
       performance: {
@@ -450,7 +467,10 @@ namespace gdjs {
     // cost before the next one.
     const FAST_RUN_RENDER_DUTY_MULTIPLIER = 4;
     const MAX_PLAYED_SOUNDS = 500;
-    const DEFAULT_MAX_SCREENSHOTS = 5;
+    const DEFAULT_MAX_SCREENSHOTS = 4;
+    /** A hidden page gets no animation frame: capture the last rendered
+     * frame rather than waiting forever. */
+    const SCREENSHOT_RENDER_TIMEOUT_MS = 1000;
     const DEFAULT_PROBE_FRAMES = 30;
     const MAX_PROFILING_SECTIONS = 50;
     const MAX_PROFILING_TIMELINE_ENTRIES = 120;
@@ -468,11 +488,18 @@ namespace gdjs {
     const MAX_EVENT_LOG_ENTRIES = 500;
     const MAX_ERRORS = 20;
     const MAX_WARNINGS = 20;
-    const SCREENSHOT_MAX_SIZE = 512;
+    const SCREENSHOT_MAX_SIZE = 768;
     const DEFAULT_FRAME_DT_MS = 1000 / 60;
     /** Deepest `children` nesting a snapshot can expose (nested custom
      * objects), to keep snapshots bounded. */
     const MAX_CHILDREN_DEPTH = 8;
+    /** The scene variables of the final state are summarized: some games
+     * store large data in them (a map, a save...). */
+    const MAX_SUMMARIZED_VARIABLES = 50;
+    const MAX_SUMMARIZED_TEXT_LENGTH = 100;
+    /** Watched objects are summarized too: instances of a watched object can
+     * be many (bullets...), each with its variables. */
+    const MAX_WATCHED_INSTANCES = 20;
 
     /**
      * Describe a value that should have been a string, for an error message:
@@ -766,6 +793,7 @@ namespace gdjs {
       _paceReferenceWallTimeMs: number = 0;
       _paceReferenceGameTimeMs: number = 0;
       _maxScreenshots: integer;
+      _screenshotsTakenCount: integer = 0;
       _totalStepTimeMs: number = 0;
       _worstStepTimeMs: number = 0;
       _lastTrackedSceneName: string | null = null;
@@ -3425,19 +3453,19 @@ namespace gdjs {
       }
 
       /**
-       * Take a screenshot of the game canvas (downscaled). It's returned
-       * in the test result.
+       * Take a screenshot of the game canvas (downscaled). The first one
+       * and the last ones are returned in the test result.
        */
       async takeScreenshot(label: string = ''): Promise<void> {
-        if (this._screenshots.length >= this._maxScreenshots) {
-          logger.warn(
-            `Ignoring screenshot "${label}": already ${this._maxScreenshots} screenshots taken.`
-          );
-          return;
-        }
+        if (this._maxScreenshots <= 0) return;
         // Let an animation frame happen so the canvas shows the current
         // state of the game (fast runs only render a few times per second).
-        await this._renderOnce();
+        await Promise.race([
+          this._renderOnce(),
+          new Promise((resolve) =>
+            setTimeout(resolve, SCREENSHOT_RENDER_TIMEOUT_MS)
+          ),
+        ]);
         const canvas = this._runtimeGame.getRenderer().getCanvas();
         if (!canvas) {
           logger.warn('No canvas found: unable to take a screenshot.');
@@ -3457,6 +3485,11 @@ namespace gdjs {
           if (!context) return;
           context.drawImage(canvas, 0, 0, targetWidth, targetHeight);
           const dataUrl = downscaledCanvas.toDataURL('image/jpeg', 0.7);
+          this._screenshotsTakenCount++;
+          if (this._screenshots.length >= this._maxScreenshots) {
+            // Keep the first one and the most recent ones.
+            this._screenshots.splice(this._maxScreenshots > 1 ? 1 : 0, 1);
+          }
           this._screenshots.push({
             label,
             frame: this._framesExecuted,
@@ -3728,6 +3761,7 @@ namespace gdjs {
             }
           }
         }
+        const watchedObjectsSummary = summarizeWatchedObjects(watchedObjects);
         return {
           testName: this._payload.testName,
           status,
@@ -3745,12 +3779,15 @@ namespace gdjs {
           finalState: {
             sceneName: currentScene ? currentScene.getName() : '',
             objectCounts: this._getObjectCounts(),
-            watchedObjects,
-            sceneVariables: currentScene
-              ? currentScene.getVariables().getNetworkSyncData({})
-              : [],
+            ...watchedObjectsSummary,
+            ...summarizeSceneVariables(
+              currentScene
+                ? currentScene.getVariables().getNetworkSyncData({})
+                : []
+            ),
           },
           screenshots: this._screenshots,
+          screenshotsTakenCount: this._screenshotsTakenCount,
           profiles: this._profiles,
           performance:
             this._framesExecuted > 0
@@ -3765,6 +3802,115 @@ namespace gdjs {
         };
       }
     }
+
+    const summarizeVariables = (
+      variables: Array<VariableNetworkSyncData>
+    ): {
+      summaries: Array<GameplayTestVariableSummary>;
+      isSomethingLeftOut: boolean;
+    } => {
+      let isSomethingLeftOut = variables.length > MAX_SUMMARIZED_VARIABLES;
+      const summaries = variables
+        .slice(0, MAX_SUMMARIZED_VARIABLES)
+        .map(({ name, type, value, children }) => {
+          if (type === 'structure' || type === 'array') {
+            isSomethingLeftOut = true;
+            return {
+              name,
+              type,
+              childrenCount: children ? children.length : 0,
+            };
+          }
+          if (
+            typeof value === 'string' &&
+            value.length > MAX_SUMMARIZED_TEXT_LENGTH
+          ) {
+            isSomethingLeftOut = true;
+            return {
+              name,
+              type,
+              value: value.slice(0, MAX_SUMMARIZED_TEXT_LENGTH) + '…',
+            };
+          }
+          return { name, type, value };
+        });
+      return { summaries, isSomethingLeftOut };
+    };
+
+    const summarizeSceneVariables = (
+      variables: Array<VariableNetworkSyncData>
+    ): {
+      sceneVariables: Array<GameplayTestVariableSummary>;
+      sceneVariablesNote?: string;
+    } => {
+      const { summaries, isSomethingLeftOut } = summarizeVariables(variables);
+      return isSomethingLeftOut
+        ? {
+            sceneVariables: summaries,
+            sceneVariablesNote: `Summarized (${variables.length} variables): read one in full with \`harness.getSceneVariable(name)\` in the test.`,
+          }
+        : { sceneVariables: summaries };
+    };
+
+    const summarizeWatchedObjects = (watchedObjects: {
+      [objectName: string]: Array<GameplayTestObjectSnapshot>;
+    }): {
+      watchedObjects: {
+        [objectName: string]: Array<GameplayTestObjectSnapshot>;
+      };
+      watchedObjectsNote?: string;
+    } => {
+      let areInstancesLeftOut = false;
+      let areVariablesLeftOut = false;
+      const summarizeSnapshot = (
+        snapshot: GameplayTestObjectSnapshot
+      ): GameplayTestObjectSnapshot => {
+        const { summaries, isSomethingLeftOut } = summarizeVariables(
+          snapshot.variables as Array<VariableNetworkSyncData>
+        );
+        areVariablesLeftOut = areVariablesLeftOut || isSomethingLeftOut;
+        if (!snapshot.children) return { ...snapshot, variables: summaries };
+        const children: {
+          [objectName: string]: Array<GameplayTestObjectSnapshot>;
+        } = {};
+        for (const childName in snapshot.children) {
+          children[childName] = summarizeInstances(
+            snapshot.children[childName]
+          );
+        }
+        return { ...snapshot, variables: summaries, children };
+      };
+      const summarizeInstances = (
+        snapshots: Array<GameplayTestObjectSnapshot>
+      ): Array<GameplayTestObjectSnapshot> => {
+        areInstancesLeftOut =
+          areInstancesLeftOut || snapshots.length > MAX_WATCHED_INSTANCES;
+        return snapshots.slice(0, MAX_WATCHED_INSTANCES).map(summarizeSnapshot);
+      };
+
+      const summarizedWatchedObjects: {
+        [objectName: string]: Array<GameplayTestObjectSnapshot>;
+      } = {};
+      for (const objectName in watchedObjects) {
+        summarizedWatchedObjects[objectName] = summarizeInstances(
+          watchedObjects[objectName]
+        );
+      }
+      const notes = [
+        areInstancesLeftOut
+          ? `only the first ${MAX_WATCHED_INSTANCES} instances of an object are listed (see \`objectCounts\`): get them all with \`harness.getObjects(name)\``
+          : '',
+        areVariablesLeftOut
+          ? 'variables are summarized: read one in full with `harness.getObjectVariable(instanceId, variableName)`'
+          : '',
+      ].filter(Boolean);
+      return notes.length
+        ? {
+            watchedObjects: summarizedWatchedObjects,
+            watchedObjectsNote: `Summarized: ${notes.join('; ')}, in the test.`,
+          }
+        : { watchedObjects: summarizedWatchedObjects };
+    };
 
     /**
      * The gameplay test being currently run, if any.
@@ -4034,6 +4180,15 @@ namespace gdjs {
           ]);
         }
       } finally {
+        // The end state is the most useful one to look at, whatever the
+        // outcome, so capture it when the script took no screenshot.
+        if (
+          harness._screenshotsTakenCount === 0 &&
+          !harness._stopped &&
+          runtimeGame.getRenderer().getCanvas()
+        ) {
+          await harness.takeScreenshot('End of the test');
+        }
         // Restore everything, whatever happened:
         try {
           harness.releaseAllInputs();
@@ -4064,6 +4219,7 @@ namespace gdjs {
         currentlyRunningHarness = null;
       }
 
+      result.screenshotsTakenCount = harness._screenshotsTakenCount;
       return result;
     };
   }
