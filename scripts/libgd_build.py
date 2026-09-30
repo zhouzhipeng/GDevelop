@@ -308,6 +308,43 @@ def ensure_python_shim(dry_run: bool) -> Path | None:
     return shim_dir
 
 
+def ensure_node_shim(dry_run: bool) -> Path | None:
+    """Keep the Node.js found before loading emsdk first on PATH.
+
+    Returns a directory to prepend to PATH (after sourcing emsdk_env.sh) that
+    contains a `node` shim for the Node.js found on PATH, or None when there is
+    none. emsdk_env.sh prepends the Node.js bundled with Emscripten (14.x for
+    Emscripten 3.1.21), which recent npm versions can't run on (npm 10 fails
+    with `SyntaxError: Unexpected token '&&='`). Emscripten doesn't need its
+    Node.js on PATH: emcc runs the one configured in its `.emscripten` file.
+    """
+    if os.name == "nt":
+        return None
+
+    shim_dir = Path(repo_root_shim_dir())
+    # Never resolve to a shim written by a previous run: it would exec itself.
+    search_path = os.pathsep.join(
+        directory
+        for directory in os.environ.get("PATH", "").split(os.pathsep)
+        if directory and Path(directory).expanduser() != shim_dir
+    )
+    node = shutil.which("node", path=search_path)
+    if not node:
+        # Let npm fail with its own error.
+        return None
+
+    if dry_run:
+        return shim_dir
+
+    shim_dir.mkdir(parents=True, exist_ok=True)
+    shim = shim_dir / "node"
+    if shim.exists() or shim.is_symlink():
+        shim.unlink()
+    shim.write_text(f'#!/bin/sh\nexec {shlex.quote(node)} "$@"\n')
+    shim.chmod(0o755)
+    return shim_dir
+
+
 def repo_root_shim_dir() -> str:
     """A stable, writable directory to hold build shims (e.g. the python shim)."""
     return str(Path.home() / ".cache" / "gdevelop-build-shims")
@@ -467,11 +504,20 @@ def run_libgd_build_command(
     else:
         # GDevelop.js's WebIDL binder invokes `python` (the Python 2 era name),
         # but modern macOS ships only `python3`. Ensure a `python` is on PATH for
-        # the build subprocess by prepending a tiny shim dir if needed.
+        # the build subprocess by prepending a tiny shim dir if needed. Also
+        # keep the Node.js of the system in front of the one of emsdk, so that
+        # npm and Grunt can run.
         path_prefix = ""
-        python_shim_dir = ensure_python_shim(dry_run)
-        if python_shim_dir:
-            path_prefix = f"export PATH={shlex.quote(str(python_shim_dir))}:$PATH && "
+        shim_dirs: list[str] = []
+        for shim_dir in (ensure_node_shim(dry_run), ensure_python_shim(dry_run)):
+            if shim_dir and str(shim_dir) not in shim_dirs:
+                shim_dirs.append(str(shim_dir))
+        if shim_dirs:
+            path_prefix = (
+                "export PATH="
+                + ":".join(shlex.quote(shim_dir) for shim_dir in shim_dirs)
+                + ":$PATH && "
+            )
         command_text = (
             f". {shlex.quote(str(emsdk_env_script))} >/dev/null && "
             + path_prefix
