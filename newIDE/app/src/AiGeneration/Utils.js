@@ -112,7 +112,7 @@ export const useRefreshLimits = (
 // The tools of the orchestrator AND of the sub-agents it creates server-side.
 // Only bump it once the matching prompts and generation-api are deployed;
 // reverting it is the flip-back (every past version stays served).
-export const AI_ORCHESTRATOR_TOOLS_VERSION: string = 'v20';
+export const AI_ORCHESTRATOR_TOOLS_VERSION: string = 'v22';
 
 /**
  * A pending request for the user to approve (or refuse) a project-modifying
@@ -264,6 +264,7 @@ export const useProcessFunctionCalls = ({
   getIsAutoEditEnabled,
   suspendAiRequest,
   requestEditApproval,
+  onSaveProjectAsWithStorageProvider,
 }: {|
   i18n: I18nType,
   project: ?gdProject,
@@ -321,6 +322,15 @@ export const useProcessFunctionCalls = ({
   getIsAutoEditEnabled: () => boolean,
   suspendAiRequest: (aiRequestId: string) => Promise<void>,
   requestEditApproval: (request: EditApprovalRequest) => Promise<boolean>,
+  // Absent where the project can't be saved: the files attached by the user
+  // can then only be kept in memory.
+  onSaveProjectAsWithStorageProvider?: (
+    options: ?{|
+      requestedStorageProvider?: StorageProvider,
+      forcedSavedAsLocation?: SaveAsLocation,
+      createdProject?: gdProject,
+    |}
+  ) => Promise<?FileMetadata>,
 |}): {
   onProcessFunctionCalls: (
     aiRequest: AiRequest,
@@ -346,8 +356,10 @@ export const useProcessFunctionCalls = ({
     resourceManagementProps,
   });
   const attachmentsForResources = useAttachmentsForResources({
+    project,
     resourceManagementProps,
     fileMetadata,
+    onSaveProjectAsWithStorageProvider,
   });
   const { generateEvents } = useGenerateEvents({ project });
   const { triggerUnsavedChanges } = React.useContext(UnsavedChangesContext);
@@ -1560,6 +1572,8 @@ export type OpenAskAiOptions = {|
   continueProcessingFunctionCallsOnMount?: boolean,
   // When set, a new chat is started with this text pre-filled in the input.
   prefilledUserRequest?: string,
+  // Pre-fill the chat being shown (if any) instead of starting a new one.
+  prefillInCurrentChat?: boolean,
 |};
 
 export type NewAiRequestOptions = {|

@@ -67,6 +67,14 @@ export type SimplifiedExternalLayout = {|
   instancesCount: number,
 |};
 
+export type SimplifiedExternalEvents = {|
+  externalEventsName: string,
+  // The scene giving the objects and variables the events are edited with
+  // ("" when not set). The events run in the scenes linking to them.
+  associatedSceneName: string,
+  eventsCount: number,
+|};
+
 type SimplifiedResource = {|
   name: string,
   type: string,
@@ -99,6 +107,10 @@ export type SimplifiedProject = {|
   // `describe_instances` on an `external_layout` scope). Absent from the
   // projects sent by older editors.
   externalLayouts: Array<SimplifiedExternalLayout>,
+  // The external events of the project (their events are read with
+  // `read_events_source` on an `external_events` scope). Absent from the
+  // projects sent by older editors.
+  externalEvents: Array<SimplifiedExternalEvents>,
   globalVariables: Array<SimplifiedVariable>,
   resources: Array<SimplifiedResource>,
   tests?: Array<SimplifiedTest>,
@@ -593,6 +605,22 @@ export const makeSimplifiedProjectBuilder = (
           .getInstancesCount(),
       };
     }).filter(Boolean);
+    const externalEvents = mapFor(0, project.getExternalEventsCount(), i => {
+      const projectExternalEvents = project.getExternalEventsAt(i);
+      const associatedSceneName = projectExternalEvents.getAssociatedLayout();
+      if (
+        options.scopeToScene &&
+        associatedSceneName &&
+        associatedSceneName !== options.scopeToScene
+      )
+        return null;
+
+      return {
+        externalEventsName: projectExternalEvents.getName(),
+        associatedSceneName,
+        eventsCount: projectExternalEvents.getEvents().getEventsCount(),
+      };
+    }).filter(Boolean);
 
     const projectScopedContainers = gd.ProjectScopedContainers.makeNewProjectScopedContainersForProject(
       project
@@ -617,6 +645,7 @@ export const makeSimplifiedProjectBuilder = (
       ),
       scenes,
       externalLayouts,
+      externalEvents,
       globalVariables: getSimplifiedVariablesContainerJson(
         project.getVariables()
       ),

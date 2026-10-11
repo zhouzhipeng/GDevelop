@@ -10,7 +10,6 @@
 #include "GDCore/Project/NamedPropertyDescriptor.h"
 #include "GDCore/Project/PropertiesContainer.h"
 #include "GDCore/Project/EventsFunctionsContainer.h"
-#include "GDCore/Project/QuickCustomization.h"
 #include "GDCore/Project/VariablesContainer.h"
 #include "GDCore/String.h"
 namespace gd {
@@ -103,15 +102,6 @@ class GD_CORE_API EventsBasedBehavior: public AbstractEventsBasedEntity {
     return *this;
   }
 
-  QuickCustomization::Visibility GetQuickCustomizationVisibility() const {
-    return quickCustomizationVisibility;
-  }
-
-  EventsBasedBehavior& SetQuickCustomizationVisibility(QuickCustomization::Visibility visibility) {
-    quickCustomizationVisibility = visibility;
-    return *this;
-  }
-
   /**
    * \brief Return a reference to the list of shared properties.
    */
@@ -181,7 +171,6 @@ class GD_CORE_API EventsBasedBehavior: public AbstractEventsBasedEntity {
   gd::String objectType;
   gd::PropertiesContainer sharedPropertyDescriptors;
   gd::VariablesContainer variables;
-  QuickCustomization::Visibility quickCustomizationVisibility;
 };
 
 }  // namespace gd

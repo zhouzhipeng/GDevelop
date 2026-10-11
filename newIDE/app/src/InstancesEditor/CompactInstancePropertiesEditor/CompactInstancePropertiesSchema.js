@@ -48,7 +48,67 @@ const applyRatio = ({
   newReferenceValue: number,
   valueToApplyTo: number,
 |}) => {
-  return (newReferenceValue / oldReferenceValue) * valueToApplyTo;
+  // Rounding to 12 significant digits removes floating point errors
+  // (e.g. 104.01999999999998 instead of 104.02) that would otherwise
+  // accumulate when the size is changed step by step.
+  return Number(
+    ((newReferenceValue * valueToApplyTo) / oldReferenceValue).toPrecision(12)
+  );
+};
+
+type Size = [number, number, number];
+
+// Size of instances before it was set to 0 while keeping the ratio, to restore
+// their proportions when the size is increased again.
+const sizesBeforeCollapse: Map<number, Size> = new Map();
+
+const setInstanceSize = ({
+  instance,
+  dimension,
+  newValue,
+  getInstanceSize,
+  getInstanceDefaultSize,
+}: {|
+  instance: gdInitialInstance,
+  dimension: 0 | 1 | 2,
+  newValue: number,
+  getInstanceSize: gdInitialInstance => Size,
+  getInstanceDefaultSize: gdInitialInstance => Size,
+|}) => {
+  const shouldKeepRatio = instance.shouldKeepRatio();
+  const currentSize = getInstanceSize(instance);
+  const newDimensionValue = Math.max(newValue, 0);
+  const isCollapsed = currentSize.every(value => value === 0);
+  const referenceSize =
+    shouldKeepRatio && isCollapsed
+      ? sizesBeforeCollapse.get(instance.ptr) ||
+        getInstanceDefaultSize(instance)
+      : currentSize;
+  const referenceValue = referenceSize[dimension];
+  const newSize = referenceSize.map((value, index) =>
+    index === dimension
+      ? newDimensionValue
+      : !shouldKeepRatio || referenceValue === 0
+      ? currentSize[index]
+      : applyRatio({
+          oldReferenceValue: referenceValue,
+          newReferenceValue: newDimensionValue,
+          valueToApplyTo: value,
+        })
+  );
+
+  if (newSize.every(value => value === 0)) {
+    if (!isCollapsed) sizesBeforeCollapse.set(instance.ptr, currentSize);
+  } else {
+    sizesBeforeCollapse.delete(instance.ptr);
+  }
+
+  instance.setCustomWidth(newSize[0]);
+  instance.setCustomHeight(newSize[1]);
+  instance.setCustomDepth(newSize[2]);
+  // This must be done after reading the size.
+  instance.setHasCustomSize(true);
+  instance.setHasCustomDepth(true);
 };
 
 const getRotationXAndRotationYFields = ({ i18n }: {| i18n: I18nType |}) => [
@@ -226,12 +286,14 @@ const getWidthField = ({
   getInstanceWidth,
   getInstanceHeight,
   getInstanceDepth,
+  getInstanceDefaultSize,
   forceUpdate,
 }: {|
   i18n: I18nType,
   getInstanceWidth: gdInitialInstance => number,
   getInstanceHeight: gdInitialInstance => number,
   getInstanceDepth: gdInitialInstance => number,
+  getInstanceDefaultSize: gdInitialInstance => Size,
   forceUpdate: () => void,
 |}): Field => ({
   name: 'Width',
@@ -239,34 +301,17 @@ const getWidthField = ({
   valueType: 'number',
   getValue: getInstanceWidth,
   setValue: (instance: gdInitialInstance, newValue: number) => {
-    const shouldKeepRatio = instance.shouldKeepRatio();
-    const newWidth = Math.max(newValue, 0);
-    if (shouldKeepRatio) {
-      const initialWidth = getInstanceWidth(instance) || 1;
-      instance.setCustomWidth(newWidth);
-      instance.setCustomHeight(
-        applyRatio({
-          oldReferenceValue: initialWidth,
-          newReferenceValue: newWidth,
-          valueToApplyTo: getInstanceHeight(instance),
-        })
-      );
-      instance.setCustomDepth(
-        applyRatio({
-          oldReferenceValue: initialWidth,
-          newReferenceValue: newWidth,
-          valueToApplyTo: getInstanceDepth(instance),
-        })
-      );
-    } else {
-      instance.setCustomWidth(newWidth);
-      instance.setCustomHeight(getInstanceHeight(instance));
-      instance.setCustomDepth(getInstanceDepth(instance));
-    }
-
-    // This must be done after reading the size.
-    instance.setHasCustomSize(true);
-    instance.setHasCustomDepth(true);
+    setInstanceSize({
+      instance,
+      dimension: 0,
+      newValue,
+      getInstanceSize: instance => [
+        getInstanceWidth(instance),
+        getInstanceHeight(instance),
+        getInstanceDepth(instance),
+      ],
+      getInstanceDefaultSize,
+    });
     forceUpdate();
   },
   renderLeftIcon: className => <LetterW className={className} />,
@@ -287,12 +332,14 @@ const getHeightField = ({
   getInstanceWidth,
   getInstanceHeight,
   getInstanceDepth,
+  getInstanceDefaultSize,
   forceUpdate,
 }: {|
   i18n: I18nType,
   getInstanceWidth: gdInitialInstance => number,
   getInstanceHeight: gdInitialInstance => number,
   getInstanceDepth: gdInitialInstance => number,
+  getInstanceDefaultSize: gdInitialInstance => Size,
   forceUpdate: () => void,
 |}): Field => ({
   name: 'Height',
@@ -300,34 +347,17 @@ const getHeightField = ({
   valueType: 'number',
   getValue: getInstanceHeight,
   setValue: (instance: gdInitialInstance, newValue: number) => {
-    const shouldKeepRatio = instance.shouldKeepRatio();
-    const newHeight = Math.max(newValue, 0);
-    if (shouldKeepRatio) {
-      const initialHeight = getInstanceHeight(instance) || 1;
-      instance.setCustomWidth(
-        applyRatio({
-          oldReferenceValue: initialHeight,
-          newReferenceValue: newHeight,
-          valueToApplyTo: getInstanceWidth(instance),
-        })
-      );
-      instance.setCustomHeight(newHeight);
-      instance.setCustomDepth(
-        applyRatio({
-          oldReferenceValue: initialHeight,
-          newReferenceValue: newHeight,
-          valueToApplyTo: getInstanceDepth(instance),
-        })
-      );
-    } else {
-      instance.setCustomWidth(getInstanceWidth(instance));
-      instance.setCustomHeight(newHeight);
-      instance.setCustomDepth(getInstanceDepth(instance));
-    }
-
-    // This must be done after reading the size.
-    instance.setHasCustomSize(true);
-    instance.setHasCustomDepth(true);
+    setInstanceSize({
+      instance,
+      dimension: 1,
+      newValue,
+      getInstanceSize: instance => [
+        getInstanceWidth(instance),
+        getInstanceHeight(instance),
+        getInstanceDepth(instance),
+      ],
+      getInstanceDefaultSize,
+    });
     forceUpdate();
   },
   renderLeftIcon: className => <LetterH className={className} />,
@@ -348,12 +378,14 @@ const getDepthField = ({
   getInstanceWidth,
   getInstanceHeight,
   getInstanceDepth,
+  getInstanceDefaultSize,
   forceUpdate,
 }: {|
   i18n: I18nType,
   getInstanceWidth: gdInitialInstance => number,
   getInstanceHeight: gdInitialInstance => number,
   getInstanceDepth: gdInitialInstance => number,
+  getInstanceDefaultSize: gdInitialInstance => Size,
   forceUpdate: () => void,
 |}): Field => ({
   name: 'Depth',
@@ -361,34 +393,17 @@ const getDepthField = ({
   valueType: 'number',
   getValue: getInstanceDepth,
   setValue: (instance: gdInitialInstance, newValue: number) => {
-    const shouldKeepRatio = instance.shouldKeepRatio();
-    const newDepth = Math.max(newValue, 0);
-    if (shouldKeepRatio) {
-      const initialDepth = getInstanceDepth(instance) || 1;
-      instance.setCustomWidth(
-        applyRatio({
-          oldReferenceValue: initialDepth,
-          newReferenceValue: newDepth,
-          valueToApplyTo: getInstanceWidth(instance),
-        })
-      );
-      instance.setCustomHeight(
-        applyRatio({
-          oldReferenceValue: initialDepth,
-          newReferenceValue: newDepth,
-          valueToApplyTo: getInstanceHeight(instance),
-        })
-      );
-      instance.setCustomDepth(newDepth);
-    } else {
-      instance.setCustomWidth(getInstanceWidth(instance));
-      instance.setCustomHeight(getInstanceHeight(instance));
-      instance.setCustomDepth(newDepth);
-    }
-
-    // This must be done after reading the size.
-    instance.setHasCustomSize(true);
-    instance.setHasCustomDepth(true);
+    setInstanceSize({
+      instance,
+      dimension: 2,
+      newValue,
+      getInstanceSize: instance => [
+        getInstanceWidth(instance),
+        getInstanceHeight(instance),
+        getInstanceDepth(instance),
+      ],
+      getInstanceDefaultSize,
+    });
     forceUpdate();
   },
   renderLeftIcon: className => <LetterD className={className} />,
@@ -527,6 +542,17 @@ export const makeSchema = ({
       ? instance.getCustomDepth()
       : onGetInstanceSize(instance)[2];
 
+  const getInstanceDefaultSize = (instance: gdInitialInstance): Size => {
+    const hasCustomSize = instance.hasCustomSize();
+    const hasCustomDepth = instance.hasCustomDepth();
+    instance.setHasCustomSize(false);
+    instance.setHasCustomDepth(false);
+    const defaultSize = onGetInstanceSize(instance);
+    instance.setHasCustomSize(hasCustomSize);
+    instance.setHasCustomDepth(hasCustomDepth);
+    return defaultSize;
+  };
+
   if (is3DInstance) {
     // $FlowFixMe[incompatible-type]
     return [
@@ -552,6 +578,7 @@ export const makeSchema = ({
                 getInstanceWidth,
                 getInstanceHeight,
                 getInstanceDepth,
+                getInstanceDefaultSize,
                 forceUpdate,
               }),
               getHeightField({
@@ -559,6 +586,7 @@ export const makeSchema = ({
                 getInstanceWidth,
                 getInstanceHeight,
                 getInstanceDepth,
+                getInstanceDefaultSize,
                 forceUpdate,
               }),
               getDepthField({
@@ -566,6 +594,7 @@ export const makeSchema = ({
                 getInstanceWidth,
                 getInstanceHeight,
                 getInstanceDepth,
+                getInstanceDefaultSize,
                 forceUpdate,
               }),
             ],
@@ -641,6 +670,7 @@ export const makeSchema = ({
               getInstanceWidth,
               getInstanceHeight,
               getInstanceDepth,
+              getInstanceDefaultSize,
               forceUpdate,
             }),
             getHeightField({
@@ -648,6 +678,7 @@ export const makeSchema = ({
               getInstanceWidth,
               getInstanceHeight,
               getInstanceDepth,
+              getInstanceDefaultSize,
               forceUpdate,
             }),
           ],

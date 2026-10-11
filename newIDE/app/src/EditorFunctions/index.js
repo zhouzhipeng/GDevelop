@@ -5,6 +5,7 @@ import {
   renameLayoutInProject,
 } from '../Utils/Layout';
 import { mapFor } from '../Utils/MapFor';
+import { setEffectDefaultParameters } from '../EffectsList/EnumerateEffects';
 import { SafeExtractor } from '../Utils/SafeExtractor';
 import {
   serializeToJSObject,
@@ -23,10 +24,18 @@ import {
   type EventsTextRenderingError,
 } from '../EventsSheet/EventsTree/TextRenderer';
 import {
+  applyJsCodeEdits,
+  formatEditAsDiff,
+  prepareEventSourceEdits,
+  renderEditedEventSnippet,
+  type PreparedEventSourceEdits,
+} from './EventSourceEdits';
+import {
   buildEventScriptSourceView,
   renderEventSourceById,
   renderScopeSummaryHeaderLines,
   type ScopeSummary,
+  type JsCodeExcerpt,
 } from '../EventsSheet/EventsTree/TextRenderer/EventScriptSourceView';
 import {
   addMissingObjectBehaviors,
@@ -100,6 +109,7 @@ import { swapAsset } from '../AssetStore/AssetSwapper';
 import { type EnsureExtensionInstalledOptions } from '../AiGeneration/UseEnsureExtensionInstalled';
 import { getObjectFolderOrObjectWithContextFromObjectName } from '../SceneEditor/ObjectFolderOrObjectsSelection';
 import {
+  ensureObjectSizeInfoLoaded,
   extractRequiredString,
   formatPropertiesList,
   getObjectSizeInfo,
@@ -111,7 +121,6 @@ import {
   type ObjectSizeInfo,
 } from './Utils';
 import {
-  ensureModel3DMeasurementLoaded,
   ensureModel3DMeasurementsLoaded,
   isModel3DObjectMeasured,
 } from './Model3DSizeInfo';
@@ -356,6 +365,13 @@ export type EditorFunctionGenericOutput = {|
   // EventScript source view (see `read_events_source`):
   eventScript?: string,
   selectedEventIds?: Array<string>,
+  jsCodeExcerpt?: JsCodeExcerpt,
+  // `generate_events` with `edits`: the numbered lines around the edits.
+  editedEventSnippets?: Array<{|
+    eventId: string,
+    replacements: string,
+    snippet: string,
+  |}>,
   truncated?: boolean,
   notes?: Array<string>,
   generatedEventsErrorDiagnostics?: string,
@@ -374,6 +390,8 @@ export type EditorFunctionGenericOutput = {|
 
   // Used for de-duplication of outputs:
   eventsForSceneNamed?: string,
+  // `read_events_source` in external events: their name.
+  eventsForExternalEventsNamed?: string,
   // `read_events_source` in a function of an extension: the scope read, the
   // function read and what its events can use.
   eventsForScopeLabel?: string,
@@ -452,6 +470,9 @@ export type EventBatch = {|
   // The actual current source of the target event, that the backend
   // compares the anchor against:
   placementTargetEventSource: string | null,
+  // `eventScript` was built from `edits` (its compile errors are always
+  // reported):
+  isEventScriptFromEdits: boolean,
 |};
 
 export type EventsGenerationOptions = {|
@@ -585,6 +606,9 @@ export type LaunchFunctionOptionsWithoutProject = {|
   // When true, `run_script` exposes only non-mutating functions (explorer
   // sub-agent scripts, which must stay read-only). Ignored by other functions.
   runScriptReadOnly?: boolean,
+  // True for a function called by a `run_script` script: its output stays in
+  // the script (only its logs reach the AI), so it can be larger.
+  +isCalledFromScript?: boolean,
   i18n: I18nType,
   relatedAiRequestId: string | null,
   getRelatedAiRequestLastMessages: () => RelatedAiRequestLastMessages,
@@ -873,11 +897,10 @@ const resolveInstanceAnchor = ({
   return { success: true, anchor };
 };
 
-// A custom object renders its child INSTANCES, not its child objects: a
-// variant declaring children with no instance placed renders nothing at all
-// (and the engine falls back to a 1x1x1 size, so nothing is visible and no
-// geometry is right). Said on every edit of such a variant, because the AI
-// reads the result of its last call more surely than the project.
+// Missing initial instances can be a mistake for custom objects composed of
+// children, but are intentional for extensions that draw directly or create
+// children at runtime. Report the observation without claiming a rendering
+// failure or telling the AI to add instances unconditionally.
 const getVariantWithoutInstancesNotice = (
   resolvedScope: ResolvedScope
 ): string => {
@@ -886,7 +909,7 @@ const getVariantWithoutInstancesNotice = (
   const childObjectsCount = objectsContainer.getObjectsCount();
   if (childObjectsCount === 0 || initialInstances.getInstancesCount() > 0)
     return '';
-  return ` ${label} has ${childObjectsCount} child object(s) but no instance placed: it renders nothing and its size falls back to 1x1x1. Place them with \`put_3d_instances\`/\`put_2d_instances\` on this same \`custom_object_variant\` scope.`;
+  return ` ${label} has ${childObjectsCount} child object(s) but no initial instance placed. This can be intentional if extension code draws the object or creates children at runtime. If it relies on placed child instances, add them with \`put_3d_instances\`/\`put_2d_instances\` on this same \`custom_object_variant\` scope.`;
 };
 
 const VARIANT_WITHOUT_INSTANCES_HINT_CODE = 'custom-object-has-no-instance';
@@ -905,7 +928,7 @@ const addVariantWithoutInstancesHint = (
     code: VARIANT_WITHOUT_INSTANCES_HINT_CODE,
     message: `${
       resolvedScope.label
-    } had child objects but no instance of them: a custom object renders its child instances, and with none it renders nothing. Check that each child now has at least one instance (\`describe_instances\` on this \`custom_object_variant\` scope, \`put_3d_instances\`/\`put_2d_instances\` to place them), then set its default size with \`change_custom_object({ fit_area_to_children })\`.`,
+    } had child objects but no initial instance of them. This can be intentional if extension code draws the object or creates children at runtime. If it relies on placed child instances, check them with \`describe_instances\` on this \`custom_object_variant\` scope, place missing instances with \`put_3d_instances\`/\`put_2d_instances\`, then set its default size with \`change_custom_object({ fit_area_to_children })\`.`,
     objectNames: [],
   };
   output.hints = output.hints ? [...output.hints, hint] : [hint];
@@ -1032,7 +1055,6 @@ const serializeNamedProperty = (
     name,
     ...serializeToJSObject(property),
     group: undefined,
-    quickCustomizationVisibility: undefined,
     advanced: undefined,
     ...(isEmptyFontResource
       ? { hint: 'An empty font is valid: the default font is used.' }
@@ -1663,7 +1685,7 @@ const createOrReplaceObject: EditorFunction = {
                   getPropertiesText(object),
                 ].join(' '),
               };
-              await ensureModel3DMeasurementLoaded(
+              await ensureObjectSizeInfoLoaded(
                 object,
                 project,
                 PixiResourcesLoader
@@ -1793,11 +1815,7 @@ const createOrReplaceObject: EditorFunction = {
           getPropertiesText(object),
         ].join(' '),
       };
-      await ensureModel3DMeasurementLoaded(
-        object,
-        project,
-        PixiResourcesLoader
-      );
+      await ensureObjectSizeInfoLoaded(object, project, PixiResourcesLoader);
       return addVariantWithoutInstancesHint(
         injectObjectSizeInfo(scratchResult, {
           [targetObjectName]: getObjectSizeInfo(
@@ -2565,7 +2583,7 @@ const inspectObjectPropertiesEffects: EditorFunction = {
     if (inspectParts.length > 0) {
       output.reminder = `This object also has ${inspectParts.join(' and ')}.`;
     }
-    await ensureModel3DMeasurementLoaded(object, project, PixiResourcesLoader);
+    await ensureObjectSizeInfoLoaded(object, project, PixiResourcesLoader);
     injectObjectSizeInfo(output, {
       [object_name]: getObjectSizeInfo(object, project, PixiResourcesLoader),
     });
@@ -4527,6 +4545,97 @@ const makeWrongObjectInstanceIdsFailure = (
     )}. Nothing was changed. Pass ids of "${objectName}" instances (from \`describe_instances\`), fix \`object_name\`, or omit \`object_name\` to target these instances.`
   );
 
+const getLayerLabel = (layerName: string): string =>
+  layerName ? `layer "${layerName}"` : 'the base layer ("")';
+
+/**
+ * A "none" or "erase" brush naming an object, without `existing_instance_ids`
+ * nor a position, targets every instance of the object on the layer: this is
+ * what the AI means by it (resize them all, erase them all...), as it often
+ * writes these calls without having read the instances.
+ */
+const isTargetingEveryObjectInstance = ({
+  brushKind,
+  namedObject,
+  existingInstanceIds,
+  brushPosition,
+  newInstancesCount,
+}: {|
+  brushKind: string,
+  namedObject: gdObject | null,
+  existingInstanceIds: Array<string>,
+  brushPosition: string | null,
+  newInstancesCount: number | null,
+|}): boolean =>
+  (brushKind === 'none' || brushKind === 'erase') &&
+  !!namedObject &&
+  existingInstanceIds.length === 0 &&
+  !brushPosition &&
+  !newInstancesCount;
+
+/**
+ * The ids of every instance of `objectName` on `layerName`, or the output to
+ * return when there is none there: a failure naming the layers the instances
+ * are on, or - for "erase" - a success when the object has no instance at all.
+ */
+const getObjectInstanceIdsOnLayer = ({
+  initialInstances,
+  objectName,
+  layerName,
+  brushKind,
+  scopeLabel,
+}: {|
+  initialInstances: gdInitialInstancesContainer,
+  objectName: string,
+  layerName: string,
+  brushKind: string,
+  scopeLabel: string,
+|}):
+  | {| found: true, instanceIds: Array<string> |}
+  | {| found: false, output: EditorFunctionGenericOutput |} => {
+  const instanceIds = [];
+  const otherLayerNames = new Set<string>();
+  iterateOnInstances(initialInstances, instance => {
+    if (instance.getObjectName() !== objectName) return;
+    if (instance.getLayer() === layerName) {
+      instanceIds.push(instance.getPersistentUuid());
+    } else {
+      otherLayerNames.add(instance.getLayer());
+    }
+  });
+  if (instanceIds.length > 0) return { found: true, instanceIds };
+
+  if (otherLayerNames.size > 0) {
+    return {
+      found: false,
+      output: makeGenericFailure(
+        `"${objectName}" has no instance on ${getLayerLabel(
+          layerName
+        )}: its instances are on ${Array.from(otherLayerNames)
+          .map(getLayerLabel)
+          .join(
+            ', '
+          )}. Nothing was changed. Pass their layer as \`layer_name\`, or their \`existing_instance_ids\` (from \`describe_instances\`).`
+      ),
+    };
+  }
+  if (brushKind === 'erase') {
+    return {
+      found: false,
+      output: {
+        success: true,
+        message: `"${objectName}" has no instance in ${scopeLabel}: nothing to erase.`,
+      },
+    };
+  }
+  return {
+    found: false,
+    output: makeGenericFailure(
+      `"${objectName}" has no instance in ${scopeLabel}, so nothing was changed. To create instances, use the "point" brush with \`brush_position\`.`
+    ),
+  };
+};
+
 /**
  * Places new instance(s), or move/erase existing instances, of an existing object onto a specified 2D layer
  * within a scene using a virtual brush at given X, Y coordinates.
@@ -4564,6 +4673,30 @@ const put2dInstances: EditorFunction = {
       new_instances_count === null && existingInstanceIds.length === 0
         ? 1
         : new_instances_count;
+
+    if (
+      (brush_kind === 'none' || brush_kind === 'erase') &&
+      object_name &&
+      existingInstanceIds.length === 0 &&
+      !brush_position &&
+      !new_instances_count
+    ) {
+      const scopeLabel = getScopeLabelFromArgs(args);
+      return {
+        text:
+          brush_kind === 'erase' ? (
+            <Trans>
+              Erase every <b>{object_name}</b> instance (layer:{' '}
+              {layer_name || 'base'}) in {scopeLabel}.
+            </Trans>
+          ) : (
+            <Trans>
+              Change every <b>{object_name}</b> instance (layer:{' '}
+              {layer_name || 'base'}) in {scopeLabel}.
+            </Trans>
+          ),
+      };
+    }
 
     const existingInstanceCount = existingInstanceIds.length;
     const brushPosition = SafeExtractor.parseCommaSeparatedTwoFiniteNumbers(
@@ -4720,7 +4853,7 @@ const put2dInstances: EditorFunction = {
         )) ||
       null;
     if (namedObject)
-      await ensureModel3DMeasurementLoaded(
+      await ensureObjectSizeInfoLoaded(
         namedObject,
         project,
         PixiResourcesLoader
@@ -4749,12 +4882,33 @@ const put2dInstances: EditorFunction = {
 
     // An empty id would match every instance (`uuid.startsWith('')` is always
     // true), so a trailing comma or a blank entry must never survive parsing.
-    const existingInstanceIds = existing_instance_ids
+    const requestedInstanceIds = existing_instance_ids
       ? existing_instance_ids
           .split(',')
           .map(id => id.trim())
           .filter(Boolean)
       : [];
+    let existingInstanceIds = requestedInstanceIds;
+    if (
+      object_name &&
+      isTargetingEveryObjectInstance({
+        brushKind: brush_kind,
+        namedObject,
+        existingInstanceIds: requestedInstanceIds,
+        brushPosition: brush_position,
+        newInstancesCount: new_instances_count,
+      })
+    ) {
+      const objectInstanceIds = getObjectInstanceIdsOnLayer({
+        initialInstances,
+        objectName: object_name,
+        layerName,
+        brushKind: brush_kind,
+        scopeLabel: resolvedScope.label,
+      });
+      if (!objectInstanceIds.found) return objectInstanceIds.output;
+      existingInstanceIds = objectInstanceIds.instanceIds;
+    }
 
     if (brush_kind === 'erase') {
       const brushPosition = SafeExtractor.parseCommaSeparatedTwoFiniteNumbers(
@@ -5540,6 +5694,30 @@ const put3dInstances: EditorFunction = {
         ? 1
         : new_instances_count;
 
+    if (
+      (brush_kind === 'none' || brush_kind === 'erase') &&
+      object_name &&
+      existingInstanceIds.length === 0 &&
+      !brush_position &&
+      !new_instances_count
+    ) {
+      const scopeLabel = getScopeLabelFromArgs(args);
+      return {
+        text:
+          brush_kind === 'erase' ? (
+            <Trans>
+              Erase every <b>{object_name}</b> instance (layer:{' '}
+              {layer_name || 'base'}) in {scopeLabel}.
+            </Trans>
+          ) : (
+            <Trans>
+              Change every <b>{object_name}</b> instance (layer:{' '}
+              {layer_name || 'base'}) in {scopeLabel}.
+            </Trans>
+          ),
+      };
+    }
+
     const existingInstanceCount = existingInstanceIds.length;
     const brushPosition = SafeExtractor.parseCommaSeparatedThreeFiniteNumbers(
       brush_position
@@ -5688,7 +5866,7 @@ const put3dInstances: EditorFunction = {
 
     // An empty id would match every instance (`uuid.startsWith('')` is always
     // true), so a trailing comma or a blank entry must never survive parsing.
-    const existingInstanceIds = existing_instance_ids
+    const requestedInstanceIds = existing_instance_ids
       ? existing_instance_ids
           .split(',')
           .map(id => id.trim())
@@ -5698,10 +5876,10 @@ const put3dInstances: EditorFunction = {
     // Instances moved by their ids without `object_name` are sized (for the
     // anchors and the space they occupy) by their object, when they share one.
     const existingInstancesObjectNames = new Set<string>();
-    if (!object_name && existingInstanceIds.length > 0) {
+    if (!object_name && requestedInstanceIds.length > 0) {
       iterateOnInstances(initialInstances, instance => {
         if (
-          existingInstanceIds.some(id =>
+          requestedInstanceIds.some(id =>
             instance.getPersistentUuid().startsWith(id)
           )
         )
@@ -5722,7 +5900,7 @@ const put3dInstances: EditorFunction = {
         )) ||
       null;
     if (namedObject)
-      await ensureModel3DMeasurementLoaded(
+      await ensureObjectSizeInfoLoaded(
         namedObject,
         project,
         PixiResourcesLoader
@@ -5747,6 +5925,28 @@ const put3dInstances: EditorFunction = {
         resolvedScope.label,
         layersContainer
       );
+    }
+
+    let existingInstanceIds = requestedInstanceIds;
+    if (
+      object_name &&
+      isTargetingEveryObjectInstance({
+        brushKind: brush_kind,
+        namedObject,
+        existingInstanceIds: requestedInstanceIds,
+        brushPosition: brush_position,
+        newInstancesCount: new_instances_count,
+      })
+    ) {
+      const objectInstanceIds = getObjectInstanceIdsOnLayer({
+        initialInstances,
+        objectName: object_name,
+        layerName,
+        brushKind: brush_kind,
+        scopeLabel: resolvedScope.label,
+      });
+      if (!objectInstanceIds.found) return objectInstanceIds.output;
+      existingInstanceIds = objectInstanceIds.instanceIds;
     }
 
     if (brush_kind === 'erase') {
@@ -6567,10 +6767,12 @@ const readSceneEvents: EditorFunction = {
 };
 
 export const noEventsInFunctionText = 'This function has no events.';
+const noEventsInExternalEventsText = 'These external events have no events.';
 
 const EVENTS_SOURCE_MAX_CHARS_DEFAULT = 12000;
 const EVENTS_SOURCE_MAX_CHARS_MINIMUM = 2000;
 const EVENTS_SOURCE_MAX_CHARS_LIMIT = 30000;
+const EVENTS_SOURCE_MAX_CHARS_LIMIT_IN_SCRIPT = 1000000;
 
 const getPropertyNames = (
   propertiesContainer: gdPropertiesContainer
@@ -6638,9 +6840,9 @@ const getScopeSummary = (
 };
 
 /**
- * The events to read: those of a scene, or those of the function named by
- * `function_name` in an extension scope (with the function itself, to
- * summarize what it can use).
+ * The events to read: those of a scene or of external events, or those of
+ * the function named by `function_name` in an extension scope (with the
+ * function itself, to summarize what it can use).
  */
 const getEventsSourceTarget = (
   resolvedScope: ResolvedScope,
@@ -6653,7 +6855,16 @@ const getEventsSourceTarget = (
       eventsFunction: gdEventsFunction | null,
     |}
   | {| success: false, message: string |} => {
-  const { layout } = resolvedScope;
+  const { layout, externalEvents } = resolvedScope;
+  // Checked first: the `layout` of external events is the scene giving them
+  // their objects and variables, not the events to read.
+  if (externalEvents) {
+    return {
+      success: true,
+      eventsList: externalEvents.getEvents(),
+      eventsFunction: null,
+    };
+  }
   if (layout) {
     return {
       success: true,
@@ -6670,10 +6881,41 @@ const getEventsSourceTarget = (
   };
 };
 
+const linkLineRegex = /^\s*(?:disabled )?link "((?:[^"\\]|\\.)*)"/gm;
+
 /**
- * Reads the events of a scene as EventScript source (the exact syntax
- * accepted by the `event_script` field of events generation), with filters
- * to keep the output small.
+ * Tell how to read the events included by the `link` lines of a rendered
+ * source: the line only names its target, which can be external events or
+ * a scene.
+ */
+const getLinkedEventsNotes = (
+  project: gdProject,
+  eventScriptText: string
+): Array<string> => {
+  const targets = new Set<string>();
+  for (const match of eventScriptText.matchAll(linkLineRegex)) {
+    try {
+      targets.add(JSON.parse(`"${match[1]}"`));
+    } catch (error) {
+      // Not a valid string literal: nothing to say about it.
+    }
+  }
+  return [...targets].map(target => {
+    const quotedTarget = JSON.stringify(target);
+    if (project.hasExternalEventsNamed(target)) {
+      return `\`link ${quotedTarget}\` includes the external events ${quotedTarget}: read them with scope { type: "external_events", external_events_name: ${quotedTarget} }.`;
+    }
+    if (project.hasLayoutNamed(target)) {
+      return `\`link ${quotedTarget}\` includes the events of the scene ${quotedTarget}: read them with scope { type: "scene", scene_name: ${quotedTarget} }.`;
+    }
+    return `\`link ${quotedTarget}\` names no external events nor scene of the project: it includes nothing.`;
+  });
+};
+
+/**
+ * Reads the events of a scene, of external events or of a function as
+ * EventScript source (the exact syntax accepted by the `event_script` field
+ * of events generation), with filters to keep the output small.
  */
 const readEventsSource: EditorFunction = {
   renderForEditor: ({ args, editorCallbacks }) => {
@@ -6762,9 +7004,20 @@ const readEventsSource: EditorFunction = {
 
     return { text };
   },
-  launchFunction: async ({ project, args, ensureExtensionsUpToDate }) => {
+  launchFunction: async ({
+    project,
+    args,
+    ensureExtensionsUpToDate,
+    isCalledFromScript,
+  }) => {
     const resolvedScope = resolveScopeFromArgs(project, args, {
-      allowedTypes: ['scene', 'extension', 'custom_behavior', 'custom_object'],
+      allowedTypes: [
+        'scene',
+        'external_events',
+        'extension',
+        'custom_behavior',
+        'custom_object',
+      ],
     });
     if (resolvedScope.success === false)
       return makeScopeFailureOutput(resolvedScope);
@@ -6807,9 +7060,15 @@ const readEventsSource: EditorFunction = {
     const maxChars = Math.max(
       EVENTS_SOURCE_MAX_CHARS_MINIMUM,
       Math.min(
-        EVENTS_SOURCE_MAX_CHARS_LIMIT,
+        isCalledFromScript
+          ? EVENTS_SOURCE_MAX_CHARS_LIMIT_IN_SCRIPT
+          : EVENTS_SOURCE_MAX_CHARS_LIMIT,
         maxCharsArgument || EVENTS_SOURCE_MAX_CHARS_DEFAULT
       )
+    );
+    const jsFromLine = SafeExtractor.extractNumberProperty(
+      args,
+      'js_from_line'
     );
 
     // In a function, what the events can use (parameters, properties, child
@@ -6827,6 +7086,7 @@ const readEventsSource: EditorFunction = {
     const {
       text,
       selectedEventIds,
+      jsCodeExcerpt,
       truncated,
       notes,
       renderingErrors,
@@ -6836,6 +7096,7 @@ const readEventsSource: EditorFunction = {
       searchText,
       objectNames,
       subEventsDepth,
+      jsFromLine,
       maxChars: Math.max(
         0,
         maxChars -
@@ -6846,13 +7107,17 @@ const readEventsSource: EditorFunction = {
     // An empty `text` does NOT mean the scene has no events: a filter can
     // match nothing on a populated sheet (the notes say which case it is).
     // Only a truly empty sheet gets the "no events" text.
+    const { externalEvents } = resolvedScope;
     const eventScriptText =
       text ||
       (eventsList.getEventsCount() === 0
         ? eventsFunction
           ? noEventsInFunctionText
+          : externalEvents
+          ? noEventsInExternalEventsText
           : noEventsInSceneText
         : '');
+    const allNotes = [...notes, ...getLinkedEventsNotes(project, text)];
 
     const output: EditorFunctionGenericOutput = {
       success: true,
@@ -6863,6 +7128,8 @@ const readEventsSource: EditorFunction = {
             functionName: eventsFunction.getName(),
             scopeSummary,
           }
+        : externalEvents
+        ? { eventsForExternalEventsNamed: externalEvents.getName() }
         : { eventsForSceneNamed: resolvedScope.scope.scene_name || '' }),
       eventScript: scopeSummaryHeaderText
         ? scopeSummaryHeaderText +
@@ -6870,8 +7137,9 @@ const readEventsSource: EditorFunction = {
         : eventScriptText,
       selectedEventIds,
     };
+    if (jsCodeExcerpt) output.jsCodeExcerpt = jsCodeExcerpt;
     if (truncated) output.truncated = true;
-    if (notes.length > 0) output.notes = notes;
+    if (allNotes.length > 0) output.notes = allNotes;
     if (renderingErrors.length > 0) {
       // Surface partial failures so the cause is reported, not dropped.
       output.eventsRenderingErrors = renderingErrors;
@@ -7249,6 +7517,8 @@ const addSceneEvents: EditorFunction = {
               batch,
               'event_script'
             );
+            const edits =
+              SafeExtractor.extractArrayProperty(batch, 'edits') || [];
             const placementRelation = SafeExtractor.extractStringProperty(
               batch,
               'placement_relation'
@@ -7296,6 +7566,21 @@ const addSceneEvents: EditorFunction = {
                     : {eventScript}
                   </Text>
                 )}
+                {edits.map((edit, index) => (
+                  <Text
+                    key={index}
+                    noMargin
+                    allowSelection
+                    color="secondary"
+                    size="body-small"
+                    style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                  >
+                    <b>
+                      <Trans>Edit</Trans>
+                    </b>
+                    {`:\n${formatEditAsDiff(edit)}`}
+                  </Text>
+                ))}
                 {placementRelation && (
                   <Text
                     noMargin
@@ -7795,12 +8080,21 @@ const addSceneEvents: EditorFunction = {
       const resolvedScope = resolveScopeFromArgs(project, args, {
         allowedTypes: [
           'scene',
+          'external_events',
           'extension',
           'custom_behavior',
           'custom_object',
         ],
       });
       if (resolvedScope.success === false) return resolvedScope;
+      const { externalEvents } = resolvedScope;
+      if (externalEvents && !resolvedScope.layout) {
+        const externalEventsName = externalEvents.getName();
+        return {
+          success: false,
+          message: `External events "${externalEventsName}" have no associated scene and no scene links to them: their events would have no objects nor variables. Add a \`link "${externalEventsName}"\` event to the scene they are for first, or write the events in that scene.`,
+        };
+      }
       if (!resolvedScope.layout) {
         // Events written in a function of an extension: the extension must be
         // editable (a store extension is read-only).
@@ -7853,9 +8147,11 @@ const addSceneEvents: EditorFunction = {
       eventsFunction,
     } = eventsTarget;
     const scene = resolvedScope.layout;
+    const { externalEvents } = resolvedScope;
     // A scene name is only sent for a scene (the generation API keeps it
-    // beside the scope for older editors).
-    const sceneName = scene ? resolvedScope.scope.scene_name || '' : '';
+    // beside the scope for older editors), and for external events: the scene
+    // whose objects and variables they use.
+    const sceneName = scene ? scene.getName() : '';
 
     // The existing events are sent as JSON only: the generation backend
     // renders them itself (as a bounded EventScript view) for its model.
@@ -7864,8 +8160,92 @@ const addSceneEvents: EditorFunction = {
         ? serializeToJSON(currentEventsList)
         : null;
 
+    // `edits` are applied here, to the current source of the event: the
+    // batch then replaces the event with the edited source, like an
+    // `event_script` would.
+    const preparedEventSourceEdits: Array<PreparedEventSourceEdits | null> = (
+      eventBatches || []
+    ).map((batch, index) =>
+      prepareEventSourceEdits({
+        eventsList: currentEventsList,
+        batch,
+        batchLabel:
+          eventBatches && eventBatches.length > 1 ? `Batch ${index + 1}: ` : '',
+      })
+    );
+    const editsFailureMessages = [];
+    for (const preparedEdits of preparedEventSourceEdits) {
+      if (preparedEdits && preparedEdits.success === false) {
+        editsFailureMessages.push(preparedEdits.message);
+      }
+    }
+    if (editsFailureMessages.length > 0) {
+      return makeGenericFailure(
+        `${editsFailureMessages.join('\n')}\nNothing was changed.`
+      );
+    }
+
+    // The code of `js` events is changed directly (nothing to generate):
+    // such a call must only change `js` events, so that it stays atomic.
+    const jsCodeEdits = [];
+    for (const preparedEdits of preparedEventSourceEdits) {
+      if (preparedEdits && preparedEdits.success && preparedEdits.isJsCode) {
+        jsCodeEdits.push(preparedEdits);
+      }
+    }
+    if (jsCodeEdits.length > 0) {
+      if (jsCodeEdits.length !== preparedEventSourceEdits.length) {
+        return makeGenericFailure(
+          'The `edits` of a `js` event are applied directly, without generating events: give them in a `generate_events` call of their own, apart from the other batches. Nothing was changed.'
+        );
+      }
+      for (const preparedEdits of jsCodeEdits) {
+        applyJsCodeEdits({ eventsList: currentEventsList, preparedEdits });
+      }
+      if (eventsFunction) {
+        const extensionName = resolvedScope.eventsFunctionsExtension
+          ? resolvedScope.eventsFunctionsExtension.getName()
+          : '';
+        onSceneEventsModifiedOutsideEditor({
+          scene: null,
+          eventsFunction,
+          extensionName,
+          newOrChangedAiGeneratedEventIds: new Set(),
+        });
+        onExtensionsModifiedOutsideEditor({
+          extensionNames: [extensionName],
+          needsCodeRegeneration: true,
+        });
+      } else if (externalEvents) {
+        onSceneEventsModifiedOutsideEditor({
+          scene: null,
+          externalEvents,
+          newOrChangedAiGeneratedEventIds: new Set(),
+        });
+      } else {
+        onSceneEventsModifiedOutsideEditor({
+          scene,
+          newOrChangedAiGeneratedEventIds: new Set(),
+        });
+      }
+      return {
+        success: true,
+        message: `Changed the code of the \`js\` event(s) ${jsCodeEdits
+          .map(preparedEdits => preparedEdits.eventId)
+          .join(', ')}.`,
+        editedEventSnippets: jsCodeEdits.map(preparedEdits => ({
+          eventId: preparedEdits.eventId,
+          replacements: preparedEdits.replacementsSummary,
+          snippet: renderEditedEventSnippet({
+            eventsList: currentEventsList,
+            preparedEdits,
+          }),
+        })),
+      };
+    }
+
     const parsedEventBatches = eventBatches
-      ? eventBatches.map(batch => {
+      ? eventBatches.map((batch, index) => {
           const placementRelation =
             SafeExtractor.extractStringProperty(batch, 'placement_relation') ||
             '(unspecified)';
@@ -7904,16 +8284,21 @@ const addSceneEvents: EditorFunction = {
               ? renderedTargetEventSource
               : null;
 
+          const preparedEdits = preparedEventSourceEdits[index];
+          const editedEventScript =
+            preparedEdits && preparedEdits.success
+              ? preparedEdits.eventScript
+              : null;
+
           return {
             eventsDescription:
               SafeExtractor.extractStringProperty(
                 batch,
                 'events_description'
               ) || '',
-            eventScript: SafeExtractor.extractStringProperty(
-              batch,
-              'event_script'
-            ),
+            eventScript:
+              editedEventScript ||
+              SafeExtractor.extractStringProperty(batch, 'event_script'),
             placementRelation,
             placementTargetEventId,
             placementExpectedParentEventId: SafeExtractor.extractStringProperty(
@@ -7924,11 +8309,16 @@ const addSceneEvents: EditorFunction = {
               batch,
               'placement_rationale'
             ),
-            expectedEventSource: SafeExtractor.extractStringProperty(
-              batch,
-              'expected_event_source'
-            ),
+            // The edits were applied to the current source of the event: it
+            // is what was read.
+            expectedEventSource: editedEventScript
+              ? placementTargetEventSource
+              : SafeExtractor.extractStringProperty(
+                  batch,
+                  'expected_event_source'
+                ),
             placementTargetEventSource,
+            isEventScriptFromEdits: !!editedEventScript,
           };
         })
       : null;
@@ -8185,6 +8575,12 @@ Events were not changed (extensions, variables or behaviors needed by them may h
             extensionNames: [extensionName],
             needsCodeRegeneration: true,
           });
+        } else if (upToDateResolvedScope.externalEvents) {
+          onSceneEventsModifiedOutsideEditor({
+            scene: null,
+            externalEvents: upToDateResolvedScope.externalEvents,
+            newOrChangedAiGeneratedEventIds: new Set([aiGeneratedEvent.id]),
+          });
         } else {
           onSceneEventsModifiedOutsideEditor({
             scene: upToDateResolvedScope.layout,
@@ -8253,6 +8649,22 @@ See errors; verify event contents if needed.`
         };
         if (newlyAddedResources.length > 0) {
           output.newlyAddedResources = newlyAddedResources;
+        }
+        const editedEventSnippets = [];
+        for (const preparedEdits of preparedEventSourceEdits) {
+          if (preparedEdits && preparedEdits.success) {
+            editedEventSnippets.push({
+              eventId: preparedEdits.eventId,
+              replacements: preparedEdits.replacementsSummary,
+              snippet: renderEditedEventSnippet({
+                eventsList: upToDateEventsList,
+                preparedEdits,
+              }),
+            });
+          }
+        }
+        if (editedEventSnippets.length > 0) {
+          output.editedEventSnippets = editedEventSnippets;
         }
         if (errors.length > 0) {
           output.errors = errors;
@@ -8721,6 +9133,7 @@ const applyEffectChange = ({
           new_effect_position || 0
         );
         newlyCreatedEffect.setEffectType(effect_type);
+        setEffectDefaultParameters(newlyCreatedEffect, effectMetadata);
       }
     } else if (
       delete_this_effect ||
@@ -11858,6 +12271,22 @@ const searchDocs: EditorFunction = {
   modifiesProject: false,
 };
 
+const readJavascriptReference: EditorFunction = {
+  renderForEditor: ({ args }) => {
+    const names = SafeExtractor.extractStringProperty(args, 'names');
+
+    return {
+      text: <Trans>Read the JavaScript reference of {names}.</Trans>,
+    };
+  },
+  launchFunction: async ({ args }) => {
+    return makeGenericFailure(
+      `Unable to read the JavaScript reference - continue with your existing GDevelop knowledge.`
+    );
+  },
+  modifiesProject: false,
+};
+
 const getGameStarterSummary: EditorFunctionWithoutProject = {
   // Handled entirely on the backend to inform planning, but still shown in the
   // chat so the user can see the AI is studying a starter template.
@@ -12192,7 +12621,7 @@ const runScript: EditorFunction = {
     const exposedFunctions = buildExposedScriptFunctions({
       editorFunctions,
       editorFunctionsWithoutProject,
-      launchOptions,
+      launchOptions: { ...launchOptions, isCalledFromScript: true },
       project,
       allowedFunctionNames,
     });
@@ -12299,6 +12728,7 @@ export const editorFunctions: { [string]: EditorFunction } = {
   change_custom_function: changeCustomFunction,
   read_full_docs: readFullDocs,
   search_docs: searchDocs,
+  read_javascript_reference: readJavascriptReference,
 
   create_or_update_plan: createOrUpdatePlan,
 

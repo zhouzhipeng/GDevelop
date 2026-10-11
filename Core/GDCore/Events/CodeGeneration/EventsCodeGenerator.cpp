@@ -1000,6 +1000,9 @@ gd::String EventsCodeGenerator::GenerateParameterCodes(
         parameter,
         lastObjectName,
         metadata.GetExtraInfo());
+    if (metadata.GetType() == "easing") {
+      argOutput = GenerateEasingCode(argOutput);
+    }
   } else if (ParameterMetadata::IsExpression("variable", metadata.GetType())) {
     argOutput = gd::ExpressionCodeGenerator::GenerateExpressionCode(
         *this,

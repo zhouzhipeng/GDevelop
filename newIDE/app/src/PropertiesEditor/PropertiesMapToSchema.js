@@ -15,8 +15,6 @@ import { keyNames } from '../Utils/KeyboardKeyNames';
 import { getChoiceDisplayLabel } from '../Utils/ChoiceLabel';
 import Restore from '../UI/CustomSvgIcons/Restore';
 
-const gd: libGDevelop = global.gd;
-
 const createField = (
   name: string,
   property: gdPropertyDescriptor,
@@ -560,12 +558,10 @@ const isPropertyVisible = ({
   properties,
   name,
   visibility,
-  quickCustomizationVisibilities,
 }: {
   properties: gdMapStringPropertyDescriptor,
   name: string,
-  visibility: 'All' | 'Basic' | 'Advanced' | 'Deprecated' | 'Basic-Quick',
-  quickCustomizationVisibilities?: gdQuickCustomizationVisibilitiesContainer,
+  visibility: 'All' | 'Basic' | 'Advanced' | 'Deprecated',
 }): boolean => {
   if (!properties.has(name)) {
     return false;
@@ -586,34 +582,6 @@ const isPropertyVisible = ({
   if (visibility === 'Basic') {
     return !property.isAdvanced() && !property.isDeprecated();
   }
-  if (visibility === 'Basic-Quick') {
-    // "Basic":
-    if (property.isDeprecated()) return false;
-    if (property.isAdvanced()) return false;
-
-    // Honor visibility if set on the property.
-    if (
-      property.getQuickCustomizationVisibility() ===
-      gd.QuickCustomization.Hidden
-    )
-      return false;
-    if (
-      property.getQuickCustomizationVisibility() ===
-      gd.QuickCustomization.Visible
-    )
-      return true;
-
-    // Honor visibility if set on the container.
-    if (quickCustomizationVisibilities) {
-      const visibility = quickCustomizationVisibilities.get(name);
-      if (visibility === gd.QuickCustomization.Hidden) return false;
-      if (visibility === gd.QuickCustomization.Visible) return true;
-    }
-
-    // Otherwise, hide some properties that we know are complex.
-    const propertyType = property.getType();
-    if (propertyType === 'Behavior') return false; // Hide "required behaviors".
-  }
   return true;
 };
 
@@ -623,8 +591,7 @@ type CommonProps = {|
     | gdMapStringPropertyDescriptor
     | null,
   object?: ?gdObject,
-  visibility?: 'All' | 'Basic' | 'Advanced' | 'Deprecated' | 'Basic-Quick',
-  quickCustomizationVisibilities?: gdQuickCustomizationVisibilitiesContainer,
+  visibility?: 'All' | 'Basic' | 'Advanced' | 'Deprecated',
   showcaseNonDefaultValues?: boolean,
   allowConstantPlaceholders?: boolean,
   hideResourceProperties?: boolean,
@@ -634,7 +601,6 @@ export const effectPropertiesMapToSchema = ({
   defaultValueProperties,
   object,
   visibility = 'All',
-  quickCustomizationVisibilities,
   hideResourceProperties,
   showcaseNonDefaultValues,
   allowConstantPlaceholders,
@@ -648,7 +614,6 @@ export const effectPropertiesMapToSchema = ({
     object,
     layersContainer: null,
     visibility,
-    quickCustomizationVisibilities,
     hideResourceProperties,
     showcaseNonDefaultValues,
     shouldDisabledFieldsWithMixedValues: false,
@@ -702,7 +667,6 @@ const propertiesMapToSchema = ({
   object,
   layersContainer,
   visibility = 'All',
-  quickCustomizationVisibilities,
   showcaseNonDefaultValues,
   allowConstantPlaceholders,
   hideResourceProperties,
@@ -725,7 +689,6 @@ const propertiesMapToSchema = ({
     object,
     layersContainer,
     visibility,
-    quickCustomizationVisibilities,
     showcaseNonDefaultValues,
     allowConstantPlaceholders,
     hideResourceProperties,
@@ -758,7 +721,6 @@ const adaptablePropertiesMapToSchema = ({
   object,
   layersContainer,
   visibility = 'All',
-  quickCustomizationVisibilities,
   showcaseNonDefaultValues,
   allowConstantPlaceholders = false,
   hideResourceProperties,
@@ -805,7 +767,6 @@ const adaptablePropertiesMapToSchema = ({
         properties,
         name,
         visibility,
-        quickCustomizationVisibilities,
       })
     ) {
       return null;
@@ -836,7 +797,6 @@ const adaptablePropertiesMapToSchema = ({
                 properties,
                 name: rowPropertyName,
                 visibility,
-                quickCustomizationVisibilities,
               })
             ) {
               rowPropertyNames.push(rowPropertyName);
@@ -854,7 +814,6 @@ const adaptablePropertiesMapToSchema = ({
                   properties,
                   name: rowPropertyName,
                   visibility,
-                  quickCustomizationVisibilities,
                 })
               ) {
                 rowPropertyNames.push(rowPropertyName);
@@ -870,7 +829,10 @@ const adaptablePropertiesMapToSchema = ({
         if (
           rowProperties.every(
             property => property.getGroup() === rowProperties[0].getGroup()
-          )
+          ) &&
+          // Resource selectors are wide (text field + thumbnail), so always
+          // give them a full line instead of squeezing them in a row.
+          !rowProperties.some(property => property.getType() === 'resource')
         ) {
           const rowFields: Field[] = [];
           for (

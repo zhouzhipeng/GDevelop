@@ -11,6 +11,7 @@ describe('Fog material invalidation', function () {
             getRenderer3DWorldScale: () => 100,
           }),
         };
+        /** @type {any} Partial effects target used by the fog filter. */
         const target = {
           getRuntimeScene: () => runtimeScene,
           get3DRendererObject: () => scene,
@@ -20,9 +21,17 @@ describe('Fog material invalidation', function () {
           'invalidateSceneInputs'
         );
         try {
-          const filter = gdjs.PixiFiltersTools.getFilterCreator(
+          const filterCreator = gdjs.PixiFiltersTools.getFilterCreator(
             'Scene3D::' + name
-          ).makeFilter(target, {});
+          );
+          if (!filterCreator) throw new Error('Missing fog filter creator');
+          const filter = filterCreator.makeFilter(target, {
+            name: 'Fog',
+            effectType: 'Scene3D::' + name,
+            doubleParameters: {},
+            stringParameters: {},
+            booleanParameters: {},
+          });
           filter.applyEffect(target);
           expect(invalidate.callCount).to.be(1);
           filter.applyEffect(target);
@@ -41,6 +50,7 @@ describe('Fog material invalidation', function () {
           expect(invalidate.callCount).to.be(1);
           filter.updateColorParameter('color', 0x123456);
           expect(invalidate.callCount).to.be(1);
+          /** @type {any} Fog subtype is selected by the parameterized test. */
           const fog = scene.fog;
           const color = fog.color;
           for (let i = 0; i < 120; i++) {

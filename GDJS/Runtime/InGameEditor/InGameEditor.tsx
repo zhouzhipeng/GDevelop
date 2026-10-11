@@ -1240,6 +1240,7 @@ namespace gdjs {
     // Dragged new object:
     private _draggedNewObject: gdjs.RuntimeObject | null = null;
     private _draggedSelectedObject: gdjs.RuntimeObject | null = null;
+    private _objectToDuplicateOnDrag: gdjs.RuntimeObject | null = null;
     private _draggedSelectedObjectInitialX: float = 0;
     private _draggedSelectedObjectInitialY: float = 0;
     private _draggedSelectedObjectInitialZ: float = 0;
@@ -1521,6 +1522,7 @@ namespace gdjs {
       this._selectionControls = null;
       this._draggedNewObject = null;
       this._draggedSelectedObject = null;
+      this._objectToDuplicateOnDrag = null;
       const selectedObjectIds = this._selection
         .getSelectedObjects()
         .map((object) => object.persistentUuid)
@@ -2013,9 +2015,15 @@ namespace gdjs {
         for (const [toolbarId, items] of this._requestedExtensionToolbars) {
           let toolbar = this._extensionToolbars.get(toolbarId);
           if (!toolbar) {
-            toolbar = new ExtensionToolbar(() => {
-              this._timeSinceLastInteraction = 0;
-            });
+            toolbar = new ExtensionToolbar(
+              () => {
+                this._timeSinceLastInteraction = 0;
+              },
+              (error) =>
+                this._runtimeGame.reportInGameEditorExtensionError(error, {
+                  phase: 'toolbar',
+                })
+            );
             this._extensionToolbars.set(toolbarId, toolbar);
           }
           toolbar.render(parent, items, toolbarIndex++);
@@ -2193,6 +2201,13 @@ namespace gdjs {
         });
       }
 
+      if (
+        !inputManager.isMouseButtonPressed(0) ||
+        !this._shouldDragSelectedObject()
+      ) {
+        this._objectToDuplicateOnDrag = null;
+      }
+
       // Inspect then if a drag should be started or continued.
       if (!this._shouldDragSelectedObject()) {
         // We can early return as the rest is not applicable (we've already checked
@@ -2207,14 +2222,27 @@ namespace gdjs {
         inputManager.isMouseButtonPressed(0) &&
         !this._draggedSelectedObject
       ) {
-        // Start a new drag.
-        let object = this.getObjectUnderCursor();
-        if (object && this._selection.getSelectedObjects().includes(object)) {
-          if (isControlOrCmdPressed(inputManager)) {
-            object = this._duplicateSelectedObjects(object);
-            if (!object) {
-              return;
-            }
+        if (!this._objectToDuplicateOnDrag) {
+          const objectUnderCursor = this.getObjectUnderCursor();
+          if (
+            objectUnderCursor &&
+            this._selection.getSelectedObjects().includes(objectUnderCursor)
+          ) {
+            this._objectToDuplicateOnDrag = objectUnderCursor;
+          }
+        }
+        // Only duplicate once the cursor has moved, to avoid silently
+        // stacking a copy on the original with a Ctrl+click.
+        if (
+          this._objectToDuplicateOnDrag &&
+          !this._hasCursorStayedStillWhilePressed({ toleranceRadius: 3 })
+        ) {
+          const object = this._duplicateSelectedObjects(
+            this._objectToDuplicateOnDrag
+          );
+          this._objectToDuplicateOnDrag = null;
+          if (!object) {
+            return;
           }
           this._draggedSelectedObject = object;
           this._draggedSelectedObjectInitialX = object.getX();
@@ -2512,13 +2540,7 @@ namespace gdjs {
         }
         let objectToEdit: gdjs.RuntimeObject | null = null;
         if (objectUnderCursor) {
-          const layer = this.getEditorLayer(objectUnderCursor.getLayer());
-          if (
-            layer &&
-            layer.isVisible() &&
-            !layer._initialLayerData.isLocked &&
-            !this.isInstanceSealed(objectUnderCursor)
-          ) {
+          if (this._isInstanceSelectable(objectUnderCursor)) {
             this._selection.toggle(objectUnderCursor);
           }
 
@@ -3014,6 +3036,8 @@ namespace gdjs {
                 // Three.js computes the scale as a ratio of the pointer distances
                 // to the gizmo, which barely changes the size of small objects.
                 // Use the pointer movement in the object local axes instead.
+                // The pointer positions are in the Three.js world, so they are
+                // converted back to scene units with the world scale.
                 const { pointStart, pointEnd } = threeTransformControls as any;
                 // The pointer positions are in the Three.js world, which is
                 // scaled down by the world scale: convert them to scene units.
@@ -3474,6 +3498,15 @@ namespace gdjs {
       return !!instanceData && !!instanceData.sealed;
     }
 
+    /**
+     * Instances hidden at start stay visible in the editor, but extensions
+     * can use this to disable what can't be shown as "hidden" (like lights).
+     */
+    isInstanceHiddenAtStart(object: gdjs.RuntimeObject): boolean {
+      const instanceData = this._getInstanceData(object.persistentUuid);
+      return !!instanceData && !!instanceData.hidden;
+    }
+
     private _addInstances(addedInstances: Array<InstanceData>) {
       for (const addedInstance of addedInstances) {
         this._editedInstanceDataList.push(addedInstance);
@@ -3566,7 +3599,11 @@ namespace gdjs {
       const debuggerClient = this._runtimeGame._debuggerClient;
       if (!debuggerClient) return;
 
-      debuggerClient.sendOpenContextMenu(cursorX, cursorY);
+      debuggerClient.sendOpenContextMenu(
+        cursorX,
+        cursorY,
+        this._getCursorIn3D()
+      );
     }
 
     private _handleShortcuts() {
@@ -3628,7 +3665,7 @@ namespace gdjs {
     private _sendPaste() {
       const debuggerClient = this._runtimeGame._debuggerClient;
       if (!debuggerClient) return;
-      debuggerClient.sendPaste();
+      debuggerClient.sendPaste(this._getCursorIn3D());
     }
 
     private _sendCut() {
@@ -3794,9 +3831,9 @@ namespace gdjs {
               0
             );
 
-            const closestIntersect = this._getClosestIntersectionUnderCursor([
-              this._draggedNewObject,
-            ]);
+            const closestIntersect = this._getClosestIntersectionUnderCursor({
+              excludedObjects: [this._draggedNewObject],
+            });
             if (closestIntersect && !is3D(this._draggedNewObject)) {
               // Avoid to create a 2D object hidden under a 3D one.
               this.cancelDragNewInstance();
@@ -3996,6 +4033,7 @@ namespace gdjs {
               );
             }
             runtimeObject.extraInitializationFromInitialInstance(instance);
+            gdjs.RuntimeObject.applyInGameEditorMinimumOpacity(runtimeObject);
           }
         });
       this._updateInstances(instances);
@@ -4028,9 +4066,32 @@ namespace gdjs {
       }
     }
 
+    private _isInstanceSelectable(object: gdjs.RuntimeObject): boolean {
+      const layer = this.getEditorLayer(object.getLayer());
+      return (
+        !!layer &&
+        layer.isVisible() &&
+        !layer._initialLayerData.isLocked &&
+        !this.isInstanceSealed(object)
+      );
+    }
+
+    private _isThreeObjectVisible(threeObject: THREE.Object3D): boolean {
+      let currentThreeObject: THREE.Object3D | null = threeObject;
+      while (currentThreeObject) {
+        if (!currentThreeObject.visible) return false;
+        currentThreeObject = currentThreeObject.parent;
+      }
+      return true;
+    }
+
     private _getClosestIntersectionUnderCursor(
-      excludedObjects?: Array<gdjs.RuntimeObject>
+      options: {
+        excludedObjects?: Array<gdjs.RuntimeObject>;
+        ignoreUnselectableInstances?: boolean;
+      } = {}
     ): THREE.Intersection | null {
+      const { excludedObjects, ignoreUnselectableInstances } = options;
       const runtimeGame = this._runtimeGame;
       const firstIntersectsByLayer: {
         [layerName: string]: null | {
@@ -4090,7 +4151,15 @@ namespace gdjs {
           true
         );
 
-        const firstIntersect = intersects[0];
+        // Three.js raycasting ignores visibility, so hidden objects are skipped
+        // here. Unselectable instances are skipped too when picking an object,
+        // so that objects behind them can be selected.
+        const firstIntersect = intersects.find((intersect) => {
+          if (!this._isThreeObjectVisible(intersect.object)) return false;
+          if (!ignoreUnselectableInstances) return true;
+          const runtimeObject = this._getObject3D(intersect.object);
+          return !runtimeObject || this._isInstanceSelectable(runtimeObject);
+        });
         if (!firstIntersect) return;
 
         const worldScale = currentScene.getRenderer3DWorldScale();
@@ -4140,8 +4209,9 @@ namespace gdjs {
     private _getCursorIn3D(
       excludedObjects?: Array<gdjs.RuntimeObject>
     ): Point3D | null {
-      const closestIntersect =
-        this._getClosestIntersectionUnderCursor(excludedObjects);
+      const closestIntersect = this._getClosestIntersectionUnderCursor({
+        excludedObjects,
+      });
       if (closestIntersect) {
         return [
           closestIntersect.point.x,
@@ -4165,7 +4235,9 @@ namespace gdjs {
     }
 
     getObjectUnderCursor(): gdjs.RuntimeObject | null {
-      const closestIntersect = this._getClosestIntersectionUnderCursor();
+      const closestIntersect = this._getClosestIntersectionUnderCursor({
+        ignoreUnselectableInstances: true,
+      });
       if (!closestIntersect) {
         const editedInstanceContainer = this.getEditedInstanceContainer();
         if (!editedInstanceContainer) {
@@ -4432,7 +4504,13 @@ namespace gdjs {
       if (this._currentScene) {
         this._currentScene._updateObjectsForInGameEditor();
         for (let i = 0; i < gdjs.callbacksInGameEditorPostStep.length; ++i) {
-          gdjs.callbacksInGameEditorPostStep[i](this);
+          try {
+            gdjs.callbacksInGameEditorPostStep[i](this);
+          } catch (error) {
+            this._runtimeGame.reportInGameEditorExtensionError(error, {
+              phase: 'editorCallback',
+            });
+          }
         }
         this._currentScene.render();
       }
@@ -4758,9 +4836,14 @@ namespace gdjs {
     private _items: Array<InGameEditorToolbarItem> = [];
     private _itemsLayout = '';
     private _onInteraction: () => void;
+    private _onItemError: (error: unknown) => void;
 
-    constructor(onInteraction: () => void) {
+    constructor(
+      onInteraction: () => void,
+      onItemError: (error: unknown) => void
+    ) {
       this._onInteraction = onInteraction;
+      this._onItemError = onItemError;
     }
 
     render(
@@ -4845,7 +4928,11 @@ namespace gdjs {
           this._onInteraction();
           const currentItem = this._items[index];
           if (currentItem.type === 'slider') {
-            currentItem.onChange(Number(slider.value));
+            try {
+              currentItem.onChange(Number(slider.value));
+            } catch (error) {
+              this._onItemError(error);
+            }
           }
         });
         // A focused element would receive the keyboard shortcuts of the editor.
@@ -4863,7 +4950,13 @@ namespace gdjs {
           onClick={() => {
             this._onInteraction();
             const currentItem = this._items[index];
-            if (currentItem.type === 'button') currentItem.onClick();
+            if (currentItem.type === 'button') {
+              try {
+                currentItem.onClick();
+              } catch (error) {
+                this._onItemError(error);
+              }
+            }
           }}
         >
           <span />

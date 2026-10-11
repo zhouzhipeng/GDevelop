@@ -6,12 +6,19 @@
 #include "GDCore/Project/EventsBasedObject.h"
 #include "GDCore/Project/Layout.h"
 #include "GDCore/Project/Object.h"
+#include "GDCore/Project/NamedEasingsContainer.h"
 #include "GDCore/Project/ObjectsContainer.h"
 #include "GDCore/Project/Project.h"
 #include "GDCore/Events/Event.h"
 #include "GDCore/Extensions/PlatformExtension.h"
 
 namespace gd {
+
+const gd::NamedEasingsContainer &
+ProjectScopedContainers::GetNamedEasings() const {
+  static const gd::NamedEasingsContainer emptyNamedEasings;
+  return namedEasings ? *namedEasings : emptyNamedEasings;
+}
 
 ProjectScopedContainers
 ProjectScopedContainers::MakeNewProjectScopedContainersForProjectAndLayout(
@@ -28,6 +35,7 @@ ProjectScopedContainers::MakeNewProjectScopedContainersForProjectAndLayout(
 
   projectScopedContainers.project = &project;
   projectScopedContainers.scopeSceneName = layout.GetName();
+  projectScopedContainers.namedEasings = &project.GetNamedEasings();
 
   return projectScopedContainers;
 }
@@ -45,6 +53,8 @@ ProjectScopedContainers::MakeNewProjectScopedContainersForProject(
           project));
 
   projectScopedContainers.project = &project;
+  projectScopedContainers.namedEasings = &project.GetNamedEasings();
+
   return projectScopedContainers;
 }
 
@@ -63,6 +73,11 @@ ProjectScopedContainers::MakeNewProjectScopedContainersForEventsFunctionsExtensi
           project));
 
   projectScopedContainers.project = &project;
+  projectScopedContainers.namedEasings =
+      &eventsFunctionsExtension.GetNamedEasings();
+  projectScopedContainers.scopeExtensionName =
+      eventsFunctionsExtension.GetName();
+
   return projectScopedContainers;
 };
 
@@ -98,6 +113,8 @@ ProjectScopedContainers::MakeNewProjectScopedContainersForFreeEventsFunction(
   projectScopedContainers.AddParameters(eventsFunction.GetParametersForEvents(
       eventsFunctionsExtension.GetEventsFunctions()));
 
+  projectScopedContainers.namedEasings =
+      &eventsFunctionsExtension.GetNamedEasings();
   projectScopedContainers.scopeExtensionName = eventsFunctionsExtension.GetName();
   projectScopedContainers.scopeFunctionName = eventsFunction.GetName();
 
@@ -145,6 +162,8 @@ ProjectScopedContainers::MakeNewProjectScopedContainersForBehaviorEventsFunction
   projectScopedContainers.AddParameters(eventsFunction.GetParametersForEvents(
       eventsBasedBehavior.GetEventsFunctions()));
 
+  projectScopedContainers.namedEasings =
+      &eventsFunctionsExtension.GetNamedEasings();
   projectScopedContainers.scopeExtensionName = eventsFunctionsExtension.GetName();
   projectScopedContainers.scopeFunctionName = eventsFunction.GetName();
   projectScopedContainers.scopeBehaviorName = eventsBasedBehavior.GetName();
@@ -191,6 +210,8 @@ ProjectScopedContainers::MakeNewProjectScopedContainersForObjectEventsFunction(
   projectScopedContainers.AddParameters(eventsFunction.GetParametersForEvents(
       eventsBasedObject.GetEventsFunctions()));
 
+  projectScopedContainers.namedEasings =
+      &eventsFunctionsExtension.GetNamedEasings();
   projectScopedContainers.scopeExtensionName = eventsFunctionsExtension.GetName();
   projectScopedContainers.scopeFunctionName = eventsFunction.GetName();
   projectScopedContainers.scopeObjectName = eventsBasedObject.GetName();
@@ -240,6 +261,11 @@ ProjectScopedContainers::MakeNewProjectScopedContainersForEventsBasedObject(
   projectScopedContainers.project = &project;
   projectScopedContainers.AddPropertiesContainer(
       eventsBasedObject.GetPropertyDescriptors());
+
+  projectScopedContainers.namedEasings =
+      &eventsFunctionsExtension.GetNamedEasings();
+  projectScopedContainers.scopeExtensionName =
+      eventsFunctionsExtension.GetName();
 
   return projectScopedContainers;
 }

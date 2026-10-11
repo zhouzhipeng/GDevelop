@@ -20,6 +20,7 @@ class EventsFunctionsExtension;
 class EventsFunction;
 class EventsBasedBehavior;
 class EventsBasedObject;
+class NamedEasingsContainer;
 } // namespace gd
 
 namespace gd {
@@ -47,6 +48,7 @@ class ProjectScopedContainers {
         variablesContainersList(variablesContainersList_),
         legacyGlobalVariables(legacyGlobalVariables_),
         legacySceneVariables(legacySceneVariables_),
+        namedEasings(nullptr),
         propertiesContainersList(propertiesContainersList_),
         resourcesContainersList(resourcesContainersList_),
         project(nullptr){};
@@ -256,6 +258,12 @@ class ProjectScopedContainers {
   const gd::Project &GetProject() const { return *project; }
 
   /**
+   * \brief Named easings in this scope (project or the current extension).
+   * Empty when not built by a `MakeNew...` factory.
+   */
+  const gd::NamedEasingsContainer &GetNamedEasings() const;
+
+  /**
    * \brief Return the name of the scene (layout) in scope, or an empty string
    * if the scope is not a scene.
    */
@@ -395,13 +403,14 @@ class ProjectScopedContainers {
    * temporary. */
   ProjectScopedContainers()
       : legacyGlobalVariables(nullptr), legacySceneVariables(nullptr),
-        project(nullptr){};
+        project(nullptr), namedEasings(nullptr) {};
 
 private:
   gd::ObjectsContainersList objectsContainersList;
   gd::VariablesContainersList variablesContainersList;
   const gd::VariablesContainer *legacyGlobalVariables;
   const gd::VariablesContainer *legacySceneVariables;
+  const gd::NamedEasingsContainer *namedEasings;
   gd::PropertiesContainersList propertiesContainersList;
   std::vector<const ParameterMetadataContainer *> parametersVectorsList;
   gd::ResourcesContainersList resourcesContainersList;

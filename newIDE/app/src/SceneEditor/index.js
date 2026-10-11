@@ -506,6 +506,7 @@ const getMoveInstancesToLayerOperationLabel = (
 type CopyCutPasteOptions = {|
   useLastCursorPosition?: boolean,
   pasteInTheForeground?: boolean,
+  embeddedGameCursorScenePosition?: ?[number, number, number],
 |};
 
 export type SceneEditorSelectionSnapshot = {|
@@ -562,6 +563,7 @@ export default class SceneEditor extends React.Component<Props, State> {
   editorViewPosition2D: EditorViewPosition2D = { viewX: null, viewY: null };
   _reloadResourcesCounter: number = 0;
   _ignoredResourceChangeIdentifiers: { [string]: number } = {};
+  _lastEmbeddedGameContextMenuScenePosition: ?[number, number, number] = null;
 
   constructor(props: Props) {
     super(props);
@@ -677,6 +679,8 @@ export default class SceneEditor extends React.Component<Props, State> {
             } else if (parsedMessage.command === 'setCameraState') {
               setCameraState(parsedMessage.editorId, parsedMessage.payload);
             } else if (parsedMessage.command === 'openContextMenu') {
+              this._lastEmbeddedGameContextMenuScenePosition =
+                parsedMessage.payload.cursorScenePosition || null;
               this._onContextMenu(
                 parsedMessage.payload.cursorX,
                 parsedMessage.payload.cursorY
@@ -692,7 +696,10 @@ export default class SceneEditor extends React.Component<Props, State> {
             } else if (parsedMessage.command === 'copy') {
               this.copySelection();
             } else if (parsedMessage.command === 'paste') {
-              this.paste();
+              this.paste({
+                embeddedGameCursorScenePosition:
+                  parsedMessage.payload.cursorScenePosition || null,
+              });
             } else if (parsedMessage.command === 'cut') {
               this.cutSelection();
             }
@@ -3187,7 +3194,7 @@ export default class SceneEditor extends React.Component<Props, State> {
           previewDebuggerServer.sendMessage(debuggerId, {
             command: 'setRenderer3DWorldScale',
             payload: {
-              renderer3DWorldScale: layout.getRenderer3DWorldScale(),
+              renderer3DWorldScale: [layout.getRenderer3DWorldScale()],
             },
           });
         });
@@ -4132,16 +4139,31 @@ export default class SceneEditor extends React.Component<Props, State> {
 
     let x = 0;
     let y = 0;
-    if (this.editorDisplay) {
+    let z = 0;
+    const selectedInstances = this.instancesSelection.getSelectedInstances();
+    if (this.props.gameEditorMode === 'embedded-game') {
+      // The 2D instances editor is not mounted: use the instance positions.
+      if (selectedInstances.length > 0) {
+        const xs = selectedInstances.map(instance => instance.getX());
+        const ys = selectedInstances.map(instance => instance.getY());
+        x = (Math.min(...xs) + Math.max(...xs)) / 2;
+        y = (Math.min(...ys) + Math.max(...ys)) / 2;
+        z = Math.min(...selectedInstances.map(instance => instance.getZ()));
+      }
+    } else if (this.editorDisplay) {
       const selectionAABB = this.editorDisplay.instancesHandlers.getSelectionAABB();
       x = selectionAABB.centerX();
       y = selectionAABB.centerY();
+      if (selectedInstances.length > 0) {
+        z = Math.min(...selectedInstances.map(instance => instance.getZ()));
+      }
     }
 
     if (this.editorDisplay) {
       Clipboard.set(INSTANCES_CLIPBOARD_KIND, {
         x,
         y,
+        z,
         pasteInTheForeground: !!pasteInTheForeground,
         instances: serializedSelection,
       });
@@ -4202,9 +4224,11 @@ export default class SceneEditor extends React.Component<Props, State> {
   _pasteInstancesFromClipboard = ({
     clipboardContent,
     useLastCursorPosition,
+    embeddedGameCursorScenePosition,
   }: {|
     clipboardContent: any,
     useLastCursorPosition?: boolean,
+    embeddedGameCursorScenePosition?: [number, number, number],
   |}): boolean => {
     const instancesContent = SafeExtractor.extractArrayProperty(
       clipboardContent,
@@ -4212,6 +4236,7 @@ export default class SceneEditor extends React.Component<Props, State> {
     );
     const x = SafeExtractor.extractNumberProperty(clipboardContent, 'x');
     const y = SafeExtractor.extractNumberProperty(clipboardContent, 'y');
+    const z = SafeExtractor.extractNumberProperty(clipboardContent, 'z');
     const pasteInTheForeground =
       SafeExtractor.extractBooleanProperty(
         clipboardContent,
@@ -4230,7 +4255,31 @@ export default class SceneEditor extends React.Component<Props, State> {
           .get()
           .getObjectsContainersList()
           .hasObjectNamed(objectName),
+      doesLayerExistInContext: layerName =>
+        this.props.layersContainer.hasLayerNamed(layerName),
     });
+
+    if (this.props.gameEditorMode === 'embedded-game') {
+      const cursorScenePosition =
+        embeddedGameCursorScenePosition !== undefined
+          ? embeddedGameCursorScenePosition
+          : this._lastEmbeddedGameContextMenuScenePosition;
+      const positionX = cursorScenePosition
+        ? Math.round(cursorScenePosition[0])
+        : x;
+      const positionY = cursorScenePosition
+        ? Math.round(cursorScenePosition[1])
+        : y;
+      for (const instance of newInstances) {
+        instance.setX(instance.getX() + positionX);
+        instance.setY(instance.getY() + positionY);
+        if (cursorScenePosition && z !== null) {
+          if (this.isInstanceOf3DObject(instance)) {
+            instance.setZ(instance.getZ() - z + cursorScenePosition[2]);
+          }
+        }
+      }
+    }
 
     this._onInstancesAddedAndSendToEditor3D(newInstances);
     this.instancesSelection.clearSelection();
@@ -4241,7 +4290,7 @@ export default class SceneEditor extends React.Component<Props, State> {
     });
 
     const { editorDisplay } = this;
-    if (editorDisplay) {
+    if (editorDisplay && this.props.gameEditorMode !== 'embedded-game') {
       const position = this._getScenePastePosition(useLastCursorPosition);
       for (const instance of newInstances) {
         instance.setX(instance.getX() + position[0]);
@@ -4306,12 +4355,16 @@ export default class SceneEditor extends React.Component<Props, State> {
     }
   };
 
-  paste = ({ useLastCursorPosition }: CopyCutPasteOptions = {}) => {
+  paste = ({
+    useLastCursorPosition,
+    embeddedGameCursorScenePosition,
+  }: CopyCutPasteOptions = {}) => {
     const clipboardContent = Clipboard.get(INSTANCES_CLIPBOARD_KIND);
     if (
       this._pasteInstancesFromClipboard({
         clipboardContent,
         useLastCursorPosition,
+        embeddedGameCursorScenePosition,
       })
     ) {
       return;
@@ -5099,11 +5152,15 @@ export default class SceneEditor extends React.Component<Props, State> {
                           editedLayer: null,
                         });
                       }}
-                      onCancel={() =>
+                      onCancel={() => {
+                        // The layer was restored to its state before the dialog
+                        // was opened: refresh the preview, and the properties
+                        // panel if the layer is selected in it.
+                        this._onLayersModified(false);
                         this.setState({
                           editedLayer: null,
-                        })
-                      }
+                        });
+                      }}
                       hotReloadPreviewButtonProps={
                         this.props.hotReloadPreviewButtonProps
                       }

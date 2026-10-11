@@ -16,8 +16,7 @@ EventsBasedBehavior::EventsBasedBehavior()
           "MyBehavior", gd::EventsFunctionsContainer::FunctionOwner::Behavior),
       sharedPropertyDescriptors(
           gd::EventsFunctionsContainer::FunctionOwner::Behavior),
-      variables(gd::VariablesContainer::SourceType::Behavior),
-      quickCustomizationVisibility(QuickCustomization::Visibility::Default) {}
+      variables(gd::VariablesContainer::SourceType::Behavior) {}
 
 void EventsBasedBehavior::SerializeTo(SerializerElement& element) const {
   AbstractEventsBasedEntity::SerializeTo(element);
@@ -30,13 +29,6 @@ void EventsBasedBehavior::SerializeTo(SerializerElement& element) const {
   }
   if (variables.Count() != 0) {
     variables.SerializeTo(element.AddChild("variables"));
-  }
-  if (quickCustomizationVisibility != QuickCustomization::Visibility::Default) {
-    element.SetStringAttribute(
-        "quickCustomizationVisibility",
-        quickCustomizationVisibility == QuickCustomization::Visibility::Visible
-            ? "visible"
-            : "hidden");
   }
 }
 
@@ -56,14 +48,6 @@ void EventsBasedBehavior::UnserializeFrom(gd::Project& project,
   variables.Clear();
   if (element.HasChild("variables")) {
     variables.UnserializeFrom(element.GetChild("variables"));
-  }
-  if (element.HasChild("quickCustomizationVisibility")) {
-    quickCustomizationVisibility =
-        element.GetStringAttribute("quickCustomizationVisibility") == "visible"
-            ? QuickCustomization::Visibility::Visible
-            : QuickCustomization::Visibility::Hidden;
-  } else {
-    quickCustomizationVisibility = QuickCustomization::Visibility::Default;
   }
 }
 

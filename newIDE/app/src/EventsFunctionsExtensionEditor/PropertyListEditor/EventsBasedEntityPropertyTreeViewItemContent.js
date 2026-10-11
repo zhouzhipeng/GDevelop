@@ -20,7 +20,6 @@ import {
 import Tooltip from '@material-ui/core/Tooltip';
 import { type HTMLDataset } from '../../Utils/HTMLDataset';
 import VisibilityOffIcon from '../../UI/CustomSvgIcons/VisibilityOff';
-import { renderQuickCustomizationMenuItems } from '../../QuickCustomization/QuickCustomizationMenuItems';
 import { ProjectScopedContainersAccessor } from '../../InstructionOrExpression/EventsScope';
 import { buildMoveToMenu } from './EventsBasedEntityPropertyFolderTreeViewItemContent';
 
@@ -361,15 +360,43 @@ export class EventsBasedEntityPropertyTreeViewItemContent
         label: i18n._(t`Duplicate`),
         click: () => this._duplicate(),
       },
-      ...renderQuickCustomizationMenuItems({
-        i18n,
-        visibility: property.getQuickCustomizationVisibility(),
-        onChangeVisibility: visibility => {
-          property.setQuickCustomizationVisibility(visibility);
-          this.props.forceUpdate();
-          this.props.onPropertiesUpdated();
+      {
+        type: 'separator',
+      },
+      {
+        label: i18n._(t`Generate expression and action`),
+        click: () => {
+          const {
+            project,
+            extension,
+            eventsBasedBehavior,
+            eventsBasedObject,
+            isSharedProperties,
+            onEventsFunctionsAdded,
+          } = this.props;
+          if (eventsBasedBehavior) {
+            gd.PropertyFunctionGenerator.generateBehaviorGetterAndSetter(
+              project,
+              extension,
+              eventsBasedBehavior,
+              property,
+              isSharedProperties
+            );
+          } else if (eventsBasedObject) {
+            gd.PropertyFunctionGenerator.generateObjectGetterAndSetter(
+              project,
+              extension,
+              eventsBasedObject,
+              property
+            );
+          }
+          onEventsFunctionsAdded();
         },
-      }),
+        enabled: gd.PropertyFunctionGenerator.canGenerateGetterAndSetter(
+          this.props.eventsBasedEntity,
+          property
+        ),
+      },
     ];
   }
 

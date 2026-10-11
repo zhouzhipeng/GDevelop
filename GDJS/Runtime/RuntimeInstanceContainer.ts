@@ -402,6 +402,9 @@ namespace gdjs {
             .getVariables()
             .initFrom(instanceData.initialVariables, true);
           newObject.extraInitializationFromInitialInstance(instanceData);
+          if (this.getGame().isInGameEdition()) {
+            gdjs.RuntimeObject.applyInGameEditorMinimumOpacity(newObject);
+          }
         }
       }
     }

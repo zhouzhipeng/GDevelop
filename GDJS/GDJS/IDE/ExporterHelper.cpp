@@ -550,10 +550,6 @@ void ExporterHelper::SerializeRuntimeGameOptions(
     runtimeGameOptions.AddChild("projectTemplateSlug")
         .SetStringValue(options.projectTemplateSlug);
   }
-  if (!options.sourceGameId.empty()) {
-    runtimeGameOptions.AddChild("sourceGameId")
-        .SetStringValue(options.sourceGameId);
-  }
 
   if (!options.captureOptions.IsEmpty()) {
     auto &captureOptionsElement = runtimeGameOptions.AddChild("captureOptions");
@@ -1305,6 +1301,7 @@ void ExporterHelper::AddLibsInclude(bool pixiRenderers,
   InsertUnique(includesFiles, "layer.js");
   InsertUnique(includesFiles, "RuntimeCustomObjectLayer.js");
   InsertUnique(includesFiles, "timer.js");
+  InsertUnique(includesFiles, "named-easings-manager.js");
   InsertUnique(includesFiles, "runtimegame.js");
   InsertUnique(includesFiles, "variable.js");
   InsertUnique(includesFiles, "variablescontainer.js");

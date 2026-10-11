@@ -317,10 +317,6 @@ void Project::EnsureObjectInheritedBehaviors(gd::Object& object) const {
       behavior.UnserializeFrom(inheritedBehavior.GetContent());
       behavior.SetFolded(inheritedBehavior.IsFolded());
       behavior.SetMuted(inheritedBehavior.IsMuted());
-      behavior.SetQuickCustomizationVisibility(
-          inheritedBehavior.GetQuickCustomizationVisibility());
-      behavior.GetPropertiesQuickCustomizationVisibilities() =
-          inheritedBehavior.GetPropertiesQuickCustomizationVisibilities();
       behavior.SetDefaultBehavior(false);
       behavior.SetInheritedFromObjectType(true);
 
@@ -1223,6 +1219,11 @@ void Project::UnserializeFrom(const SerializerElement& element) {
     tests.UnserializeTestsFrom(element.GetChild("tests"));
   }
 
+  namedEasings.ClearNamedEasings();
+  if (element.HasChild("namedEasings")) {
+    namedEasings.UnserializeNamedEasingsFrom(element.GetChild("namedEasings"));
+  }
+
   externalLayouts.clear();
   const SerializerElement& externalLayoutsElement =
       element.GetChild("externalLayouts", 0, "ExternalLayouts");
@@ -1480,6 +1481,10 @@ void Project::SerializeTo(SerializerElement& element) const {
     tests.SerializeTestsTo(element.AddChild("tests"));
   }
 
+  if (namedEasings.GetNamedEasingsCount() > 0) {
+    namedEasings.SerializeNamedEasingsTo(element.AddChild("namedEasings"));
+  }
+
   SerializerElement& eventsFunctionsExtensionsElement =
       element.AddChild("eventsFunctionsExtensions");
   eventsFunctionsExtensionsElement.ConsiderAsArrayOf(
@@ -1604,6 +1609,8 @@ void Project::Init(const gd::Project& game) {
   externalEvents = gd::Clone(game.externalEvents);
 
   tests = game.tests;
+
+  namedEasings = game.namedEasings;
 
   externalLayouts = gd::Clone(game.externalLayouts);
   eventsFunctionsExtensions = gd::Clone(game.eventsFunctionsExtensions);

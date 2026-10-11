@@ -43,3 +43,4 @@ __pycache__/
 *.pyc
 build/
 GDJS Runtime Documentation/
+/GDJS/tests/.benchmark-runtimes

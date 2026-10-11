@@ -7,3 +7,9 @@ gdjs.Logger.getDefaultConsoleLoggerOutput().discardGroup('RuntimeScene (setup wa
 gdjs.Logger.getDefaultConsoleLoggerOutput().discardGroup('Player Authentication');
 
 gdjs.multiplayer.disableMultiplayerForTesting = true;
+
+// Scene cleanup can use Physics3D even when only unrelated tests are selected.
+before(function(done) {
+  this.timeout(20000);
+  gdjs.getAllAsynchronouslyLoadingLibraryPromise().then(() => done(), done);
+});

@@ -265,7 +265,7 @@ describe('3D model bone attachments', function () {
     );
     const behavior = getBoneAttachmentBehavior(attachment);
 
-    expect(attachment.hasBone).to.be(undefined);
+    expect(/** @type {any} */ (attachment).hasBone).to.be(undefined);
     behavior.attachToModelBone(target, 'Hand');
 
     expect(behavior.isBoneAttachmentResolved()).to.be(true);

@@ -20,7 +20,7 @@ const gameplayTestContextDeclaration = `
 declare const harness: gdjs.gameplayTests.GameplayTestHarness;
 `;
 
-export const setupAutocompletions = (monaco: any) => {
+export const setupAutocompletions = (monaco: any): Promise<void> => {
   // Use the same reviewed public API declaration as save-time validation.
   // Loading the complete runtime source tree exposed implementation-only
   // members and made editor suggestions disagree with the AI authoring API.
@@ -36,4 +36,5 @@ export const setupAutocompletions = (monaco: any) => {
     gameplayTestContextDeclaration,
     'gdevelop-gameplay-test-context.d.ts'
   );
+  return Promise.resolve();
 };

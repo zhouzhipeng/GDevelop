@@ -42,7 +42,6 @@ module.exports = {
         .setValue(content.getChild('object3D').getStringValue())
         .setType('Behavior')
         .setLabel(_('3D capability'))
-        .setQuickCustomizationVisibility(gd.QuickCustomization.Hidden)
         .addExtraInfo('Scene3D::Base3DBehavior');
       return properties;
     };

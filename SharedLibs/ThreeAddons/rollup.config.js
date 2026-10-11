@@ -193,6 +193,7 @@ const verifyTSLRuntimeContract = () => ({
     }
   },
 });
+import json from '@rollup/plugin-json';
 
 export default [
   {
@@ -221,6 +222,7 @@ export default [
         extensions: [".js"],
       }),
       terser(),
+      json(),
     ],
   },
   {
@@ -284,7 +286,8 @@ export default [
       resolve({
         extensions: [".js"],
       }),
-      terser(),
+			terser(),
+      json(),
     ],
   },
 ];

@@ -40,17 +40,21 @@ export type SceneEventsOutsideEditorChanges = {|
   // were changed.
   eventsFunction?: ?gdEventsFunction,
   extensionName?: ?string,
-  externalEvents?: gdExternalEvents,
+  // Set instead of `scene` when the events of external events were changed.
+  externalEvents?: ?gdExternalEvents,
   lifecycleFunctionName?: string,
   newOrChangedAiGeneratedEventIds: Set<string>,
 |};
 
 export const getSceneEventsOutsideEditorChangesKey = (
   changes: SceneEventsOutsideEditorChanges
-): string =>
-  changes.eventsFunction
-    ? `events-function:${changes.eventsFunction.ptr}`
-    : `scene:${changes.scene ? changes.scene.ptr : 'none'}`;
+): string => {
+  if (changes.eventsFunction)
+    return `events-function:${changes.eventsFunction.ptr}`;
+  if (changes.externalEvents)
+    return `external-events:${changes.externalEvents.ptr}`;
+  return `scene:${changes.scene ? changes.scene.ptr : 'none'}`;
+};
 
 export type InstancesOutsideEditorChanges = {|
   ...OutsideEditorChangesTarget,

@@ -226,6 +226,7 @@ export class ExternalEventsEditorContainer extends React.Component<
 
   onSceneEventsModifiedOutsideEditor(changes: SceneEventsOutsideEditorChanges) {
     if (
+      changes.externalEvents &&
       this.getExternalEvents() === changes.externalEvents &&
       this.eventsEditor
     ) {

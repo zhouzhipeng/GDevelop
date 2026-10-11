@@ -19,7 +19,6 @@ import {
   pasteObjectFolderOrObjectsAndNotify,
 } from './ObjectFolderOrObjectsClipboard';
 import { duplicateObjectFolderOrObjects } from './ObjectFolderOrObjectsDuplicate';
-import { renderQuickCustomizationMenuItems } from '../QuickCustomization/QuickCustomizationMenuItems';
 import { type MessageDescriptor } from '../Utils/i18n/MessageDescriptor.flow';
 import type { ObjectWithContext } from '../ObjectsList/EnumerateObjects';
 import { type HTMLDataset } from '../Utils/HTMLDataset';
@@ -221,7 +220,6 @@ export class ObjectFolderTreeViewItemContent implements TreeViewItemContent {
       addFolder,
       onAddNewObject,
       onMovedObjectFolderOrObjectToAnotherFolderInSameContainer,
-      forceUpdate,
       isListLocked,
     } = this.props;
 
@@ -317,14 +315,6 @@ export class ObjectFolderTreeViewItemContent implements TreeViewItemContent {
               },
             ],
           },
-      ...renderQuickCustomizationMenuItems({
-        i18n,
-        visibility: this.objectFolder.getQuickCustomizationVisibility(),
-        onChangeVisibility: visibility => {
-          this.objectFolder.setQuickCustomizationVisibility(visibility);
-          forceUpdate();
-        },
-      }),
       { type: 'separator' },
       {
         label: i18n._(t`Add a new object`),

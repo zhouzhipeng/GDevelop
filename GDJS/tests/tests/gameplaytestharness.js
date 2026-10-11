@@ -1040,6 +1040,62 @@ describe('gdjs.gameplayTests', () => {
     expect(result.status).to.be('passed');
   });
 
+  it('benchmarks frames and reports the measures in the result', async () => {
+    const runtimeGame = makeRuntimeGame();
+    const result = await runTestScript(
+      runtimeGame,
+      `
+      await harness.goToScene('Scene 1');
+      harness.spawn('MyObject', 10, 20);
+      const benchmark = await harness.benchmark('Test benchmark', {
+        warmupFrames: 2,
+        frames: 5,
+      });
+      harness.assert(benchmark.frameTimesMs.length === 5, '5 frames are measured');
+      harness.assert(
+        benchmark.medianFrameTimeMs >= 0,
+        'The median frame time is returned'
+      );
+      harness.assert(benchmark.objectsCount === 1, 'The objects are counted');
+      harness.assert(
+        benchmark.drawCallsPerFrame === null,
+        'No draw calls are counted without renderer'
+      );
+      `
+    );
+
+    expect(result.status).to.be('passed');
+    expect(result.framesExecuted).to.be(1 + 2 + 5);
+    expect(result.benchmarks.length).to.be(1);
+    expect(result.benchmarks[0].name).to.be('Test benchmark');
+    expect(result.benchmarks[0].stateChecksum).to.be.a('string');
+  });
+
+  it('seeds Math.random until the end of the test', async () => {
+    const originalMathRandom = Math.random;
+    const runTestScriptPickingRandomNumbers = () =>
+      runTestScript(
+        makeRuntimeGame(),
+        `
+        harness.setRandomSeed(42);
+        await harness.goToScene('Scene 1');
+        console.log('Random numbers: ' + [Math.random(), Math.random()]);
+        `
+      );
+    /** @param {gdjs.gameplayTests.GameplayTestResult} result */
+    const getRandomNumbersLog = (result) =>
+      result.consoleLogs.find((log) =>
+        log.message.startsWith('Random numbers: ')
+      );
+    const result1 = await runTestScriptPickingRandomNumbers();
+    const result2 = await runTestScriptPickingRandomNumbers();
+
+    expect(result1.status).to.be('passed');
+    expect(getRandomNumbersLog(result1)).to.be.ok();
+    expect(getRandomNumbersLog(result1)).to.eql(getRandomNumbersLog(result2));
+    expect(Math.random).to.be(originalMathRandom);
+  });
+
   it('reports an aim result object with the mouse responsiveness', async () => {
     const runtimeGame = makeRuntimeGame();
     const result = await runTestScript(
@@ -1576,6 +1632,7 @@ describe('gdjs.gameplayTests', () => {
     ) => ({
       name,
       objects,
+      behaviors: [],
       instances,
       objectsGroups: [],
       layers: [],
@@ -2778,7 +2835,7 @@ describe('gdjs.gameplayTests', () => {
 
         expect(getWarningsAbout(harness, 'EmptyShell').length).to.be(1);
         expect(getWarningsAbout(harness, 'EmptyShell')[0]).to.contain(
-          'renders nothing'
+          'has no child instances at the end of the test'
         );
         expect(getWarningsAbout(harness, 'EmptyShell3D').length).to.be(1);
         // A custom object with children is fine.
@@ -2803,6 +2860,50 @@ describe('gdjs.gameplayTests', () => {
 
         expect(getWarningsAbout(harness, 'EmptyShell3D').length).to.be(0);
       });
+
+      for (const is3D of [false, true]) {
+        it(`does not warn about a ${is3D ? '3D' : '2D'} renderer subclass drawing outside the custom object's children`, async () => {
+          const harness = makeStartedHarness(
+            makeRuntimeGameWithCustomObjects()
+          );
+          await harness.goToScene('Scene 1');
+          const objectName = is3D ? 'EmptyShell3D' : 'EmptyShell';
+          harness.spawn(objectName, 100, 200);
+          await harness.stepFrames(1);
+          const object = /** @type {any} */ (
+            harness.getRuntimeObject(objectName)
+          );
+          if (!object) throw new Error(`${objectName} was not spawned.`);
+
+          const BaseRenderer = is3D
+            ? gdjs.CustomRuntimeObject3DRenderer
+            : gdjs.CustomRuntimeObject2DRenderer;
+          class ExtensionRenderer extends BaseRenderer {}
+          object._renderer = new ExtensionRenderer(
+            object,
+            object.getChildrenContainer(),
+            object.getInstanceContainer()
+          );
+
+          // ParticleEmitter3D uses a subclass of the stock renderer, but
+          // its emitter is an empty Object3D: the meshes are drawn by a
+          // shared batch renderer on the layer, outside the emitter tree.
+          // The same arrangement is possible with a PixiJS renderer.
+          const layerRenderer = object
+            .getInstanceContainer()
+            .getLayer(object.getLayer())
+            .getRenderer();
+          if (is3D) {
+            object._renderer._threeGroup = new THREE.Object3D();
+            layerRenderer.add3DRendererObject(new THREE.Mesh());
+          } else {
+            layerRenderer.addRendererObject(new PIXI.Graphics(), 0);
+          }
+
+          expect(object._renderer instanceof BaseRenderer).to.be(true);
+          expect(getWarningsAbout(harness, objectName).length).to.be(0);
+        });
+      }
 
       it('does not warn about a custom object whose code draws in its renderer container', async () => {
         // The containers already hold the (empty) layers of the custom
