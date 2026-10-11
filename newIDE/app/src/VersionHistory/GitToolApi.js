@@ -3,6 +3,7 @@ import optionalRequire from '../Utils/OptionalRequire';
 
 const electron = optionalRequire('electron');
 const ipcRenderer = electron ? electron.ipcRenderer : null;
+const gitStatusRequestTimeoutMs = 30000;
 
 export type GitChangedFile = {|
   path: string,
@@ -46,6 +47,29 @@ export type GitStatus = {|
   error?: string,
 |};
 
+export const withGitStatusTimeout = (
+  request: Promise<GitStatus>,
+  timeoutMs: number = gitStatusRequestTimeoutMs
+): Promise<GitStatus> =>
+  new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(
+      () =>
+        reject(new Error('Git status did not respond. Please try refreshing.')),
+      timeoutMs
+    );
+
+    request.then(
+      status => {
+        clearTimeout(timeoutId);
+        resolve(status);
+      },
+      error => {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
+
 type GitToolStatusAction =
   | 'status'
   | 'init'
@@ -67,11 +91,12 @@ export const invokeGitTool = async (
     throw new Error('The Git tool is only available in the desktop app.');
   }
 
-  return renderer.invoke('git-tool-request', {
+  const request = renderer.invoke('git-tool-request', {
     projectFilePath,
     action,
     payload: payload || {},
   });
+  return action === 'status' ? withGitStatusTimeout(request) : request;
 };
 
 export const invokeGitToolDiff = async (

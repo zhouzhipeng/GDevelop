@@ -1158,7 +1158,23 @@ app.on('ready', function() {
   );
 
   ipcMain.handle('git-tool-request', async (event, request) => {
-    return handleGitToolRequest(request);
+    const action = request && request.action;
+    const startedAt = Date.now();
+    log.info(`Git tool request started: ${action || 'unknown'}`);
+    try {
+      const result = await handleGitToolRequest(request);
+      log.info(
+        `Git tool request completed: ${action || 'unknown'} (${Date.now() -
+          startedAt}ms)`
+      );
+      return result;
+    } catch (error) {
+      log.warn(
+        `Git tool request failed: ${action || 'unknown'} (${Date.now() -
+          startedAt}ms): ${error && error.message ? error.message : error}`
+      );
+      throw error;
+    }
   });
 
   // ServeFolder events:
