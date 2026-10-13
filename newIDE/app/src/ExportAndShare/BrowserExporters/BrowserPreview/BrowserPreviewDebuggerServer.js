@@ -26,6 +26,7 @@ const existingPreviewWindows: {
 } = {};
 
 let embbededGameFrameWindow: WindowProxy | null = null;
+let isEmbeddedGameFrameReady = false;
 let gameplayTestFrameWindow: WindowProxy | null = null;
 
 const getExistingDebuggerIds = (): Array<DebuggerId> => [
@@ -34,8 +35,12 @@ const getExistingDebuggerIds = (): Array<DebuggerId> => [
   ...getExistingPreviewDebuggerIds(),
 ];
 
+// A frame that has a location loaded but no game running in it yet (or a game that
+// failed to start) can't be hot-reloaded: messages sent to it are silently lost.
 const getExistingEmbeddedGameFrameDebuggerIds = (): Array<DebuggerId> =>
-  embbededGameFrameWindow ? ['embedded-game-frame'] : [];
+  embbededGameFrameWindow && isEmbeddedGameFrameReady
+    ? ['embedded-game-frame']
+    : [];
 
 const getExistingGameplayTestFrameDebuggerIds = (): Array<DebuggerId> =>
   gameplayTestFrameWindow ? ['gameplay-test-frame'] : [];
@@ -192,6 +197,13 @@ class BrowserPreviewDebuggerServer {
         : existingPreviewWindows[id];
     if (!theWindow) return;
 
+    if (id === 'embedded-game-frame' && message.command === 'hardReload') {
+      // The game is about to navigate away: it can't be considered as running - and
+      // so can't be hot-reloaded or have its files re-exported - until it announces
+      // itself again.
+      this.setEmbeddedGameFrameReady(false);
+    }
+
     try {
       theWindow.postMessage(message, previewOrigin);
     } catch (error) {
@@ -201,10 +213,13 @@ class BrowserPreviewDebuggerServer {
       );
     }
   }
-  sendMessageWithResponse(message: Object): Promise<Object> {
+  sendMessageWithResponse(
+    message: Object,
+    options?: {| timeoutMs?: number |}
+  ): Promise<Object> {
     const messageId = nextMessageWithResponseId;
     nextMessageWithResponseId++;
-    const timeout = 1000;
+    const timeout = (options && options.timeoutMs) || 1000;
     return new Promise<Object>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         responseCallbacks.delete(messageId);
@@ -297,6 +312,21 @@ class BrowserPreviewDebuggerServer {
     embbededGameFrameWindow = window;
     recentLogsByDebuggerId['embedded-game-frame'] = [];
   }
+  setEmbeddedGameFrameReady(isReady: boolean) {
+    if (isEmbeddedGameFrameReady === isReady) return;
+
+    isEmbeddedGameFrameReady = isReady;
+    if (isReady) {
+      callbacksList.forEach(({ onConnectionOpened }) =>
+        onConnectionOpened({
+          id: 'embedded-game-frame',
+          debuggerIds: getExistingDebuggerIds(),
+        })
+      );
+    } else {
+      notifyConnectionClosed('embedded-game-frame');
+    }
+  }
   registerGameplayTestFrame(window: WindowProxy) {
     if (window === gameplayTestFrameWindow) return;
 
@@ -341,6 +371,7 @@ class BrowserPreviewDebuggerServer {
       'Unregistered the embedded game frame window in the debugger server.'
     );
     embbededGameFrameWindow = null;
+    isEmbeddedGameFrameReady = false;
     notifyConnectionClosed('embedded-game-frame');
   }
   closeAllPreviewConnections() {
@@ -371,6 +402,7 @@ class BrowserPreviewDebuggerServer {
     this.closeAllPreviewConnections();
     if (embbededGameFrameWindow) {
       embbededGameFrameWindow = null;
+      isEmbeddedGameFrameReady = false;
       notifyConnectionClosed('embedded-game-frame');
     }
 

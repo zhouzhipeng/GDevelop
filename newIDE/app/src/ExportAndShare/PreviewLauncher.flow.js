@@ -168,7 +168,10 @@ export interface PreviewDebuggerServer {
   getConnectionInfo(id: DebuggerId): ?Object;
   getLastConnectionInfo(): ?Object;
   sendMessage(id: DebuggerId, message: Object): void;
-  sendMessageWithResponse(message: Object): Promise<Object>;
+  sendMessageWithResponse(
+    message: Object,
+    options?: {| timeoutMs?: number |}
+  ): Promise<Object>;
   sendMessageToDebuggerWithResponse(
     id: DebuggerId,
     message: Object,
@@ -176,6 +179,12 @@ export interface PreviewDebuggerServer {
   ): Promise<Object>;
   registerCallbacks(callbacks: PreviewDebuggerServerCallbacks): () => void;
   registerEmbeddedGameFrame(window: WindowProxy): void;
+  /**
+   * Tell whether a game is actually running in the embedded game frame (and so can be
+   * hot-reloaded). The frame having a location loaded is not enough: the game inside it
+   * must have announced itself.
+   */
+  setEmbeddedGameFrameReady(isReady: boolean): void;
   unregisterEmbeddedGameFrame(window: WindowProxy): void;
   closeAllPreviewConnections(): void;
   registerGameplayTestFrame(window: WindowProxy): void;

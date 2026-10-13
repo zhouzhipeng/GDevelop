@@ -128,7 +128,7 @@ namespace gdjs {
       const canvasResolution = getCanvasResolution();
       this._canvasResolution = canvasResolution;
 
-      if (typeof THREE !== 'undefined') {
+      if (typeof THREE !== 'undefined' && gameCanvas.getContext('webgl2')) {
         this._threeRenderer = new THREE.WebGLRenderer({
           canvas: gameCanvas,
           antialias:

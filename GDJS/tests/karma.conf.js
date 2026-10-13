@@ -108,6 +108,23 @@ module.exports = function (config) {
         timeout: 10000, // Give a bit more time for CIs (the default 2s can be too low sometimes, as a real browser is involved).
       },
     },
+    // A cross-origin isolated page has a precise timer (5µs instead of
+    // 100µs), needed to measure frames and batches lasting about 1ms.
+    customHeaders:
+      config.enableBenchmarks || config.benchmarksOnly
+        ? [
+            {
+              match: '.*',
+              name: 'Cross-Origin-Opener-Policy',
+              value: 'same-origin',
+            },
+            {
+              match: '.*',
+              name: 'Cross-Origin-Embedder-Policy',
+              value: 'require-corp',
+            },
+          ]
+        : [],
     basePath: '../..',
     proxies: {
       '/base/tests-utils/': '/base/GDJS/tests/tests-utils/',
@@ -115,6 +132,8 @@ module.exports = function (config) {
       // which is resolved relatively to the page, not to the script.
       '/jolt-physics.wasm.js': `/base/${gdjsRuntimePath}/Extensions/Physics3DBehavior/jolt-physics.wasm.js`,
       '/jolt-physics.wasm.wasm': `/base/${gdjsRuntimePath}/Extensions/Physics3DBehavior/jolt-physics.wasm.wasm`,
+      // Loaded by the tests of the in-game editor only (see below).
+      '/in-game-editor.js': `/base/${gdjsRuntimePath}/InGameEditor/InGameEditor.js`,
     },
     files: [
       './GDJS/tests/node_modules/expect.js/index.js',
@@ -281,6 +300,12 @@ module.exports = function (config) {
       `${gdjsRuntimePath}/Extensions/3D/DepthOfFieldEffect.js`,
       `${gdjsRuntimePath}/Extensions/3D/N8AOEffect.js`,
       `${gdjsRuntimePath}/Extensions/3D/DirectionalLight.js`,
+      // Loaded only by the tests of the in-game editor, as it replaces the
+      // objects of unknown types.
+      {
+        pattern: `${gdjsRuntimePath}/InGameEditor/InGameEditor.js`,
+        included: false,
+      },
       {
         pattern: `${gdjsRuntimePath}/Extensions/Physics3DBehavior/jolt-physics.wasm.js`,
         watched: true,

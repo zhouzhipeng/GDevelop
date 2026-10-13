@@ -1507,6 +1507,38 @@ describe('gdjs.gameplayTests', () => {
         expectedScreenY + 0.001
       );
     });
+
+    it('simulates the mouse position on a layer with a camera rotated in 3D', async () => {
+      const runtimeGame = makeRuntimeGame();
+      const harness = makeStartedHarness(runtimeGame);
+      await harness.goToScene('Scene 1');
+      const runtimeScene = harness.getCurrentRuntimeScene();
+      runtimeScene.addLayer({
+        name: '3D layer',
+        renderingType: '3d',
+        visibility: true,
+        cameras: [],
+        effects: [],
+        ambientLightColorR: 0,
+        ambientLightColorG: 0,
+        ambientLightColorB: 0,
+        isLightingLayer: false,
+        followBaseLayerCamera: false,
+      });
+      const layer = runtimeScene.getLayer('3D layer');
+      layer.setCameraX(100);
+      layer.setCameraY(200);
+      layer.setCameraRotationX(30);
+
+      harness.setMousePosition(150, 50, '3D layer');
+
+      expect(
+        gdjs.evtTools.input.getCursorX(runtimeScene, '3D layer', 0)
+      ).to.be.within(149.99, 150.01);
+      expect(
+        gdjs.evtTools.input.getCursorY(runtimeScene, '3D layer', 0)
+      ).to.be.within(49.99, 50.01);
+    });
   });
 
   describe('GameplayTestHarness snapshots of nested custom objects', () => {
@@ -2221,6 +2253,20 @@ describe('gdjs.gameplayTests', () => {
       harness.getNearby('MyObject', 'CombinedTank', 900);
 
       expect(harness._runWarnings.length).to.be(0);
+    });
+
+    it('warns that stepUntilObjectIsStable only waits for the first instance', async () => {
+      const harness = await makeHarnessWithSpawnedTank();
+      await harness.stepUntilObjectIsStable('CombinedTank', { maxFrames: 2 });
+      expect(harness._runWarnings.length).to.be(0);
+
+      harness.spawn('CombinedTank', 300, 200, undefined, 'UI');
+      await harness.stepUntilObjectIsStable('CombinedTank', { maxFrames: 2 });
+
+      expect(harness._runWarnings.length).to.be(1);
+      expect(harness._runWarnings[0]).to.contain(
+        'only waits for the first of the 2 instances of "CombinedTank"'
+      );
     });
 
     it('moves a point with the Z and Z scale of a parent without a THREE object', () => {
