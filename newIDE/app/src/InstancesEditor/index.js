@@ -857,7 +857,6 @@ export default class InstancesEditor extends Component<Props, State> {
           hasAdjustedViewPosition = true;
         }
       }
-      this.statusBar.resize(width, height);
       this.backgroundArea.hitArea = new PIXI.Rectangle(0, 0, width, height);
       this.background.resize(width, height);
 
