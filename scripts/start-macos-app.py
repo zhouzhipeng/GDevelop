@@ -448,6 +448,19 @@ def verify_electron_started(repo_root: Path, electron_exe: Path, dry_run: bool) 
 
 def main() -> int:
     args = parse_args()
+    ssd_env = Path('/Volumes/ssd512/GDevelop-tools/env.sh')
+    if ssd_env.is_file():
+        environment = subprocess.run(
+            ['bash', '-c', 'source /Volumes/ssd512/GDevelop-tools/env.sh && env -0'],
+            check=True,
+            capture_output=True,
+        )
+        os.environ.update(
+            entry.decode().split('=', 1)
+            for entry in environment.stdout.split(b'\0')
+            if b'=' in entry
+        )
+        print(f'Loaded SSD build environment: {ssd_env}', flush=True)
     repo_root = args.repo_root.resolve()
     app_dir = repo_root / "newIDE" / "app"
     electron_app_dir = repo_root / "newIDE" / "electron-app"
