@@ -77,6 +77,32 @@ const projectFixture = {
 describe('Local multi-file project storage', () => {
   let temporaryDirectory;
 
+  it('reads managed sources without waiting for asynchronous filesystem callbacks', async () => {
+    const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
+    await writeLegacyProjectAsMultiFile(projectFixture, entryPath);
+    const readdir = jest
+      .spyOn(fs, 'readdir')
+      .mockImplementation(() => new Promise(() => {}));
+    const stat = jest
+      .spyOn(fs, 'stat')
+      .mockImplementation(() => new Promise(() => {}));
+    const readFile = jest
+      .spyOn(fs, 'readFile')
+      .mockImplementation(() => new Promise(() => {}));
+    try {
+      const tree = await readMultiFileSourceTree(entryPath);
+      expect(tree.files['game://project.gdevelop']).toBeDefined();
+      expect(tree.files['game://scenes/Main/scene.settings']).toBeDefined();
+      expect(readdir).not.toHaveBeenCalled();
+      expect(stat).not.toHaveBeenCalled();
+      expect(readFile).not.toHaveBeenCalled();
+    } finally {
+      readdir.mockRestore();
+      stat.mockRestore();
+      readFile.mockRestore();
+    }
+  });
+
   beforeEach(() => {
     temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-multifile-')

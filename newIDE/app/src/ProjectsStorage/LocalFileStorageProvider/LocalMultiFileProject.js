@@ -154,7 +154,7 @@ const removeEmptyManagedParentDirectories = async (
   );
   for (const directory of deepestFirst) {
     if (!fs.existsSync(directory)) continue;
-    if ((await fs.readdir(directory)).length) continue;
+    if (fs.readdirSync(directory).length) continue;
     try {
       await fs.rmdir(directory);
     } catch (error) {
@@ -173,7 +173,7 @@ export const recoverMultiFileTransactions = async (
   const transactionsRoot = path.join(root, '.gdevelop', 'transactions');
   if (!fs.existsSync(transactionsRoot)) return;
   assertInside(root, transactionsRoot);
-  const transactionNames = await fs.readdir(transactionsRoot);
+  const transactionNames = fs.readdirSync(transactionsRoot);
   for (const transactionName of transactionNames) {
     const transactionRoot = path.join(transactionsRoot, transactionName);
     assertInside(root, transactionRoot);
@@ -186,7 +186,7 @@ export const recoverMultiFileTransactions = async (
     }
     let journal;
     try {
-      journal = JSON.parse(await fs.readFile(journalPath, 'utf8'));
+      journal = JSON.parse(fs.readFileSync(journalPath, 'utf8'));
     } catch (error) {
       throw new MultiFileProjectError(
         'MULTIFILE_INCOMPLETE_TRANSACTION',
@@ -255,13 +255,16 @@ export const recoverMultiFileTransactions = async (
   }
 };
 
+// Source reads also run during renderer catalog regeneration. Use bounded synchronous
+// filesystem reads so a delayed libuv callback cannot hold the reload lock forever.
+// Keep the Promise API for existing callers and transaction ordering.
 const readBoundedUtf8 = async (
   filePath: string,
   maximumSize: number = MAX_SOURCE_FILE_SIZE
 ): Promise<string> => {
   let stats;
   try {
-    stats = await fs.stat(filePath);
+    stats = fs.statSync(filePath);
   } catch (error) {
     if (error && error.code === 'ENOENT') {
       throw new MultiFileProjectError(
@@ -279,7 +282,7 @@ const readBoundedUtf8 = async (
       `Managed source exceeds ${maximumSize} bytes: ${filePath}`
     );
   }
-  return fs.readFile(filePath, 'utf8');
+  return fs.readFileSync(filePath, 'utf8');
 };
 
 const findGameUris = (value: any, output: Set<string>) => {
@@ -522,7 +525,7 @@ const discoverDirectSettingsFiles = async (
   output: Array<string>
 ): Promise<void> => {
   if (!fs.existsSync(directoryPath)) return;
-  const entries = await fs.readdir(directoryPath, { withFileTypes: true });
+  const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
   for (const entry of entries) {
     const encodedName = physicalNameToGameUriSegment(entry.name);
     if (entry.isFile() && entry.name.endsWith('.settings')) {
@@ -537,7 +540,7 @@ const discoverDirectEventsFiles = async (
   output: Array<string>
 ): Promise<void> => {
   if (!fs.existsSync(directoryPath)) return;
-  const entries = await fs.readdir(directoryPath, { withFileTypes: true });
+  const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith('.events')) continue;
     output.push(
@@ -554,7 +557,7 @@ const discoverDirectRetiredLayoutFiles = async (
   output: Array<string>
 ): Promise<void> => {
   if (!fs.existsSync(directoryPath)) return;
-  const entries = await fs.readdir(directoryPath, { withFileTypes: true });
+  const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
   for (const entry of entries) {
     const encodedName = physicalNameToGameUriSegment(entry.name);
     if (entry.isFile() && entry.name.endsWith('.layout')) {
@@ -575,7 +578,7 @@ const discoverGameplayTestSourceUris = async (
       'The managed tests path must be a directory inside the project root.'
     );
   }
-  const entries = await fs.readdir(testsRoot, { withFileTypes: true });
+  const entries = fs.readdirSync(testsRoot, { withFileTypes: true });
   const discovered = [];
   for (const entry of entries) {
     if (entry.isDirectory() || entry.isSymbolicLink()) {
@@ -596,7 +599,7 @@ const discoverRetiredFunctionSettings = async (
   output: Array<string>
 ): Promise<void> => {
   if (!fs.existsSync(functionsDirectoryPath)) return;
-  const entries = await fs.readdir(functionsDirectoryPath, {
+  const entries = fs.readdirSync(functionsDirectoryPath, {
     withFileTypes: true,
   });
   for (const entry of entries) {
@@ -640,7 +643,7 @@ const discoverOwnedSettingsUris = async (
   );
   const scenesRoot = path.join(projectRoot, 'scenes');
   if (fs.existsSync(scenesRoot)) {
-    const sceneEntries = await fs.readdir(scenesRoot, {
+    const sceneEntries = fs.readdirSync(scenesRoot, {
       withFileTypes: true,
     });
     for (const entry of sceneEntries) {
@@ -689,7 +692,7 @@ const discoverOwnedSettingsUris = async (
         discovered
       );
       if (fs.existsSync(externalEventsRoot)) {
-        const entries = await fs.readdir(externalEventsRoot, {
+        const entries = fs.readdirSync(externalEventsRoot, {
           withFileTypes: true,
         });
         for (const entry of entries) {
@@ -719,7 +722,7 @@ const discoverOwnedSettingsUris = async (
         discovered
       );
       if (!fs.existsSync(externalsRoot)) continue;
-      const externalEntries = await fs.readdir(externalsRoot, {
+      const externalEntries = fs.readdirSync(externalsRoot, {
         withFileTypes: true,
       });
       for (const externalEntry of externalEntries) {
@@ -764,7 +767,7 @@ const discoverOwnedSettingsUris = async (
 
   const extensionsRoot = path.join(projectRoot, 'extensions');
   if (fs.existsSync(extensionsRoot)) {
-    const extensionEntries = await fs.readdir(extensionsRoot, {
+    const extensionEntries = fs.readdirSync(extensionsRoot, {
       withFileTypes: true,
     });
     for (const extensionEntry of extensionEntries) {
@@ -807,7 +810,7 @@ const discoverOwnedSettingsUris = async (
           );
           continue;
         }
-        const childEntries = await fs.readdir(childRoot, {
+        const childEntries = fs.readdirSync(childRoot, {
           withFileTypes: true,
         });
         for (const entry of childEntries) {
@@ -877,7 +880,7 @@ const discoverOwnedSettingsUris = async (
             ],
             discovered
           );
-          const variantEntries = await fs.readdir(variantsRoot, {
+          const variantEntries = fs.readdirSync(variantsRoot, {
             withFileTypes: true,
           });
           for (const variantEntry of variantEntries) {
