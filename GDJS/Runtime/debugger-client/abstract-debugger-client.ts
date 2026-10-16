@@ -1752,6 +1752,7 @@ namespace gdjs {
       // Recently played sounds since the last status (cleared after reporting),
       // so a harness can confirm a PlaySound action actually fired.
       const recentlyPlayedSounds = this._takeRecentlyPlayedSounds();
+      const gameRenderer = this._runtimegame.getRenderer();
       this._sendMessage(
         circularSafeStringify({
           command: 'status',
@@ -1762,6 +1763,10 @@ namespace gdjs {
             sceneName: currentScene ? currentScene.getName() : null,
             recentlyPlayedSounds,
             gameFrameLoadId: getGameFrameLoadId(),
+            // Unknown (null) until the renderers are initialized.
+            is3DRenderingAvailable: gameRenderer.getPIXIRenderer()
+              ? !!gameRenderer.getThreeRenderer()
+              : null,
           },
         })
       );

@@ -4695,6 +4695,9 @@ export default class SceneEditor extends React.Component<Props, State> {
                     ref={ref => (this.editorDisplay = ref)}
                     gameEditorMode={this.props.gameEditorMode}
                     onRestartInGameEditor={this.props.onRestartInGameEditor}
+                    onSwitchToInstancesEditor={() =>
+                      this.setGameEditorMode('instances-editor')
+                    }
                     showRestartInGameEditorAfterErrorButton={
                       this.props.showRestartInGameEditorAfterErrorButton
                     }

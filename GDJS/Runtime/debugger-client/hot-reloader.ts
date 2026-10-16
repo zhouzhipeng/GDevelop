@@ -2114,9 +2114,11 @@ namespace gdjs {
         }
       } else {
         if (!newInstance.customSize && oldInstance.customSize) {
-          // The custom size was removed. Just flag the size as changed
-          // and hope the object will handle this in
-          // `extraInitializationFromInitialInstance`.
+          // The custom size was removed: restore the original size, as objects
+          // don't reset it in `extraInitializationFromInitialInstance`.
+          runtimeObject.setWidth(runtimeObject.getOriginalWidth());
+          runtimeObject.setHeight(runtimeObject.getOriginalHeight());
+          somethingChanged = true;
           sizeChanged = true;
         }
       }
@@ -2133,12 +2135,22 @@ namespace gdjs {
           newInstance.depth === undefined &&
           oldInstance.depth !== undefined
         ) {
-          // The custom depth was removed. Just flag the depth as changed
-          // and hope the object will handle this in
-          // `extraInitializationFromInitialInstance`.
+          // The custom depth was removed: restore the original depth, as
+          // objects don't reset it in `extraInitializationFromInitialInstance`.
+          runtimeObject.setDepth(runtimeObject.getOriginalDepth());
+          somethingChanged = true;
           sizeChanged = true;
         }
       }
+      // Check if opacity or flipping changed. They are applied by the object in
+      // `extraInitializationFromInitialInstance`, so just flag them as changed.
+      const opacityOrFlipChanged =
+        (oldInstance.opacity === undefined ? 255 : oldInstance.opacity) !==
+          (newInstance.opacity === undefined ? 255 : newInstance.opacity) ||
+        !oldInstance.flippedX !== !newInstance.flippedX ||
+        !oldInstance.flippedY !== !newInstance.flippedY ||
+        !oldInstance.flippedZ !== !newInstance.flippedZ;
+
       if (runtimeObject instanceof gdjs.CustomRuntimeObject) {
         // The `objects` attribute is already resolved by `resolveCustomObjectConfigurations()`.
         const oldCustomObjectData = oldObjectData as ObjectData &
@@ -2197,7 +2209,12 @@ namespace gdjs {
           return !oldStringProperty || oldStringProperty.value !== value;
         }
       );
-      if (numberPropertiesChanged || stringPropertiesChanged || sizeChanged) {
+      if (
+        numberPropertiesChanged ||
+        stringPropertiesChanged ||
+        sizeChanged ||
+        opacityOrFlipChanged
+      ) {
         runtimeObject.extraInitializationFromInitialInstance(newInstance);
         if (this._runtimeGame.isInGameEdition()) {
           gdjs.RuntimeObject.applyInGameEditorMinimumOpacity(runtimeObject);

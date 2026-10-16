@@ -45,7 +45,7 @@ function AlertDialog(props: Props): React.Node {
           onApply={props.onDismiss}
         >
           <>
-            <Text>
+            <Text displayAsBlockContainer>
               <MarkdownText
                 translatableSource={props.message}
                 isStandaloneText

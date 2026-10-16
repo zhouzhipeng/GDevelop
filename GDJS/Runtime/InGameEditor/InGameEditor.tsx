@@ -624,6 +624,23 @@ namespace gdjs {
     return aabb;
   };
 
+  type SelectionRotation = {
+    /** The rotation applied to the selection, in scene coordinates. */
+    quaternion: THREE.Quaternion;
+    /** The point, in scene coordinates, around which the objects are rotated. */
+    pivot: Point3D;
+  };
+
+  type SelectionMovement = {
+    translationX: float;
+    translationY: float;
+    translationZ: float;
+    rotation: SelectionRotation | null;
+    scaleX: float;
+    scaleY: float;
+    scaleZ: float;
+  };
+
   /** A segment, in the scene coordinates, along which surfaces are searched. */
   export type InGameEditorRay = {
     from: Point3D;
@@ -854,6 +871,44 @@ namespace gdjs {
       .sort((a, b) => a - b); // Ensure stable order to help comparisons.
   };
 
+  const maxDelayBetweenFingersOfAGestureInMs = 150;
+
+  /** The left mouse button, or a finger, used by a tool rather than to move the view. */
+  class CapturedLeftMouseButton {
+    private _isMovingView = false;
+    private _firstTouchStartTime: number | null = null;
+
+    update(inputManager: gdjs.InputManager): void {
+      const touchCount = getCurrentTouchIdentifiers(inputManager).length;
+      if (touchCount >= 2 || isSpacePressed(inputManager)) {
+        this._isMovingView = true;
+      } else if (touchCount === 0 && !inputManager.isMouseButtonPressed(0)) {
+        this._isMovingView = false;
+      }
+      if (touchCount === 0) {
+        this._firstTouchStartTime = null;
+      } else if (this._firstTouchStartTime === null) {
+        this._firstTouchStartTime = Date.now();
+      }
+    }
+
+    isPressed(inputManager: gdjs.InputManager): boolean {
+      return (
+        inputManager.isMouseButtonPressed(0) &&
+        !this._isMovingView &&
+        !this._canOtherFingersOfAGestureStillCome()
+      );
+    }
+
+    private _canOtherFingersOfAGestureStillCome(): boolean {
+      return (
+        this._firstTouchStartTime !== null &&
+        Date.now() - this._firstTouchStartTime <
+          maxDelayBetweenFingersOfAGestureInMs
+      );
+    }
+  }
+
   const getTouchesCentroid = (inputManager: gdjs.InputManager) => {
     const ids = getCurrentTouchIdentifiers(inputManager);
     if (ids.length === 0) return { x: 0, y: 0 };
@@ -983,8 +1038,34 @@ namespace gdjs {
       return this._selectedObjects[this._selectedObjects.length - 1] || null;
     }
 
-    getAABB(): AABB3D | null {
-      return getObjectsAABB(this._selectedObjects, false);
+    getAABB(options?: {
+      ignoreIf: (object: gdjs.RuntimeObject) => boolean;
+    }): AABB3D | null {
+      let aabb: AABB3D | null = null;
+      for (const object of this._selectedObjects) {
+        if (options && options.ignoreIf(object)) {
+          continue;
+        }
+        if (is3D(object)) {
+          const aabb2D = object.getAABB();
+          const minZ = object.getUnrotatedAABBMinZ();
+          const maxZ = object.getUnrotatedAABBMaxZ();
+          if (aabb) {
+            aabb.min[0] = Math.min(aabb.min[0], aabb2D.min[0]);
+            aabb.min[1] = Math.min(aabb.min[1], aabb2D.min[1]);
+            aabb.min[2] = Math.min(aabb.min[2], minZ);
+            aabb.max[0] = Math.max(aabb.max[0], aabb2D.max[0]);
+            aabb.max[1] = Math.max(aabb.max[1], aabb2D.max[1]);
+            aabb.max[2] = Math.max(aabb.max[2], maxZ);
+          } else {
+            aabb = {
+              min: [aabb2D.min[0], aabb2D.min[1], minZ],
+              max: [aabb2D.max[0], aabb2D.max[1], maxZ],
+            };
+          }
+        }
+      }
+      return aabb;
     }
   }
 
@@ -992,6 +1073,11 @@ namespace gdjs {
     private editor: InGameEditor;
     private _changeHappened = false;
     private _isMoving = false;
+    private startTime = 0;
+    // Only used inside `move`, kept here to avoid allocations during a drag.
+    private _temporaryRotatedCenterOffset = new THREE.Vector3();
+    private _temporaryRotatedObjectEuler = new THREE.Euler(0, 0, 0, 'ZYX');
+    private _temporaryRotatedObjectQuaternion = new THREE.Quaternion();
 
     constructor(editor: InGameEditor) {
       this.editor = editor;
@@ -1003,6 +1089,9 @@ namespace gdjs {
         x: float;
         y: float;
         z: float;
+        centerX: float;
+        centerY: float;
+        centerZ: float;
         rotationX: float;
         rotationY: float;
         angle: float;
@@ -1015,6 +1104,7 @@ namespace gdjs {
     startMove() {
       if (this._isMoving) return;
       this._isMoving = true;
+      this.startTime = Date.now();
       this._changeHappened = false;
       this._objectInitialPositions.clear();
     }
@@ -1029,18 +1119,13 @@ namespace gdjs {
 
     move(
       selectedObjects: Array<gdjs.RuntimeObject>,
-      movement: {
-        translationX: float;
-        translationY: float;
-        translationZ: float;
-        rotationX: float;
-        rotationY: float;
-        rotationZ: float;
-        scaleX: float;
-        scaleY: float;
-        scaleZ: float;
-      }
+      movement: SelectionMovement
     ) {
+      if (Date.now() - this.startTime < 150) {
+        // Avoid miss-clicks gizmo dragging point to change object positions.
+        return;
+      }
+      const rotation = movement.rotation;
       selectedObjects.forEach((object) => {
         if (this.editor.isInstanceLocked(object)) {
           return;
@@ -1051,9 +1136,7 @@ namespace gdjs {
           movement.translationX !== 0 ||
           movement.translationY !== 0 ||
           movement.translationZ !== 0 ||
-          movement.rotationX !== 0 ||
-          movement.rotationY !== 0 ||
-          movement.rotationZ !== 0 ||
+          !!rotation ||
           movement.scaleX !== 1 ||
           movement.scaleY !== 1 ||
           movement.scaleZ !== 1;
@@ -1065,6 +1148,9 @@ namespace gdjs {
                 x: object.getX(),
                 y: object.getY(),
                 z: object.getZ(),
+                centerX: object.getCenterXInScene(),
+                centerY: object.getCenterYInScene(),
+                centerZ: object.getCenterZInScene(),
                 rotationX: object.getRotationX(),
                 rotationY: object.getRotationY(),
                 angle: object.getAngle(),
@@ -1076,6 +1162,9 @@ namespace gdjs {
                 x: object.getX(),
                 y: object.getY(),
                 z: 0,
+                centerX: object.getCenterXInScene(),
+                centerY: object.getCenterYInScene(),
+                centerZ: 0,
                 rotationX: 0,
                 rotationY: 0,
                 angle: object.getAngle(),
@@ -1089,14 +1178,49 @@ namespace gdjs {
         if (!is3D(object)) {
           return;
         }
-        object.setX(Math.round(initialPosition.x + movement.translationX));
-        object.setY(Math.round(initialPosition.y + movement.translationY));
-        object.setAngle(
-          gdjs.evtTools.common.mod(
-            Math.round(initialPosition.angle + movement.rotationZ),
-            360
-          )
-        );
+        let translationX = movement.translationX;
+        let translationY = movement.translationY;
+        let translationZ = movement.translationZ;
+        let rotationX = initialPosition.rotationX;
+        let rotationY = initialPosition.rotationY;
+        let angle = initialPosition.angle;
+        if (rotation) {
+          // Like in the 2D editor, the selection rotates as a whole around its
+          // center: the rotation is applied to each object orientation and
+          // each object center is rotated around the pivot.
+          const { quaternion, pivot } = rotation;
+          const objectEuler = this._temporaryRotatedObjectEuler;
+          const objectQuaternion = this._temporaryRotatedObjectQuaternion;
+          objectEuler.set(
+            gdjs.toRad(rotationX),
+            gdjs.toRad(rotationY),
+            gdjs.toRad(angle),
+            'ZYX'
+          );
+          objectQuaternion.setFromEuler(objectEuler).premultiply(quaternion);
+          objectEuler.setFromQuaternion(objectQuaternion, 'ZYX');
+          rotationX = gdjs.toDegrees(objectEuler.x);
+          rotationY = gdjs.toDegrees(objectEuler.y);
+          angle = gdjs.toDegrees(objectEuler.z);
+
+          const rotatedCenterOffset = this._temporaryRotatedCenterOffset;
+          rotatedCenterOffset
+            .set(
+              initialPosition.centerX - pivot[0],
+              initialPosition.centerY - pivot[1],
+              initialPosition.centerZ - pivot[2]
+            )
+            .applyQuaternion(quaternion);
+          translationX +=
+            pivot[0] + rotatedCenterOffset.x - initialPosition.centerX;
+          translationY +=
+            pivot[1] + rotatedCenterOffset.y - initialPosition.centerY;
+          translationZ +=
+            pivot[2] + rotatedCenterOffset.z - initialPosition.centerZ;
+        }
+        object.setX(Math.round(initialPosition.x + translationX));
+        object.setY(Math.round(initialPosition.y + translationY));
+        object.setAngle(gdjs.evtTools.common.mod(Math.round(angle), 360));
         if (movement.scaleX !== 1) {
           object.setWidth(
             Math.round(initialPosition.width * Math.abs(movement.scaleX))
@@ -1108,18 +1232,12 @@ namespace gdjs {
           );
         }
         if (is3D(object)) {
-          object.setZ(Math.round(initialPosition.z + movement.translationZ));
+          object.setZ(Math.round(initialPosition.z + translationZ));
           object.setRotationX(
-            gdjs.evtTools.common.mod(
-              Math.round(initialPosition.rotationX + movement.rotationX),
-              360
-            )
+            gdjs.evtTools.common.mod(Math.round(rotationX), 360)
           );
           object.setRotationY(
-            gdjs.evtTools.common.mod(
-              Math.round(initialPosition.rotationY + movement.rotationY),
-              360
-            )
+            gdjs.evtTools.common.mod(Math.round(rotationY), 360)
           );
           if (movement.scaleZ !== 1) {
             object.setDepth(
@@ -1181,7 +1299,22 @@ namespace gdjs {
         value: float;
         onChange: (value: float) => void;
       }
+    | {
+        type: 'color';
+        id: string;
+        tooltip: string;
+        /** The chosen color, like "#ff8000". */
+        value: string;
+        onChange: (value: string) => void;
+      }
     | { type: 'divider'; id: string };
+
+  const supportedToolbarItemTypes: Array<string> = [
+    'button',
+    'slider',
+    'color',
+    'divider',
+  ];
 
   /** @category In-Game Editor */
   export class InGameEditor {
@@ -1230,17 +1363,8 @@ namespace gdjs {
     private _transformControlsMode: 'translate' | 'rotate' | 'scale' =
       'translate';
     private _editorGrid: EditorGrid;
-    private _selectionControlsMovementTotalDelta: {
-      translationX: float;
-      translationY: float;
-      translationZ: float;
-      rotationX: float;
-      rotationY: float;
-      rotationZ: float;
-      scaleX: float;
-      scaleY: float;
-      scaleZ: float;
-    } | null = null;
+    private _selectionControlsMovementTotalDelta: SelectionMovement | null =
+      null;
     private _hasSelectionActuallyMoved = false;
     private _isTransformControlsHovered = false;
     private _wasMovingSelectionLastFrame = false;
@@ -1285,23 +1409,11 @@ namespace gdjs {
     private _draggedSelectedObjectInitialX: float = 0;
     private _draggedSelectedObjectInitialY: float = 0;
     private _draggedSelectedObjectInitialZ: float = 0;
-    private _draggedSelectedObjectTotalDelta: {
-      translationX: float;
-      translationY: float;
-      translationZ: float;
-      rotationX: float;
-      rotationY: float;
-      rotationZ: float;
-      scaleX: float;
-      scaleY: float;
-      scaleZ: float;
-    } = {
+    private _draggedSelectedObjectTotalDelta: SelectionMovement = {
       translationX: 0,
       translationY: 0,
       translationZ: 0,
-      rotationX: 0,
-      rotationY: 0,
-      rotationZ: 0,
+      rotation: null,
       scaleX: 1,
       scaleY: 1,
       scaleZ: 1,
@@ -1311,11 +1423,13 @@ namespace gdjs {
     private _inGameEditorSettings: InGameEditorSettings;
     private _shortcuts: InGameEditorShortcuts = new InGameEditorShortcuts();
     private _isLeftMouseButtonCaptured = false;
+    private _capturedLeftMouseButton = new CapturedLeftMouseButton();
     private _requestedExtensionToolbars = new Map<
       string,
       Array<InGameEditorToolbarItem>
     >();
     private _extensionToolbars = new Map<string, ExtensionToolbar>();
+    private _extensionToolbarsContainer: HTMLElement | null = null;
 
     constructor(
       game: RuntimeGame,
@@ -1674,8 +1788,9 @@ namespace gdjs {
       if (editorCamera3D) {
         this.restoreCameraState(editorCamera3D);
       } else {
-        // TODO Get the visibleScreenArea from the editor.
-        this.zoomToInitialPosition({
+        // A guess of the visible area, not stored: the editor sends the real
+        // one while the scene is loading.
+        this._zoomToInnerArea({
           minX: 0.15,
           minY: 0.15,
           maxX: 0.85,
@@ -1894,6 +2009,10 @@ namespace gdjs {
       maxY: number;
     }) {
       this.setVisibleScreenArea(visibleScreenArea);
+      this._zoomToInnerArea(visibleScreenArea);
+    }
+
+    private _zoomToInnerArea(visibleScreenArea: ScreenArea) {
       if (this._innerArea) {
         this.zoomToFitArea(
           {
@@ -2038,6 +2157,16 @@ namespace gdjs {
     }
 
     /**
+     * Check if the left mouse button, or a finger, is pressed for the tool that
+     * captured it with `captureLeftMouseButton`, and not to move the view.
+     */
+    isCapturedLeftMouseButtonPressed(): boolean {
+      return this._capturedLeftMouseButton.isPressed(
+        this._runtimeGame.getInputManager()
+      );
+    }
+
+    /**
      * Show a toolbar for a tool of an extension, below the editor toolbar and
      * looking like it, during the next frame: call it at every frame while
      * it must be shown.
@@ -2053,6 +2182,15 @@ namespace gdjs {
       this._requestedExtensionToolbars.set(toolbarId, items);
     }
 
+    /**
+     * Check if toolbars shown with `showToolbar` can have items of a type, for
+     * extensions working with older versions too (for example, showing
+     * buttons for a few colors when there is no color picker).
+     */
+    isToolbarItemTypeSupported(type: string): boolean {
+      return supportedToolbarItemTypes.includes(type);
+    }
+
     private _renderExtensionToolbars(parent: HTMLElement | null): void {
       for (const [toolbarId, toolbar] of this._extensionToolbars) {
         if (!parent || !this._requestedExtensionToolbars.has(toolbarId)) {
@@ -2060,7 +2198,21 @@ namespace gdjs {
           this._extensionToolbars.delete(toolbarId);
         }
       }
-      if (parent) {
+      if (!parent || this._requestedExtensionToolbars.size === 0) {
+        if (this._extensionToolbarsContainer) {
+          this._extensionToolbarsContainer.remove();
+        }
+      } else {
+        let toolbarsContainer = this._extensionToolbarsContainer;
+        if (!toolbarsContainer) {
+          toolbarsContainer = document.createElement('div');
+          toolbarsContainer.className =
+            'InGameEditor-Extension-Toolbars-Container';
+          this._extensionToolbarsContainer = toolbarsContainer;
+        }
+        if (toolbarsContainer.parentElement !== parent) {
+          parent.appendChild(toolbarsContainer);
+        }
         let toolbarIndex = 0;
         for (const [toolbarId, items] of this._requestedExtensionToolbars) {
           let toolbar = this._extensionToolbars.get(toolbarId);
@@ -2076,7 +2228,7 @@ namespace gdjs {
             );
             this._extensionToolbars.set(toolbarId, toolbar);
           }
-          toolbar.render(parent, items, toolbarIndex++);
+          toolbar.render(toolbarsContainer, items, toolbarIndex++);
         }
       }
       this._requestedExtensionToolbars.clear();
@@ -2141,6 +2293,23 @@ namespace gdjs {
 
     setVisibleScreenArea(visibleScreenArea: ScreenArea) {
       this._visibleScreenArea = visibleScreenArea;
+
+      // Toolbars are centered in this area.
+      if (typeof document === 'undefined') return;
+      const rootElement = document.documentElement;
+      if (!rootElement) return;
+      rootElement.style.setProperty(
+        '--in-game-editor-visible-area-left',
+        visibleScreenArea.minX * 100 + '%'
+      );
+      rootElement.style.setProperty(
+        '--in-game-editor-visible-area-right',
+        (1 - visibleScreenArea.maxX) * 100 + '%'
+      );
+      rootElement.style.setProperty(
+        '--in-game-editor-visible-area-top',
+        visibleScreenArea.minY * 100 + '%'
+      );
     }
 
     private _focusOnSelection() {
@@ -2935,6 +3104,12 @@ namespace gdjs {
             let initialObjectDepth = 0;
             const initialDummyPosition = new THREE.Vector3();
             const initialDummyRotation = new THREE.Euler();
+            const initialDummyQuaternion = new THREE.Quaternion();
+            const invertedInitialDummyQuaternion = new THREE.Quaternion();
+            const selectionRotation: SelectionRotation = {
+              quaternion: new THREE.Quaternion(),
+              pivot: [0, 0, 0],
+            };
             const initialDummyScale = new THREE.Vector3();
             let xyzClickCursorX: float | null = null;
             let xyzClickCursorY: float | null = null;
@@ -2968,6 +3143,7 @@ namespace gdjs {
                   : 0;
                 initialDummyPosition.copy(dummyThreeObject.position);
                 initialDummyRotation.copy(dummyThreeObject.rotation);
+                initialDummyQuaternion.copy(dummyThreeObject.quaternion);
                 initialDummyScale.copy(dummyThreeObject.scale);
                 return;
               }
@@ -2993,12 +3169,16 @@ namespace gdjs {
                 }
               }
 
-              let translationX =
-                dummyThreeObject.position.x - initialDummyPosition.x;
-              let translationY =
-                dummyThreeObject.position.y - initialDummyPosition.y;
-              let translationZ =
-                dummyThreeObject.position.z - initialDummyPosition.z;
+              const isRotating = this._transformControlsMode === 'rotate';
+              let translationX = isRotating
+                ? 0
+                : dummyThreeObject.position.x - initialDummyPosition.x;
+              let translationY = isRotating
+                ? 0
+                : dummyThreeObject.position.y - initialDummyPosition.y;
+              let translationZ = isRotating
+                ? 0
+                : dummyThreeObject.position.z - initialDummyPosition.z;
               if (
                 this._transformControlsMode === 'translate' &&
                 threeTransformControls.axis
@@ -3185,19 +3365,40 @@ namespace gdjs {
                   }
                 }
               }
+              let rotation: SelectionRotation | null = null;
+              if (
+                isRotating &&
+                !dummyThreeObject.quaternion.equals(initialDummyQuaternion)
+              ) {
+                // The dummy rotation is the object rotation with the Y and Z
+                // angles negated (see _updateDummyLocation), which is the
+                // object rotation mirrored on the X axis. The rotation done by
+                // the gizmo on the dummy is mirrored back the same way: the
+                // axis is mirrored and the angle is negated.
+                const { quaternion, pivot } = selectionRotation;
+                quaternion
+                  .copy(dummyThreeObject.quaternion)
+                  .multiply(
+                    invertedInitialDummyQuaternion
+                      .copy(initialDummyQuaternion)
+                      .invert()
+                  );
+                quaternion.set(
+                  quaternion.x,
+                  -quaternion.y,
+                  -quaternion.z,
+                  quaternion.w
+                );
+                pivot[0] = dummyThreeObject.position.x;
+                pivot[1] = dummyThreeObject.position.y;
+                pivot[2] = dummyThreeObject.position.z;
+                rotation = selectionRotation;
+              }
               this._selectionControlsMovementTotalDelta = {
                 translationX,
                 translationY,
                 translationZ,
-                rotationX: gdjs.toDegrees(
-                  dummyThreeObject.rotation.x - initialDummyRotation.x
-                ),
-                rotationY: -gdjs.toDegrees(
-                  dummyThreeObject.rotation.y - initialDummyRotation.y
-                ),
-                rotationZ: -gdjs.toDegrees(
-                  dummyThreeObject.rotation.z - initialDummyRotation.z
-                ),
+                rotation,
                 scaleX,
                 scaleY,
                 scaleZ,
@@ -3234,7 +3435,18 @@ namespace gdjs {
         !this._draggedNewObject &&
         !this._draggedSelectedObject
       ) {
-        const { threeTransformControls } = this._selectionControls;
+        const { threeTransformControls, dummyThreeObject } =
+          this._selectionControls;
+
+        if (
+          this._transformControlsMode === 'rotate' &&
+          !threeTransformControls.dragging
+        ) {
+          this._updateDummyRotationPivot(
+            dummyThreeObject,
+            lastEditableSelectedObject
+          );
+        }
 
         // Update the rotation snap.
         const inputManager = this._runtimeGame.getInputManager();
@@ -3315,12 +3527,9 @@ namespace gdjs {
         dummyThreeObject.rotation.y = -dummyThreeObject.rotation.y;
         dummyThreeObject.rotation.z = -dummyThreeObject.rotation.z;
 
-        dummyThreeObject.position.set(
-          lastEditableSelectedObject.getCenterXInScene(),
-          lastEditableSelectedObject.getCenterYInScene(),
-          is3D(lastEditableSelectedObject)
-            ? lastEditableSelectedObject.getCenterZInScene()
-            : 0
+        this._updateDummyRotationPivot(
+          dummyThreeObject,
+          lastEditableSelectedObject
         );
       } else {
         dummyThreeObject.position.set(
@@ -3333,6 +3542,48 @@ namespace gdjs {
       }
     }
 
+    /**
+     * The whole selection rotates around its center (like in the 2D editor),
+     * so the rotation gizmo is shown there.
+     */
+    private _updateDummyRotationPivot(
+      dummyThreeObject: THREE.Object3D,
+      lastEditableSelectedObject: gdjs.RuntimeObject
+    ) {
+      const rotationPivot = this._getSelectionRotationPivot();
+      if (rotationPivot) {
+        dummyThreeObject.position.set(
+          rotationPivot[0],
+          rotationPivot[1],
+          rotationPivot[2]
+        );
+      } else {
+        dummyThreeObject.position.set(
+          lastEditableSelectedObject.getCenterXInScene(),
+          lastEditableSelectedObject.getCenterYInScene(),
+          is3D(lastEditableSelectedObject)
+            ? lastEditableSelectedObject.getCenterZInScene()
+            : 0
+        );
+      }
+    }
+
+    /**
+     * The center of the movable 3D objects of the selection, in scene
+     * coordinates (or null if none).
+     */
+    private _getSelectionRotationPivot(): Point3D | null {
+      const aabb = this._selection.getAABB({
+        ignoreIf: (object) => this.isInstanceLocked(object),
+      });
+      if (!aabb) return null;
+      return [
+        (aabb.min[0] + aabb.max[0]) / 2,
+        (aabb.min[1] + aabb.max[1]) / 2,
+        (aabb.min[2] + aabb.max[2]) / 2,
+      ];
+    }
+
     private _removeSelectionControls(): void {
       if (!this._selectionControls) {
         return;
@@ -3341,6 +3592,11 @@ namespace gdjs {
       this._selectionControls.threeTransformControls
         .getHelper()
         .removeFromParent();
+      // Detaching is not enough: the controls keep their pointer event listeners
+      // on the canvas until disposed. Without this, every removed controls would
+      // keep handling (and raycasting on) all the pointer events, making the
+      // editor slower and slower and interfering with the new controls.
+      this._selectionControls.threeTransformControls.dispose();
       this._selectionControls.dummyThreeObject.removeFromParent();
       this._editorGrid.setVisible(false);
       this._selectionControls = null;
@@ -3479,6 +3735,14 @@ namespace gdjs {
           // Not modified by the InGameEditor (which always shows instances,
           // even those hidden at start), but must be preserved:
           hidden: oldData ? oldData.hidden : undefined,
+          // Not modified by the InGameEditor itself: the editor only lowers
+          // the opacity for edition, and flipping is changed from the IDE
+          // (which then sends the updated instance data). But they must be
+          // preserved:
+          opacity: oldData ? oldData.opacity : undefined,
+          flippedX: oldData ? oldData.flippedX : undefined,
+          flippedY: oldData ? oldData.flippedY : undefined,
+          flippedZ: oldData ? oldData.flippedZ : undefined,
           // TODO: how to transmit/should we transmit other properties?
           numberProperties: [],
           stringProperties: [],
@@ -4097,7 +4361,17 @@ namespace gdjs {
           }
         });
       this._updateInstances(instances);
-      this._forceUpdateSelectionControls();
+      // Don't recreate the selection controls while they are being dragged: the
+      // editor can send updated instances at the very moment a drag starts (for
+      // example, a property field committing its value when it loses focus
+      // because the user clicked on the gizmo), and recreating the controls
+      // would cancel the drag.
+      if (
+        !this._selectionControls ||
+        !this._selectionControls.threeTransformControls.dragging
+      ) {
+        this._forceUpdateSelectionControls();
+      }
     }
 
     addInstances(instances: Array<InstanceData>) {
@@ -4731,6 +5005,7 @@ namespace gdjs {
           !!this._selectionControls.threeTransformControls.axis;
       }
 
+      this._capturedLeftMouseButton.update(inputManager);
       this._handlePointerLock();
       this._handleTransformControlsMode();
       this._handleCameraMovement();
@@ -4832,25 +5107,49 @@ namespace gdjs {
       styleElement.textContent = `
         .InGameEditor-Toolbar-Centering-Container {
           position: fixed;
-          left: 0;
-          right: 0;
+          left: var(--in-game-editor-visible-area-left, 0%);
+          right: var(--in-game-editor-visible-area-right, 0%);
+          top: var(--in-game-editor-visible-area-top, 0%);
           display: flex;
           flex-direction: row;
           align-items: center;
           justify-content: center;
+          pointer-events: none;
 
           transition: transform 0.1s ease-in-out;
+        }
+        .InGameEditor-Extension-Toolbars-Container {
+          position: fixed;
+          left: var(--in-game-editor-visible-area-left, 0%);
+          right: var(--in-game-editor-visible-area-right, 0%);
+          top: calc(var(--in-game-editor-visible-area-top, 0%) + 36px);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          pointer-events: none;
         }
         .InGameEditor-Toolbar-Container {
           position: relative;
           pointer-events: all;
           display: flex;
           flex-direction: row;
+          flex-wrap: wrap;
           align-items: center;
           justify-content: center;
+          max-width: calc(100% - 16px);
+          box-sizing: border-box;
           top: 2px;
           border-radius: 3px;
           padding: 4px;
+          gap: 6px;
+        }
+        .InGameEditor-Toolbar-Group {
+          display: flex;
+          flex-direction: row;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: center;
           gap: 6px;
         }
         .InGameEditor-Toolbar-Container-Background {
@@ -4911,6 +5210,26 @@ namespace gdjs {
         .InGameEditor-Toolbar-Slider {
           width: 80px;
           accent-color: var(--in-game-editor-theme-icon-button-selected-background-color);
+        }
+        .InGameEditor-Toolbar-Color {
+          width: 24px;
+          height: 24px;
+          padding: 0;
+          border: none;
+          border-radius: 4px;
+          background-color: transparent;
+          cursor: pointer;
+        }
+        .InGameEditor-Toolbar-Color::-webkit-color-swatch-wrapper {
+          padding: 3px;
+        }
+        .InGameEditor-Toolbar-Color::-webkit-color-swatch {
+          border: 1px solid var(--in-game-editor-theme-toolbar-separator-color);
+          border-radius: 50%;
+        }
+        .InGameEditor-Toolbar-Color::-moz-color-swatch {
+          border: 1px solid var(--in-game-editor-theme-toolbar-separator-color);
+          border-radius: 50%;
         }
       `;
     }
@@ -5136,10 +5455,11 @@ namespace gdjs {
         this.remove();
         this._itemsLayout = itemsLayout;
         container = this._createContainer(items);
-        parent.appendChild(container);
         this._container = container;
       }
-      container.style.top = 36 * (toolbarIndex + 1) + 'px';
+      if (parent.children[toolbarIndex] !== container) {
+        parent.insertBefore(container, parent.children[toolbarIndex] || null);
+      }
 
       items.forEach((item, index) => {
         const element = this._itemElements[index];
@@ -5166,6 +5486,12 @@ namespace gdjs {
           if (document.activeElement !== slider) {
             slider.value = '' + item.value;
           }
+        } else if (item.type === 'color') {
+          const colorInput = element as HTMLInputElement;
+          colorInput.title = item.tooltip;
+          if (document.activeElement !== colorInput) {
+            colorInput.value = item.value;
+          }
         }
       });
     }
@@ -5176,12 +5502,27 @@ namespace gdjs {
       this._itemElements = items.map((item, index) =>
         this._createItemElement(item, index)
       );
+      // Items between dividers stay on the same row.
+      const groupsAndDividers: Array<HTMLElement> = [];
+      let group: HTMLElement | null = null;
+      items.forEach((item, index) => {
+        const element = this._itemElements[index];
+        if (item.type === 'divider') {
+          groupsAndDividers.push(element);
+          group = null;
+          return;
+        }
+        if (!group) {
+          group = document.createElement('div');
+          group.className = 'InGameEditor-Toolbar-Group';
+          groupsAndDividers.push(group);
+        }
+        group.appendChild(element);
+      });
       return (
-        <div class="InGameEditor-Toolbar-Centering-Container">
-          <div class="InGameEditor-Toolbar-Container">
-            <div class="InGameEditor-Toolbar-Container-Background" />
-            {this._itemElements}
-          </div>
+        <div class="InGameEditor-Toolbar-Container">
+          <div class="InGameEditor-Toolbar-Container-Background" />
+          {groupsAndDividers}
         </div>
       );
     }
@@ -5192,6 +5533,25 @@ namespace gdjs {
     ): HTMLElement {
       if (item.type === 'divider') {
         return <div class="InGameEditor-Toolbar-Divider" />;
+      }
+      if (item.type === 'color') {
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.className = 'InGameEditor-Toolbar-Color';
+        colorInput.addEventListener('input', () => {
+          this._onInteraction();
+          const currentItem = this._items[index];
+          if (currentItem.type === 'color') {
+            try {
+              currentItem.onChange(colorInput.value);
+            } catch (error) {
+              this._onItemError(error);
+            }
+          }
+        });
+        // A focused element would receive the keyboard shortcuts of the editor.
+        colorInput.addEventListener('change', () => colorInput.blur());
+        return colorInput;
       }
       if (item.type === 'slider') {
         const slider = document.createElement('input');

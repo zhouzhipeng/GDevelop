@@ -110,7 +110,7 @@ function ConfirmDialog(props: Props): React.Node {
             onRequestClose={props.onDismiss}
             onApply={props.onConfirm}
           >
-            <Text>
+            <Text displayAsBlockContainer>
               <MarkdownText
                 translatableSource={props.message}
                 isStandaloneText

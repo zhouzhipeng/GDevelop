@@ -128,17 +128,36 @@ namespace gdjs {
       const canvasResolution = getCanvasResolution();
       this._canvasResolution = canvasResolution;
 
-      if (typeof THREE !== 'undefined' && gameCanvas.getContext('webgl2')) {
-        this._threeRenderer = new THREE.WebGLRenderer({
-          canvas: gameCanvas,
-          antialias:
-            this._game.getAntialiasingMode() !== 'none' &&
-            (this._game.isAntialisingEnabledOnMobile() ||
-              !gdjs.evtTools.common.isMobile()),
-          // Pixi uses the shared context's stencil buffer for masks.
-          stencil: true,
-          preserveDrawingBuffer: true, // Keep to true to allow screenshots.
-        });
+      // Check WebGL2 support on a separate canvas: getting a context on the game
+      // canvas would make the browser ignore the context attributes asked
+      // later by Three.js (antialias, preserveDrawingBuffer...).
+      if (
+        typeof THREE !== 'undefined' &&
+        document.createElement('canvas').getContext('webgl2')
+      ) {
+        try {
+          this._threeRenderer = new THREE.WebGLRenderer({
+            canvas: gameCanvas,
+            antialias:
+              this._game.getAntialiasingMode() !== 'none' &&
+              (this._game.isAntialisingEnabledOnMobile() ||
+                !gdjs.evtTools.common.isMobile()),
+            // Pixi uses the shared context's stencil buffer for masks.
+            stencil: true,
+            preserveDrawingBuffer: true, // Keep to true to allow screenshots.
+          });
+        } catch (error) {
+          // The context creation can still fail, for example with software
+          // rendering running out of resources: fall back to 2D rendering.
+          logger.error(
+            'Unable to create the Three.js renderer, falling back to 2D rendering:',
+            error
+          );
+          this._threeRenderer = null;
+        }
+      }
+
+      if (this._threeRenderer) {
         this._threeRenderer.shadowMap.enabled = true;
         this._threeRenderer.shadowMap.type = THREE.PCFShadowMap;
         this._threeRenderer.autoClear = false;

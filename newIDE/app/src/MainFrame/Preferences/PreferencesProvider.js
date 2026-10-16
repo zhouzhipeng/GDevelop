@@ -27,6 +27,7 @@ import { type CommandName } from '../../CommandPalette/CommandsList';
 import { setLanguageInDOM } from '../../Utils/Language';
 import Window from '../../Utils/Window';
 import { type GamesDashboardOrderBy } from '../../GameDashboard/GamesList';
+import { isWebGL2Supported } from '../../Utils/WebGL';
 import {
   CHECK_APP_UPDATES_TIMEOUT,
   PERIODIC_APP_UPDATES_TIMEOUT,
@@ -78,6 +79,11 @@ export const loadPreferencesFromLocalStorage = (): ?PreferencesValues => {
       values.showDeprecatedInstructionWarning = values.showDeprecatedInstructionWarning
         ? 'icon'
         : 'no';
+    }
+
+    // 3D rendering requires WebGL2 (the preference used to only require WebGL1).
+    if (values.use3DEditor && !isWebGL2Supported()) {
+      values.use3DEditor = false;
     }
 
     return values;

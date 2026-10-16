@@ -372,6 +372,55 @@ describe('gdjs.gameplayTests', () => {
       expect(result.screenshots).to.eql([]);
       expect(result.screenshotsTakenCount).to.be(0);
     });
+
+    it('takes screenshots at the full resolution of the game when asked', async () => {
+      const result = await runTestScript(
+        makeRuntimeGameWithCanvas(),
+        `
+        await harness.goToScene('Scene 1');
+        harness.setGameResolutionSize(1600, 900);
+        await harness.takeScreenshot('Downscaled');
+        await harness.takeScreenshot('Full', { fullResolution: true });
+        `
+      );
+
+      /** @param {string} jpegBase64 */
+      const getImageSize = (jpegBase64) =>
+        new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve([image.width, image.height]);
+          image.onerror = reject;
+          image.src = 'data:image/jpeg;base64,' + jpegBase64;
+        });
+      expect(result.status).to.be('passed');
+      expect(await getImageSize(result.screenshots[0].jpegBase64)).to.eql([
+        768, 432,
+      ]);
+      expect(await getImageSize(result.screenshots[1].jpegBase64)).to.eql([
+        1600, 900,
+      ]);
+    });
+
+    it('renders the game right before taking a screenshot', async () => {
+      const result = await runTestScript(
+        makeRuntimeGameWithCanvas(),
+        `
+        await harness.goToScene('Scene 1');
+        const scene = harness.getCurrentRuntimeScene();
+        const render = scene.render.bind(scene);
+        let renderCount = 0;
+        scene.render = () => {
+          renderCount++;
+          render();
+        };
+        await harness.takeScreenshot('Now');
+        harness.assert(renderCount === 1, 'Rendered ' + renderCount + ' times.');
+        `
+      );
+
+      expect(result.errors).to.eql([]);
+      expect(result.status).to.be('passed');
+    });
   });
 
   it('reports a script error', async () => {
@@ -648,6 +697,68 @@ describe('gdjs.gameplayTests', () => {
     expect(result.status).to.be('error');
     expect(result.errors[0]).to.contain('did not finish starting');
   }).timeout(10000);
+
+  it('excludes the creation of the scene and its first frame from the timeout budget', async () => {
+    const runtimeGame = makeRuntimeGame();
+    // A scene longer to create than the whole test budget (like a big 3D
+    // scene rendered in software).
+    const sceneStack = runtimeGame.getSceneStack();
+    const replace = sceneStack.replace.bind(sceneStack);
+    // @ts-ignore
+    sceneStack.replace = (options) => {
+      const endTimeMs = Date.now() + 300;
+      while (Date.now() < endTimeMs) {}
+      return replace(options);
+    };
+    const result = await runTestScript(
+      runtimeGame,
+      `
+      await harness.goToScene('Scene 1');
+      await harness.stepFrames(2);
+      harness.assert(harness.getSceneName() === 'Scene 1', 'Scene is running');
+      `,
+      { timeoutMs: 200 }
+    );
+
+    expect(result.status).to.be('passed');
+    expect(result.loadingMs >= 280).to.be(true);
+  }).timeout(10000);
+
+  it('lets a test change its timeout budget', async () => {
+    const result = await runTestScript(
+      makeRuntimeGame(),
+      `
+      harness.setTimeoutMs(5000);
+      await harness.goToScene('Scene 1');
+      // Longer than the budget given by the payload.
+      await harness.stepFrames(1, {
+        onFrame: () => {
+          const endTimeMs = Date.now() + 300;
+          while (Date.now() < endTimeMs) {}
+        },
+      });
+      await harness.stepFrames(1);
+      harness.assert(true, 'Done');
+      `,
+      { timeoutMs: 200 }
+    );
+
+    expect(result.status).to.be('passed');
+    expect(result.timeoutMs).to.be(5000);
+  }).timeout(10000);
+
+  it('refuses a timeout budget that is not a positive number', async () => {
+    const result = await runTestScript(
+      makeRuntimeGame(),
+      `
+      harness.setTimeoutMs(-1);
+      await harness.goToScene('Scene 1');
+      `
+    );
+
+    expect(result.status).to.be('error');
+    expect(result.errors.join('\n')).to.contain('setTimeoutMs');
+  });
 
   it('excludes slow scene-asset loading from the timeout budget', async () => {
     const runtimeGame = makeRuntimeGame();

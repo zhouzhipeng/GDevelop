@@ -41,6 +41,31 @@ const onInputKeyDown = (event: KeyboardEvent) => {
 // $FlowFixMe[missing-local-annot]
 const memoized = memoizeOne((initialValue, callback) => callback());
 
+type DragOverReporterProps = {|
+  isOver: boolean,
+  canDrop: boolean,
+  onChange: (isOver: boolean, canDrop: boolean) => void,
+|};
+
+/**
+ * Reports the drag over state of the row after rendering: it is only known
+ * in the render function of the drop target, where the row state can't be
+ * updated.
+ */
+const DragOverReporter = ({
+  isOver,
+  canDrop,
+  onChange,
+}: DragOverReporterProps): null => {
+  React.useEffect(
+    () => {
+      onChange(isOver, canDrop);
+    },
+    [isOver, canDrop, onChange]
+  );
+  return null;
+};
+
 type Props<Item> = {|
   index: number,
   style: any,
@@ -323,8 +348,6 @@ const TreeViewRow = <Item: ItemBaseAttributes>(
           canDrop,
           isReadyToDrag,
         }) => {
-          setIsStayingOver(isOver, canDrop);
-
           const isRenaming = renamedItemId === node.id;
           const itemNameTooltip =
             typeof node.name === 'string' && !isRenaming
@@ -454,11 +477,11 @@ const TreeViewRow = <Item: ItemBaseAttributes>(
                     )}
                   >
                     {node.rightComponent}
-                    {rightButtons.map(rightButton =>
+                    {rightButtons.map((rightButton, rightButtonIndex) =>
                       rightButton.primary ? (
                         <TreeViewRightPrimaryButton
                           id={rightButton.id}
-                          key={rightButton.id}
+                          key={rightButtonIndex}
                           onClick={e => {
                             e.stopPropagation();
                             if (rightButton.click) {
@@ -480,7 +503,7 @@ const TreeViewRow = <Item: ItemBaseAttributes>(
                       ) : (
                         <IconButton
                           id={rightButton.id}
-                          key={rightButton.id}
+                          key={rightButtonIndex}
                           size="small"
                           onClick={e => {
                             e.stopPropagation();
@@ -575,6 +598,11 @@ const TreeViewRow = <Item: ItemBaseAttributes>(
               })}
             >
               {dropTarget}
+              <DragOverReporter
+                isOver={isOver}
+                canDrop={canDrop}
+                onChange={setIsStayingOver}
+              />
             </div>
           );
         }}
