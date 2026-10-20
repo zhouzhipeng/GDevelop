@@ -111,16 +111,19 @@ type State = {|
   autocompletions: AutocompletionsState,
 |};
 
+export type ExpressionType =
+  | 'number'
+  | 'string'
+  | 'variable'
+  | 'variableOrProperty'
+  | 'variableOrPropertyOrParameter'
+  | 'objectvar'
+  | 'scenevar'
+  | 'globalvar';
+
 type Props = {|
-  expressionType:
-    | 'number'
-    | 'string'
-    | 'variable'
-    | 'variableOrProperty'
-    | 'variableOrPropertyOrParameter'
-    | 'objectvar'
-    | 'scenevar'
-    | 'globalvar',
+  expressionType: ExpressionType,
+  expressionTypeExtraInfo?: string,
   /** An optional callback that can be used to provide additional autocompletions. */
   onGetAdditionalAutocompletions?: (
     currentExpression: string
@@ -149,7 +152,7 @@ export const extractErrors = (
   project: gdProject,
   projectScopedContainersAccessor: ProjectScopedContainersAccessor,
   expressionType: string,
-  parameterMetadata: ?gdParameterMetadata,
+  expressionTypeExtraInfo: string,
   expressionNode: gdExpressionNode,
   objectName: string,
   showDeprecatedInstructionWarning:
@@ -166,7 +169,7 @@ export const extractErrors = (
     projectScopedContainersAccessor.get(),
     expressionType,
     objectName,
-    parameterMetadata ? parameterMetadata.getExtraInfo() : ''
+    expressionTypeExtraInfo
   );
   expressionNode.visit(expressionValidator);
   const errors = expressionValidator.getAllErrors();
@@ -269,6 +272,10 @@ export default class ExpressionField extends React.Component<Props, State> {
       }
       this._enqueueValidation();
     }
+  };
+
+  isFocused = (): boolean => {
+    return !!this._field && this._field.isFocused();
   };
 
   getInputValue = (): string => {
@@ -496,6 +503,7 @@ export default class ExpressionField extends React.Component<Props, State> {
       project,
       projectScopedContainersAccessor,
       expressionType,
+      expressionTypeExtraInfo,
       parameterMetadata,
       instruction,
       scope,
@@ -546,7 +554,8 @@ export default class ExpressionField extends React.Component<Props, State> {
           project,
           projectScopedContainersAccessor,
           expressionType,
-          parameterMetadata,
+          expressionTypeExtraInfo ||
+            (parameterMetadata ? parameterMetadata.getExtraInfo() : ''),
           expressionNode,
           objectName,
           showDeprecatedInstructionWarning
@@ -586,7 +595,8 @@ export default class ExpressionField extends React.Component<Props, State> {
       gd.JsPlatform.get(),
       projectScopedContainersAccessor.get(),
       expressionType,
-      parameterMetadata ? parameterMetadata.getExtraInfo() : '',
+      expressionTypeExtraInfo ||
+        (parameterMetadata ? parameterMetadata.getExtraInfo() : ''),
       objectName,
       expressionNode,
       isVariableParameter ? Math.max(0, cursorPosition - 1) : cursorPosition - 1
@@ -790,7 +800,8 @@ export default class ExpressionField extends React.Component<Props, State> {
                       </Popper>
                     </ClickAwayListener>
                   )}
-                  {this._inputElement &&
+                  {this.isFocused() &&
+                    this._inputElement &&
                     !this.state.popoverOpen &&
                     parameterRenderingService && (
                       <ExpressionAutocompletionsDisplayer
