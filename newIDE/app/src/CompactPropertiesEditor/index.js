@@ -939,6 +939,25 @@ const CompactPropertiesEditor = ({
     []
   );
 
+  const renderSubgroupTitle = React.useCallback(
+    (field: { name: string, title: string }) => {
+      return [
+        <LineStackLayout
+          expand
+          noMargin
+          alignItems="center"
+          key={field.name + '-title'}
+        >
+          <Text size="body-small" color="secondary" noMargin>
+            {field.title}
+          </Text>
+          <Level2Separator />
+        </LineStackLayout>,
+      ];
+    },
+    []
+  );
+
   return renderContainer(
     schema.map(field => {
       if (!!field.nonFieldType) {
@@ -991,11 +1010,11 @@ const CompactPropertiesEditor = ({
           );
 
         if (field.title) {
+          const titleField = { title: field.title, name: field.name };
           return [
-            ...renderSectionLevel2Title({
-              title: field.title,
-              name: field.name,
-            }),
+            ...(field.isSubgroup
+              ? renderSubgroupTitle(titleField)
+              : renderSectionLevel2Title(titleField)),
             contentView,
           ];
         }
