@@ -12,10 +12,8 @@ describe('Resource3DPreviewContext', () => {
     const source = getSource();
 
     expect(source).toContain('clearResourcePreviews: () => void');
-    expect(source).toContain(
-      'Object.values(previewCache.current).forEach(revokeGeneratedPreview);'
-    );
-    expect(source).toContain('previewCache.current = {};');
+    expect(source).toContain('burstResource3DPreviewCache();');
+    expect(source).toContain('prefetchedModelRef.current = null;');
     expect(source).toContain('workerManagerRef.current.terminate();');
     expect(source).toContain(
       'workerManagerRef.current = new Resource3DPreviewWorkerManager();'

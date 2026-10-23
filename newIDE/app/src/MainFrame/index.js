@@ -314,6 +314,7 @@ import UrlStorageProvider from '../ProjectsStorage/UrlStorageProvider';
 import { findEmptyPathInWorkspaceFolder } from '../ProjectsStorage/LocalFileStorageProvider/LocalPathFinder';
 import useEditorTabsStateSaving from './EditorTabs/UseEditorTabsStateSaving';
 import PixiResourcesLoader from '../ObjectsRendering/PixiResourcesLoader';
+import { burstResource3DPreviewCache } from '../ResourcesList/ResourcePreview/Resource3DPreviewCache';
 import useResourcesWatcher from './ResourcesWatcher';
 import useLocalProjectChangesWatcher, {
   showLocalProjectFilesChangedDialog,
@@ -2244,6 +2245,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       // for another resource with the same name in the new project.
       ResourcesLoader.burstAllUrlsCache();
       PixiResourcesLoader.burstCache();
+      burstResource3DPreviewCache();
 
       // Set the on-disk path before exposing the project via state so that
       // consumers (like the CLI command dispatcher) can call getProjectFile()
