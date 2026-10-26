@@ -42,6 +42,49 @@ describe('UrlStorageProvider', () => {
     );
   });
 
+  it('normalizes obsolete template fields before returning native JSON to the editor', async () => {
+    axiosGetMock
+      .mockResolvedValueOnce({
+        data: {
+          eventsFunctionsExtensions: [
+            {
+              name: 'Controls',
+              eventsBasedBehaviors: [
+                { name: 'Input', propertyDescriptors: [{ name: 'Enabled' }] },
+              ],
+            },
+          ],
+          layouts: [
+            {
+              objects: [
+                {
+                  name: 'Player',
+                  behaviors: [
+                    {
+                      name: 'Input',
+                      type: 'Controls::Input',
+                      Enabled: false,
+                      FloatingEnabled: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      })
+      .mockRejectedValueOnce({ response: { status: 403 } });
+    const result = await createOnOpen()({
+      fileIdentifier:
+        'https://resources.gdevelop-app.com/examples/platformer/platformer.json',
+    });
+    expect(result.content.layouts[0].objects[0].behaviors[0]).toEqual({
+      name: 'Input',
+      type: 'Controls::Input',
+      Enabled: false,
+    });
+  });
+
   it('loads sibling constants and preserves URL authorization parameters', async () => {
     const projectUrl =
       'https://private-assets.gdevelop.io/template/game.json?token=secret';

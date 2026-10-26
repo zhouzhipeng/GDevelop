@@ -150,11 +150,11 @@ The native conversion maps the legacy extension as follows:
 | `eventsFunctions[].events`                                                        | Matching `functions/<F>.events`                                                                |
 | `eventsBasedObjects[]` metadata, flat property descriptors, groups, and variables | One `prefabs/<P>/prefab.settings` each                                                         |
 | Default child object definitions and attached behaviors                           | One flat `prefabs/<P>/objects/<Object>.settings` each; grouping is `folder`                    |
-| Prefab default-variant instances/layers/spatial bounds/editor layout state        | Embedded `[layout]` in `prefabs/<P>/prefab.settings`                                           |
+| Prefab default-variant instances/layers/spatial bounds/editor layout state        | Root layout nodes in `prefabs/<P>/prefab.settings`                                           |
 | Prefab `eventsFunctions[]` metadata/bodies and function grouping                  | `prefabs/<P>/functions/<F>.settings` (`folder`) plus same-stem `<F>.events`                    |
 | Prefab non-default variant metadata/groups                                        | `prefabs/<P>/variants/<Variant>/variant.settings`                                              |
 | Prefab non-default variant child definitions/behaviors                            | One flat `prefabs/<P>/variants/<Variant>/objects/<Object>.settings` each; grouping is `folder` |
-| Prefab non-default variant instances/layers/spatial bounds/editor state           | Embedded `[layout]` in `variants/<Variant>/variant.settings`                                  |
+| Prefab non-default variant instances/layers/spatial bounds/editor state           | Root layout nodes in `variants/<Variant>/variant.settings`                                  |
 | `eventsBasedBehaviors[]` owner metadata                                           | One `behaviors/<B>/behavior.settings` each                                                     |
 | Behavior `eventsFunctions[]` metadata/bodies and function grouping                | `behaviors/<B>/functions/<F>.settings` (`folder`) plus same-stem `<F>.events`                  |
 
@@ -180,7 +180,7 @@ dependency/compatibility issue before retrying.
 ## Verify and report
 
 1. Parse every new settings TOML fragment independently and as combined
-   settings; semantically compile every generated embedded `[layout]` subtree
+   settings; semantically compile every generated root layout nodes
    as layout TOML version 1.
 2. Confirm no downloaded `.json` file was added to project source.
 3. Confirm the import receipt lists the requested extension, its generated

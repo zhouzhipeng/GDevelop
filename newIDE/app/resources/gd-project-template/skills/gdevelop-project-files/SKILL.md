@@ -1,6 +1,6 @@
 ---
 name: gdevelop-project-files
-description: Create, inspect, modify, refactor, and verify GDevelop games through the version 7 multi-file project sources (`project.gdevelop`, `constants.toml`, `.settings`, `.events`, `tests.settings`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
+description: Create, inspect, modify, refactor, and verify GDevelop games through the version 9 multi-file project sources (`project.gdevelop`, `constants.toml`, `.settings`, `.events`, `tests.settings`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
 ---
 
 # GDevelop Project Files
@@ -64,8 +64,7 @@ Read, in order:
 4. `tests.settings`, then the selected flat `tests/*.js` source when gameplay
    tests are in scope.
 5. `.gdevelop/settings-catalog.json`, then relevant child `.settings` files
-   for semantic configuration, object definitions, and embedded `[layout]`
-   subtrees, including instances, layers, spatial bounds, background, and
+   for semantic configuration, object definitions, and root layer and instance nodes, including instances, layers, spatial bounds, background, and
    editor-canvas state.
 6. `.gdevelop/project-module-map.json` to locate scene, external-fragment, and
    extension event sources and their static Link relationships; then read the
@@ -107,21 +106,20 @@ This refresh is not validation and does not replace the final
 Use the catalogs as authoring contracts:
 
 - In `settings-catalog.json`, read `fileKinds` for the target document's path,
-  mounted namespace, local TOML root, required/common/forbidden fields, and ownership boundary.
+  typed DSL root, required fields, and ownership boundary.
   Treat the matching `schema.rootFields` and recursively nested
-  `schema.childTables` as the complete structural contract, including exact
-  TOML headers, child-record fields, dynamic-key rules, and empty forms;
-  `commonFields` is only a search summary. Search
+  `schema.childNodes` as the complete structural contract, including exact
+  node types, child-record fields, dynamic-key rules, and empty forms;
+  Search
   `objectTypes`, `behaviorTypes`, and `effectTypes` for exact registered type
   names, defaults, requirements, and property metadata. Use `settingsOwners`
   to resolve existing project components and their object definitions. For an
   attached behavior, initialize or edit only properties listed in its
   `behaviorTypes` entry. Editor-hidden, deprecated, extension-owned, and legacy
   serializer properties are deliberately absent from the authoring surface;
-  never invent them, but preserve every unlisted field already present in an
-  object settings file or legacy JSON source.
+  never invent them, but retain only registered serializer fields; unknown fields are rejected.
 - In `settings-catalog.json`, read `layoutTables` for exact context-specific
-  headers, fields, value types, defaults, and constraints. Select the one
+  nodes, fields, value types, defaults, and constraints. Select the one
   `layoutContexts` entry whose `owner` matches the scene, prefab, variant, or
   external layout, then use only its listed layers, objects, and attached
   behaviors. Search `effectTypes` for exact effect parameters and types.
@@ -129,7 +127,7 @@ Use the catalogs as authoring contracts:
   stop instead of guessing. If a direct edit introduces a new object or
   attached behavior name, validate its registered type in the settings catalog,
   define it first in the owning `.settings` file, and then reference that exact
-  new name in the same coherent owner-settings `[layout]` patch; the saved layout context will
+  new name in the same coherent owner-settings patch; the saved layout context will
   list it after GDevelop regenerates the catalogs.
 
 Treat additive semantic and capability metadata as enforceable contracts:
@@ -155,7 +153,7 @@ Search narrowly, for example:
 ```sh
 rg '"type":"Sprite"' .gdevelop/settings-catalog.json
 rg '"type":"Tween::TweenBehavior"' .gdevelop/settings-catalog.json
-rg '"table":"instances"' .gdevelop/settings-catalog.json
+rg '"table":"instance"' .gdevelop/settings-catalog.json
 rg '"owner":{"scene":"Main"}' .gdevelop/settings-catalog.json
 ```
 
@@ -164,126 +162,49 @@ generated compatibility/runtime output, not multi-file source.
 
 ## File contract
 
-- `.settings`: TOML semantic/configuration data, including object definitions
-  and their complete behavior/variable/effect configuration. Keep every file
-  independent, local-root, and unindented. The physical path supplies the
-  mounted namespace, so never repeat owner names in long TOML table headers.
-  Never embed another settings document. Follow the matching settings-catalog
-  `fileKinds` entry and use only registered type metadata from that catalog.
-- Variable definitions: in `variables`, `globalVariables`, and
-  `sceneVariables`, write one repeated `[[variables]]`,
-  `[[globalVariables]]`, or `[[sceneVariables]]` record per variable. Every
-  record contains an explicit `name` plus its complete descriptor, for example
-  `name = "Controllers"`, `type = "array"`, and `children = [...]`. Represent
-  an empty container only as `variables = [ ]`, `globalVariables = [ ]`, or
-  `sceneVariables = [ ]`. Never write keyed `[variables]` tables, whole
-  containers as inline tables, non-empty inline descriptor arrays, or recursive
-  `[[variables.children]]` tables.
-- Object groups: use only an `[objectGroups]` table in the owning project,
-  scene, prefab, prefab-variant, or function settings. Each key is the group
-  name and each value is an array of object names, for example
-  `Buttons = ["PauseButton", "Retry"]`. Use `objectGroups = { }` when there
-  are no groups. Preserve a group's `requiredBehaviors` with an optional
-  `[objectGroupRequiredBehaviors]` companion table whose matching group key
-  contains the behavior-type string array. Never write `objectsGroups`,
-  `objectGroups = []`, `[[objectsGroups]]`, or nested group/member descriptor
-  tables.
-- Sprite points: keep `originPoint` and `centerPoint` as inline TOML tables;
-  keep named `points` and `customCollisionMask` vertices as inline arrays of
-  point tables. Never expand point data into long dotted TOML headers. For
-  example: `originPoint = { name = "Origin", x = 0, y = 0 }`.
-- `constants.toml`: the entire root document is editor-only Constants.
-  Author data directly, with no `[settings]`, `[constants]`, format-version,
-  or raw-JSON metadata wrapper. Use only values TOML can represent losslessly.
-- Embedded layout: layout-bearing owner `.settings` files contain `[layout]`,
-  optional `[layout.editor]`, and short `[[layout.layers]]`,
-  `[[layout.effects]]`, `[[layout.instances]]`, `[[layout.variables]]`, and
-  `[[layout.behaviors]]` records. Never put object definitions or attached
-  behavior definitions in the embedded layout subtree. Instance
-  behavior overrides are allowed only for behaviors already attached by the
-  owning `.settings` object definition. Follow the matching settings-catalog
-  `layoutContexts` entry and `layoutTables` definitions.
-- `.events`: IfDo DSL only. Do not embed TOML or raw event JSON.
-- `tests.settings`: the single root manifest for project and extension gameplay
-  tests. Keep `kind = "tests"` and `settingsFormatVersion = 7`. Each `[[tests]]`
-  record has `scope`, container-local contiguous `order`, `name`, `type`,
-  `description`, and a scheme-free canonical `file`; extension-owned records
-  also have `extension`. Use `tests = [ ]` for no tests. Never write the retired
-  `source` path field or last-run summary fields here.
-- `tests/*.js`: one UTF-8 async test body per `tests.settings` record. Sources
-  are flat directly below `tests/`; nested paths, absolute paths, traversal,
-  `game://` prefixes, aliases, and shared source files are invalid. Percent
-  encoding and deterministic collision suffixes are allocated by the version
-  5 writer. The preferred basename is the test name for project scope and
-  `<Extension> - <Test>` for extension scope; the writer encodes that whole
-  basename. The exact `tests.settings` `file` is authoritative.
-- References: use canonical `game://...` URIs rooted at `project.gdevelop`.
-- `.gdevelop/`: generated/editor state. Read catalogs; do not author sources
-  there. Use `instructions-catalog.json` as the only source for constructing
-  new event instructions. `deprecated-instructions-catalog.json` exists only
-  so you can understand legacy projects and make targeted edits to deprecated
-  instructions already present in their `.events` files. Never select an
-  instruction from the deprecated catalog when constructing new events, and
-  never introduce a new use of a deprecated instruction. Preserve or minimally
-  edit an existing deprecated instruction only when the user's legacy project
-  requires it; use a current replacement from `instructions-catalog.json`
-  whenever the edit can migrate it safely. Imported projects may contain
-  inferred signatures for removed instructions in this deprecated catalog;
-  treat them with the same legacy-only restriction.
-  `runtime-api.d.ts` and `project-api.d.ts` are the approved JavaScript-event
-  surface. `harness-api.d.ts` is the approved gameplay-test surface and may
-  depend on public types from the runtime and project declarations.
-  `tsl-api.d.ts` and `tsl-catalog.json` are the approved TSL material surface;
-  they are paired and version-pinned. Read the applicable declarations before
-  changing `@js`, a test, or a TSL source; never hand-edit a declaration or
-  recover private APIs from runtime source/generated code.
+All `.settings` and `project.gdevelop` use **Settings DSL**, not TOML. Read
+[Settings DSL](references/settings-dsl.md) before editing declarations.
 
-Preserve component order, stable names, existing unknown fields, and ownership
-boundaries. Make the smallest coherent patch. When adding a component, create
-its physical component directory and every referenced source file in the same
-change. Never write optional component-grouping directories or `eventsFunctionsFolderStructure`,
-`objectsFolderStructure`, `propertiesFolderStructure`, or
-`sharedPropertiesFolderStructure`. Object and owner-function settings store
-editor grouping as `folder = ["Parent", "Child"]`; use `folder = []` for the
-root. There is no property tree: prefab
-`propertyDescriptors` and behavior
-`propertyDescriptors`/`sharedPropertyDescriptors` are flat arrays in source
-order.
-
-Give every global, scene, default-prefab, and variant-prefab object its own
-`<Object>.settings` file directly under the owner's flat `objects/` directory. Put
-the complete object definition there, including behaviors, variables, effects,
-and type-specific configuration. `project.gdevelop`, `scene.settings`, and
-`prefab.settings` must not embed object definitions. Keep object groups and
-other owner-wide configuration in the owner settings. Put only instances,
-layers, background/bounds, and editor layout state in the owner's reserved
-`[layout]` subtree.
-For type-specific object configuration, resolve the registered entry in
-`settings-catalog.json` by `objectTypes[].type`: use its `properties` for
-public generic-editor fields and its recursive `schema` for exact serialized
-root fields, child tables, repeated tables, and empty forms. Preserve existing
-unlisted legacy or private serializer fields.
-For each attached behavior, keep its identity fields and complete existing
-serializer data in `<Object>.settings`. Initialize or edit only the
-author-writable properties present in `settings-catalog.json`; preserve
-unlisted fields verbatim because specialized editors may own runtime-required
-configuration that the generic catalog intentionally hides.
-
-Give each real scene, extension, prefab, or behavior function one same-stem
-`functions/<Function>.settings` and `functions/<Function>.events` pair. Function
-settings never contain an events URI. Scenes use the reserved lifecycle roles
-`sceneLoad`, `sceneSignal`, `sceneUpdate`, and `sceneUnload`; infer their presence
-from settings/events pairs, never from a `sceneLifecycleFunctions` settings key.
-External Events are plain event fragments, not functions. Each uses a same-stem
-`scenes/<Scene>/external-events/<Fragment>.settings` and `.events` pair. Read
-`eventFileKinds` in `settings-catalog.json` for this source contract. The
-settings root contains `kind = "externalEvents"`, `settingsFormatVersion = 7`,
-`name`, `description`, and `eventsLogic`; the last two describe purpose and
-event flow without changing runtime behavior. Never create function folders,
-parameter declarations, or a registration manifest for a fragment.
-Store editable prefab/behavior grouping in the function settings `folder` array.
-Lifecycle function names, order, roles, types, and parameters are fixed and must
-not be edited.
+- Use `key = value` for properties and `node { ... }` for structure. Names,
+  IDs and all properties belong inside the node. Two-space indentation is
+  canonical; braces determine ownership. One declaration per line.
+- Every document has exactly one typed root: project, resources, tests,
+  scene, prefab, variant, external, external_events, object, function,
+  extension or behavior. The physical path supplies the owning scope.
+- Only project.gdevelop has `formatVersion = 9`. Do not write kind,
+  settingsFormatVersion, TOML headers, per-document format versions, or
+  settings/layout wrapper nodes. Extension metadata can still have a semantic
+  version string when its schema defines one.
+- Scene, prefab, variant and external settings contain their own configuration
+  and layout. Put layer and instance directly below that root. Layer contains
+  camera/effect; instance contains properties/variable/behavior overrides.
+  Root instance order is global serialized order; preserve UUIDs.
+- Object definitions remain flat `objects/<Object>.settings` files. An
+  object.behavior defines an attachment; instance.behavior only overrides an
+  existing attachment. Dynamic fields must be registered in the catalog.
+- Declare repeated `variable {}` nodes directly on the owner, with `name` and
+  `value`. Use `{ Key = value }` structures and `[]` arrays inside value; infer
+  ordinary types and declare enum explicitly. Extension defaults require scope.
+  Descendant UUID/enum/editor data uses metadata nodes with typed path arrays.
+  UUID id is optional; preserve existing ids for editor variable refactoring.
+  Collection wrappers, recursive variable children and shorthand are rejected.
+  Root variables and instance variables have different scopes.
+- Object groups use `objectGroups { Group = ["Player"] }`, expanded across
+  lines. Required behaviors use objectGroupRequiredBehaviors. Empty repeated
+  collections may use an empty array assignment; nonempty record collections
+  use child nodes.
+- Sprite points use structured originPoint/centerPoint/point nodes; collision
+  masks use polygon nodes containing point nodes. No inline object literals.
+- Functions and external fragments use same-stem .settings/.events pairs.
+  Keep function signatures in settings and IfDo statements in events.
+- tests.settings has a tests root with repeated test nodes. Scripts remain
+  direct children of tests/; `file` is a canonical root-relative path, with
+  no game:// prefix. Run results are ignored state below .gdevelop.
+- constants.toml remains direct-root TOML for editor Constants. It is the
+  explicit exception and has no settings markers. Assets, events and generated
+  JSON do not change their formats.
+- Only the latest DSL is accepted. Unknown fields/types are errors. There is
+  no old-format reader, rawJson escape hatch or migration workflow.
 
 ## Project layout
 
@@ -333,7 +254,7 @@ Do not create optional component-grouping folders. Canonical component directori
 fixed; object/function grouping belongs in each settings file's `folder`
 array. Settings files never reference other settings files.
 
-In format version 7, each same-stem `.settings` and `.events` pair under
+In format version 9, each same-stem `.settings` and `.events` pair under
 `external-events/` declares a fragment. Its decoded filename and settings
 `name` supply its project-unique NFC identity; the physical scene supplies its
 authoring context. Names must also be unique ignoring case. There is no
@@ -343,7 +264,7 @@ inherits parent conditions, picked objects and local variables. Empty,
 comment-only and unreferenced event bodies are valid, but the settings file is
 still required. Declare an external layout
 independently with `scenes/<Scene>/external-layout/<External>.settings`; it owns
-its identity, project-wide contiguous `order`, and embedded `[layout]` subtree.
+its identity, project-wide contiguous `order`, and root layout nodes subtree.
 Do not write `externalEventFiles`, `externalLayoutFiles`, layout URIs,
 `associatedLayout`, `linkedScene`, or `unresolvedScene`, and never create a
 root `externals/external.settings`.
@@ -397,8 +318,8 @@ Load only the references required by the task:
 - Read [references/create-extensions.md](references/create-extensions.md) in
   full before creating an extension or adding/removing extension-level
   functions, prefabs, behaviors, or their functions.
-- Read [references/layout-toml.md](references/layout-toml.md) in full before
-  creating or changing any embedded `[layout]` subtree. Preserve existing UUIDs and use its
+- Read [references/settings-dsl.md](references/settings-dsl.md) in full before
+  creating or changing layout nodes. Preserve existing UUIDs and use its
   exact scene, prefab/variant, or external-layout context rules.
 - Read [references/events-dsl.md](references/events-dsl.md) in full before
   creating or changing any `.events` file. Use only its canonical IfDo
@@ -411,7 +332,7 @@ Load only the references required by the task:
 - Read
   [references/gameplay-test-harness.md](references/gameplay-test-harness.md)
   in full before creating or materially modifying `tests.settings` or any
-  `tests/*.js` script. Use the exact flat version 7 file identity, read the
+  `tests/*.js` script. Use the exact flat version 9 file identity, read the
   generated `.gdevelop/harness-api.d.ts` contract, and complete its
   validation, reload, run, and result-polling workflow.
 - Read [references/tsl-materials.md](references/tsl-materials.md) in full
@@ -568,7 +489,7 @@ loop, comment, and JavaScript metadata when editing existing sources.
 5. Re-read every changed manifest reference. Verify each `game://` URI exists
    and stays inside the project; separately verify each `tests.settings` file
    identity is a scheme-free canonical flat `tests/<Encoded name>.js` path.
-6. Check settings and layout TOML syntax/semantics, duplicate
+6. Check settings and Settings DSL layout syntax/semantics, duplicate
    namespaces, event depth, instruction names, named parameters, gameplay-test
    manifest/source ownership, and asset paths.
 7. Call the no-input GDevelop MCP `validate_project_files` tool after the most
@@ -825,18 +746,15 @@ second reload while the recorded operation is still running.
 
 Before finishing:
 
-- Confirm every changed `.settings` file is unindented, independently parseable
-  TOML; confirm every embedded `[layout]` subtree is canonical layout TOML
-  version 1 and uses only `layout.*` child headers.
-- Confirm embedded layout subtrees contain only placement/layout concepts and
+- Confirm every changed `.settings` parses as latest Settings DSL and validates against its registered component and layout schemas.
+- Confirm layer and instance nodes contain only placement/layout concepts and
   contain no `objects`, `objectGroups`, or behavior definitions.
 - Confirm no `.settings` file contains a legacy `*FolderStructure` property;
   object/function grouping uses only a valid local `folder` array.
 - Confirm every global, scene, and prefab object definition and its complete
   behaviors are at the local root of its individual `<Object>.settings` file.
 - Confirm attached behaviors use catalog-listed properties for new edits and
-  preserve every existing unlisted serialized field verbatim. Do not treat a
-  field's absence from the catalog as permission to delete it.
+  use the complete registered serializer schema; unknown fields are errors.
 - Confirm prefab and behavior property descriptor arrays are flat and contain
   no grouping/folder metadata.
 - Confirm every prefab/behavior function has a flat same-stem

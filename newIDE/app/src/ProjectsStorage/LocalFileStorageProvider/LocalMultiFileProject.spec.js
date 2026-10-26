@@ -12,9 +12,7 @@ import {
   areLegacyProjectsEquivalent,
 } from '../MultiFileProjectFormat';
 import {
-  hashLegacySource,
   GAMEPLAY_TEST_RESULTS_RELATIVE_PATH,
-  migrateLegacyProject,
   openMultiFileProject,
   readMultiFileSourceTree,
   recoverMultiFileTransactions,
@@ -470,7 +468,7 @@ describe('Local multi-file project storage', () => {
       'scenes/Main/external-events/Shared Combat.settings'
     );
     expect(fs.readFileSync(fragmentSettingsPath, 'utf8')).toContain(
-      'kind = "externalEvents"'
+      'external_events {'
     );
     fs.writeFileSync(
       fragmentSettingsPath,
@@ -526,7 +524,7 @@ describe('Local multi-file project storage', () => {
     });
     fs.writeFileSync(
       path.join(root, 'New fragment.settings'),
-      'kind = "externalEvents"\nsettingsFormatVersion = 7\nname = "New fragment"\ndescription = ""\neventsLogic = ""\n',
+      'external_events {\n name = "New fragment"\n description = ""\n eventsLogic = ""\n}\n',
       'utf8'
     );
     const project = await openMultiFileProject(entryPath);
@@ -586,14 +584,14 @@ describe('Local multi-file project storage', () => {
 
     const projectSource = fs
       .readFileSync(entryPath, 'utf8')
-      .replace('[[variables]]', '[variables]');
+      .replace('variable {', 'invalidVariables {');
     const sceneSettingsPath = path.join(
       temporaryDirectory,
       'scenes/Main/scene.settings'
     );
     const sceneSource = fs
       .readFileSync(sceneSettingsPath, 'utf8')
-      .replace('[[variables]]', '[variables]');
+      .replace('variable {', 'invalidVariables {');
     fs.writeFileSync(entryPath, projectSource, 'utf8');
     fs.writeFileSync(sceneSettingsPath, sceneSource, 'utf8');
     const untouchedEventsPath = path.join(
@@ -603,7 +601,7 @@ describe('Local multi-file project storage', () => {
     const untouchedEvents = fs.readFileSync(untouchedEventsPath, 'utf8');
 
     await expect(openMultiFileProject(entryPath)).rejects.toEqual(
-      expect.objectContaining({ code: 'MULTIFILE_INVALID_VARIABLES' })
+      expect.objectContaining({ code: 'SETTINGS_UNKNOWN_NODE' })
     );
     expect(fs.readFileSync(entryPath, 'utf8')).toBe(projectSource);
     expect(fs.readFileSync(sceneSettingsPath, 'utf8')).toBe(sceneSource);
@@ -786,7 +784,7 @@ describe('Local multi-file project storage', () => {
     ).toBe(true);
   });
 
-  test('rebuilds a pre-merge settings catalog and removes the retired layout catalog', async () => {
+  test('rebuilds a stale behavior schema catalog and removes the retired layout catalog', async () => {
     const gd: libGDevelop = global.gd;
     const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
     const project = gd.ProjectHelper.createNewGDJSProject();
@@ -811,7 +809,14 @@ describe('Local multi-file project storage', () => {
     const staleSettingsCatalog = JSON.parse(
       fs.readFileSync(settingsCatalogPath, 'utf8')
     );
-    staleSettingsCatalog.formatVersion = 1;
+    staleSettingsCatalog.formatVersion = 5;
+    const stalePlatformer = staleSettingsCatalog.behaviorTypes.find(
+      type => type.type === 'PlatformBehavior::PlatformerObjectBehavior'
+    );
+    stalePlatformer.serializedDefaults = {};
+    stalePlatformer.serializedProperties = stalePlatformer.serializedProperties.filter(
+      property => property.serializedKey !== 'useLegacyTrajectory'
+    );
     fs.writeFileSync(
       settingsCatalogPath,
       JSON.stringify(staleSettingsCatalog),
@@ -824,12 +829,17 @@ describe('Local multi-file project storage', () => {
     const rebuiltSettingsCatalog = JSON.parse(
       fs.readFileSync(settingsCatalogPath, 'utf8')
     );
+    expect(
+      rebuiltSettingsCatalog.behaviorTypes.find(
+        type => type.type === 'PlatformBehavior::PlatformerObjectBehavior'
+      ).serializedProperties
+    ).toContainEqual({ serializedKey: 'useLegacyTrajectory', type: 'boolean' });
     expect(rebuiltSettingsCatalog).toMatchObject({
       format: 'gdevelop-settings-catalog',
-      formatVersion: 4,
+      formatVersion: 8,
       layoutAuthoring: {
-        storage: 'embedded-settings',
-        rootTable: 'layout',
+        storage: 'component-root',
+        syntax: 'Settings DSL',
       },
     });
     expect(rebuiltSettingsCatalog.layoutTables.length).toBeGreaterThan(0);
@@ -955,6 +965,13 @@ describe('Local multi-file project storage', () => {
   });
 
   test('routes prefab definition and instance edits to their owning files', async () => {
+    // $FlowFixMe[cannot-resolve-module] Load the runtime extension's current metadata.
+    const tweenExtension = require('../../../../../Extensions/TweenBehavior/JsExtension').createExtension(
+      message => message,
+      global.gd
+    );
+    global.gd.JsPlatform.get().addNewExtension(tweenExtension);
+    tweenExtension.delete();
     const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
     const project = JSON.parse(JSON.stringify(projectFixture));
     project.eventsFunctionsExtensions = [
@@ -1117,11 +1134,11 @@ describe('Local multi-file project storage', () => {
       const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
       await writeLegacyProjectAsMultiFile(serializedProject, entryPath);
       const projectSettings = fs.readFileSync(entryPath, 'utf8');
-      expect(projectSettings).toContain('[objectGroups]');
-      expect(projectSettings).toContain('"Global Actors" = [ "GlobalPlayer" ]');
-      expect(projectSettings).toContain('[objectGroupRequiredBehaviors]');
+      expect(projectSettings).toContain('objectGroups {');
+      expect(projectSettings).toContain('"Global Actors" = ["GlobalPlayer"]');
+      expect(projectSettings).toContain('objectGroupRequiredBehaviors {');
       expect(projectSettings).toContain(
-        '"Global Actors" = [ "Tween::TweenBehavior" ]'
+        '"Global Actors" = ["Tween::TweenBehavior"]'
       );
       expect(
         areLegacyProjectsEquivalent(
@@ -1136,7 +1153,7 @@ describe('Local multi-file project storage', () => {
 
   test('stores prefab and behavior function grouping in function settings', async () => {
     const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
-    const makeFunction = name => ({
+    const makeFunction = (name: string) => ({
       name,
       functionType: 'Action',
       fullName: name,
@@ -1384,7 +1401,7 @@ describe('Local multi-file project storage', () => {
       ),
       'utf8'
     );
-    expect(prefabSettings).toContain('[layout]');
+    expect(prefabSettings).toContain('bounds {');
     expect(prefabSettings).not.toContain('.functions.');
     expect(prefabSettings).not.toContain('ReceiveDamage.events');
     project = renamed;
@@ -1427,112 +1444,15 @@ describe('Local multi-file project storage', () => {
     ).toBe(true);
   });
 
-  test('migrates without modifying the original JSON', async () => {
+  test('rejects JSON project opening without migration', async () => {
     const legacyPath = path.join(temporaryDirectory, 'game.json');
-    const legacySource = `${JSON.stringify(projectFixture, null, 2)}\n`;
-    fs.writeFileSync(legacyPath, legacySource, 'utf8');
-
-    const { entryPath } = await migrateLegacyProject({
-      legacyPath,
-      legacySource,
-      legacyProject: projectFixture,
+    fs.writeFileSync(legacyPath, JSON.stringify(projectFixture));
+    await expect(onOpen({ fileIdentifier: legacyPath })).rejects.toMatchObject({
+      code: 'MULTIFILE_UNSUPPORTED_VERSION',
     });
-
-    expect(fs.readFileSync(legacyPath, 'utf8')).toBe(legacySource);
-    expect(fs.readFileSync(entryPath, 'utf8')).toContain(
-      `sourceSha256 = "${hashLegacySource(legacySource)}"`
-    );
     expect(
-      areLegacyProjectsEquivalent(
-        projectFixture,
-        await openMultiFileProject(entryPath)
-      )
-    ).toBe(true);
-  });
-
-  test('local project opening migrates once and redirects metadata', async () => {
-    const legacyPath = path.join(temporaryDirectory, 'game.json');
-    const { constants, ...projectContent } = projectFixture;
-    const legacySource = `${JSON.stringify(projectContent, null, 2)}\n`;
-    fs.writeFileSync(legacyPath, legacySource, 'utf8');
-    fs.writeFileSync(
-      path.join(temporaryDirectory, 'constants.toml'),
-      '',
-      'utf8'
-    );
-
-    const firstResult = await onOpen({ fileIdentifier: legacyPath });
-    if (!firstResult.fileMetadata)
-      throw new Error('Expected migration metadata.');
-    expect(firstResult.fileMetadata.fileIdentifier).toBe(
-      path.join(temporaryDirectory, 'project.gdevelop')
-    );
-    expect(fs.readFileSync(legacyPath, 'utf8')).toBe(legacySource);
-    expect(firstResult.constants).toEqual(constants);
-
-    const secondResult = await onOpen({ fileIdentifier: legacyPath });
-    if (!secondResult.fileMetadata)
-      throw new Error('Expected redirected migration metadata.');
-    expect(secondResult.fileMetadata.fileIdentifier).toBe(
-      path.join(temporaryDirectory, 'project.gdevelop')
-    );
-    expect(
-      areLegacyProjectsEquivalent(firstResult.content, secondResult.content)
-    ).toBe(true);
-
-    fs.writeFileSync(legacyPath, `${legacySource} `, 'utf8');
-    await expect(onOpen({ fileIdentifier: legacyPath })).rejects.toThrow(
-      /diverged/
-    );
-  });
-
-  test('legacy migration preserves resource names and normalizes only local files', async () => {
-    const legacyPath = path.join(temporaryDirectory, 'game.json');
-    const { constants, ...projectContent } = JSON.parse(
-      JSON.stringify(projectFixture)
-    );
-    const legacyResourceName = 'legacy\\models\\model.glb';
-    projectContent.resources.resources.push({
-      kind: 'model3D',
-      name: legacyResourceName,
-      file: 'assets\\models\\model.glb',
-      metadata: '',
-      userAdded: true,
-    });
-    projectContent.resources.resources.push({
-      kind: 'image',
-      name: 'legacy/url-image.png',
-      file: 'https://example.com/images\\image.png',
-      metadata: '',
-      smoothed: true,
-      userAdded: true,
-    });
-    const legacySource = `${JSON.stringify(projectContent, null, 2)}\n`;
-    fs.writeFileSync(legacyPath, legacySource, 'utf8');
-    fs.writeFileSync(
-      path.join(temporaryDirectory, 'constants.toml'),
-      '',
-      'utf8'
-    );
-
-    const result = await onOpen({ fileIdentifier: legacyPath });
-
-    expect(fs.readFileSync(legacyPath, 'utf8')).toBe(legacySource);
-    expect(result.constants).toEqual(constants);
-    const migratedLocalResource = result.content.resources.resources.find(
-      resource => resource.name === legacyResourceName
-    );
-    expect(migratedLocalResource).toMatchObject({
-      name: legacyResourceName,
-      file: 'assets/models/model.glb',
-    });
-    const migratedUrlResource = result.content.resources.resources.find(
-      resource => resource.name === 'legacy/url-image.png'
-    );
-    expect(migratedUrlResource).toMatchObject({
-      name: 'legacy/url-image.png',
-      file: 'https://example.com/images\\image.png',
-    });
+      fs.existsSync(path.join(temporaryDirectory, 'project.gdevelop'))
+    ).toBe(false);
   });
 
   test('resolves managed paths inside the project root', () => {
@@ -1625,7 +1545,7 @@ describe('Local multi-file project storage', () => {
         fileKind =>
           fileKind.schema &&
           Array.isArray(fileKind.schema.rootFields) &&
-          Array.isArray(fileKind.schema.childTables)
+          typeof fileKind.schema.childNodes === 'object'
       )
     ).toBe(true);
     expect(
@@ -1643,7 +1563,7 @@ describe('Local multi-file project storage', () => {
         fileKind => fileKind.kind === 'externals'
       )
     ).toBe(false);
-    expect(settingsCatalog.counts.fileKinds).toBe(18);
+    expect(settingsCatalog.counts.fileKinds).toBe(17);
     expect(settingsCatalog.counts.objectTypes).toBeGreaterThan(5);
     expect(settingsCatalog.counts.behaviorTypes).toBeGreaterThan(5);
     expect(settingsCatalog.layoutContexts).toEqual(
@@ -1937,7 +1857,7 @@ describe('Local multi-file project storage', () => {
     );
     expect(moduleMap).toMatchObject({
       format: 'gdevelop-project-module-map',
-      sourceFormatVersion: 7,
+      sourceFormatVersion: 9,
       project: { name: 'Generated compatibility project' },
     });
     const generatedProject = JSON.parse(fs.readFileSync(generatedPath, 'utf8'));
@@ -2105,6 +2025,105 @@ column2 = "333"
     project.delete();
   });
 
+  test('preserves authored structure field order across a native editor save', async () => {
+    const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
+    const source = {
+      ...projectFixture,
+      properties: {
+        ...projectFixture.properties,
+        platforms: [{ name: 'GDevelop JS platform' }],
+        currentPlatform: 'GDevelop JS platform',
+      },
+      variables: [
+        {
+          name: 'Data',
+          type: 'structure',
+          children: [
+            { name: 'Z', type: 'number', value: 1 },
+            { name: 'A', type: 'number', value: 2 },
+          ],
+        },
+      ],
+    };
+    await writeLegacyProjectAsMultiFile(source, entryPath);
+    const project = global.gd.ProjectHelper.createNewGDJSProject();
+    try {
+      unserializeFromJSObject(project, await openMultiFileProject(entryPath));
+      expect(
+        serializeToJSObject(project).variables[0].children.map(
+          child => child.name
+        )
+      ).toEqual(['A', 'Z']);
+      // Opening the variable editor can assign ids to existing declarations;
+      // name-based fallback must still preserve their authored field order.
+      project.getVariables().ensurePersistentUuids();
+      await onSaveProject(project, { fileIdentifier: entryPath }, undefined, {
+        showAlert: jest.fn(),
+        showConfirmation: jest.fn(),
+      });
+      expect(
+        (await openMultiFileProject(entryPath)).variables[0].children.map(
+          child => child.name
+        )
+      ).toEqual(['Z', 'A']);
+    } finally {
+      project.delete();
+    }
+  });
+
+  test.each([false, true])(
+    'saves and reopens a platformer template with trajectory flag %s',
+    async useLegacyTrajectory => {
+      const project = global.gd.ProjectHelper.createNewGDJSProject();
+      const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
+      try {
+        unserializeFromJSObject(project, {
+          ...projectFixture,
+          properties: {
+            ...projectFixture.properties,
+            platforms: [{ name: 'GDevelop JS platform' }],
+            currentPlatform: 'GDevelop JS platform',
+          },
+        });
+        const player = project
+          .getLayoutAt(0)
+          .getObjects()
+          .insertNewObject(project, 'Sprite', 'Player', 0);
+        const behavior = player.addNewBehavior(
+          project,
+          'PlatformBehavior::PlatformerObjectBehavior',
+          'PlatformerObject'
+        );
+        if (!behavior)
+          throw new Error('Expected platformer behavior to be created.');
+        behavior.updateProperty(
+          'UseLegacyTrajectory',
+          useLegacyTrajectory ? '1' : '0'
+        );
+        await onSaveProject(project, { fileIdentifier: entryPath }, undefined, {
+          showAlert: jest.fn(),
+          showConfirmation: jest.fn(),
+        });
+        const source = fs.readFileSync(
+          path.join(temporaryDirectory, 'scenes/Main/objects/Player.settings'),
+          'utf8'
+        );
+        expect(source).toContain(
+          `useLegacyTrajectory = ${useLegacyTrajectory}`
+        );
+        expect(source).not.toContain('UseLegacyTrajectory =');
+        const reopened = await openMultiFileProject(entryPath);
+        expect(
+          reopened.layouts[0].objects[0].behaviors.find(
+            b => b.name === 'PlatformerObject'
+          )
+        ).toMatchObject({ useLegacyTrajectory, useRepeatedJump: false });
+      } finally {
+        project.delete();
+      }
+    }
+  );
+
   test('saves a platformer collision with its optional boolean default omitted', async () => {
     const gd: libGDevelop = global.gd;
     const project = gd.ProjectHelper.createNewGDJSProject();
@@ -2270,7 +2289,7 @@ column2 = "333"
     }
   });
 
-  test('preserves hidden Physics3D behavior properties without exposing them in the catalog', async () => {
+  test('preserves registered Physics3D fields in DSL and generated game data', async () => {
     const gd: libGDevelop = global.gd;
     const hiddenPhysics3DProperties = [
       ['meshShapeResourceName', 'PrivateCollider.glb', 'PrivateCollider.glb'],
@@ -2371,19 +2390,26 @@ column2 = "333"
       );
       const generatedBehavior =
         generatedGameJson.layouts[0].objects[0].behaviors[0];
-      const physics3DPropertyNames = settingsCatalog.behaviorTypes
-        .find(
-          behaviorType => behaviorType.type === 'Physics3D::Physics3DBehavior'
-        )
-        .properties.map(property => property.name);
       expect(objectSource).toContain('bodyType = "Static"');
-      expect(physics3DPropertyNames).not.toContain('layers');
-      expect(physics3DPropertyNames).not.toContain('masks');
+      expect(
+        settingsCatalog.behaviorTypes
+          .find(t => t.type === 'Physics3D::Physics3DBehavior')
+          .serializedProperties.map(p => p.serializedKey)
+      ).toContain('layers');
+      expect(
+        settingsCatalog.behaviorTypes
+          .find(t => t.type === 'Physics3D::Physics3DBehavior')
+          .serializedProperties.map(p => p.serializedKey)
+      ).toContain('masks');
       expect(objectSource).toContain('layers = 5');
       expect(objectSource).toContain('masks = 9');
       expect(generatedBehavior).toMatchObject({ layers: 5, masks: 9 });
       hiddenPhysics3DProperties.forEach(([propertyName, , serializedValue]) => {
-        expect(physics3DPropertyNames).not.toContain(propertyName);
+        expect(
+          settingsCatalog.behaviorTypes
+            .find(t => t.type === 'Physics3D::Physics3DBehavior')
+            .serializedProperties.map(p => p.serializedKey)
+        ).toContain(propertyName);
         expect(objectSource).toContain(propertyName);
         expect(generatedBehavior).toHaveProperty(propertyName, serializedValue);
       });
@@ -2420,7 +2446,7 @@ column2 = "333"
     );
     expect(
       fs.readFileSync(path.join(sceneDirectory, 'scene.settings'), 'utf8')
-    ).toContain('[layout]');
+    ).toContain('layer {');
     expect(
       fs.readFileSync(path.join(sceneDirectory, 'scene.settings'), 'utf8')
     ).not.toContain('sceneLifecycleFunctions');
@@ -2430,7 +2456,7 @@ column2 = "333"
     project.delete();
   });
 
-  test('preserves a legacy serialized behavior property removed from its extension', async () => {
+  test('rejects an unregistered behavior property without compatibility preservation', async () => {
     const gd: libGDevelop = global.gd;
     const project = gd.ProjectHelper.createNewGDJSProject();
     const extensionName = 'LegacyJoystickPropertyTest';
@@ -2481,31 +2507,12 @@ column2 = "333"
 
     try {
       const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
-      await onSaveProject(
-        project,
-        ({
-          fileIdentifier: entryPath,
-          name: project.getName(),
-          gameId: project.getProjectUuid(),
-          lastModifiedDate: 0,
-        }: any),
-        undefined,
-        {
+      await expect(
+        onSaveProject(project, { fileIdentifier: entryPath }, undefined, {
           showAlert: jest.fn(),
           showConfirmation: jest.fn(),
-        }
-      );
-
-      const objectSource = fs.readFileSync(
-        path.join(temporaryDirectory, 'scenes/Game/objects/Border.settings'),
-        'utf8'
-      );
-      expect(objectSource).toContain('FloatingEnabled = false');
-      const reopened = await openMultiFileProject(entryPath);
-      expect(reopened.layouts[0].objects[0].behaviors[0]).toHaveProperty(
-        'FloatingEnabled',
-        false
-      );
+        })
+      ).rejects.toMatchObject({ code: 'SETTINGS_UNKNOWN_FIELD' });
     } finally {
       project.delete();
       gd.JsPlatform.get().removeExtension(extensionName);

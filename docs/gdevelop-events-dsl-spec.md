@@ -1,6 +1,6 @@
 # IfDo Events DSL
 
-**Status:** Current syntax contract for multi-file project format 7.
+**Status:** Current syntax contract for multi-file project format 8.
 **Source:** UTF-8 `.events` files.
 **Implementation:** `newIDE/app/src/EventsSheet/IfDoEventsDsl/index.js` and
 `ProjectInstructionCatalog.js`. The parser's coverage version is `3.0`.

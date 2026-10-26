@@ -1,13 +1,15 @@
 // @noflow
 
-import { parse as parseToml } from 'smol-toml';
-
-export type LayoutTomlKind = 'scene' | 'prefab' | 'prefab-variant' | 'external';
+export type LayoutDocumentKind =
+  | 'scene'
+  | 'prefab'
+  | 'prefab-variant'
+  | 'external';
 
 type Location = { line: number, column: number };
 
-export type LayoutTomlContext = {
-  kind: LayoutTomlKind,
+export type LayoutDocumentContext = {
+  kind: LayoutDocumentKind,
   fileUri?: string,
   objectNames?: Array<string>,
   layerNames?: Array<string>,
@@ -33,7 +35,7 @@ export type LayoutTomlContext = {
   usedInstanceUuids?: Set<string>,
 };
 
-export const LAYOUT_TOML_VERSION = 1;
+export const LAYOUT_DOCUMENT_VERSION = 1;
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const COLOR = /^#[0-9A-F]{6}$/;
@@ -47,15 +49,6 @@ const ROOT_FIELDS = [
   'variables',
   'behaviors',
 ];
-const RECORD_HEADERS = new Set([
-  'layout',
-  'editor',
-  'layers',
-  'effects',
-  'instances',
-  'variables',
-  'behaviors',
-]);
 const EFFECT_STRUCTURAL_FIELDS = Object.freeze([
   'layer',
   'name',
@@ -65,7 +58,7 @@ const EFFECT_STRUCTURAL_FIELDS = Object.freeze([
 ]);
 const RETIRED_EFFECT_FIELDS = new Set(['params']);
 
-export class LayoutTomlError extends Error {
+export class LayoutDocumentError extends Error {
   code: string;
   fileUri: ?string;
   line: number;
@@ -84,11 +77,12 @@ export class LayoutTomlError extends Error {
         fileUri ? ` (${fileUri}:${line}:${column})` : ` (${line}:${column})`
       }`
     );
-    this.name = 'LayoutTomlError';
+    this.name = 'LayoutDocumentError';
     this.code = code;
     this.fileUri = fileUri || null;
     this.line = line;
     this.column = column;
+    Object.assign(this, location || {});
   }
 }
 
@@ -108,7 +102,7 @@ const fail = (
   message: string,
   record?: mixed
 ): empty => {
-  throw new LayoutTomlError(
+  throw new LayoutDocumentError(
     code,
     message,
     locationOf(state, record),
@@ -131,84 +125,9 @@ const sortedObject = value =>
       return result;
     }, {});
 
-const parserLocation = error => ({
-  line:
-    Number(error && (error.line || error.lineNumber)) ||
-    Number(error && error.location && error.location.line) ||
-    1,
-  column:
-    Number(error && (error.col || error.column || error.columnNumber)) ||
-    Number(error && error.location && error.location.column) ||
-    1,
-});
-
-const indexRecordLocations = (source, document): WeakMap<Object, Location> => {
-  const locations = new WeakMap();
-  const indexes = {};
-  source.split(/\r?\n/).forEach((line, lineIndex) => {
-    const match = line.match(/^\s*(\[\[?)([A-Za-z0-9_-]+)\]\]?\s*(?:#.*)?$/);
-    if (!match || !RECORD_HEADERS.has(match[2])) return;
-    const name = match[2];
-    const value = document[name];
-    const record =
-      match[1] === '[['
-        ? Array.isArray(value)
-          ? value[indexes[name] || 0]
-          : null
-        : value;
-    indexes[name] = (indexes[name] || 0) + (match[1] === '[[' ? 1 : 0);
-    if (record && typeof record === 'object') {
-      locations.set(record, {
-        line: lineIndex + 1,
-        column: line.indexOf('[') + 1,
-      });
-    }
-  });
-  return locations;
-};
-
-const parseLayoutTomlDocument = (source, fileUri) => {
-  if (typeof source !== 'string') {
-    throw new LayoutTomlError(
-      'LAYOUT_INVALID_SOURCE',
-      'Layout source must be a string.',
-      undefined,
-      fileUri
-    );
-  }
-  let document;
-  try {
-    document = parseToml(source.replace(/^\uFEFF/, ''));
-  } catch (error) {
-    throw new LayoutTomlError(
-      'LAYOUT_INVALID_TOML',
-      `Invalid layout TOML: ${String(
-        error && error.message ? error.message : error
-      )}`,
-      parserLocation(error),
-      fileUri
-    );
-  }
-  return {
-    document,
-    state: {
-      fileUri: fileUri || null,
-      locations: indexRecordLocations(source, document),
-    },
-  };
-};
-
-export const parseLayoutToml = (source: string, fileUri?: string): Object =>
-  parseLayoutTomlDocument(source, fileUri).document;
-
 const validateRecord = (record, allowed, required, label, state) => {
   if (!isPlainObject(record))
-    fail(
-      state,
-      'LAYOUT_INVALID_RECORD',
-      `${label} must be a TOML table.`,
-      record
-    );
+    fail(state, 'LAYOUT_INVALID_RECORD', `${label} must be a record.`, record);
   required.forEach(name => {
     if (!Object.prototype.hasOwnProperty.call(record, name))
       fail(state, 'LAYOUT_MISSING_FIELD', `${label} requires ${name}.`, record);
@@ -319,34 +238,21 @@ const expectColor = (value, label, record, state) => {
 const serializedColorParts = (value, label, record, state) => {
   if (typeof value === 'string' && COLOR.test(value.toUpperCase()))
     return colorParts(value.toUpperCase());
-  if (typeof value === 'string' && /^rgb\(.+\)$/.test(value))
-    return expectTuple(
-      value
-        .slice(4, -1)
-        .split(',')
-        .map(Number),
-      [3],
-      label,
-      record,
-      state
-    );
-  fail(
-    state,
-    'LAYOUT_INVALID_COLOR',
-    `${label} must be #RRGGBB or rgb(r,g,b).`,
-    record
-  );
+  fail(state, 'LAYOUT_INVALID_COLOR', `${label} must be #RRGGBB.`, record);
 };
 
 const colorFromParts = (r, g, b) => {
   const parts = [r, g, b];
   if (parts.some(value => typeof value !== 'number' || !Number.isFinite(value)))
-    throw new LayoutTomlError(
+    throw new LayoutDocumentError(
       'LAYOUT_INVALID_COLOR',
       'Serialized color components must be finite numbers.'
     );
   if (parts.some(value => !Number.isInteger(value) || value < 0 || value > 255))
-    return `rgb(${parts.join(',')})`;
+    throw new LayoutDocumentError(
+      'LAYOUT_INVALID_COLOR',
+      'Color components must be integers in [0,255].'
+    );
   return `#${parts
     .map(value => value.toString(16).padStart(2, '0'))
     .join('')
@@ -358,7 +264,7 @@ const validateLiteral = (value, label, record, state) => {
     fail(
       state,
       'LAYOUT_INVALID_LITERAL',
-      `${label} contains a value that layout TOML cannot represent.`,
+      `${label} contains a value that layout data cannot represent.`,
       record
     );
   if (typeof value === 'string') {
@@ -378,7 +284,7 @@ const validateLiteral = (value, label, record, state) => {
     fail(
       state,
       'LAYOUT_INVALID_LITERAL',
-      `${label} must contain only TOML strings, numbers, booleans, arrays, and tables.`,
+      `${label} must contain only strings, numbers, booleans, arrays, and tables.`,
       record
     );
   Object.keys(value).forEach(key => {
@@ -392,7 +298,7 @@ const expectTable = (value, label, record, state) => {
     fail(
       state,
       'LAYOUT_INVALID_LITERAL',
-      `${label} must be an inline TOML table.`,
+      `${label} must be an inline record.`,
       record
     );
   validateLiteral(value, label, record, state);
@@ -414,7 +320,6 @@ const compileEditor = (record, state) => {
       'zoom',
       'window_mask',
       'selected_layer',
-      'selected_layer_unresolved',
       'mode',
     ],
     [],
@@ -504,16 +409,6 @@ const compileEditor = (record, state) => {
       record,
       state
     );
-  if (
-    editor.selected_layer_unresolved !== undefined &&
-    expectBoolean(
-      editor.selected_layer_unresolved,
-      'selected_layer_unresolved',
-      record,
-      state
-    )
-  )
-    output.__selectedLayerUnresolved = true;
   if (editor.mode !== undefined)
     output.gameEditorMode = expectEnum(
       editor.mode,
@@ -746,7 +641,16 @@ const compileProperties = (properties, objectName, context, record, state) => {
 const compileVariable = (record, parentType, state) => {
   const variable = validateRecord(
     record,
-    ['name', 'type', 'value', 'values', 'folded', 'id', 'children'],
+    [
+      'name',
+      'type',
+      'value',
+      'values',
+      'folded',
+      'hasMixedValues',
+      'id',
+      'children',
+    ],
     ['type'],
     'variable',
     state
@@ -773,25 +677,27 @@ const compileVariable = (record, parentType, state) => {
       record
     );
   const output = { type };
-  if (
-    variable.folded !== undefined &&
-    expectBoolean(variable.folded, 'variable folded', record, state)
-  )
-    output.folded = true;
+  for (const key of ['folded', 'hasMixedValues']) {
+    if (variable[key] !== undefined)
+      output[key] = expectBoolean(
+        variable[key],
+        `variable ${key}`,
+        record,
+        state
+      );
+  }
   if (variable.id !== undefined) {
-    output.persistentUuid = expectString(
-      variable.id,
-      'variable id',
-      record,
-      state
-    );
-    if (!UUID_V4.test(output.persistentUuid))
+    if (
+      typeof variable.id !== 'string' ||
+      (variable.id !== '' && !UUID_V4.test(variable.id))
+    )
       fail(
         state,
         'LAYOUT_INVALID_UUID',
-        'Variable id must be canonical UUIDv4.',
+        'Variable id must be empty or canonical UUIDv4.',
         record
       );
+    output.persistentUuid = variable.id;
   }
   if (type === 'structure' || type === 'array') {
     if (variable.value !== undefined || variable.values !== undefined)
@@ -814,27 +720,23 @@ const compileVariable = (record, parentType, state) => {
       );
     if (type === 'structure') {
       const names = new Set();
-      output.children = children
-        .map(child => {
-          const name = expectString(
-            child.name,
-            'structure child name',
-            record,
-            state
-          );
-          if (names.has(name))
-            fail(
-              state,
-              'LAYOUT_DUPLICATE_VARIABLE',
-              `Duplicate structure child ${name}.`,
-              record
-            );
-          names.add(name);
-          return { name, ...compileVariable(child, 'structure', state) };
-        })
-        .sort((left, right) =>
-          left.name < right.name ? -1 : left.name > right.name ? 1 : 0
+      output.children = children.map(child => {
+        const name = expectString(
+          child.name,
+          'structure child name',
+          record,
+          state
         );
+        if (names.has(name))
+          fail(
+            state,
+            'LAYOUT_DUPLICATE_VARIABLE',
+            `Duplicate structure child ${name}.`,
+            record
+          );
+        names.add(name);
+        return { name, ...compileVariable(child, 'structure', state) };
+      });
     } else {
       output.children = children.map(child =>
         compileVariable(child, 'array', state)
@@ -1067,7 +969,6 @@ const compileInstance = (record, layerName, context, state) => {
       'id',
       'object',
       'layer',
-      'unresolved',
       'at',
       'rotation',
       'z_order',
@@ -1087,26 +988,13 @@ const compileInstance = (record, layerName, context, state) => {
     state
   );
   const name = expectString(instance.object, 'object name', record, state);
-  const unresolved =
-    instance.unresolved !== undefined &&
-    expectBoolean(instance.unresolved, 'unresolved', record, state);
-  if (context.objectNames) {
-    const resolves = context.objectNames.includes(name);
-    if (!resolves && !unresolved)
-      fail(
-        state,
-        'LAYOUT_UNKNOWN_OBJECT',
-        `Object ${name} does not resolve in this layout.`,
-        record
-      );
-    if (resolves && unresolved)
-      fail(
-        state,
-        'LAYOUT_INVALID_INSTANCE',
-        `Object ${name} resolves and must not be marked unresolved.`,
-        record
-      );
-  }
+  if (context.objectNames && !context.objectNames.includes(name))
+    fail(
+      state,
+      'LAYOUT_UNKNOWN_OBJECT',
+      `Object ${name} does not resolve in this layout.`,
+      record
+    );
   const uuid = expectString(instance.id, 'instance id', record, state);
   if (!UUID_V4.test(uuid))
     fail(
@@ -1424,9 +1312,9 @@ const compileLayer = (record, context, state) => {
   return { id, name, layer };
 };
 
-export const compileLayoutToml = (
-  source: string,
-  initialContext: LayoutTomlContext
+export const compileLayoutDocument = (
+  document: Object,
+  initialContext: LayoutDocumentContext
 ): Object => {
   if (
     !initialContext ||
@@ -1434,7 +1322,7 @@ export const compileLayoutToml = (
       initialContext.kind
     )
   )
-    throw new LayoutTomlError(
+    throw new LayoutDocumentError(
       'LAYOUT_INVALID_CONTEXT',
       'A valid layout context is required.'
     );
@@ -1442,7 +1330,10 @@ export const compileLayoutToml = (
     ...initialContext,
     usedInstanceUuids: initialContext.usedInstanceUuids || new Set(),
   };
-  const { document, state } = parseLayoutTomlDocument(source, context.fileUri);
+  const state = {
+    fileUri: context.fileUri,
+    locations: context.locations || new WeakMap(),
+  };
   validateRecord(document, ROOT_FIELDS, ['layout'], 'layout document', state);
   const scene = context.kind === 'scene';
   const prefab = context.kind === 'prefab' || context.kind === 'prefab-variant';
@@ -1453,11 +1344,11 @@ export const compileLayoutToml = (
     'layout',
     state
   );
-  if (layoutRecord.version !== LAYOUT_TOML_VERSION)
+  if (layoutRecord.version !== LAYOUT_DOCUMENT_VERSION)
     fail(
       state,
       'LAYOUT_UNSUPPORTED_VERSION',
-      `Only layout TOML version ${LAYOUT_TOML_VERSION} is supported.`,
+      `Only layout data version ${LAYOUT_DOCUMENT_VERSION} is supported.`,
       layoutRecord
     );
   if (scene && layoutRecord.background === undefined)
@@ -1673,41 +1564,17 @@ export const compileLayoutToml = (
 
   const editor = output[scene ? 'uiSettings' : 'editionSettings'];
   const selectedLayer = editor.selectedLayer;
-  const selectedLayerUnresolved = editor.__selectedLayerUnresolved === true;
   const resolvableLayers =
     context.kind === 'external' && context.layerNames
       ? new Set(context.layerNames)
       : layerNames;
-  if (!selectedLayer && selectedLayerUnresolved)
-    fail(
-      state,
-      'LAYOUT_INVALID_EDITOR',
-      'selected_layer_unresolved requires selected_layer.',
-      document.editor
-    );
-  if (
-    selectedLayer &&
-    !resolvableLayers.has(selectedLayer) &&
-    !selectedLayerUnresolved
-  )
+  if (selectedLayer && !resolvableLayers.has(selectedLayer))
     fail(
       state,
       'LAYOUT_UNKNOWN_LAYER',
       `Selected layer ${selectedLayer} does not exist.`,
       document.editor
     );
-  if (
-    selectedLayer &&
-    resolvableLayers.has(selectedLayer) &&
-    selectedLayerUnresolved
-  )
-    fail(
-      state,
-      'LAYOUT_INVALID_EDITOR',
-      `Selected layer ${selectedLayer} exists and must not be marked unresolved.`,
-      document.editor
-    );
-  delete editor.__selectedLayerUnresolved;
   if (context.kind !== 'external') output.layers = layers;
   output.instances = instances;
   return output;
@@ -1716,9 +1583,9 @@ export const compileLayoutToml = (
 const assertKnownFields = (value, allowed, label) => {
   Object.keys(value || {}).forEach(key => {
     if (!allowed.includes(key))
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_UNSUPPORTED_FIELD',
-        `${label} field ${key} is outside layout TOML version 1.`
+        `${label} field ${key} is outside layout data version 1.`
       );
   });
 };
@@ -1727,15 +1594,15 @@ const canonicalLiteral = value => {
   if (Array.isArray(value)) return value.map(canonicalLiteral);
   if (value && typeof value === 'object') {
     if (!isPlainObject(value))
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_INVALID_LITERAL',
-        'Layout TOML cannot serialize dates or custom objects.'
+        'Layout Layout schema cannot serialize dates or custom objects.'
       );
     return Object.keys(value)
       .sort()
       .reduce((result, key) => {
         if (key !== key.normalize('NFC'))
-          throw new LayoutTomlError(
+          throw new LayoutDocumentError(
             'LAYOUT_INVALID_STRING',
             'Cannot serialize a non-NFC table key.'
           );
@@ -1744,19 +1611,19 @@ const canonicalLiteral = value => {
       }, {});
   }
   if (typeof value === 'string' && value !== value.normalize('NFC'))
-    throw new LayoutTomlError(
+    throw new LayoutDocumentError(
       'LAYOUT_INVALID_STRING',
       'Cannot serialize a non-NFC string.'
     );
   if (typeof value === 'number' && !Number.isFinite(value))
-    throw new LayoutTomlError(
+    throw new LayoutDocumentError(
       'LAYOUT_INVALID_NUMBER',
       'Cannot serialize a non-finite number.'
     );
   if (!['string', 'number', 'boolean'].includes(typeof value))
-    throw new LayoutTomlError(
+    throw new LayoutDocumentError(
       'LAYOUT_INVALID_LITERAL',
-      'Layout TOML values must be strings, numbers, booleans, arrays, or tables.'
+      'Layout Layout values must be strings, numbers, booleans, arrays, or tables.'
     );
   return value;
 };
@@ -1830,7 +1697,7 @@ const decompileEditor = (settings, layerNames = null) => {
       settings.gridColor < 0 ||
       settings.gridColor > 0xffffff
     )
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_INVALID_COLOR',
         'gridColor must be a 24-bit integer.'
       );
@@ -1852,7 +1719,10 @@ const decompileEditor = (settings, layerNames = null) => {
     layerNames &&
     !layerNames.includes(String(settings.selectedLayer))
   )
-    output.selected_layer_unresolved = true;
+    throw new LayoutDocumentError(
+      'LAYOUT_UNKNOWN_LAYER',
+      `Selected layer ${settings.selectedLayer} does not exist.`
+    );
   if (settings.gameEditorMode !== undefined)
     output.mode = settings.gameEditorMode;
   return output;
@@ -1864,7 +1734,15 @@ const decompileVariable = (entry, hasName) => {
   if (hasName) delete variable.name;
   assertKnownFields(
     variable,
-    ['type', 'value', 'values', 'folded', 'persistentUuid', 'children'],
+    [
+      'type',
+      'value',
+      'values',
+      'folded',
+      'hasMixedValues',
+      'persistentUuid',
+      'children',
+    ],
     'variable'
   );
   const output = {};
@@ -1873,18 +1751,15 @@ const decompileVariable = (entry, hasName) => {
   if (variable.value !== undefined) output.value = variable.value;
   if (variable.values && variable.values.length)
     output.values = variable.values.slice();
-  if (variable.folded) output.folded = true;
-  if (variable.persistentUuid) output.id = variable.persistentUuid;
+  for (const key of ['folded', 'hasMixedValues'])
+    if (variable[key] !== undefined) output[key] = variable[key];
+  if (variable.persistentUuid !== undefined)
+    output.id = variable.persistentUuid;
   if (variable.children && variable.children.length) {
     output.children =
       variable.type === 'array'
         ? variable.children.map(child => decompileVariable(child, false))
-        : variable.children
-            .slice()
-            .sort((left, right) =>
-              left.name < right.name ? -1 : left.name > right.name ? 1 : 0
-            )
-            .map(child => decompileVariable(child, true));
+        : variable.children.map(child => decompileVariable(child, true));
   }
   return output;
 };
@@ -1895,7 +1770,7 @@ const propertyArrayToMap = (properties, expectedType) => {
     assertKnownFields(property, ['name', 'value'], 'instance property');
     const name = String(property.name);
     if (Object.prototype.hasOwnProperty.call(result, name))
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_INVALID_INSTANCE_PROPERTY',
         `Duplicate ${expectedType} instance property ${name}.`
       );
@@ -1903,12 +1778,12 @@ const propertyArrayToMap = (properties, expectedType) => {
       expectedType === 'number' &&
       (typeof property.value !== 'number' || !Number.isFinite(property.value))
     )
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_INVALID_INSTANCE_PROPERTY',
         `Instance property ${name} must be a finite number.`
       );
     if (expectedType === 'string' && typeof property.value !== 'string')
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_INVALID_INSTANCE_PROPERTY',
         `Instance property ${name} must be a string.`
       );
@@ -1920,7 +1795,7 @@ const propertyArrayToMap = (properties, expectedType) => {
 const mergeInstancePropertyMaps = (numberProperties, stringProperties) => {
   Object.keys(numberProperties).forEach(name => {
     if (Object.prototype.hasOwnProperty.call(stringProperties, name))
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_DUPLICATE_INSTANCE_PROPERTY',
         `Instance property ${name} occurs in both numberProperties and stringProperties.`
       );
@@ -1977,13 +1852,13 @@ const decompileInstance = (instance, layerId, context) => {
     'initialVariables',
   ].forEach(field => {
     if (instance[field] === undefined)
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_UNSUPPORTED_FIELD',
         `Serialized instance is missing required field ${field}.`
       );
   });
   if (!UUID_V4.test(instance.persistentUuid || ''))
-    throw new LayoutTomlError(
+    throw new LayoutDocumentError(
       'LAYOUT_INVALID_UUID',
       `Instance ${instance.name || ''} has no canonical UUIDv4.`
     );
@@ -1997,7 +1872,10 @@ const decompileInstance = (instance, layerId, context) => {
         : [instance.x || 0, instance.y || 0],
   };
   if (context.objectNames && !context.objectNames.includes(instance.name))
-    output.unresolved = true;
+    throw new LayoutDocumentError(
+      'LAYOUT_UNKNOWN_OBJECT',
+      `Object ${instance.name} does not resolve in this layout.`
+    );
   if ((instance.rotationX || 0) !== 0 || (instance.rotationY || 0) !== 0)
     output.rotation = [
       instance.rotationX || 0,
@@ -2036,14 +1914,14 @@ const decompileBehavior = (override, instance, context) => {
     context.behaviorTypesByObject[instance.name] &&
     context.behaviorTypesByObject[instance.name][override.name];
   if (!expectedBehaviorType)
-    throw new LayoutTomlError(
+    throw new LayoutDocumentError(
       'LAYOUT_UNKNOWN_BEHAVIOR',
       `Behavior ${String(override.name || '')} is not attached to ${String(
         instance.name || ''
       )}.`
     );
   if (override.type !== expectedBehaviorType)
-    throw new LayoutTomlError(
+    throw new LayoutDocumentError(
       'LAYOUT_BEHAVIOR_TYPE_MISMATCH',
       `Behavior ${String(override.name || '')} has type ${String(
         override.type || ''
@@ -2114,7 +1992,7 @@ const decompileCamera = camera => {
     'viewportBottom',
   ].forEach(field => {
     if (camera[field] === undefined)
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_UNSUPPORTED_FIELD',
         `Serialized camera is missing required field ${field}.`
       );
@@ -2168,7 +2046,7 @@ const decompileEffect = (effect, layerId) => {
     ['boolean', effect.booleanParameters || {}],
   ].forEach(([type, values]) => {
     if (!isPlainObject(values))
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_INVALID_EFFECT_PARAMETER',
         `Effect ${String(
           effect.name || ''
@@ -2179,12 +2057,12 @@ const decompileEffect = (effect, layerId) => {
         EFFECT_STRUCTURAL_FIELDS.includes(name) ||
         RETIRED_EFFECT_FIELDS.has(name)
       )
-        throw new LayoutTomlError(
+        throw new LayoutDocumentError(
           'LAYOUT_EFFECT_PARAMETER_COLLISION',
           `Effect parameter ${name} collides with a reserved effect field.`
         );
       if (Object.prototype.hasOwnProperty.call(parameters, name))
-        throw new LayoutTomlError(
+        throw new LayoutDocumentError(
           'LAYOUT_DUPLICATE_EFFECT_PARAMETER',
           `Effect parameter ${name} occurs in more than one typed parameter map.`
         );
@@ -2287,91 +2165,10 @@ const decompileLayer = (layer, id, external) => {
   return output;
 };
 
-const tomlKey = key =>
-  /^[A-Za-z0-9_-]+$/.test(key) ? key : JSON.stringify(key);
-
-const tomlValue = value => {
-  value = canonicalLiteral(value);
-  if (typeof value === 'string') return JSON.stringify(value);
-  if (typeof value === 'number')
-    return Object.is(value, -0) ? '0' : String(value);
-  if (typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) return `[${value.map(tomlValue).join(', ')}]`;
-  return `{ ${Object.entries(value)
-    .map(([key, item]) => `${tomlKey(key)} = ${tomlValue(item)}`)
-    .join(', ')} }`;
-};
-
-const emitTable = (lines, header, record) => {
-  lines.push(header);
-  Object.keys(record).forEach(key =>
-    lines.push(`${tomlKey(key)} = ${tomlValue(record[key])}`)
-  );
-  lines.push('');
-};
-
-const serializeLayoutDocument = document => {
-  const lines = [];
-  emitTable(lines, '[layout]', document.layout);
-  if (document.editor) emitTable(lines, '[editor]', document.editor);
-  (document.layers || []).forEach(record =>
-    emitTable(lines, '[[layers]]', record)
-  );
-  (document.effects || []).forEach(record =>
-    emitTable(lines, '[[effects]]', record)
-  );
-  (document.instances || []).forEach(record =>
-    emitTable(lines, '[[instances]]', record)
-  );
-  (document.variables || []).forEach(record =>
-    emitTable(lines, '[[variables]]', record)
-  );
-  (document.behaviors || []).forEach(record =>
-    emitTable(lines, '[[behaviors]]', record)
-  );
-  return `${lines.join('\n').trimEnd()}\n`;
-};
-
-export const compileLayoutDocument = (
-  document: Object,
-  context: LayoutTomlContext
-): Object => compileLayoutToml(serializeLayoutDocument(document), context);
-
-const standaloneLayoutSourceFromEmbeddedSettings = (source: string): string => {
-  let insideLayout = false;
-  return source
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map(line => {
-      const header = line.match(
-        /^\s*(\[\[?)([A-Za-z0-9_.-]+)(\]\]?)\s*(?:#.*)?$/
-      );
-      if (header) {
-        insideLayout =
-          header[2] === 'layout' || header[2].startsWith('layout.');
-        if (!insideLayout) return '';
-        const standaloneName =
-          header[2] === 'layout' ? 'layout' : header[2].slice('layout.'.length);
-        return line.replace(header[2], standaloneName);
-      }
-      return insideLayout ? line : '';
-    })
-    .join('\n');
-};
-
-export const compileEmbeddedLayoutToml = (
-  ownerSettingsSource: string,
-  context: LayoutTomlContext
-): Object =>
-  compileLayoutToml(
-    standaloneLayoutSourceFromEmbeddedSettings(ownerSettingsSource),
-    context
-  );
-
-export const decompileLayoutToml = (
+export const decompileLayoutDocument = (
   layout: Object,
-  context: LayoutTomlContext
-): string => {
+  context: LayoutDocumentContext
+): Object => {
   const kind = context.kind;
   const scene = kind === 'scene';
   const prefab = kind === 'prefab' || kind === 'prefab-variant';
@@ -2391,7 +2188,7 @@ export const decompileLayoutToml = (
       ]
     : ['editionSettings', 'instances'];
   assertKnownFields(layout, topFields, `${kind} layout`);
-  const document = { layout: { version: LAYOUT_TOML_VERSION } };
+  const document = { layout: { version: LAYOUT_DOCUMENT_VERSION } };
   if (scene)
     document.layout.background = colorFromParts(layout.r, layout.v, layout.b);
   if (prefab)
@@ -2418,12 +2215,12 @@ export const decompileLayoutToml = (
   instances.forEach(instance => {
     const uuid = instance.persistentUuid || '';
     if (!UUID_V4.test(uuid))
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_INVALID_UUID',
         `Instance ${String(instance.name || '')} has no canonical UUIDv4.`
       );
     if (usedInstanceUuids.has(uuid))
-      throw new LayoutTomlError(
+      throw new LayoutDocumentError(
         'LAYOUT_DUPLICATE_UUID',
         `Duplicate instance UUID ${uuid}.`
       );
@@ -2433,7 +2230,7 @@ export const decompileLayoutToml = (
     const names = new Set(layerRecords.map(layer => String(layer.name || '')));
     instances.forEach(instance => {
       if (!names.has(String(instance.layer || '')))
-        throw new LayoutTomlError(
+        throw new LayoutDocumentError(
           'LAYOUT_UNKNOWN_LAYER',
           `Instance ${String(
             instance.name || ''
@@ -2467,67 +2264,6 @@ export const decompileLayoutToml = (
       document.behaviors.push(decompileBehavior(override, instance, context))
     );
   });
-  const source = serializeLayoutDocument(document);
-  compileLayoutToml(source, {
-    ...context,
-    usedInstanceUuids: new Set(),
-  });
-  return source;
+  compileLayoutDocument(document, { ...context, usedInstanceUuids: new Set() });
+  return document;
 };
-
-export const decompileLayoutDocument = (
-  layout: Object,
-  context: LayoutTomlContext
-): Object =>
-  parseLayoutToml(decompileLayoutToml(layout, context), context.fileUri);
-
-export const decompileEmbeddedLayoutToml = (
-  layout: Object,
-  context: LayoutTomlContext
-): string =>
-  decompileLayoutToml(layout, context)
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map(line =>
-      line.replace(
-        /^(\s*\[\[?)(editor|layers|effects|instances|variables|behaviors)(\]\]?\s*(?:#.*)?)$/,
-        '$1layout.$2$3'
-      )
-    )
-    .join('\n')
-    .trimEnd();
-
-export const formatLayoutToml = (
-  source: string,
-  context: LayoutTomlContext
-): string => {
-  const isolatedContext = { ...context, usedInstanceUuids: new Set() };
-  return decompileLayoutToml(compileLayoutToml(source, isolatedContext), {
-    ...context,
-    usedInstanceUuids: new Set(),
-  });
-};
-
-export const normalizeLayoutFragmentForToml = (
-  layout: Object,
-  context: LayoutTomlContext
-): Object =>
-  compileLayoutToml(
-    decompileLayoutToml(layout, {
-      ...context,
-      usedInstanceUuids: new Set(),
-    }),
-    { ...context, usedInstanceUuids: new Set() }
-  );
-
-export const areLayoutFragmentsEquivalent = (
-  left: Object,
-  right: Object,
-  context: LayoutTomlContext
-): boolean =>
-  JSON.stringify(
-    canonicalLiteral(normalizeLayoutFragmentForToml(left, context))
-  ) ===
-  JSON.stringify(
-    canonicalLiteral(normalizeLayoutFragmentForToml(right, context))
-  );

@@ -71,14 +71,16 @@ assets/config/hero_spring_bones.json
 
 Register it in `resources.settings` with a stable resource name:
 
-```toml
-[[resources]]
-disablePreload = false
-file = "assets/config/hero_spring_bones.json"
-kind = "json"
-metadata = ""
-name = "HeroSpringBones"
-userAdded = true
+```settings
+resources {
+  resource {
+    disablePreload = false
+    file = "assets/config/hero_spring_bones.json"
+    metadata = ""
+    name = "HeroSpringBones"
+    userAdded = true
+  }
+}
 ```
 
 The behavior property uses the resource `name`, not the file path.
@@ -88,24 +90,28 @@ The behavior property uses the resource `name`, not the file path.
 Add one behavior record to the model object's `.settings` file. Initialize all
 properties listed by the current settings catalog. A typical record is:
 
-```toml
-[[behaviors]]
-name = "SpringBones"
-type = "SpringBoneDynamics::SpringBone3DBehavior"
-backendPreference = "WebGPUPreferred"
-blendWeight = 1
-configurationResource = "HeroSpringBones"
-enabled = true
-gravityScale = 1
-maxSubsteps = 6
-movementInertia = 1
-rotationInertia = 1
-simulationFrequency = 120
-teleportAngle = 90
-teleportDistance = 300
-windX = 0
-windY = 0
-windZ = 0
+```settings
+behavior {
+  name = "SpringBones"
+  type = "SpringBoneDynamics::SpringBone3DBehavior"
+
+  properties {
+    backendPreference = "WebGPUPreferred"
+    blendWeight = 1
+    configurationResource = "HeroSpringBones"
+    enabled = true
+    gravityScale = 1
+    maxSubsteps = 6
+    movementInertia = 1
+    rotationInertia = 1
+    simulationFrequency = 120
+    teleportAngle = 90
+    teleportDistance = 300
+    windX = 0
+    windY = 0
+    windZ = 0
+  }
+}
 ```
 
 Behavior properties are normalized at runtime:

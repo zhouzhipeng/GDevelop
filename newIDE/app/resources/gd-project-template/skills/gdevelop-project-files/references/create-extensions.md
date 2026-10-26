@@ -23,7 +23,7 @@ Keep each child object definition and all of its behaviors in an individual
 `objects/<Object>.settings` file. Store its editor grouping in
 `folder = ["Parent", "Child"]`. Keep prefab-wide
 metadata, groups, variables, and flat property descriptors in
-`prefab.settings`, its embedded `[layout]` subtree for instance/layer/spatial
+`prefab.settings`, its root layer and instance nodes for instance/layer/spatial
 composition, and executable logic in `.events`.
 
 ## Required workflow
@@ -40,12 +40,7 @@ composition, and executable logic in `.events`.
    child-settings indexes to `project.gdevelop` or `extension.settings`.
 6. Derive every function's `.events` sibling from its `.settings` stem. Never
    store events or layout URI fields.
-7. Write one repeated `[[variables]]`, `[[globalVariables]]`, or
-   `[[sceneVariables]]` record per variable, with an explicit `name` and the
-   complete descriptor fields. Use `variables = [ ]`,
-   `globalVariables = [ ]`, or `sceneVariables = [ ]` only for an empty
-   container. Never author keyed variable tables, whole-container inline
-   tables, non-empty inline descriptor arrays, or recursive child tables.
+7. Write variables blocks with scalar shorthand or typed variable children, following settings-dsl.md.
 8. Use exact instruction types and `dslName` parameters from
    `.gdevelop/instructions-catalog.json` in every event body.
 9. Call `generate-catalogs` after the declaration/files exist. If the extension
@@ -80,25 +75,24 @@ extensions/CombatKit/
 
 `extensions/CombatKit/extension.settings`:
 
-```toml
-kind = "extension"
-settingsFormatVersion = 7
-order = 0
-name = "CombatKit"
-fullName = "Combat Kit"
-version = "1.0.0"
-extensionNamespace = ""
-shortDescription = "Reusable combat components"
-description = ["Reusable combat components for this project."]
-dimension = ""
-category = "Gameplay"
-author = ""
-authorIds = []
-tags = ["combat"]
-previewIconUrl = ""
-iconUrl = ""
-helpPath = ""
-gdevelopVersion = ""
+```settings
+extension {
+  order = 0
+  name = "CombatKit"
+  fullName = "Combat Kit"
+  extensionNamespace = ""
+  shortDescription = "Reusable combat components"
+  description = ["Reusable combat components for this project."]
+  dimension = ""
+  category = "Gameplay"
+  author = ""
+  authorIds = []
+  tags = ["combat"]
+  previewIconUrl = ""
+  iconUrl = ""
+  helpPath = ""
+  gdevelopVersion = ""
+}
 ```
 
 Do not add `functionFiles`, `prefabFiles`, `behaviorFiles`, or child settings
@@ -108,25 +102,27 @@ structure.
 
 `extensions/CombatKit/functions/ResetCombat.settings`:
 
-```toml
-kind = "function"
-settingsFormatVersion = 7
-order = 0
-extension = "CombatKit"
-name = "ResetCombat"
-functionType = "Action"
-fullName = "Reset combat"
-description = "Resets combat state after an explicit request."
-sentence = "Reset combat state"
-group = "Combat"
-getterName = ""
-private = false
-async = false
-helpUrl = ""
-deprecated = false
-deprecationMessage = ""
-parameters = []
-objectGroups = { }
+```settings
+function {
+  order = 0
+  extension = "CombatKit"
+  name = "ResetCombat"
+  functionType = "Action"
+  fullName = "Reset combat"
+  description = "Resets combat state after an explicit request."
+  sentence = "Reset combat state"
+  group = "Combat"
+  getterName = ""
+  private = false
+  async = false
+  helpUrl = ""
+  deprecated = false
+  deprecationMessage = ""
+  parameters = []
+
+  objectGroups {
+  }
+}
 ```
 
 `ResetCombat.events`:
@@ -139,53 +135,64 @@ do SetBooleanVariable variable="ResetRequested" modification_sign="False"
 
 `extensions/CombatKit/prefabs/Enemy/prefab.settings`:
 
-```toml
-kind = "prefab"
-settingsFormatVersion = 7
-order = 0
-name = "Enemy"
-fullName = "Enemy"
-description = "Reusable enemy composition"
-defaultName = "Enemy"
-assetStoreTag = ""
-private = false
-previewIconUrl = ""
-iconUrl = ""
-helpPath = ""
-is3D = false
-isAnimatable = false
-isTextContainer = false
-isInnerAreaFollowingParentSize = false
-isUsingLegacyInstancesRenderer = false
-propertyDescriptors = []
-objectGroups = { }
+```settings
+prefab {
+  order = 0
+  name = "Enemy"
+  fullName = "Enemy"
+  description = "Reusable enemy composition"
+  defaultName = "Enemy"
+  assetStoreTag = ""
+  private = false
+  previewIconUrl = ""
+  iconUrl = ""
+  helpPath = ""
+  is3D = false
+  isAnimatable = false
+  isTextContainer = false
+  isInnerAreaFollowingParentSize = false
+  isUsingLegacyInstancesRenderer = false
+  propertyDescriptors = []
 
-variables = [ ]
+  objectGroups {
+  }
 
-[layout]
-version = 1
-bounds = { min = [0, 0, 0], max = [64, 64, 64] }
+  bounds {
+    min = [0, 0, 0]
+    max = [64, 64, 64]
+  }
+
+
+}
 ```
 
 `extensions/CombatKit/prefabs/Enemy/functions/Initialize.settings`:
 
-```toml
-kind = "function"
-settingsFormatVersion = 7
-order = 0
-folder = []
-name = "Initialize"
-functionType = "Action"
-fullName = "Initialize"
-description = "Initializes one enemy instance."
-sentence = "Initialize _PARAM0_"
-private = false
-async = false
-parameters = [{ name = "Object", description = "Object", type = "object", supplementaryInformation = "CombatKit::Enemy" }]
-objectGroups = { }
+```settings
+function {
+  order = 0
+  folder = []
+  name = "Initialize"
+  functionType = "Action"
+  fullName = "Initialize"
+  description = "Initializes one enemy instance."
+  sentence = "Initialize _PARAM0_"
+  private = false
+  async = false
+
+  parameter {
+    name = "Object"
+    description = "Object"
+    type = "object"
+    supplementaryInformation = "CombatKit::Enemy"
+  }
+
+  objectGroups {
+  }
+}
 ```
 
-`Initialize/Initialize.events`:
+`Initialize.events`:
 
 ```events
 @event aiGeneratedEventId="initialize-enemy"
@@ -193,31 +200,29 @@ if BooleanObjectVariable object="Object" variable="Initialized" check_if_the_val
 do SetBooleanObjectVariable object="Object" variable="Initialized" modification_sign="True"
 ```
 
-`extensions/CombatKit/prefabs/Enemy/objects/Visuals/Body.settings`:
+`extensions/CombatKit/prefabs/Enemy/objects/Body.settings`:
 
-```toml
-kind = "object"
-settingsFormatVersion = 7
-order = 0
-folder = []
-name = "Body"
-type = "Sprite"
-behaviors = []
-effects = []
+```settings
+object {
+  order = 0
+  folder = []
+  name = "Body"
+  type = "Sprite"
+  behaviors = []
+  effects = []
 
-variables = [ ]
+
+}
 ```
 
 Add every child object definition, its variables/effects, and every attached
 behavior to its own flat object settings file. Its `folder` array is the editor
 object grouping. Add only instances, layers,
-spatial bounds, and editor layout state to `prefab.settings` below `[layout]`. Copy the complete
+spatial bounds, and editor layout state to `prefab.settings` directly below the component root. Copy the complete
 object-definition shape from an existing compatible object `.settings` file
 rather than inventing serializer fields. For attached behaviors, copy only
 author-writable properties listed for that type in `settings-catalog.json` when
-creating a new attachment. When migrating an existing attachment, preserve its
-unlisted serialized fields verbatim: specialized editors can store required
-runtime configuration there even though the generic catalog hides it. Keep
+creating a new attachment. When migrating an existing attachment, use only its registered serialized fields. Keep
 `propertyDescriptors` as one flat ordered array in `prefab.settings`; never add
 property folders.
 
@@ -226,41 +231,61 @@ extension-initialized defaults, including nested objects, while arrays remain
 authored replacements. Overriding behaviors intentionally remain sparse. This
 protects legacy/partial sources from missing runtime defaults, but new
 attachments must still author every writable property required by the generated
-catalog and preserve all existing unknown fields.
+catalog and use only registered serializer fields.
 
 `extensions/CombatKit/behaviors/Health/behavior.settings`:
 
-```toml
-kind = "behavior"
-settingsFormatVersion = 7
-order = 0
-name = "Health"
-fullName = "Health"
-description = "Adds hit points to one object instance."
-objectType = ""
-private = false
-previewIconUrl = ""
-iconUrl = ""
-helpPath = ""
-quickCustomizationVisibility = "default"
+```settings
+behavior {
+  order = 0
+  name = "Health"
+  fullName = "Health"
+  description = "Adds hit points to one object instance."
+  objectType = ""
+  private = false
+  previewIconUrl = ""
+  iconUrl = ""
+  helpPath = ""
+  quickCustomizationVisibility = "default"
+}
 ```
 
 `extensions/CombatKit/behaviors/Health/functions/TakeDamage.settings`:
 
-```toml
-kind = "function"
-settingsFormatVersion = 7
-order = 0
-folder = []
-name = "TakeDamage"
-functionType = "Action"
-fullName = "Take damage"
-description = "Subtracts damage from one picked object."
-sentence = "_PARAM0_ takes _PARAM2_ damage"
-private = false
-async = false
-parameters = [{ name = "Object", description = "Object", type = "object" }, { name = "Behavior", description = "Behavior", type = "behavior", supplementaryInformation = "CombatKit::Health" }, { name = "Amount", description = "Damage amount", type = "expression" }]
-objectGroups = { }
+```settings
+function {
+  order = 0
+  folder = []
+  name = "TakeDamage"
+  functionType = "Action"
+  fullName = "Take damage"
+  description = "Subtracts damage from one picked object."
+  sentence = "_PARAM0_ takes _PARAM2_ damage"
+  private = false
+  async = false
+
+  parameter {
+    name = "Object"
+    description = "Object"
+    type = "object"
+  }
+
+  parameter {
+    name = "Behavior"
+    description = "Behavior"
+    type = "behavior"
+    supplementaryInformation = "CombatKit::Health"
+  }
+
+  parameter {
+    name = "Amount"
+    description = "Damage amount"
+    type = "expression"
+  }
+
+  objectGroups {
+  }
+}
 ```
 
 `TakeDamage.events`:
@@ -290,7 +315,7 @@ selection through child events and nested private behavior-function calls.
   only its body in the sibling `<Name>.events`. Never embed a
   function entry in `prefab.settings` or `behavior.settings`.
 - Add prefab variants under `variants/<Variant>/variant.settings`; keep the
-  variant's identity, order, groups, and embedded `[layout]` in that owner. Put each
+  variant's identity, order, groups, and root layout nodes in that owner. Put each
   variant child definition and its behaviors in
   `variants/<Variant>/objects/<Object>.settings` and store grouping in `folder`.
 - On rename, update the component directory or same-stem pair, path-derived
@@ -300,16 +325,16 @@ selection through child events and nested private behavior-function calls.
 
 ## Validate the extension
 
-1. Parse every changed settings TOML independently, mount it from its canonical
+1. Parse every changed Settings DSL independently, mount it from its canonical
    path, and verify the strict combined merge; semantically compile every
-   changed embedded `[layout]` subtree as layout TOML version 1.
+   changed root layer and instance nodes as current layout schema.
 2. Verify component orders are contiguous and names/folders/basenames match.
 3. Verify every required same-stem `.events` file exists and no layout URI is present.
 4. Verify prefab layouts contain no object definitions or behaviors and that
    every definition is present in its own flat object settings file.
    Verify property descriptor arrays are flat and no property folder metadata
    exists. Verify new attached behavior fields are catalog-listed and all
-   pre-existing unlisted serialized fields still round-trip unchanged.
+   registered fields round-trip and unknown fields are rejected.
 5. Verify every action is condition-guarded and every object action targets the
    intended picked set. Multiple picked instances are valid when the operation
    is intentionally collective; isolate with `for each` only when required.

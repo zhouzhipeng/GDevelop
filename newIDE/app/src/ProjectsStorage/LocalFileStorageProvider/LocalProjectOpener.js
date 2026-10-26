@@ -1,42 +1,27 @@
 // @flow
 import optionalRequire from '../../Utils/OptionalRequire';
 import { type FileMetadata } from '../index';
-import { unsplit } from '../../Utils/ObjectSplitter';
-import { openFilePicker, readJSONFile } from '../../Utils/FileSystem';
+import { openFilePicker } from '../../Utils/FileSystem';
 import {
   serializeToJSObject,
   unserializeFromJSObject,
 } from '../../Utils/Serializer';
-import { normalizeProjectLocalResourceFilePaths } from '../../ResourcesList/ResourceUtils';
-import {
-  getLegacyMigrationSourceHash,
-  hashLegacySource,
-  migrateLegacyProject,
-  openMultiFileProject,
-} from './LocalMultiFileProject';
+import { openMultiFileProject } from './LocalMultiFileProject';
 import { writeProjectSourceCatalogs } from './LocalProjectWriter';
 import {
   MULTI_FILE_ENTRY_NAME,
   MultiFileProjectError,
-  parseConstantsFromToml,
 } from '../MultiFileProjectFormat';
 import {
   PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH,
   PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH,
-  buildLegacyInstructionCatalogDelta,
-  buildProjectDeprecatedInstructionCatalog,
-  buildProjectInstructionCatalog,
-  createCatalogInstructionFormatter,
-  createCatalogInstructionResolver,
-  getCatalogCodeOnlyParameterIndicesByType,
-  mergeProjectInstructionCatalogs,
-  normalizeLegacyProjectInstructionParameters,
 } from '../../EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog';
 import {
   generateEventsFunctionExtensionMetadata,
   type EventsFunctionCodeWriter,
 } from '../../EventsFunctionsExtensionsLoader';
 import {
+  buildProjectSettingsCatalog,
   PROJECT_SETTINGS_CATALOG_FORMAT_VERSION,
   PROJECT_SETTINGS_CATALOG_RELATIVE_PATH,
 } from '../ProjectSourceCatalog';
@@ -80,77 +65,6 @@ const generateProjectAdditionalExtensions = (
   return additionalExtensions;
 };
 
-type MigrationInstructionCatalogs = {|
-  authoringCatalog: Object,
-  deprecatedCatalog: Object,
-  serializationCatalog: Object,
-|};
-
-const buildMigrationInstructionCatalogs = (
-  legacyProject: Object
-): MigrationInstructionCatalogs => {
-  const project = gd.ProjectHelper.createNewGDJSProject();
-  const additionalExtensions: Array<gdPlatformExtension> = [];
-  try {
-    unserializeFromJSObject(project, legacyProject);
-    additionalExtensions.push(...generateProjectAdditionalExtensions(project));
-    const authoringCatalog = buildProjectInstructionCatalog(
-      project,
-      catalogI18n,
-      additionalExtensions
-    );
-    const baseDeprecatedCatalog = buildProjectDeprecatedInstructionCatalog(
-      project,
-      catalogI18n,
-      authoringCatalog,
-      additionalExtensions
-    );
-    const baseSerializationCatalog = mergeProjectInstructionCatalogs(
-      authoringCatalog,
-      baseDeprecatedCatalog
-    );
-    const deprecatedCatalog = mergeProjectInstructionCatalogs(
-      baseDeprecatedCatalog,
-      buildLegacyInstructionCatalogDelta(
-        baseSerializationCatalog,
-        legacyProject
-      )
-    );
-    return {
-      authoringCatalog,
-      deprecatedCatalog,
-      serializationCatalog: mergeProjectInstructionCatalogs(
-        authoringCatalog,
-        deprecatedCatalog
-      ),
-    };
-  } finally {
-    additionalExtensions.forEach(extension => extension.delete());
-    project.delete();
-  }
-};
-
-const writeMigrationProjectSourceCatalogs = async (
-  legacyProject: Object,
-  projectRoot: string,
-  catalogs: MigrationInstructionCatalogs
-): Promise<void> => {
-  const project = gd.ProjectHelper.createNewGDJSProject();
-  const additionalExtensions: Array<gdPlatformExtension> = [];
-  try {
-    unserializeFromJSObject(project, legacyProject);
-    additionalExtensions.push(...generateProjectAdditionalExtensions(project));
-    await writeProjectSourceCatalogs(project, projectRoot, {
-      additionalExtensions,
-      instructionCatalog: catalogs.authoringCatalog,
-      deprecatedInstructionCatalog: catalogs.deprecatedCatalog,
-    });
-  } finally {
-    additionalExtensions.forEach(extension => extension.delete());
-    project.delete();
-  }
-};
-
 const bootstrapProjectSourceCatalogs = async (
   projectFile: string
 ): Promise<void> => {
@@ -192,6 +106,16 @@ const bootstrapProjectSourceCatalogs = async (
     return;
   }
 
+  const schemaProject = gd.ProjectHelper.createNewGDJSProject();
+  try {
+    buildProjectSettingsCatalog({
+      project: schemaProject,
+      serializedProject: serializeToJSObject(schemaProject),
+    });
+  } finally {
+    schemaProject.delete();
+  }
+
   // A first open has no generated instruction catalog yet, so reconstruct the
   // project without compiling events, build isolated metadata for its local
   // extensions, and write every generated authoring artifact before reopening.
@@ -214,29 +138,6 @@ const bootstrapProjectSourceCatalogs = async (
     additionalExtensions.forEach(extension => extension.delete());
     catalogProject.delete();
   }
-};
-
-const normalizeLegacyProjectWithCurrentSerializer = (
-  legacyProject: Object
-): Object => {
-  const project = gd.ProjectHelper.createNewGDJSProject();
-  try {
-    unserializeFromJSObject(project, legacyProject);
-    normalizeProjectLocalResourceFilePaths(project);
-    return serializeToJSObject(project);
-  } finally {
-    project.delete();
-  }
-};
-
-const readConstantsSource = async (projectRoot: string): Promise<Object> => {
-  const constantsPath = path.join(projectRoot, 'constants.toml');
-  if (!fs.existsSync(constantsPath)) {
-    throw new Error(`The project is missing ${constantsPath}.`);
-  }
-  return parseConstantsFromToml(
-    await fs.promises.readFile(constantsPath, 'utf8')
-  );
 };
 
 const separateConstantsFromProject = (
@@ -265,7 +166,7 @@ export const onOpen = (
 ): Promise<{|
   content: Object,
   constants: Object,
-  fileMetadata?: FileMetadata,
+  fileMetadata: FileMetadata,
 |}> => {
   const filePath = fileMetadata.fileIdentifier;
   const fileName = path.basename(filePath);
@@ -294,101 +195,12 @@ export const onOpen = (
       )
     );
   }
-  const projectPath = path.dirname(filePath);
-  return fs.promises.readFile(filePath, 'utf8').then(legacySource => {
-    return readJSONFile(filePath).then(object => {
-      return unsplit(object, {
-        getReferencePartialObject: referencePath => {
-          return readJSONFile(path.join(projectPath, referencePath) + '.json');
-        },
-        isReferenceMagicPropertyName: '__REFERENCE_TO_SPLIT_OBJECT',
-        // Migration must reconstruct the complete legacy reference tree before
-        // ownership projection. Keep a finite guard against malicious cycles.
-        maxUnsplitDepth: 100,
-      }).then(async () => {
-        const entryPath = path.join(projectPath, MULTI_FILE_ENTRY_NAME);
-        if (fs.existsSync(entryPath)) {
-          const migrationHash = await getLegacyMigrationSourceHash(entryPath);
-          if (
-            migrationHash &&
-            migrationHash !== hashLegacySource(legacySource)
-          ) {
-            throw new Error(
-              'The legacy JSON and migrated project.gdevelop have diverged. Open project.gdevelop or import the changed JSON into a different folder.'
-            );
-          }
-          const lastModifiedDate = await getLocalProjectLastModifiedDate(
-            entryPath
-          );
-          const openedProject = separateConstantsFromProject(
-            await openMultiFileProject(entryPath)
-          );
-          return {
-            ...openedProject,
-            fileMetadata: {
-              ...fileMetadata,
-              fileIdentifier: entryPath,
-              ...(lastModifiedDate !== null ? { lastModifiedDate } : {}),
-            },
-          };
-        }
-        const serializedContent = normalizeLegacyProjectWithCurrentSerializer(
-          object
-        );
-        const instructionCatalogs = buildMigrationInstructionCatalogs(
-          serializedContent
-        );
-        const instructionCatalog = instructionCatalogs.serializationCatalog;
-        const content = normalizeLegacyProjectInstructionParameters(
-          serializedContent,
-          instructionCatalog
-        );
-        const constants = await readConstantsSource(projectPath);
-        const migration = await migrateLegacyProject({
-          legacyPath: filePath,
-          legacySource,
-          legacyProject: {
-            ...content,
-            constants,
-          },
-          decomposeOptions: {
-            instructionParameterIndicesToIgnoreByType: getCatalogCodeOnlyParameterIndicesByType(
-              instructionCatalog
-            ),
-            eventsDslOptions: {
-              formatInstruction: createCatalogInstructionFormatter(
-                instructionCatalog
-              ),
-            },
-          },
-          composeOptions: {
-            compileOptions: {
-              resolveInstruction: createCatalogInstructionResolver(
-                instructionCatalog
-              ),
-            },
-          },
-        });
-        await writeMigrationProjectSourceCatalogs(
-          content,
-          projectPath,
-          instructionCatalogs
-        );
-        const lastModifiedDate = await getLocalProjectLastModifiedDate(
-          migration.entryPath
-        );
-        return {
-          content,
-          constants,
-          fileMetadata: {
-            ...fileMetadata,
-            fileIdentifier: migration.entryPath,
-            ...(lastModifiedDate !== null ? { lastModifiedDate } : {}),
-          },
-        };
-      });
-    });
-  });
+  return Promise.reject(
+    new MultiFileProjectError(
+      'MULTIFILE_UNSUPPORTED_VERSION',
+      'Only the current Settings DSL project.gdevelop format is supported.'
+    )
+  );
 };
 
 export const getMultiFileAutoSavePath = (filePath: string): string =>

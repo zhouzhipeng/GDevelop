@@ -15,7 +15,7 @@ describe('project module map', () => {
     };
     const files = {
       'game://scenes/Game/functions/sceneUpdate.settings':
-        'kind = "function"\n',
+        'function {\n name = "sceneUpdate"\n}\n',
       'game://scenes/Game/functions/sceneUpdate.events': 'link "HUD"\n',
     };
     const result = buildProjectModuleMap(project, files, () => null);
@@ -53,11 +53,11 @@ describe('project module map', () => {
     };
     const files = {
       'game://scenes/Game/functions/sceneUpdate.settings':
-        'kind = "function"\ndescription = "Every frame"\n',
+        'function {\n name = "sceneUpdate"\n description = "Every frame"\n}\n',
       'game://scenes/Game/external-events/HUD.settings':
-        'kind = "externalEvents"\nname = "HUD"\ndescription = "Show player status"\neventsLogic = "Refresh labels"\n',
+        'external_events {\n name = "HUD"\n description = "Show player status"\n eventsLogic = "Refresh labels"\n}\n',
       'game://extensions/Local/functions/Update.settings':
-        'kind = "function"\ndescription = "Update local state"\n',
+        'function {\n name = "Update"\n description = "Update local state"\n}\n',
     };
     const result = buildProjectModuleMap(project, files);
     expect(result.scenes[0].events[0].links).toEqual(['HUD', 'Missing']);

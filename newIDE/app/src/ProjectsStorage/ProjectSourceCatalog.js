@@ -5,12 +5,15 @@ import {
   serializeToJSObject,
   unserializeFromJSObject,
 } from '../Utils/Serializer';
+import { encodeManagedName } from './MultiFileProjectFormat';
+
 import {
-  MULTI_FILE_ENTRY_NAME,
-  MULTI_FILE_ENTRY_URI,
-  MULTI_FILE_FORMAT_VERSION,
-  encodeManagedName,
-} from './MultiFileProjectFormat';
+  getSettingsSchemas,
+  registerSettingsTypes,
+  setSettingsTypeProvider,
+  getObjectSettingsSchema,
+  getComponentSettingsSchema,
+} from './SettingsDsl';
 
 const gd: libGDevelop = global.gd;
 
@@ -23,7 +26,7 @@ const SCENE_LIFECYCLE_SOURCES = Object.freeze([
 
 export const PROJECT_SETTINGS_CATALOG_RELATIVE_PATH =
   '.gdevelop/settings-catalog.json';
-export const PROJECT_SETTINGS_CATALOG_FORMAT_VERSION = 4;
+export const PROJECT_SETTINGS_CATALOG_FORMAT_VERSION = 8;
 
 export class ProjectSourceCatalogError extends Error {
   code: string;
@@ -181,6 +184,25 @@ const inferSerializedPropertyKey = ({
         );
       }
     }
+  }
+};
+
+// Metadata instances are prototypes, not necessarily initialized configurations.
+// Inspect the engine's actual default content without retaining mutations on a
+// borrowed WASM instance or guessing serialized keys from editor labels.
+const readInitializedSerializedDefaults = (instance: any): Object => {
+  // Shared-data wrappers do not expose the serialization API in these bindings.
+  if (
+    typeof instance.serializeTo !== 'function' ||
+    typeof instance.unserializeFrom !== 'function'
+  )
+    return {};
+  const baseline = serializeToJSObject(instance);
+  try {
+    instance.initializeContent();
+    return serializeToJSObject(instance);
+  } finally {
+    unserializeFromJSObject(instance, baseline);
   }
 };
 
@@ -428,7 +450,10 @@ const serializedValueKind = (value: any): string => {
   if (value === null) return 'null';
   if (Array.isArray(value)) return 'array';
   if (typeof value === 'number') {
-    return Number.isInteger(value) ? 'integer' : 'number';
+    // An integral default (for example tileScale = 1) does not prove that
+    // a native serializer field only accepts integers. JSON samples establish
+    // a number schema; integral constraints require an explicit field schema.
+    return 'number';
   }
   return typeof value;
 };
@@ -504,7 +529,7 @@ const shapeType = (
         : `${itemType} array`;
     }
     if (kind === 'object') return 'inline table';
-    if (kind === 'null') return 'JSON null stored through [rawJson]';
+    if (kind === 'null') return 'unsupported null (not part of Settings DSL)';
     return kind;
   });
   if (types.includes('number') && types.includes('integer')) {
@@ -542,10 +567,7 @@ const buildSerializedObjectChildTable = (
           fieldShape.kinds.includes('array') &&
           fieldShape.item &&
           fieldShape.item.kinds.includes('object');
-        if (
-          !isInlineObjectConfigurationField(fieldName) &&
-          (isObject || isObjectArray)
-        ) {
+        if (isObject || isObjectArray) {
           childTables.push(
             buildSerializedObjectChildTable(fieldName, fieldShape, path)
           );
@@ -590,10 +612,7 @@ const buildSerializedObjectConfigurationSchema = (
         shape.kinds.includes('array') &&
         shape.item &&
         shape.item.kinds.includes('object');
-      if (
-        !isInlineObjectConfigurationField(name) &&
-        (isObject || isObjectArray)
-      ) {
+      if (isObject || isObjectArray) {
         childTables.push(buildSerializedObjectChildTable(name, shape, ''));
       } else {
         rootFields.push(shapeField(name, shape));
@@ -799,7 +818,7 @@ const collectRegisteredTypes = (
       const metadata = extension.getObjectMetadata(objectType);
       if (
         gd.MetadataProvider.isBadObjectMetadata(metadata) ||
-        (metadata.isHidden && metadata.isHidden()) ||
+        metadata.isHidden() ||
         (metadata.isPrivate() && !canUsePrivateTypes)
       ) {
         return;
@@ -851,7 +870,7 @@ const collectRegisteredTypes = (
       });
       entry.schema = buildSerializedObjectConfigurationSchema(configurations);
       entry.keySpace = 'serialized paths';
-      entry.unknownPropertyPolicy = 'preserve';
+      entry.unknownPropertyPolicy = 'error';
       const defaultBehaviors = toArray(metadata.getDefaultBehaviors());
       if (defaultBehaviors.length) {
         entry.defaultBehaviorTypes = sortedUnique(defaultBehaviors);
@@ -865,7 +884,7 @@ const collectRegisteredTypes = (
       const metadata = extension.getBehaviorMetadata(behaviorType);
       if (
         gd.MetadataProvider.isBadBehaviorMetadata(metadata) ||
-        (metadata.isHidden && metadata.isHidden()) ||
+        metadata.isHidden() ||
         (metadata.isPrivate() && !canUsePrivateTypes)
       ) {
         return;
@@ -901,12 +920,60 @@ const collectRegisteredTypes = (
           `shared properties for behavior ${behaviorType}`
         );
       }
+      entry.serializedDefaults = readInitializedSerializedDefaults(
+        metadata.get()
+      );
+      entry.sharedSerializedDefaults = readInitializedSerializedDefaults(
+        metadata.getSharedDataInstance()
+      );
+      if (!localBehaviorDefinition) {
+        const byKey: Map<string, Object> = new Map();
+        Object.entries(entry.serializedDefaults).forEach(
+          ([serializedKey, value]) => {
+            byKey.set(serializedKey, {
+              serializedKey,
+              type: Array.isArray(value) ? 'array' : typeof value,
+            });
+          }
+        );
+        const descriptors = metadata.getProperties();
+        toArray(descriptors.keys()).forEach(key => {
+          const authoringKey = String(key);
+          const property = descriptors.get(key);
+          const publicMapping = entry.properties.find(
+            p => p.authoringKey === authoringKey
+          );
+          const mapping =
+            publicMapping && publicMapping.serializedKey
+              ? publicMapping
+              : byKey.has(authoringKey)
+              ? { serializedKey: authoringKey }
+              : inferSerializedPropertyKey({
+                  instance: metadata.get(),
+                  authoringKey,
+                  property,
+                });
+          // Deprecated/hidden editor keys are not serializer keys. Keep only
+          // proven mappings; default serializer fields are already registered.
+          if (!mapping.serializedKey) return;
+          const serializedKey = mapping.serializedKey;
+          if (!byKey.has(serializedKey))
+            byKey.set(serializedKey, {
+              serializedKey,
+              type:
+                property.getType() === 'Bitmask'
+                  ? 'integer'
+                  : property.getType(),
+            });
+        });
+        entry.serializedProperties = Array.from(byKey.values());
+      } else {
+        entry.serializedProperties = (
+          localBehaviorDefinition.propertyDescriptors || []
+        ).map(p => ({ serializedKey: p.name, type: p.type }));
+      }
       entry.keySpace = 'serialized';
-      // Behavior serializers can retain fields from an older version of an
-      // extension after a property descriptor is removed. These fields must
-      // survive project conversion: rejecting them makes otherwise valid
-      // templates and legacy projects impossible to save.
-      entry.unknownPropertyPolicy = 'preserve';
+      entry.unknownPropertyPolicy = 'error';
       const objectType = metadata.getObjectType();
       if (objectType) entry.objectType = objectType;
       const requiredBehaviorTypes = localBehaviorDefinition
@@ -935,6 +1002,15 @@ const collectRegisteredTypes = (
           ? ['3d']
           : ['2d', '3d'],
         unique: metadata.isMarkedAsUnique(),
+        // Editor visibility does not determine which parameters the serializer
+        // and runtime support. Keep hidden/deprecated parameters in this schema.
+        serializedParameters: (() => {
+          const properties = metadata.getProperties();
+          return toArray(properties.keys()).map(name => ({
+            name: String(name),
+            type: String(properties.get(name).getType()),
+          }));
+        })(),
         parameters: safelySummarizeMetadataProperties(
           () => metadata.getProperties(),
           undefined,
@@ -947,7 +1023,7 @@ const collectRegisteredTypes = (
   const uniqueByType = (entries: Array<Object>): Array<Object> =>
     Array.from(
       entries
-        .reduce((byType, entry) => {
+        .reduce((byType: Map<string, Object>, entry: Object) => {
           if (!byType.has(entry.type)) byType.set(entry.type, entry);
           return byType;
         }, new Map())
@@ -962,6 +1038,15 @@ const collectRegisteredTypes = (
   };
 };
 
+setSettingsTypeProvider(() => {
+  const project = gd.ProjectHelper.createNewGDJSProject();
+  try {
+    return collectRegisteredTypes(project, serializeToJSObject(project), []);
+  } finally {
+    project.delete();
+  }
+});
+
 const settingsField = (
   name: string,
   type: string,
@@ -972,1286 +1057,131 @@ const settingsField = (
   ...options,
 });
 
-const formatFields = ({
-  kind,
-  ordered = false,
-  folder = false,
-  name = false,
-}: Object): Array<Object> => [
-  settingsField('kind', 'string', { required: true, value: kind }),
-  settingsField('settingsFormatVersion', 'integer', {
-    required: true,
-    value: MULTI_FILE_FORMAT_VERSION,
-  }),
-  ...(ordered
-    ? [
-        settingsField('order', 'contiguous zero-based integer', {
-          required: true,
-        }),
-      ]
-    : []),
-  ...(folder
-    ? [
-        settingsField('folder', 'ordered string array', {
-          required: true,
-          emptyValue: [],
-        }),
-      ]
-    : []),
-  ...(name ? [settingsField('name', 'string', { required: true })] : []),
-];
-
-const rawJsonTable = {
-  table: 'rawJson',
-  header: '[rawJson]',
-  optional: true,
-  dynamicFields: {
-    key: 'RFC 6901 JSON Pointer relative to this component payload',
-    value: 'canonical JSON text string',
-  },
-  note:
-    'Reserved lossless fallback written only for values that TOML cannot represent directly. Preserve existing entries.',
-};
-
-const variableRecordFields = [
-  settingsField('name', 'non-empty string', { required: true }),
-  settingsField('type', 'enum', {
-    required: true,
-    values: [
-      'string',
-      'number',
-      'boolean',
-      'structure',
-      'array',
-      'enum',
-      'mixed',
-    ],
-  }),
-  settingsField('value', 'string, number, or boolean', {
-    requiredForTypes: ['string', 'number', 'boolean', 'enum'],
-  }),
-  settingsField('children', 'inline recursive variable descriptor array', {
-    requiredForTypes: ['structure', 'array'],
-    note:
-      'Structure children have a non-empty name. Array children have no name. Never write a recursive TOML child table.',
-  }),
-  settingsField('values', 'unique string array', {
-    requiredForTypes: ['enum'],
-  }),
-  settingsField('folded', 'boolean'),
-  settingsField('persistentUuid', 'empty string or lowercase UUIDv4 string'),
-  settingsField('hasMixedValues', 'boolean'),
-];
-
-const variableTable = (name: string): Object => ({
-  table: name,
-  header: `[[${name}]]`,
-  repeated: true,
-  emptyForm: `${name} = [ ]`,
-  fields: variableRecordFields,
-  additionalFields: 'preserve unknown variable serializer fields',
-});
-
-const objectGroupsTable = (prefix: string = ''): Object => ({
-  table: `${prefix}objectGroups`,
-  header: `[${prefix}objectGroups]`,
-  optional: true,
-  emptyForm: prefix
-    ? `objectGroups = { } inside [[${prefix.slice(0, -1)}]]`
-    : 'objectGroups = { }',
-  dynamicFields: {
-    key: 'unique object-group name',
-    value: 'ordered string array of existing object names',
-  },
-});
-
-const objectGroupRequiredBehaviorsTable = (prefix: string = ''): Object => ({
-  table: `${prefix}objectGroupRequiredBehaviors`,
-  header: `[${prefix}objectGroupRequiredBehaviors]`,
-  optional: true,
-  dynamicFields: {
-    key: `object-group name also present in ${prefix}objectGroups`,
-    value: 'ordered string array of registered behavior types',
-  },
-});
-
-const quickCustomizationTable = (prefix: string): Object => ({
-  table: `${prefix}.propertiesQuickCustomizationVisibilities`,
-  header: `[${prefix}.propertiesQuickCustomizationVisibilities]`,
-  optional: true,
-  dynamicFields: {
-    key: 'serialized property name',
-    value: 'enum: default, visible, or hidden',
-  },
-});
-
-const attachedBehaviorTable = {
-  table: 'behaviors',
-  header: '[[behaviors]]',
-  repeated: true,
-  emptyForm: 'behaviors = [ ]',
-  fields: [
-    settingsField('name', 'unique object-local string', { required: true }),
-    settingsField('type', 'registered behaviorTypes[].type', {
-      required: true,
-    }),
-    settingsField('isFolded', 'boolean', { default: false }),
-    settingsField('isMuted', 'boolean', { default: false }),
-    settingsField('isInheritedFromObjectType', 'boolean', { default: false }),
-    settingsField('quickCustomizationVisibility', 'enum', {
-      values: ['default', 'visible', 'hidden'],
-    }),
-  ],
-  childTables: [quickCustomizationTable('behaviors')],
-  dynamicFields: {
-    source: 'behaviorTypes[type].properties',
-    key: 'properties[].serializedKey',
-    value: 'properties[].type',
-  },
-  additionalFields:
-    'preserve unlisted existing serializer fields according to behaviorTypes[type].unknownPropertyPolicy',
-};
-
-const objectEffectTable = {
-  table: 'effects',
-  header: '[[effects]]',
-  repeated: true,
-  emptyForm: 'effects = [ ]',
-  fields: [
-    settingsField('name', 'unique object-local string', { required: true }),
-    settingsField('effectType', 'registered effectTypes[].type', {
-      required: true,
-    }),
-    settingsField('folded', 'boolean', { default: false }),
-    settingsField('disabled', 'boolean', { default: false }),
-  ],
-  childTables: [
-    {
-      table: 'effects.doubleParameters',
-      header: '[effects.doubleParameters]',
-      optional: true,
-      dynamicFields: {
-        source: 'effectTypes[effectType].parameters',
-        key: 'effect parameter name',
-        value: 'number',
-      },
-      emptyForm: 'doubleParameters = { } inside [[effects]]',
-    },
-    {
-      table: 'effects.stringParameters',
-      header: '[effects.stringParameters]',
-      optional: true,
-      dynamicFields: {
-        source: 'effectTypes[effectType].parameters',
-        key: 'effect parameter name',
-        value: 'string',
-      },
-      emptyForm: 'stringParameters = { } inside [[effects]]',
-    },
-    {
-      table: 'effects.booleanParameters',
-      header: '[effects.booleanParameters]',
-      optional: true,
-      dynamicFields: {
-        source: 'effectTypes[effectType].parameters',
-        key: 'effect parameter name',
-        value: 'boolean',
-      },
-      emptyForm: 'booleanParameters = { } inside [[effects]]',
-    },
-  ],
-};
-
-const propertyDescriptorFields = [
-  settingsField('name', 'unique string', { required: true }),
-  settingsField('value', 'string', { required: true }),
-  settingsField('type', 'property type string', { required: true }),
-  settingsField('unit', 'measurement-unit string', {
-    emittedWhen: 'type is Number and a measurement unit is defined',
-  }),
-  settingsField('label', 'string', { required: true }),
-  settingsField('description', 'string'),
-  settingsField('group', 'compatibility string'),
-  settingsField('extraInformation', 'string array'),
-  settingsField('hidden', 'boolean', { default: false }),
-  settingsField('deprecated', 'boolean', { default: false }),
-  settingsField('advanced', 'boolean', { default: false }),
-  settingsField('quickCustomizationVisibility', 'enum', {
-    values: ['default', 'visible', 'hidden'],
-  }),
-];
-
-const propertyDescriptorTable = (name: string): Object => ({
-  table: name,
-  header: `[[${name}]]`,
-  repeated: true,
-  emptyForm: `${name} = [ ]`,
-  fields: propertyDescriptorFields,
-  childTables: [
-    {
-      table: `${name}.choices`,
-      header: `[[${name}.choices]]`,
-      repeated: true,
-      emptyForm: 'choices = [ ] inside the parent property descriptor',
-      fields: [
-        settingsField('value', 'string', { required: true }),
-        settingsField('label', 'string', { required: true }),
-      ],
-    },
-  ],
-});
-
-const functionSchema = ({ folder, extensionRequired }: Object): Object => ({
-  rootFields: [
-    ...formatFields({
-      kind: 'function',
-      ordered: true,
-      folder,
-      name: true,
-    }),
-    ...(extensionRequired
-      ? [
-          settingsField('extension', 'owning extension name', {
-            required: true,
-          }),
-        ]
-      : []),
-    settingsField('functionType', 'enum', {
-      required: true,
-      values: [
-        'Action',
-        'Condition',
-        'Expression',
-        'StringExpression',
-        'ExpressionAndCondition',
-        'ActionWithOperator',
-      ],
-    }),
-    settingsField('fullName', 'string'),
-    settingsField('description', 'string'),
-    settingsField('sentence', 'string'),
-    settingsField('group', 'string'),
-    settingsField('getterName', 'string'),
-    settingsField('private', 'boolean', { default: false }),
-    settingsField('async', 'boolean', { default: false }),
-    settingsField('helpUrl', 'string'),
-    settingsField('deprecated', 'boolean', { default: false }),
-    settingsField('deprecationMessage', 'string'),
-  ],
-  childTables: [
-    {
-      table: 'expressionType',
-      header: '[expressionType]',
-      optional: true,
-      requiredForFunctionTypes: [
-        'Expression',
-        'StringExpression',
-        'ExpressionAndCondition',
-      ],
-      fields: [
-        settingsField('type', 'value type string', { required: true }),
-        settingsField('supplementaryInformation', 'string'),
-        settingsField('optional', 'boolean', { default: false }),
-        settingsField('defaultValue', 'string'),
-      ],
-    },
-    {
-      table: 'parameters',
-      header: '[[parameters]]',
-      repeated: true,
-      emptyForm: 'parameters = [ ]',
-      fields: [
-        settingsField('name', 'unique parameter string', { required: true }),
-        settingsField('type', 'parameter value type string', {
-          required: true,
-        }),
-        settingsField('supplementaryInformation', 'string'),
-        settingsField('optional', 'boolean', { default: false }),
-        settingsField('defaultValue', 'string'),
-        settingsField('description', 'string', { required: true }),
-        settingsField('longDescription', 'string'),
-        settingsField('hint', 'string'),
-        settingsField('codeOnly', 'boolean', { default: false }),
-      ],
-    },
-    objectGroupsTable(),
-    objectGroupRequiredBehaviorsTable(),
-    rawJsonTable,
-  ],
-  additionalFields:
-    'preserve unknown current EventsFunction serializer metadata fields',
-});
-
-const lifecycleFunctionSchema = (() => {
-  const schema = functionSchema({ folder: true, extensionRequired: false });
-  return {
-    ...schema,
-    rootFields: [
-      ...schema.rootFields.map(field =>
-        field.name === 'order'
-          ? {
-              ...field,
-              type: 'fixed lifecycle integer',
-              values: [0, 1, 2, 3],
-            }
-          : field
-      ),
-      settingsField('lifecycleRole', 'fixed lifecycle role', {
-        required: true,
-        values: SCENE_LIFECYCLE_SOURCES.map(source => source.name),
-      }),
-    ],
-    additionalFields:
-      'Lifecycle metadata is fixed. Do not rename, reorder, delete, duplicate, make public/async, or change signatures.',
-  };
-})();
-
-const objectSettingsSchema = {
-  rootFields: [
-    ...formatFields({
-      kind: 'object',
-      ordered: true,
-      folder: true,
-      name: true,
-    }),
-    settingsField('type', 'registered objectTypes[].type', { required: true }),
-    settingsField('persistentUuid', 'lowercase UUIDv4 string'),
-    settingsField('assetStoreId', 'string'),
-    settingsField('resourcesPreloading', 'string'),
-  ],
-  childTables: [
-    variableTable('variables'),
-    attachedBehaviorTable,
-    objectEffectTable,
-    rawJsonTable,
-  ],
-  dynamicFields: {
-    source: 'the object serializer selected by root field type',
-    schema: 'objectTypes[type].schema',
-    policy:
-      'Use objectTypes[type].schema for public type-specific configuration and preserve unknown legacy or private fields and child tables.',
-  },
-};
-
-// Keep these contracts aligned with MultiFileProjectFormat's ownership
-// projection and the corresponding libGD SerializeTo methods. `header` is the
-// exact canonical header emitted by @iarna/toml, including nested records.
-const SETTINGS_FILE_SCHEMAS = Object.freeze({
-  project: {
-    rootFields: [
-      settingsField('combinedSettingsFormatVersion', 'integer', {
-        required: true,
-        value: MULTI_FILE_FORMAT_VERSION,
-      }),
-      settingsField('eventsDslVersion', 'string', {
-        required: true,
-        value: '2.0',
-      }),
-      settingsField('entry', MULTI_FILE_ENTRY_URI, {
-        optional: true,
-      }),
-      ...formatFields({ kind: 'project' }),
-      settingsField('initialGDVersion', 'string'),
-      settingsField('firstLayout', 'existing scene name', { required: true }),
-      settingsField('previewLayout', 'existing scene name'),
-    ],
-    childTables: [
-      {
-        table: 'gdVersion',
-        header: '[gdVersion]',
-        fields: ['major', 'minor', 'build', 'revision'].map(name =>
-          settingsField(name, 'integer', { required: true })
-        ),
-      },
-      {
-        table: 'properties',
-        header: '[properties]',
-        fields: [
-          settingsField('name', 'string', { required: true }),
-          settingsField('description', 'string'),
-          settingsField('version', 'string'),
-          settingsField('author', 'string'),
-          settingsField('windowWidth', 'positive integer'),
-          settingsField('windowHeight', 'positive integer'),
-          settingsField('latestCompilationDirectory', 'string'),
-          settingsField('maxFPS', 'number'),
-          settingsField('minFPS', 'number'),
-          settingsField('verticalSync', 'boolean'),
-          settingsField('scaleMode', 'string'),
-          settingsField('pixelsRounding', 'boolean'),
-          settingsField('adaptGameResolutionAtRuntime', 'boolean'),
-          settingsField('sizeOnStartupMode', 'string'),
-          settingsField('antialiasingMode', 'string'),
-          settingsField('antialisingEnabledOnMobile', 'boolean'),
-          settingsField('projectUuid', 'UUID string'),
-          settingsField('folderProject', 'boolean'),
-          settingsField('packageName', 'string'),
-          settingsField('templateSlug', 'string'),
-          settingsField('orientation', 'string'),
-          settingsField('areEffectsHiddenInEditor', 'boolean'),
-          settingsField('authorIds', 'string array'),
-          settingsField('authorUsernames', 'string array'),
-          settingsField('categories', 'string array'),
-          settingsField('playableDevices', 'unique enum string array', {
-            values: ['keyboard', 'gamepad', 'mobile'],
-          }),
-          settingsField('useDeprecatedZeroAsDefaultZOrder', 'boolean'),
-          settingsField('useDeprecatedZeroAsDefaultStringVariable', 'boolean'),
-          settingsField('currentPlatform', 'string'),
-          settingsField('sceneResourcesPreloading', 'string'),
-          settingsField('sceneResourcesUnloading', 'string'),
-        ],
-        childTables: [
-          {
-            table: 'properties.platformSpecificAssets',
-            header: '[properties.platformSpecificAssets]',
-            emptyForm: 'platformSpecificAssets = { } inside [properties]',
-            dynamicFields: {
-              key: '<platform>-<asset-name>',
-              value: 'resource name string',
-            },
-          },
-          {
-            table: 'properties.loadingScreen',
-            header: '[properties.loadingScreen]',
-            fields: [
-              settingsField('showGDevelopSplash', 'boolean'),
-              settingsField('gdevelopLogoStyle', 'string'),
-              settingsField('backgroundImageResourceName', 'resource name'),
-              settingsField('backgroundColor', 'integer RGB color'),
-              settingsField('backgroundFadeInDuration', 'non-negative number'),
-              settingsField('minDuration', 'non-negative number'),
-              settingsField(
-                'logoAndProgressFadeInDuration',
-                'non-negative number'
-              ),
-              settingsField(
-                'logoAndProgressLogoFadeInDelay',
-                'non-negative number'
-              ),
-              settingsField('showProgressBar', 'boolean'),
-              settingsField('progressBarMinWidth', 'non-negative number'),
-              settingsField('progressBarMaxWidth', 'non-negative number'),
-              settingsField('progressBarWidthPercent', 'number'),
-              settingsField('progressBarHeight', 'non-negative number'),
-              settingsField('progressBarColor', 'integer RGB color'),
-            ],
-          },
-          {
-            table: 'properties.watermark',
-            header: '[properties.watermark]',
-            fields: [
-              settingsField('showWatermark', 'boolean'),
-              settingsField('placement', 'string'),
-            ],
-          },
-          {
-            table: 'properties.extensionProperties',
-            header: '[[properties.extensionProperties]]',
-            repeated: true,
-            emptyForm: 'extensionProperties = [ ] inside [properties]',
-            fields: [
-              settingsField('extension', 'extension name', { required: true }),
-              settingsField('property', 'property name', { required: true }),
-              settingsField('value', 'string', { required: true }),
-            ],
-          },
-          {
-            table: 'properties.platforms',
-            header: '[[properties.platforms]]',
-            repeated: true,
-            emptyForm: 'platforms = [ ] inside [properties]',
-            fields: [
-              settingsField('name', 'platform name', { required: true }),
-            ],
-          },
-        ],
-        additionalFields:
-          'preserve unknown current Project::properties serializer fields',
-      },
-      variableTable('variables'),
-      objectGroupsTable(),
-      objectGroupRequiredBehaviorsTable(),
-      {
-        table: 'migration',
-        header: '[migration]',
-        optional: true,
-        fields: [
-          settingsField('source', 'canonical game:// URI'),
-          settingsField('sourceSha256', 'lowercase SHA-256 string'),
-          settingsField('importedAt', 'RFC 3339 timestamp string'),
-          settingsField('importerVersion', 'integer'),
-        ],
-        additionalFields: 'preserve unknown migration metadata fields',
-      },
-      rawJsonTable,
-    ],
-    additionalFields:
-      'preserve unknown current Project serializer fields except split/forbidden ownership fields',
-  },
-  object: objectSettingsSchema,
-  resources: {
-    rootFields: [
-      ...formatFields({ kind: 'resources' }),
-      settingsField(
-        'resourceFolders',
-        'preserved homogeneous resource-folder array',
-        {
-          emptyForm: 'resourceFolders = [ ]',
-        }
-      ),
-    ],
-    childTables: [
-      {
-        table: 'resources',
-        header: '[[resources]]',
-        repeated: true,
-        emptyForm: 'resources = [ ]',
-        fields: [
-          settingsField('kind', 'enum', {
-            required: true,
-            values: [
-              'image',
-              'audio',
-              'font',
-              'video',
-              'json',
-              'tilemap',
-              'tileset',
-              'bitmapFont',
-              'model3D',
-              'atlas',
-              'spine',
-              'javascript',
-              'tslMaterial',
-              'internal-in-game-editor-only-svg',
-            ],
-            capabilitiesByValue: {
-              image: ['image-2d', 'three-texture'],
-              model3D: ['model-3d'],
-              tslMaterial: ['tsl-material'],
-            },
-            capabilityNotes: {
-              'three-texture':
-                'Image resources can be uploaded to Three.js from the cached Pixi image, canvas, ImageBitmap, ImageData, video, or OffscreenCanvas source. SVG image files are supported after Pixi rasterizes them.',
-            },
-          }),
-          settingsField('name', 'unique resource name', { required: true }),
-          settingsField('metadata', 'string', { required: true }),
-          settingsField('file', 'project-relative resource path', {
-            required: true,
-          }),
-          settingsField('userAdded', 'boolean', { required: true }),
-          settingsField('smoothed', 'boolean', {
-            requiredForKinds: ['image'],
-          }),
-          settingsField('preloadAsMusic', 'boolean', {
-            requiredForKinds: ['audio'],
-          }),
-          settingsField('preloadAsSound', 'boolean', {
-            requiredForKinds: ['audio'],
-          }),
-          settingsField('preloadInCache', 'boolean', {
-            requiredForKinds: ['audio'],
-          }),
-          settingsField('disablePreload', 'boolean', {
-            requiredForKinds: ['json', 'tilemap', 'tileset', 'spine'],
-          }),
-        ],
-        childTables: [
-          {
-            table: 'resources.origin',
-            header: '[resources.origin]',
-            optional: true,
-            fields: [
-              settingsField('name', 'origin name string', { required: true }),
-              settingsField('identifier', 'origin identifier string', {
-                required: true,
-              }),
-            ],
-          },
-        ],
-        additionalFields:
-          'preserve unknown resource-kind serializer fields for forward compatibility',
-      },
-      rawJsonTable,
-    ],
-  },
-  tests: {
-    rootFields: [...formatFields({ kind: 'tests' })],
-    childTables: [
-      {
-        table: 'tests',
-        header: '[[tests]]',
-        repeated: true,
-        emptyForm: 'tests = [ ]',
-        fields: [
-          settingsField('scope', 'enum', {
-            required: true,
-            values: ['project', 'extension'],
-          }),
-          settingsField('extension', 'owning extension name', {
-            requiredForScopes: ['extension'],
-          }),
-          settingsField('order', 'contiguous zero-based integer', {
-            required: true,
-          }),
-          settingsField('name', 'container-unique test name', {
-            required: true,
-          }),
-          settingsField('type', 'enum', {
-            required: true,
-            values: ['gameplay'],
-          }),
-          settingsField('description', 'string', { required: true }),
-          settingsField(
-            'file',
-            'canonical root-relative tests/<Encoded basename>.js path',
-            { required: true }
-          ),
-        ],
-      },
-    ],
-    additionalFields:
-      'No additional fields. lastRunStatus, lastRunAt, lastRunDurationMs, and lastRunFramesExecuted are forbidden editor state.',
-  },
-  constants: {
-    rootFields: [],
-    childTables: [],
-    dynamicFields: {
-      key: 'arbitrary user-owned TOML-compatible key',
-      value:
-        'string, finite number, boolean, homogeneous array, table, or nested combination',
-    },
-    additionalFields:
-      'all fields are user-owned; rawJson has no reserved meaning here',
-  },
-  scene: {
-    rootFields: [
-      ...formatFields({ kind: 'scene', ordered: true, name: true }),
-      settingsField('mangledName', 'string'),
-      settingsField('title', 'string'),
-      settingsField('standardSortMethod', 'boolean'),
-      settingsField('stopSoundsOnStartup', 'boolean'),
-      settingsField('renderer3DWorldScale', 'number'),
-      settingsField('resourcesPreloading', 'string'),
-      settingsField('resourcesUnloading', 'string'),
-      settingsField('disableInputWhenNotFocused', 'boolean'),
-    ],
-    childTables: [
-      variableTable('variables'),
-      objectGroupsTable(),
-      objectGroupRequiredBehaviorsTable(),
-      {
-        table: 'behaviorsSharedData',
-        header: '[[behaviorsSharedData]]',
-        repeated: true,
-        emptyForm: 'behaviorsSharedData = [ ]',
-        fields: [
-          settingsField('name', 'unique scene-local string', {
-            required: true,
-          }),
-          settingsField('type', 'registered behaviorTypes[].type', {
-            required: true,
-          }),
-          settingsField('quickCustomizationVisibility', 'enum', {
-            values: ['default', 'visible', 'hidden'],
-          }),
-        ],
-        childTables: [quickCustomizationTable('behaviorsSharedData')],
-        dynamicFields: {
-          source: 'behaviorTypes[type].sharedProperties',
-          key: 'sharedProperties[].serializedKey',
-          value: 'sharedProperties[].type',
-        },
-        additionalFields:
-          'preserve unlisted existing shared-data serializer fields',
-      },
-      rawJsonTable,
-    ],
-    additionalFields:
-      'preserve unknown current Layout serializer fields except layout/lifecycle-function/object ownership fields',
-  },
-  sceneLifecycleFunction: lifecycleFunctionSchema,
-  externalEvents: {
-    rootFields: [
-      ...formatFields({ kind: 'externalEvents', name: true }),
-      settingsField('description', 'string'),
-      settingsField('eventsLogic', 'string'),
-    ],
-    childTables: [],
-  },
-  externalLayout: {
-    rootFields: [
-      ...formatFields({ kind: 'externalLayout', ordered: true, name: true }),
-    ],
-    childTables: [rawJsonTable],
-    additionalFields:
-      'preserve unknown current ExternalLayout serializer metadata fields except association and embedded layout fields',
-  },
-  extension: {
-    rootFields: [
-      ...formatFields({ kind: 'extension', ordered: true, name: true }),
-      settingsField('version', 'string'),
-      settingsField('extensionNamespace', 'string'),
-      settingsField('shortDescription', 'string'),
-      settingsField('description', 'string or string array of lines'),
-      settingsField('dimension', 'string'),
-      settingsField('fullName', 'string'),
-      settingsField('category', 'string'),
-      settingsField('tags', 'string array'),
-      settingsField('authorIds', 'string array'),
-      settingsField('author', 'string'),
-      settingsField('previewIconUrl', 'string'),
-      settingsField('iconUrl', 'string'),
-      settingsField('helpPath', 'string'),
-      settingsField('gdevelopVersion', 'string'),
-    ],
-    childTables: [
-      {
-        table: 'origin',
-        header: '[origin]',
-        optional: true,
-        fields: [
-          settingsField('name', 'origin name string', { required: true }),
-          settingsField('identifier', 'origin identifier string', {
-            required: true,
-          }),
-        ],
-      },
-      {
-        table: 'changelog',
-        header: '[[changelog]]',
-        repeated: true,
-        fields: [
-          settingsField('version', 'version string', { required: true }),
-          settingsField('breaking', 'string or string array of lines', {
-            required: true,
-          }),
-        ],
-      },
-      {
-        table: 'dependencies',
-        header: '[[dependencies]]',
-        repeated: true,
-        emptyForm: 'dependencies = [ ]',
-        fields: [
-          settingsField('type', 'dependency type string', { required: true }),
-          settingsField('exportName', 'string', { required: true }),
-          settingsField('name', 'dependency name string', { required: true }),
-          settingsField('version', 'version string', { required: true }),
-        ],
-      },
-      {
-        table: 'sourceFiles',
-        header: '[[sourceFiles]]',
-        repeated: true,
-        fields: [
-          settingsField('resourceName', 'resource name string', {
-            required: true,
-          }),
-          settingsField('includePosition', 'enum', {
-            required: true,
-            values: ['first', 'last'],
-          }),
-        ],
-      },
-      variableTable('globalVariables'),
-      variableTable('sceneVariables'),
-      rawJsonTable,
-    ],
-    additionalFields:
-      'preserve unknown current EventsFunctionsExtension metadata fields except split child implementations',
-  },
-  extensionFunction: functionSchema({
-    folder: false,
-    extensionRequired: true,
-  }),
-  prefab: {
-    rootFields: [
-      ...formatFields({ kind: 'prefab', ordered: true, name: true }),
-      settingsField('defaultName', 'string'),
-      settingsField('assetStoreTag', 'string'),
-      settingsField('assetStoreAssetId', 'string'),
-      settingsField('assetStoreOriginalName', 'string'),
-      settingsField('is3D', 'boolean', { default: false }),
-      settingsField('isAnimatable', 'boolean', { default: false }),
-      settingsField('isTextContainer', 'boolean', { default: false }),
-      settingsField('isInnerAreaFollowingParentSize', 'boolean', {
-        default: false,
-      }),
-      settingsField('isUsingLegacyInstancesRenderer', 'boolean'),
-      settingsField('description', 'string'),
-      settingsField('fullName', 'string'),
-      settingsField('private', 'boolean', { default: false }),
-      settingsField('previewIconUrl', 'string'),
-      settingsField('iconUrl', 'string'),
-      settingsField('helpPath', 'string'),
-    ],
-    childTables: [
-      variableTable('variables'),
-      attachedBehaviorTable,
-      propertyDescriptorTable('propertyDescriptors'),
-      objectGroupsTable(),
-      objectGroupRequiredBehaviorsTable(),
-      rawJsonTable,
-    ],
-    additionalFields:
-      'preserve unknown current EventsBasedObject metadata fields except split functions/layout/objects',
-  },
-  prefabVariant: {
-    rootFields: [
-      ...formatFields({ kind: 'prefabVariant', ordered: true, name: true }),
-      settingsField('assetStoreAssetId', 'string'),
-      settingsField('assetStoreOriginalName', 'string'),
-    ],
-    childTables: [
-      objectGroupsTable(),
-      objectGroupRequiredBehaviorsTable(),
-      rawJsonTable,
-    ],
-    additionalFields:
-      'preserve unknown current EventsBasedObjectVariant metadata fields except split layout/object fields',
-  },
-  prefabFunction: functionSchema({
-    folder: true,
-    extensionRequired: false,
-  }),
-  behavior: {
-    rootFields: [
-      ...formatFields({ kind: 'behavior', ordered: true, name: true }),
-      settingsField('description', 'string'),
-      settingsField('fullName', 'string'),
-      settingsField('private', 'boolean', { default: false }),
-      settingsField('previewIconUrl', 'string'),
-      settingsField('iconUrl', 'string'),
-      settingsField('helpPath', 'string'),
-      settingsField('objectType', 'registered object type or empty string'),
-      settingsField('quickCustomizationVisibility', 'enum', {
-        values: ['default', 'visible', 'hidden'],
-      }),
-    ],
-    childTables: [
-      variableTable('variables'),
-      propertyDescriptorTable('propertyDescriptors'),
-      propertyDescriptorTable('sharedPropertyDescriptors'),
-      rawJsonTable,
-    ],
-    additionalFields:
-      'preserve unknown current EventsBasedBehavior metadata fields except split functions',
-  },
-  behaviorFunction: functionSchema({
-    folder: true,
-    extensionRequired: false,
-  }),
-});
-
-const SETTINGS_FILE_KINDS = Object.freeze([
+const SETTINGS_FILE_KINDS = [
   {
     kind: 'project',
-    requiredMarker: { field: 'kind', value: 'project' },
-    path: MULTI_FILE_ENTRY_NAME,
-    mountedNamespace: 'project',
-    tomlRoot: true,
-    requiredFields: ['kind', 'settingsFormatVersion'],
-    commonFields: [
-      'gdVersion',
-      'properties',
-      'objectGroups',
-      'objectGroupRequiredBehaviors',
-      'variables',
-      'firstLayout',
-      'previewLayout',
-    ],
-    forbiddenFields: [
-      'resources',
-      'constants',
-      'objects',
-      'layouts',
-      'eventsFunctionsExtensions',
-      'externalEvents',
-      'externalLayouts',
-      'tests',
-    ],
-    schema: SETTINGS_FILE_SCHEMAS.project,
+    path: 'project.gdevelop',
+    componentKind: 'project',
+    schemaKey: 'project',
+    layout: false,
   },
   {
     kind: 'global-object',
-    requiredMarker: { field: 'kind', value: 'object' },
     path: 'objects/<Object>.settings',
-    mountedNamespace: 'project.objects."<Object>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'folder',
-      'name',
-      'type',
-    ],
-    commonFields: [
-      'behaviors',
-      'variables',
-      'effects',
-      'type-specific object configuration',
-    ],
-    forbiddenFields: ['instances', 'layers', 'events'],
-    schema: SETTINGS_FILE_SCHEMAS.object,
+    componentKind: 'object',
+    schemaKey: 'object',
+    layout: false,
   },
   {
     kind: 'resources',
-    requiredMarker: { field: 'kind', value: 'resources' },
     path: 'resources.settings',
-    mountedNamespace: 'project.resources',
-    tomlRoot: true,
-    requiredFields: ['kind', 'settingsFormatVersion'],
-    commonFields: ['resources', 'resourceFolders'],
-    schema: SETTINGS_FILE_SCHEMAS.resources,
+    componentKind: 'resources',
+    schemaKey: 'resources',
+    layout: false,
   },
   {
     kind: 'tests',
-    requiredMarker: { field: 'kind', value: 'tests' },
     path: 'tests.settings',
-    mountedNamespace: 'tests',
-    tomlRoot: true,
-    requiredFields: ['kind', 'settingsFormatVersion'],
-    commonFields: [
-      'project and extension gameplay test metadata',
-      'flat root-relative JavaScript file references',
-    ],
-    forbiddenFields: [
-      'source',
-      'lastRunStatus',
-      'lastRunAt',
-      'lastRunDurationMs',
-      'lastRunFramesExecuted',
-      'inline JavaScript source',
-    ],
-    note:
-      'Each file field is a canonical root-relative tests/<Encoded basename>.js path. JavaScript files are direct children of tests/; folders are forbidden.',
-    schema: SETTINGS_FILE_SCHEMAS.tests,
-  },
-  {
-    kind: 'constants',
-    path: 'constants.toml',
-    mountedNamespace: 'editor.constants',
-    tomlRoot: true,
-    requiredFields: [],
-    commonFields: ['arbitrary TOML-compatible constants'],
-    note:
-      'The entire document is editor-only Constants. Do not add format metadata or a wrapper table.',
-    schema: SETTINGS_FILE_SCHEMAS.constants,
+    componentKind: 'tests',
+    schemaKey: 'tests',
+    layout: false,
   },
   {
     kind: 'scene',
-    requiredMarker: { field: 'kind', value: 'scene' },
     path: 'scenes/<Scene>/scene.settings',
-    mountedNamespace: 'scenes."<Scene>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'layout',
-      'name',
-    ],
-    commonFields: [
-      'objectGroups',
-      'objectGroupRequiredBehaviors',
-      'variables',
-      'behaviorsSharedData',
-      'runtime/loading/input/sound/sort settings',
-    ],
-    forbiddenFields: [
-      'objects',
-      'instances',
-      'layers',
-      'uiSettings',
-      'r',
-      'v',
-      'b',
-      'sceneLifecycleFunctions',
-    ],
-    embeddedLayout: { rootTable: 'layout', contextKind: 'scene' },
-    schema: SETTINGS_FILE_SCHEMAS.scene,
+    componentKind: 'scene',
+    schemaKey: 'scene',
+    layout: true,
   },
   {
     kind: 'scene-lifecycle-function',
-    requiredMarker: { field: 'kind', value: 'function' },
     path: 'scenes/<Scene>/functions/<Role>.settings',
-    mountedNamespace: 'scenes."<Scene>".functions."<Role>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'folder',
-      'name',
-      'functionType',
-      'lifecycleRole',
-    ],
-    commonFields: ['fixed signature', 'parameters', 'objectGroups'],
-    forbiddenFields: ['mutable function identity', 'event body'],
-    note:
-      'Only sceneLoad, sceneSignal, sceneUpdate, and sceneUnload are valid. sceneUpdate is required; empty optional same-stem pairs are forbidden.',
-    schema: SETTINGS_FILE_SCHEMAS.sceneLifecycleFunction,
+    componentKind: 'function',
+    schemaKey: 'sceneLifecycleFunction',
+    layout: false,
   },
   {
     kind: 'external-events',
-    requiredMarker: { field: 'kind', value: 'externalEvents' },
     path: 'scenes/<Scene>/external-events/<Fragment>.settings',
-    mountedNamespace: 'scenes."<Scene>".externalEvents."<Fragment>"',
-    tomlRoot: true,
-    requiredFields: ['kind', 'settingsFormatVersion', 'name'],
-    commonFields: ['description', 'eventsLogic'],
-    forbiddenFields: ['events', 'associatedLayout', 'functions'],
-    note:
-      'Requires a same-stem .events file. The parent scene comes from the path.',
-    schema: SETTINGS_FILE_SCHEMAS.externalEvents,
+    componentKind: 'externalEvents',
+    schemaKey: 'externalEvents',
+    layout: false,
   },
   {
     kind: 'external-layout',
-    requiredMarker: { field: 'kind', value: 'externalLayout' },
     path: 'scenes/<Scene>/external-layout/<ExternalLayout>.settings',
-    mountedNamespace: 'scenes."<Scene>".externalLayouts."<ExternalLayout>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'name',
-      'layout',
-    ],
-    commonFields: ['ExternalLayout serializer metadata'],
-    forbiddenFields: [
-      'associatedLayout',
-      'linkedScene',
-      'unresolvedScene',
-      'layout URI',
-    ],
-    embeddedLayout: { rootTable: 'layout', contextKind: 'external' },
-    note:
-      'The associated scene is derived from the physical directory; layout is an embedded TOML subtree.',
-    schema: SETTINGS_FILE_SCHEMAS.externalLayout,
+    componentKind: 'externalLayout',
+    schemaKey: 'externalLayout',
+    layout: true,
   },
   {
     kind: 'scene-object',
-    requiredMarker: { field: 'kind', value: 'object' },
     path: 'scenes/<Scene>/objects/<Object>.settings',
-    mountedNamespace: 'scenes."<Scene>".objects."<Object>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'folder',
-      'name',
-      'type',
-    ],
-    commonFields: [
-      'behaviors',
-      'variables',
-      'effects',
-      'type-specific object configuration',
-    ],
-    forbiddenFields: ['instances', 'layers', 'events'],
-    schema: SETTINGS_FILE_SCHEMAS.object,
+    componentKind: 'object',
+    schemaKey: 'object',
+    layout: false,
   },
   {
     kind: 'extension',
-    requiredMarker: { field: 'kind', value: 'extension' },
     path: 'extensions/<Extension>/extension.settings',
-    mountedNamespace: 'extensions."<Extension>"',
-    tomlRoot: true,
-    requiredFields: ['kind', 'settingsFormatVersion', 'order', 'name'],
-    commonFields: ['metadata', 'dependencies', 'variables'],
-    forbiddenFields: [
-      'eventsFunctions',
-      'eventsBasedObjects',
-      'eventsBasedBehaviors',
-      'tests',
-    ],
-    schema: SETTINGS_FILE_SCHEMAS.extension,
+    componentKind: 'extension',
+    schemaKey: 'extension',
+    layout: false,
   },
   {
     kind: 'function',
-    requiredMarker: { field: 'kind', value: 'function' },
     path: 'extensions/<Extension>/functions/<Function>.settings',
-    mountedNamespace: 'extensions."<Extension>".functions."<Function>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'extension',
-      'name',
-      'functionType',
-    ],
-    commonFields: [
-      'signature',
-      'parameters',
-      'objectGroups',
-      'objectGroupRequiredBehaviors',
-      'editor metadata',
-    ],
-    forbiddenFields: ['event body'],
-    schema: SETTINGS_FILE_SCHEMAS.extensionFunction,
+    componentKind: 'function',
+    schemaKey: 'extensionFunction',
+    layout: false,
   },
   {
     kind: 'prefab',
-    requiredMarker: { field: 'kind', value: 'prefab' },
     path: 'extensions/<Extension>/prefabs/<Prefab>/prefab.settings',
-    mountedNamespace: 'extensions."<Extension>".prefabs."<Prefab>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'name',
-      'layout',
-    ],
-    commonFields: [
-      'objectGroups',
-      'objectGroupRequiredBehaviors',
-      'variables',
-      'propertyDescriptors',
-    ],
-    forbiddenFields: [
-      'instances',
-      'layers',
-      'editionSettings',
-      'areaMin/Max fields',
-      'objects',
-      'functions',
-    ],
-    note:
-      'propertyDescriptors is one flat ordered array; property folders do not exist.',
-    embeddedLayout: { rootTable: 'layout', contextKind: 'prefab' },
-    schema: SETTINGS_FILE_SCHEMAS.prefab,
+    componentKind: 'prefab',
+    schemaKey: 'prefab',
+    layout: true,
   },
   {
     kind: 'prefab-variant',
-    requiredMarker: { field: 'kind', value: 'prefabVariant' },
     path:
       'extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.settings',
-    mountedNamespace:
-      'extensions."<Extension>".prefabs."<Prefab>".variants."<Variant>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'name',
-      'layout',
-    ],
-    commonFields: [
-      'objectGroups',
-      'objectGroupRequiredBehaviors',
-      'variant metadata',
-    ],
-    forbiddenFields: ['objects', 'layout URI'],
-    embeddedLayout: { rootTable: 'layout', contextKind: 'prefab-variant' },
-    schema: SETTINGS_FILE_SCHEMAS.prefabVariant,
+    componentKind: 'prefabVariant',
+    schemaKey: 'prefabVariant',
+    layout: true,
   },
   {
     kind: 'prefab-object',
-    requiredMarker: { field: 'kind', value: 'object' },
     path:
       'extensions/<Extension>/prefabs/<Prefab>/{objects|variants/<Variant>/objects}/<Object>.settings',
-    mountedNamespace:
-      'extensions."<Extension>".prefabs."<Prefab>".{objects|variants."<Variant>".objects}."<Object>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'folder',
-      'name',
-      'type',
-    ],
-    commonFields: [
-      'behaviors',
-      'variables',
-      'effects',
-      'type-specific object configuration',
-    ],
-    forbiddenFields: ['instances', 'layers', 'events'],
-    schema: SETTINGS_FILE_SCHEMAS.object,
+    componentKind: 'object',
+    schemaKey: 'object',
+    layout: false,
   },
   {
     kind: 'prefab-function',
-    requiredMarker: { field: 'kind', value: 'function' },
     path:
       'extensions/<Extension>/prefabs/<Prefab>/functions/<Function>.settings',
-    mountedNamespace:
-      'extensions."<Extension>".prefabs."<Prefab>".functions."<Function>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'folder',
-      'name',
-      'functionType',
-    ],
-    commonFields: [
-      'signature',
-      'parameters',
-      'objectGroups',
-      'objectGroupRequiredBehaviors',
-      'editor metadata',
-    ],
-    forbiddenFields: ['event body'],
-    note:
-      'folder is an array of editor folder names. The sibling <Function>.events owns the body.',
-    schema: SETTINGS_FILE_SCHEMAS.prefabFunction,
+    componentKind: 'function',
+    schemaKey: 'prefabFunction',
+    layout: false,
   },
   {
     kind: 'behavior',
-    requiredMarker: { field: 'kind', value: 'behavior' },
     path: 'extensions/<Extension>/behaviors/<Behavior>/behavior.settings',
-    mountedNamespace: 'extensions."<Extension>".behaviors."<Behavior>"',
-    tomlRoot: true,
-    requiredFields: ['kind', 'settingsFormatVersion', 'order', 'name'],
-    commonFields: [
-      'variables',
-      'propertyDescriptors',
-      'sharedPropertyDescriptors',
-    ],
-    forbiddenFields: ['functions', 'event bodies'],
-    note:
-      'propertyDescriptors and sharedPropertyDescriptors are flat ordered arrays; property folders do not exist.',
-    schema: SETTINGS_FILE_SCHEMAS.behavior,
+    componentKind: 'behavior',
+    schemaKey: 'behavior',
+    layout: false,
   },
   {
     kind: 'behavior-function',
-    requiredMarker: { field: 'kind', value: 'function' },
     path:
       'extensions/<Extension>/behaviors/<Behavior>/functions/<Function>.settings',
-    mountedNamespace:
-      'extensions."<Extension>".behaviors."<Behavior>".functions."<Function>"',
-    tomlRoot: true,
-    requiredFields: [
-      'kind',
-      'settingsFormatVersion',
-      'order',
-      'folder',
-      'name',
-      'functionType',
-    ],
-    commonFields: [
-      'signature',
-      'parameters',
-      'objectGroups',
-      'objectGroupRequiredBehaviors',
-      'editor metadata',
-    ],
-    forbiddenFields: ['event body'],
-    note:
-      'folder is an array of editor folder names. The sibling <Function>.events owns the body.',
-    schema: SETTINGS_FILE_SCHEMAS.behaviorFunction,
+    componentKind: 'function',
+    schemaKey: 'behaviorFunction',
+    layout: false,
   },
-]);
+];
 
 const summarizeObjectDefinition = (object: Object): Object => ({
   name: String(object.name || ''),
@@ -2402,6 +1332,10 @@ export const buildProjectSettingsCatalog = ({
     serializedProject,
     behaviorTypes: registeredTypes.behaviorTypes,
   });
+  registerSettingsTypes(registeredTypes);
+  registeredTypes.objectTypes.forEach(type => {
+    type.schema = getObjectSettingsSchema(type.type);
+  });
   return validateProjectSettingsCatalog({
     format: 'gdevelop-settings-catalog',
     formatVersion: PROJECT_SETTINGS_CATALOG_FORMAT_VERSION,
@@ -2409,34 +1343,15 @@ export const buildProjectSettingsCatalog = ({
     authoring: {
       sourceExtension: '.settings',
       syntax:
-        'TOML 1.0 using unindented, file-local component documents mounted by physical path.',
+        'Settings DSL: key = value and node { ... }. Only the current schema is supported.',
       rules: [
-        'Read the relevant existing settings file before editing or creating a sibling component.',
-        'Use the matching fileKinds[].schema as the complete structural contract: rootFields lists root scalars and childTables recursively lists every canonical TOML table header, record field, dynamic-key rule, empty form, and type-specific schema reference. commonFields is only a search summary and is not a schema.',
-        'Write component fields at the TOML root. Never repeat project, scene, extension, prefab, behavior, function, or object names in TOML table headers; the canonical physical path supplies that namespace.',
-        'At load time the editor parses each local .settings document, mounts it at fileKinds.mountedNamespace, and strictly merges all mounted settings documents. constants.toml is loaded separately as editor-only Constants. Duplicate ownership is an error.',
-        'Layout data is embedded below the reserved [layout] subtree of its owning settings file. Functions derive their same-stem .events sibling from the physical settings path; do not write layout or events URI fields.',
-        `Use kind and settingsFormatVersion=${MULTI_FILE_FORMAT_VERSION} exactly where the file-kind entry requires them. Ordinary owner order is contiguous and zero based. Lifecycle order is the fixed sparse semantic value sceneLoad=0, sceneSignal=1, sceneUpdate=2, sceneUnload=3. External-layout order is global; external event fragments are sorted by name within each scene.`,
-        'Scene lifecycle bodies live in fixed functions/<Role>.settings plus same-stem <Role>.events sources. Function presence is inferred from these pairs; never write sceneLifecycleFunctions in an owner settings file. sceneUpdate is always materialized. Omit both files for empty sceneLoad, sceneSignal, and sceneUnload roles. Never rename, add, delete, reorder, duplicate, make async/public, or change the signature of a lifecycle function.',
-        'External event fragments are single IfDo files at scenes/<Scene>/external-events/<Name>.events. They have no settings, function signature, lifecycle, or manifest. Name and associated scene come from the path; a Link expands the body in the caller context. External layouts use scenes/<Scene>/external-layout/<Name>.settings.',
-        'Write every non-empty variable container as repeated [[variables]], [[globalVariables]], or [[sceneVariables]] records. Each record contains an explicit non-empty name and the complete descriptor fields, for example name = "Controllers", type = "array", and children = [...]. Write variables = [ ], globalVariables = [ ], or sceneVariables = [ ] only for an empty container. Keyed [variables] tables, whole-container inline tables, and non-empty inline descriptor arrays are forbidden.',
-        'Write object groups only as an [objectGroups] TOML table whose keys are group names and whose values are arrays of object names, for example Buttons = ["PauseButton", "Retry"]. Preserve per-group requiredBehaviors in the optional [objectGroupRequiredBehaviors] companion table using the same group key and an array of behavior-type strings. Write objectGroups = { } when there are no groups. The retired objectsGroups field and array/table-descriptor forms are forbidden.',
-        'Write Sprite originPoint and centerPoint as inline TOML tables. Write named points and customCollisionMask polygons as inline arrays of point tables. Never expand point data into dotted TOML headers.',
-        'Never write a legacy *FolderStructure field or optional grouping directories. For an object or owner function, write its editor grouping as folder = ["Parent", "Child"] in that component settings file. Use folder = [] for the root.',
-        'Each global, scene, default-prefab, or variant-prefab object definition and its attached behaviors belong in its dedicated objects/<Object>.settings source location; instances and per-instance behavior overrides belong in the owner settings [layout] subtree.',
-        'Each scene, extension, prefab, or behavior function owns its functions/<Function>.settings location and same-stem <Function>.events body. Function settings never store an events URI, and owner settings never embed function metadata.',
-        'Store all project and extension gameplay-test metadata in root tests.settings. Each file field is a scheme-free canonical tests/<Encoded basename>.js path to a direct child of root tests/. The retired source field, subfolders, game:// prefixes, inline JavaScript, and lastRunStatus/lastRunAt/lastRunDurationMs/lastRunFramesExecuted fields are forbidden.',
-        'For an object, use objectTypes[type].properties for public generic-editor properties and objectTypes[type].schema for the complete known serialized TOML structure, including nested type-specific tables and repeated records. Preserve unlisted legacy or private serializer fields already present in an object definition.',
-        'For an attached behavior, use behaviorTypes[].properties for author-writable fields. Editor-hidden and deprecated descriptors are intentionally absent from this catalog, but existing serialized fields not listed there are preserved verbatim because they may be configured by a specialized editor and required at runtime.',
-        'Preserve unknown serializer fields. Never invent an object, behavior, or effect type absent from this catalog.',
-        'Never edit generated files below .gdevelop or legacy game.json.',
+        'Use one typed component root. Names and properties belong inside the root; never use TOML headers, named node arguments, kind, settingsFormatVersion, settings or layout wrappers.',
+        'Read fileKinds[].schema and objectTypes[type].schema. Unknown fields are errors. Dynamic fields require registered type metadata.',
+        'Declare repeated variable nodes directly on the owner. Infer types from value literals; extension defaults require scope. Descendant metadata uses typed paths. Never write variables, sceneVariables or globalVariables wrappers.',
+        'Instances are root children in global serialized order. Each instance owns variables and behavior overrides. Layers own camera and effect nodes.',
+        'Object definitions and functions remain independent .settings components; event bodies use same-stem .events files.',
+        'Only project.gdevelop declares formatVersion. Paths determine ownership. constants.toml is separate and generated JSON is not author input.',
       ],
-      objectDefinition:
-        'An object definition requires name, type, and behaviors. Author public type-specific fields through objectTypes[type].properties and objectTypes[type].schema; preserve unlisted legacy or private fields and nested variables/effects.',
-      behaviorDefinition:
-        'An attached behavior requires a unique object-local name and a registered type. Initialize or edit only author-writable properties listed for that type in behaviorTypes[].properties. Preserve unlisted serialized properties already present in an object definition.',
-      variableDefinition:
-        'Use one repeated [[variables]], [[globalVariables]], or [[sceneVariables]] record per variable. Every record contains name plus type, value or children, enum values, folded state, persistentUuid, mixed-value state, and unknown fields. Use a root field = [ ] assignment only for an empty container.',
     },
     eventFileKinds: [
       {
@@ -2451,8 +1366,30 @@ export const buildProjectSettingsCatalog = ({
           'Expanded at each Link with caller conditions, object selection and lifecycle context.',
       },
     ],
-    fileKinds: SETTINGS_FILE_KINDS,
+    fileKinds: SETTINGS_FILE_KINDS.map(entry => {
+      const roots = getSettingsSchemas();
+      const schema = getComponentSettingsSchema(
+        entry.componentKind,
+        entry.schemaKey
+      );
+      return {
+        kind: entry.kind,
+        path: entry.path,
+        root: roots.roots[entry.componentKind],
+        requiredFields: Object.keys(schema.fields).filter(
+          name => schema.fields[name].required
+        ),
+        schema: {
+          rootFields: Object.entries(schema.fields).map(([name, value]) => ({
+            ...value,
+            name,
+          })),
+          childNodes: schema.children,
+        },
+      };
+    }),
     settingsOwners,
+    variableSchemas: getSettingsSchemas().variableSchemas,
     objectTypes: registeredTypes.objectTypes,
     behaviorTypes: registeredTypes.behaviorTypes,
     effectTypes: registeredTypes.effectTypes,
@@ -2473,238 +1410,6 @@ export const buildProjectSettingsCatalog = ({
     },
   });
 };
-
-const LAYOUT_TABLES = Object.freeze([
-  {
-    table: 'layout',
-    header: '[layout]',
-    contexts: ['scene', 'prefab', 'prefab-variant', 'external'],
-    fields: [
-      { name: 'version', type: 'integer', required: true, value: 1 },
-      {
-        name: 'background',
-        type: '"#RRGGBB"',
-        requiredIn: ['scene'],
-        forbiddenIn: ['prefab', 'prefab-variant', 'external'],
-      },
-      {
-        name: 'bounds',
-        type: '{ min = [x, y, z], max = [x, y, z] }',
-        requiredIn: ['prefab', 'prefab-variant'],
-        forbiddenIn: ['scene', 'external'],
-      },
-    ],
-  },
-  {
-    table: 'editor',
-    header: '[layout.editor]',
-    contexts: ['scene', 'prefab', 'prefab-variant', 'external'],
-    optional: true,
-    fields: [
-      { name: 'grid', type: 'boolean' },
-      {
-        name: 'grid_type',
-        type: 'enum',
-        values: ['rectangular', 'isometric'],
-      },
-      { name: 'grid_size', type: '[x, y, z] non-negative numbers' },
-      { name: 'grid_offset', type: '[x, y, z] numbers' },
-      { name: 'grid_color', type: '"#RRGGBB"' },
-      { name: 'grid_alpha', type: 'number', range: '[0,1]' },
-      { name: 'snap', type: 'boolean' },
-      { name: 'zoom', type: 'number', range: '[0.01,infinity)' },
-      { name: 'window_mask', type: 'boolean' },
-      { name: 'selected_layer', type: 'existing layer name' },
-      {
-        name: 'selected_layer_unresolved',
-        type: 'boolean import marker',
-        default: false,
-      },
-      {
-        name: 'mode',
-        type: 'enum',
-        values: ['instances-editor', 'embedded-game'],
-      },
-    ],
-  },
-  {
-    table: 'layers',
-    header: '[[layout.layers]]',
-    contexts: ['scene', 'prefab', 'prefab-variant'],
-    repeated: true,
-    fields: [
-      {
-        name: 'id',
-        type: 'file-local lowercase letters/digits/hyphens reference',
-        required: true,
-      },
-      { name: 'name', type: 'string', required: true },
-      { name: 'rendering', type: 'enum', values: ['', '2d', '3d', '2d+3d'] },
-      {
-        name: 'camera_type',
-        type: 'enum',
-        values: ['', 'perspective', 'orthographic'],
-      },
-      {
-        name: 'camera_behavior',
-        type: 'enum',
-        values: ['do-nothing', 'top-left-anchored-if-never-moved'],
-      },
-      { name: 'visible', type: 'boolean', default: true },
-      { name: 'locked', type: 'boolean', default: false },
-      {
-        name: 'lighting',
-        type: 'boolean',
-        default: false,
-        description:
-          'Marks this layer as a dedicated 2D Lighting Layer. This does not enable Scene3D lighting; use Scene3D light effects for 3D layers.',
-        semanticRole: 'dedicated-2d-lighting-layer',
-        constraints: [
-          {
-            code: 'LAYOUT_3D_LAYER_MARKED_AS_LIGHTING_LAYER',
-            incompatibleWhen: { rendering: ['3d', '2d+3d'] },
-          },
-        ],
-      },
-      { name: 'follow_base_camera', type: 'boolean', default: false },
-      { name: 'ambient', type: '"#RRGGBB"', default: '#C8C8C8' },
-      { name: 'near', type: 'number', default: 3 },
-      { name: 'far', type: 'number', default: 10000 },
-      { name: 'fov', type: 'number', range: '(0,180]', default: 45 },
-      {
-        name: 'max_2d_distance',
-        type: 'positive number',
-        default: 5000,
-      },
-      {
-        name: 'cameras',
-        type:
-          'inline table array; each item has size and viewport as "default", numeric arrays, or { default = [...] }',
-      },
-    ],
-    rules: ['far must be greater than near', 'at most 50 cameras'],
-  },
-  {
-    table: 'layers',
-    header: '[[layout.layers]]',
-    variant: 'external reference',
-    contexts: ['external'],
-    repeated: true,
-    fields: [
-      {
-        name: 'id',
-        type: 'file-local lowercase letters/digits/hyphens reference',
-        required: true,
-      },
-      { name: 'name', type: 'existing linked-scene layer', required: true },
-    ],
-  },
-  {
-    table: 'effects',
-    header: '[[layout.effects]]',
-    contexts: ['scene', 'prefab', 'prefab-variant'],
-    repeated: true,
-    fields: [
-      { name: 'layer', type: 'existing layer id', required: true },
-      { name: 'name', type: 'string', required: true },
-      { name: 'type', type: 'registered effect type', required: true },
-      { name: 'folded', type: 'boolean', default: false },
-      { name: 'enabled', type: 'boolean', default: true },
-    ],
-    parameterFields: {
-      placement: 'direct fields on [[effects]]',
-      schema: 'effectTypes[type].parameters',
-      scalarTypes: ['number', 'string', 'boolean'],
-    },
-  },
-  {
-    table: 'instances',
-    header: '[[layout.instances]]',
-    contexts: ['scene', 'prefab', 'prefab-variant', 'external'],
-    repeated: true,
-    fields: [
-      { name: 'id', type: 'lowercase UUIDv4', required: true },
-      { name: 'object', type: 'existing object name', required: true },
-      { name: 'layer', type: 'existing layer id', required: true },
-      { name: 'unresolved', type: 'boolean import marker', default: false },
-      { name: 'at', type: '[x, y] or [x, y, z]', required: true },
-      { name: 'rotation', type: 'z number or [x, y, z]', default: 0 },
-      { name: 'z_order', type: 'integer', default: 0 },
-      { name: 'size', type: '[width, height] custom size' },
-      { name: 'auto_size', type: '[width, height] inactive stored size' },
-      { name: 'depth', type: 'number' },
-      { name: 'opacity', type: 'integer', range: '[0,255]', default: 255 },
-      { name: 'flip', type: 'unique string array', values: ['x', 'y', 'z'] },
-      { name: 'locked', type: 'boolean', default: false },
-      { name: 'sealed', type: 'boolean', default: false },
-      { name: 'hidden', type: 'boolean', default: false },
-      { name: 'keep_ratio', type: 'boolean', default: true },
-      {
-        name: 'properties',
-        type: 'inline TOML table of catalog-declared number/string values',
-      },
-    ],
-  },
-  {
-    table: 'variables',
-    header: '[[layout.variables]]',
-    contexts: ['scene', 'prefab', 'prefab-variant', 'external'],
-    repeated: true,
-    fields: [
-      { name: 'instance', type: 'existing instance UUID', required: true },
-      { name: 'name', type: 'string', required: true },
-      {
-        name: 'type',
-        type: 'enum',
-        required: true,
-        values: ['string', 'enum', 'number', 'boolean', 'structure', 'array'],
-      },
-      {
-        name: 'value',
-        type: 'typed primitive',
-        requiredFor: 'primitive types',
-      },
-      {
-        name: 'values',
-        type: 'unique TOML string array',
-        allowedFor: ['enum'],
-      },
-      { name: 'folded', type: 'boolean', default: false },
-      { name: 'id', type: 'lowercase UUIDv4' },
-      {
-        name: 'children',
-        type: 'recursive inline variable table array for structure/array',
-      },
-    ],
-  },
-  {
-    table: 'behaviors',
-    header: '[[layout.behaviors]]',
-    contexts: ['scene', 'prefab', 'prefab-variant', 'external'],
-    repeated: true,
-    fields: [
-      { name: 'instance', type: 'existing instance UUID', required: true },
-      { name: 'name', type: 'attached behavior name', required: true },
-      {
-        name: 'properties',
-        type:
-          'inline TOML table keyed by behaviorOverrideSchemas[].properties[].serializedKey',
-      },
-      { name: 'folded', type: 'boolean', default: false },
-      { name: 'muted', type: 'boolean', default: false },
-      { name: 'inherited', type: 'boolean', default: false },
-      {
-        name: 'quick',
-        type: 'enum',
-        values: ['default', 'visible', 'hidden'],
-      },
-      {
-        name: 'property_visibility',
-        type: 'inline TOML table with default|visible|hidden string values',
-      },
-    ],
-  },
-]);
 
 const mergeObjects = (
   localObjects: Array<Object>,
@@ -2893,24 +1598,15 @@ const buildEmbeddedLayoutCatalog = ({
   return {
     authoring: {
       sourceExtension: '.settings',
-      storage: 'embedded-settings',
-      rootTable: 'layout',
-      syntax:
-        'Standard TOML embedded below the owning settings file layout namespace.',
+      storage: 'component-root',
+      syntax: 'Settings DSL',
       rules: [
-        'Read the owning settings file and the matching context entry before editing its embedded layout subtree.',
-        'Use only the listed [layout], [layout.editor], [[layout.layers]], [[layout.effects]], [[layout.instances]], [[layout.variables]], and [[layout.behaviors]] tables and fields.',
-        'Use standard TOML strings, booleans, numeric arrays, and inline tables. Colors are quoted uppercase #RRGGBB strings.',
-        'Preserve existing instance UUIDs. New UUIDv4 values must be lowercase and unique within the owning layout.',
-        'Layer ids are short file-local references. Every effect and instance uses an existing layer id; every variable and behavior uses an existing instance UUID.',
-        'Effect parameters are direct fields on [[effects]] after type. Use the exact names and TOML scalar types in effectTypes[type].parameters; params is not a valid field.',
-        'Use an existing object name from the matching context in instance.object.',
-        'A [[behaviors]] record may reference only a behavior already attached to its instance object. Its properties keys must use the exact serializedKey entries in behaviorOverrideSchemas, never editor-facing authoringKey values.',
-        'The [[instances]] record order is the global serialized instance order. Never add a synthetic order field.',
-        'Object definitions and attached behaviors belong in .settings, while event logic belongs in .events.',
+        'Place layer and instance directly below scene/prefab/variant/external. Nest camera/effect below layer, variable/behavior below instance. Preserve instance order and UUIDs.',
       ],
     },
-    tables: LAYOUT_TABLES,
+    tables: Object.entries(getSettingsSchemas().layout).map(
+      ([table, schema]) => ({ table, node: table, ...schema })
+    ),
     contexts,
     behaviorOverrideSchemas,
   };
@@ -2926,8 +1622,8 @@ export const buildBehaviorPropertySchemasByType = (
   behaviorTypes.forEach(behavior => {
     schemas[String(behavior.type || '')] = {
       keySpace: 'serialized',
-      unknownPropertyPolicy: behavior.unknownPropertyPolicy || 'preserve',
-      properties: (behavior.properties || [])
+      unknownPropertyPolicy: 'error',
+      properties: (behavior.serializedProperties || behavior.properties || [])
         .filter(property => property.serializedKey)
         .map(property => ({
           authoringKey: String(property.authoringKey || property.name || ''),
@@ -2975,57 +1671,6 @@ const validateUniqueEntries = (
   });
 };
 
-const validateSettingsSchemaFields = (fields: any, label: string): void => {
-  if (!Array.isArray(fields)) fail(`${label} fields must be an array.`);
-  validateUniqueEntries(fields, field => field.name, `${label} field`);
-  fields.forEach(field => {
-    if (typeof field.type !== 'string' || !field.type) {
-      fail(`${label} field ${field.name} must declare a type.`);
-    }
-  });
-};
-
-const validateSettingsChildTables = (tables: any, label: string): void => {
-  if (!Array.isArray(tables)) fail(`${label} childTables must be an array.`);
-  validateUniqueEntries(tables, table => table.table, `${label} child table`);
-  tables.forEach(table => {
-    if (typeof table.header !== 'string' || !table.header) {
-      fail(`${label} child table ${table.table} must declare a TOML header.`);
-    }
-    if (table.fields !== undefined) {
-      validateSettingsSchemaFields(
-        table.fields,
-        `${label} child table ${table.table}`
-      );
-    }
-    if (
-      table.fields === undefined &&
-      table.dynamicFields === undefined &&
-      table.additionalFields === undefined
-    ) {
-      fail(
-        `${label} child table ${
-          table.table
-        } must declare fields, dynamicFields, or an additionalFields contract.`
-      );
-    }
-    if (table.childTables !== undefined) {
-      validateSettingsChildTables(
-        table.childTables,
-        `${label} child table ${table.table}`
-      );
-    }
-  });
-};
-
-const validateSettingsFileSchema = (schema: any, kind: string): void => {
-  if (!schema || typeof schema !== 'object') {
-    fail(`File kind ${kind} must declare a schema.`);
-  }
-  validateSettingsSchemaFields(schema.rootFields, `File kind ${kind} root`);
-  validateSettingsChildTables(schema.childTables, `File kind ${kind}`);
-};
-
 export const validateProjectSettingsCatalog = (catalog: any): Object => {
   const validated = validateBaseCatalog(catalog, 'gdevelop-settings-catalog', [
     'fileKinds',
@@ -3044,20 +1689,13 @@ export const validateProjectSettingsCatalog = (catalog: any): Object => {
       entry => entry.kind === fileKind.kind
     );
     if (!expectedFileKind) fail(`Unknown file kind ${fileKind.kind}.`);
-    validateSettingsFileSchema(fileKind.schema, fileKind.kind);
-    const expectedMarker = expectedFileKind.requiredMarker;
     if (
-      expectedMarker &&
-      (!fileKind.requiredMarker ||
-        fileKind.requiredMarker.field !== expectedMarker.field ||
-        fileKind.requiredMarker.value !== expectedMarker.value)
-    ) {
-      fail(
-        `File kind ${fileKind.kind} must declare persisted marker ${
-          expectedMarker.field
-        }=${expectedMarker.value}.`
-      );
-    }
+      !fileKind.root ||
+      !fileKind.schema ||
+      !Array.isArray(fileKind.schema.rootFields) ||
+      !fileKind.schema.childNodes
+    )
+      fail(`File kind ${fileKind.kind} requires a DSL root and node schema.`);
   });
   validateUniqueEntries(
     validated.objectTypes,
@@ -3073,7 +1711,7 @@ export const validateProjectSettingsCatalog = (catalog: any): Object => {
     if (!hasConfigurationContract) return;
     if (
       objectType.keySpace !== 'serialized paths' ||
-      objectType.unknownPropertyPolicy !== 'preserve' ||
+      objectType.unknownPropertyPolicy !== 'error' ||
       !Array.isArray(objectType.properties) ||
       !objectType.schema
     ) {
@@ -3081,23 +1719,10 @@ export const validateProjectSettingsCatalog = (catalog: any): Object => {
         `Object type ${objectType.type} has an invalid configuration contract.`
       );
     }
-    validateSettingsSchemaFields(
-      objectType.schema.rootFields,
-      `Object type ${objectType.type} root`
-    );
-    validateSettingsChildTables(
-      objectType.schema.childTables,
-      `Object type ${objectType.type}`
-    );
-    objectType.properties.forEach(property => {
-      if (!property.authoringKey || !property.type) {
-        fail(
-          `Object type ${
-            objectType.type
-          } has a public property without an authoring key or type.`
-        );
-      }
-    });
+    if (!objectType.schema.fields || !objectType.schema.children)
+      fail(
+        `Object type ${objectType.type} requires a Settings DSL node schema.`
+      );
   });
   validateUniqueEntries(
     validated.behaviorTypes,
@@ -3157,11 +1782,32 @@ export const validateProjectSettingsCatalog = (catalog: any): Object => {
     entry => entry.type,
     'effect type'
   );
+  validated.effectTypes.forEach(effect => {
+    if (!Array.isArray(effect.serializedParameters)) {
+      fail(`Effect ${effect.type} must declare serializedParameters.`);
+    }
+    validateUniqueEntries(
+      effect.serializedParameters,
+      parameter => parameter.name,
+      `serialized parameter for effect ${effect.type}`
+    );
+    effect.serializedParameters.forEach(parameter => {
+      if (
+        !parameter ||
+        typeof parameter.name !== 'string' ||
+        !parameter.name ||
+        typeof parameter.type !== 'string' ||
+        !parameter.type
+      ) {
+        fail(`Invalid serialized effect parameter for ${effect.type}.`);
+      }
+    });
+  });
   if (
     !validated.layoutAuthoring ||
     typeof validated.layoutAuthoring !== 'object' ||
-    validated.layoutAuthoring.rootTable !== 'layout' ||
-    validated.layoutAuthoring.storage !== 'embedded-settings'
+    validated.layoutAuthoring.storage !== 'component-root' ||
+    validated.layoutAuthoring.syntax !== 'Settings DSL'
   ) {
     fail('Settings catalog must declare embedded layout authoring metadata.');
   }

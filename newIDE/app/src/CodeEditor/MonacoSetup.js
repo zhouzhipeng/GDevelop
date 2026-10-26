@@ -1,5 +1,6 @@
 // @flow
 import { setupAutocompletions } from './LocalCodeEditorAutocompletions';
+import { registerSettingsLanguage } from './SettingsLanguage';
 import { getAllThemes } from './Theme';
 
 // Track which Monaco instances have been initialized.
@@ -10,6 +11,7 @@ const initializedMonacoInstances: WeakSet<any> = new WeakSet();
 
 /** Register custom themes. Safe to call multiple times per instance. */
 export const registerThemes = (monaco: any) => {
+  registerSettingsLanguage(monaco);
   getAllThemes().forEach(codeEditorTheme => {
     // Builtin themes don't have themeData, don't redefine them.
     if (codeEditorTheme.themeData) {

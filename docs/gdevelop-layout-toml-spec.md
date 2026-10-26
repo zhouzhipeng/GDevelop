@@ -1,3 +1,5 @@
+> Superseded authoring syntax. Current production source format is Settings DSL 8, defined in [settings-dsl-spec.md](settings-dsl-spec.md). TOML settings, embedded layout namespaces and earlier project versions are not supported. The material below is historical reference only.
+
 # GDevelop flat layout TOML
 
 **Status:** normative version 1  

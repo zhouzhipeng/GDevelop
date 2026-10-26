@@ -9,6 +9,7 @@ import { lintExtensionFunctionEvents } from './McpExtensionTools';
 import { validateProjectJavaScriptAuthoring } from '../ProjectsStorage/JavaScriptAuthoringApi';
 import {
   reloadProjectEventsFunctionsExtensionMetadata,
+  getProjectExtensionMetadataSnapshot,
   type EventsFunctionCodeWriter,
 } from '../EventsFunctionsExtensionsLoader';
 
@@ -63,18 +64,31 @@ const temporarilyLoadProjectExtensionMetadataForValidation = (
     extensionNames.push(extensionName);
   }
 
+  const originalExtensionsByName = new Map(
+    extensionNames.map(name => [
+      name,
+      getProjectExtensionMetadataSnapshot(restoreProject, name),
+    ])
+  );
   let restored = false;
   const restoreMetadata = () => {
     if (restored) return;
     restored = true;
     extensionNames.forEach(extensionName => {
       platform.removeExtension(extensionName);
-      if (restoreProject.hasEventsFunctionsExtensionNamed(extensionName)) {
+      const originalExtension = originalExtensionsByName.get(extensionName);
+      if (originalExtension) {
+        platform.addNewExtension(originalExtension);
+      } else if (
+        restoreProject.hasEventsFunctionsExtensionNamed(extensionName)
+      ) {
+        // Headless callers can supply a project without a live loader snapshot.
         reloadProjectEventsFunctionsExtensionMetadata(
           restoreProject,
           restoreProject.getEventsFunctionsExtension(extensionName),
           validationEventsFunctionCodeWriter,
-          validationI18n
+          validationI18n,
+          false
         );
       }
     });
@@ -90,7 +104,8 @@ const temporarilyLoadProjectExtensionMetadataForValidation = (
         validationProject,
         validationProject.getEventsFunctionsExtensionAt(index),
         validationEventsFunctionCodeWriter,
-        validationI18n
+        validationI18n,
+        false
       );
     }
   } catch (error) {

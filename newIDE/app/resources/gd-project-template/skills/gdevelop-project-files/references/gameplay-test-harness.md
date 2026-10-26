@@ -1,7 +1,7 @@
 # Gameplay-test harness
 
 Read this guide in full before creating or materially changing a gameplay test.
-It describes the strict version 7 project layout and the harness shipped by
+It describes the strict version 9 project layout and the harness shipped by
 this branch. For exact, current signatures and result shapes, the generated
 `.gdevelop/harness-api.d.ts` file is authoritative.
 
@@ -30,26 +30,28 @@ harness.assert(
 All project and extension tests are declared in the root `tests.settings`.
 Their JavaScript sources are flat files directly below `tests/`:
 
-```toml
-kind = "tests"
-settingsFormatVersion = 7
+```settings
+tests {
 
-[[tests]]
-scope = "project"
-order = 0
-name = "Player can jump"
-type = "gameplay"
-description = "Space starts an upward movement."
-file = "tests/Player%20can%20jump.js"
+  test {
+    scope = "project"
+    order = 0
+    name = "Player can jump"
+    type = "gameplay"
+    description = "Space starts an upward movement."
+    file = "tests/Player%20can%20jump.js"
+  }
 
-[[tests]]
-scope = "extension"
-extension = "Combat"
-order = 0
-name = "Enemy takes damage"
-type = "gameplay"
-description = "A projectile reduces enemy health."
-file = "tests/Combat%20-%20Enemy%20takes%20damage.js"
+  test {
+    scope = "extension"
+    extension = "Combat"
+    order = 0
+    name = "Enemy takes damage"
+    type = "gameplay"
+    description = "A projectile reduces enemy health."
+    file = "tests/Combat%20-%20Enemy%20takes%20damage.js"
+  }
+}
 ```
 
 A project test belongs to the project's test container. An extension test
@@ -63,7 +65,7 @@ The `file` is a canonical identity, not a URI:
 - It has no `game://` prefix, drive letter, absolute prefix, query, fragment,
   traversal segment, or nested directory.
 - The preferred basename is the test name for a project test and
-  `<Extension> - <Test>` for an extension test. The version 7 writer applies
+  `<Extension> - <Test>` for an extension test. The version 9 writer applies
   managed-name percent encoding and deterministic suffixes for normalized
   filename collisions.
 - Existing tests must use their exact recorded `file`; do not substitute the

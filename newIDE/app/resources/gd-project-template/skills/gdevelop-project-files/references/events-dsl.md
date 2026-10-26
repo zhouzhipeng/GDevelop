@@ -33,14 +33,14 @@ and event scope:
 - `scenes/<Scene>/external-events/<Fragment>.settings` and `.events` form a
   same-stem fragment pair. Settings declare `kind = "externalEvents"`, the
   matching `name`, `description`, and `eventsLogic`. Set
-  `settingsFormatVersion = 7`. For example:
+  `the current Settings DSL schema`. For example:
 
-  ```toml
-  kind = "externalEvents"
-  settingsFormatVersion = 7
-  name = "CameraVisibility"
-  description = "Resolve camera visibility after movement updates"
-  eventsLogic = "Read the requested orbit, then apply collision response."
+  ```settings
+  external_events {
+    name = "CameraVisibility"
+    description = "Resolve camera visibility after movement updates"
+    eventsLogic = "Read the requested orbit, then apply collision response."
+  }
   ```
 
   The parent path supplies
@@ -367,7 +367,7 @@ explicitly permitted.
   and owner scope.
 - Use `@group ... @end group`, `@js ... @end js`, and
   `@comment "..." background=[r,g,b] text=[r,g,b]` exactly.
-- Keep settings, layout TOML, function declarations, and raw JSON outside
+- Keep Settings DSL declarations, function declarations, and raw JSON outside
   `.events`.
 - After editing, require `validate_project_files` to pass every structural,
   generated-code, JavaScript-authoring, and semantic phase before

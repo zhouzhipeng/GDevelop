@@ -2,6 +2,14 @@
 
 import optionalRequire from '../../Utils/OptionalRequire';
 import {
+  decodeSettingsDocument,
+  parseSettingsSyntax,
+  registerSettingsTypes,
+  resetSettingsTypes,
+  preserveVariableStructureOrder,
+} from '../SettingsDsl';
+import { PROJECT_SETTINGS_CATALOG_FORMAT_VERSION } from '../ProjectSourceCatalog';
+import {
   MULTI_FILE_ENTRY_NAME,
   MULTI_FILE_CONSTANTS_URI,
   MULTI_FILE_ENTRY_URI,
@@ -15,7 +23,6 @@ import {
   decomposeLegacyProjectToFiles,
   encodeManagedName,
   getLegacyProjectFirstDifferenceDescription,
-  parseTomlSource,
   validateGameUri,
 } from '../MultiFileProjectFormat';
 import {
@@ -28,7 +35,6 @@ import {
 
 const fs = optionalRequire('fs-extra');
 const path = optionalRequire('path');
-const crypto = optionalRequire('crypto');
 
 const MAX_MANAGED_FILES = 10000;
 const MAX_SOURCE_FILE_SIZE = 16 * 1024 * 1024;
@@ -283,19 +289,6 @@ const readBoundedUtf8 = async (
     );
   }
   return fs.readFileSync(filePath, 'utf8');
-};
-
-const findGameUris = (value: any, output: Set<string>) => {
-  if (
-    typeof value === 'string' &&
-    value.startsWith('game://') &&
-    /\.(?:settings|layout|events)$/.test(value)
-  ) {
-    output.add(value);
-  } else if (Array.isArray(value))
-    value.forEach(item => findGameUris(item, output));
-  else if (value && typeof value === 'object')
-    Object.keys(value).forEach(key => findGameUris(value[key], output));
 };
 
 const forEachGameplayTest = (
@@ -932,6 +925,7 @@ export const readMultiFileSourceTree = async (
   }
   const projectRoot = path.resolve(path.dirname(entryPath));
   await recoverMultiFileTransactions(projectRoot);
+  resetSettingsTypes();
   const files: { [string]: string } = {};
   const pending: Array<string> = [
     MULTI_FILE_ENTRY_URI,
@@ -966,15 +960,20 @@ export const readMultiFileSourceTree = async (
     }
     files[uri] = source;
     if (
-      uri.endsWith('.settings') &&
+      (uri.endsWith('.settings') || uri === MULTI_FILE_ENTRY_URI) &&
       uri !== MULTI_FILE_RETIRED_EXTERNAL_SETTINGS_URI
     ) {
-      const document = parseTomlSource(source, uri);
+      const syntax = parseSettingsSyntax(source, uri);
+      const document = Object.fromEntries(
+        Object.entries(syntax.root.properties).map(([key, item]) => [
+          key,
+          item.value,
+        ])
+      );
       if (
         uri === MULTI_FILE_ENTRY_URI &&
-        (!document.gdevelop ||
-          document.gdevelop.combinedSettingsFormatVersion !==
-            MULTI_FILE_FORMAT_VERSION)
+        (syntax.root.type !== 'project' ||
+          document.formatVersion !== MULTI_FILE_FORMAT_VERSION)
       ) {
         throw new MultiFileProjectError(
           'MULTIFILE_UNSUPPORTED_VERSION',
@@ -982,15 +981,8 @@ export const readMultiFileSourceTree = async (
           uri
         );
       }
-      const references: Set<string> = new Set();
-      findGameUris(document, references);
-      references.forEach(reference => {
-        validateGameUri(reference);
-        if (files[reference] === undefined) pending.push(reference);
-      });
       if (
-        document.kind === 'function' &&
-        document.settingsFormatVersion === MULTI_FILE_FORMAT_VERSION &&
+        syntax.root.type === 'function' &&
         /\/functions\/[^/]+\.settings$/.test(uri)
       ) {
         const eventsUri = uri.replace(/\.settings$/, '.events');
@@ -1041,6 +1033,24 @@ export const openMultiFileProject = async (
       resolveInstruction: createCatalogInstructionResolver(catalog),
       ...((options && options.compileOptions) || {}),
     };
+  }
+  const settingsCatalogPath = path.join(
+    projectRoot,
+    '.gdevelop',
+    'settings-catalog.json'
+  );
+  if (fs.existsSync(settingsCatalogPath)) {
+    try {
+      const catalog = JSON.parse(await readBoundedUtf8(settingsCatalogPath));
+      if (
+        catalog.format === 'gdevelop-settings-catalog' &&
+        catalog.formatVersion === PROJECT_SETTINGS_CATALOG_FORMAT_VERSION
+      )
+        registerSettingsTypes(catalog);
+    } catch (_) {
+      // Generated metadata is disposable. Current engine type metadata and
+      // source definitions remain authoritative; no authored syntax fallback.
+    }
   }
   const project = composeLegacyProjectFromFiles(files, effectiveOptions);
   return applyGameplayTestResultsToLegacyProject(
@@ -1193,6 +1203,7 @@ const writeMultiFileSourceTreeTransaction = async ({
   const projectRoot = path.resolve(path.dirname(entryPath));
   await fs.ensureDir(projectRoot);
   await recoverMultiFileTransactions(projectRoot);
+  resetSettingsTypes();
   const transactionId = `${Date.now()}-${Math.random()
     .toString(16)
     .slice(2)}`;
@@ -1314,93 +1325,15 @@ export const writeMultiFileSourceTree = (
   return write;
 };
 
-const sha256 = (content: string): string => {
-  if (!crypto) throw new Error('Cryptographic hashes are not supported.');
-  return crypto
-    .createHash('sha256')
-    .update(content, 'utf8')
-    .digest('hex');
-};
-
-const sourceUriForLegacyPath = (legacyPath: string): string =>
-  `game://${encodeManagedName(path.basename(legacyPath))}`;
-
-export const migrateLegacyProject = async ({
-  legacyPath,
-  legacySource,
-  legacyProject,
-  decomposeOptions,
-  composeOptions,
-}: {
-  legacyPath: string,
-  legacySource: string,
-  legacyProject: Object,
-  decomposeOptions?: Object,
-  composeOptions?: Object,
-}): Promise<{| entryPath: string, files: { [string]: string } |}> => {
-  requireFileSystem();
-  const entryPath = path.join(path.dirname(legacyPath), MULTI_FILE_ENTRY_NAME);
-  const files = decomposeLegacyProjectToFiles(legacyProject, {
-    migration: {
-      source: sourceUriForLegacyPath(legacyPath),
-      sourceSha256: sha256(legacySource),
-      importedAt: new Date().toISOString(),
-      importerVersion: 1,
-    },
-    ...(decomposeOptions || {}),
-  });
-  const verificationProject = composeLegacyProjectFromFiles(
-    files,
-    composeOptions || {}
-  );
-  const verificationDifference = getLegacyProjectFirstDifferenceDescription(
-    legacyProject,
-    verificationProject,
-    {
-      behaviorPropertySchemasByType:
-        decomposeOptions && decomposeOptions.behaviorPropertySchemasByType,
-      instructionParameterIndicesToIgnoreByType:
-        decomposeOptions &&
-        decomposeOptions.instructionParameterIndicesToIgnoreByType,
-    }
-  );
-  if (verificationDifference) {
-    throw new MultiFileProjectError(
-      'MULTIFILE_MIGRATION_VERIFICATION_FAILED',
-      `The composed project differs from the legacy source. ${verificationDifference}`
-    );
-  }
-  await writeMultiFileSourceTree({ entryPath, files });
-  await writeGameplayTestResults(legacyProject, entryPath);
-  return { entryPath, files };
-};
-
-export const getLegacyMigrationSourceHash = async (
-  entryPath: string
-): Promise<?string> => {
-  if (!fs.existsSync(entryPath)) return null;
-  const source = await readBoundedUtf8(entryPath);
-  const document = parseTomlSource(source, MULTI_FILE_ENTRY_URI);
-  return document.migration ? document.migration.sourceSha256 || null : null;
-};
-
-export const hashLegacySource = (source: string): string => sha256(source);
-
 export const writeLegacyProjectAsMultiFile = async (
   legacyProject: Object,
   entryPath: string,
   options?: Object
 ): Promise<Array<string>> => {
-  let migration;
   let previousFiles: { [string]: string } = {};
   const decomposeOptions = (options && options.decomposeOptions) || {};
   if (fs.existsSync(entryPath)) {
     previousFiles = (await readMultiFileSourceTree(entryPath)).files;
-    const document = parseTomlSource(
-      await readBoundedUtf8(entryPath),
-      MULTI_FILE_ENTRY_URI
-    );
-    migration = document.migration;
   }
   const externalEventSettingsByName: { [string]: Object } = {};
   Object.keys(previousFiles)
@@ -1408,7 +1341,7 @@ export const writeLegacyProjectAsMultiFile = async (
       /^game:\/\/scenes\/[^/]+\/external-events\/[^/]+\.settings$/.test(uri)
     )
     .forEach(uri => {
-      const settings = parseTomlSource(previousFiles[uri], uri);
+      const settings = decodeSettingsDocument(previousFiles[uri], uri).payload;
       if (typeof settings.name === 'string') {
         externalEventSettingsByName[settings.name] = {
           description: settings.description,
@@ -1417,9 +1350,21 @@ export const writeLegacyProjectAsMultiFile = async (
       }
     });
   const files = decomposeLegacyProjectToFiles(legacyProject, {
-    migration,
     externalEventSettingsByName,
     ...decomposeOptions,
+  });
+  Object.keys(files).forEach(uri => {
+    if (
+      previousFiles[uri] &&
+      files[uri] !== previousFiles[uri] &&
+      /\bvalue\s*=\s*[[{]/.test(files[uri])
+    ) {
+      files[uri] = preserveVariableStructureOrder(
+        files[uri],
+        previousFiles[uri],
+        uri
+      );
+    }
   });
   const verificationProject = composeLegacyProjectFromFiles(
     files,

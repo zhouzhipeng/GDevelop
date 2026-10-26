@@ -2,6 +2,7 @@
 import { t } from '@lingui/macro';
 import { type StorageProvider, type FileMetadata } from '../index';
 import axios from 'axios';
+import { normalizeDownloadedProject } from './NormalizeDownloadedProject';
 import {
   POSITIONAL_ARGUMENTS_KEY,
   type AppArguments,
@@ -94,7 +95,7 @@ export default ({
       }
 
       return {
-        content: response.data,
+        content: normalizeDownloadedProject(response.data),
         ...(constants ? { constants } : {}),
       };
     },

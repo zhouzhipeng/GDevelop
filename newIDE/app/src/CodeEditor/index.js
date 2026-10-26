@@ -58,7 +58,7 @@ export type Props = {|
    * run inside an async function, so top-level `await` is allowed).
    */
   suppressedDiagnosticsMessages?: Array<string>,
-  language?: 'javascript' | 'typescript',
+  language?: 'javascript' | 'typescript' | 'gdevelop-settings',
   modelPath?: string,
   extraLibraries?: Array<CodeEditorExtraLibrary>,
   markers?: Array<CodeEditorMarker>,

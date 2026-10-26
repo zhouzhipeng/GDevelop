@@ -1,4 +1,5 @@
 // @flow
+import { decodeSettingsDocument } from '../ProjectsStorage/SettingsDsl';
 
 import {
   getMcpPrompts,
@@ -17,7 +18,6 @@ import {
 import {
   MULTI_FILE_ENTRY_NAME,
   getGameplayTestDescriptors,
-  parseTomlSource,
 } from '../ProjectsStorage/MultiFileProjectFormat';
 import {
   openMultiFileProject,
@@ -290,7 +290,8 @@ const errorResult = (message: string, details?: Object): McpToolResult => {
 
 const getProjectFilesValidationPhase = (code: ?string): string => {
   if (!code) return 'load-and-compose-project-files';
-  if (code === 'MULTIFILE_INVALID_TOML') return 'parse-settings';
+  if (code.startsWith('SETTINGS_') || code === 'MULTIFILE_INVALID_TOML')
+    return 'parse-settings';
   if (code === 'PROJECT_CATALOG_REGENERATION_FAILED') {
     return 'regenerate-project-catalogs';
   }
@@ -380,6 +381,9 @@ const getProjectFilesValidationDiagnostic = (
     filePath: filePath || undefined,
     line: line || undefined,
     column: column || undefined,
+    endLine: error.endLine || undefined,
+    endColumn: error.endColumn || undefined,
+    nodePath: error.path || undefined,
     sourceExcerpt:
       getValidationSourceExcerpt({ projectFile, fileUri, line }) || undefined,
   };
@@ -5917,7 +5921,8 @@ const callMcpTool = async ({
       namesToReport.forEach(name => {
         const extensionSettingsUri = savedSourceUris.find(uri => {
           if (!uri.endsWith('/extension.settings')) return false;
-          const settings = parseTomlSource(savedFiles[uri], uri);
+          const decoded = decodeSettingsDocument(savedFiles[uri], uri);
+          const settings = { ...decoded.payload, kind: decoded.kind };
           return settings.kind === 'extension' && settings.name === name;
         });
         if (!extensionSettingsUri) {

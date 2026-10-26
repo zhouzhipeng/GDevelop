@@ -115,7 +115,7 @@ extensions/Combat/
 1. Put the sprite/health-bar child object definitions and their attached
    behaviors in `Enemy/objects/Sprite.settings` and
    `Enemy/objects/HealthBar.settings`; put layers and default instances in
-   the embedded `[layout]` subtree of `Enemy/prefab.settings`. Keep prefab
+   the root layout nodes of `Enemy/prefab.settings`. Keep prefab
    property descriptors flat in the same owner settings.
 2. Put health properties/variables in `Health/behavior.settings`. Put each
    `TakeDamage`/`IsDead` signature in its flat same-stem

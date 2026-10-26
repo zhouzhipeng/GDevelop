@@ -84,19 +84,20 @@ The `.ts` ending keeps TypeScript tooling working; the preceding `.tsl` segment
 identifies the resource domain. Do not use `.gdmaterial.ts`, `.tsl`, or a
 generic JavaScript resource for a TSL material.
 
-In a version-5 multi-file project, register the source in `resources.settings`.
+In a current multi-file project, register the source in `resources.settings`.
 The exact resource schema comes from `settings-catalog.json`; a minimal entry is:
 
-```toml
-kind = "resources"
-settingsFormatVersion = 7
+```settings
+resources {
 
-[[resources]]
-kind = "tslMaterial"
-name = "Hologram"
-file = "materials/Hologram.tsl.ts"
-metadata = ""
-userAdded = true
+  resource {
+    kind = "tslMaterial"
+    name = "Hologram"
+    file = "materials/Hologram.tsl.ts"
+    metadata = ""
+    userAdded = true
+  }
+}
 ```
 
 The resource `name` is the stable identity used by behaviors and events. Use
@@ -481,18 +482,22 @@ own `.settings` file, not in the layout subtree. Use the current
 `settings-catalog.json` entry for exact field casing and required fields. A
 conceptual record is:
 
-```toml
-[[behaviors]]
-name = "TSLMaterial"
-type = "TSLMaterial::Material"
-material = "Hologram"
-bindingName = "Default"
-selectorMode = "MeshAndMaterialName"
-meshName = "Body"
-materialName = "BodyMaterial"
-priority = 0
-enabled = true
-fallback = "KeepOriginal"
+```settings
+behavior {
+  name = "TSLMaterial"
+  type = "TSLMaterial::Material"
+
+  properties {
+    material = "Hologram"
+    bindingName = "Default"
+    selectorMode = "MeshAndMaterialName"
+    meshName = "Body"
+    materialName = "BodyMaterial"
+    priority = 0
+    enabled = true
+    fallback = "KeepOriginal"
+  }
+}
 ```
 
 Selectors are structured and exact; they are not a query language:

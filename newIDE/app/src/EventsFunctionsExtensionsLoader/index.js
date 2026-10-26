@@ -35,9 +35,61 @@ type CodeGenerationContext = {|
   extensionIncludeFiles: Array<string>,
 |};
 
-/**
- * Load all events functions of a project in extensions
- */
+// Keep the owned metadata used to register each live extension. The platform
+// stores its own copy; retaining this one lets detached validation restore every
+// generated include and dependency exactly, without regenerating with a dummy
+// writer. Ownership ends on replacement or project/extension unload.
+const registeredProjectExtensionMetadata: Map<
+  string,
+  {
+    project: gdProject,
+    extension: gdPlatformExtension,
+  }
+> = new Map();
+
+const registerProjectExtensionMetadata = (
+  project: gdProject,
+  extension: gdPlatformExtension,
+  retain: boolean = true
+): void => {
+  try {
+    gd.JsPlatform.get().addNewExtension(extension);
+  } catch (error) {
+    extension.delete();
+    throw error;
+  }
+  if (!retain) {
+    extension.delete();
+    return;
+  }
+  const name = extension.getName();
+  const previous = registeredProjectExtensionMetadata.get(name);
+  registeredProjectExtensionMetadata.set(name, { project, extension });
+  if (previous) previous.extension.delete();
+};
+
+// Borrowed from the loader: callers must never delete or modify this snapshot.
+export const getProjectExtensionMetadataSnapshot = (
+  project: gdProject,
+  name: string
+): ?gdPlatformExtension => {
+  const registered = registeredProjectExtensionMetadata.get(name);
+  return registered && registered.project === project
+    ? registered.extension
+    : null;
+};
+
+const releaseProjectExtensionMetadata = (
+  project: gdProject,
+  name: string
+): void => {
+  const registered = registeredProjectExtensionMetadata.get(name);
+  if (!registered || registered.project !== project) return;
+  registeredProjectExtensionMetadata.delete(name);
+  registered.extension.delete();
+};
+
+/** Load all events functions of a project in extensions. */
 export const loadProjectEventsFunctionsExtensions = (
   project: gdProject,
   eventsFunctionCodeWriter: EventsFunctionCodeWriter,
@@ -80,15 +132,15 @@ export const reloadProjectEventsFunctionsExtensionMetadata = (
   project: gdProject,
   eventsFunctionsExtension: gdEventsFunctionsExtension,
   eventsFunctionCodeWriter: EventsFunctionCodeWriter,
-  i18n: I18nType
+  i18n: I18nType,
+  retainMetadataSnapshot: boolean = true
 ): void => {
   const extension = generateEventsFunctionExtensionMetadata(
     project,
     eventsFunctionsExtension,
     { eventsFunctionCodeWriter, i18n }
   );
-  gd.JsPlatform.get().addNewExtension(extension);
-  extension.delete();
+  registerProjectExtensionMetadata(project, extension, retainMetadataSnapshot);
 };
 
 const loadProjectEventsFunctionsExtension = (
@@ -104,8 +156,7 @@ const loadProjectEventsFunctionsExtension = (
     options
   ).then(
     extension => {
-      gd.JsPlatform.get().addNewExtension(extension);
-      extension.delete();
+      registerProjectExtensionMetadata(project, extension);
     },
     error => {
       console.error(
@@ -664,7 +715,8 @@ export const unloadProjectEventsFunctionsExtensions = (
 ): Promise<Array<void>> => {
   return Promise.all(
     mapFor(0, project.getEventsFunctionsExtensionsCount(), i => {
-      gd.JsPlatform.get().removeExtension(
+      unloadProjectEventsFunctionsExtension(
+        project,
         project.getEventsFunctionsExtensionAt(i).getName()
       );
     })
@@ -679,6 +731,7 @@ export const unloadProjectEventsFunctionsExtension = (
   extensionName: string
 ): void => {
   gd.JsPlatform.get().removeExtension(extensionName);
+  releaseProjectExtensionMetadata(project, extensionName);
 };
 
 /**

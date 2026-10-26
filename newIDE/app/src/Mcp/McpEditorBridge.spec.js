@@ -1054,33 +1054,30 @@ describe('McpEditorBridge', () => {
     );
     files['game://scenes/Scene/functions/sceneUpdate.events'] =
       'if SceneJustBegins\n';
-    files['game://extensions/Local/extension.settings'] = `kind = "extension"
-settingsFormatVersion = 5
-order = 0
-name = "Local"
-description = ""
-tags = [ ]
-authorIds = [ ]
-dependencies = [ ]
-globalVariables = [ ]
-sceneVariables = [ ]
+    files['game://extensions/Local/extension.settings'] = `extension {
+  order = 0
+  name = "Local"
+  description = ""
+  tags = []
+  authorIds = []
+  dependencies = []
+}
 `;
     files[
       'game://extensions/Local/prefabs/UnreferencedCard/prefab.settings'
-    ] = `kind = "prefab"
-settingsFormatVersion = 5
-order = 0
-name = "UnreferencedCard"
-defaultName = "UnreferencedCard"
-description = "Unreferenced prefab used to verify disk catalog generation."
-propertyDescriptors = [ ]
-objectGroups = { }
-variables = [ ]
-behaviors = [ ]
-
-[layout]
-version = 1
-bounds = { min = [0, 0, 0], max = [64, 64, 0] }
+    ] = `prefab {
+  order = 0
+  name = "UnreferencedCard"
+  defaultName = "UnreferencedCard"
+  description = "Unreferenced prefab used to verify disk catalog generation."
+  propertyDescriptors = []
+  behaviors = []
+  objectGroups {}
+  bounds {
+    min = [0, 0, 0]
+    max = [64, 64, 0]
+  }
+}
 `;
     await writeMultiFileSourceTree({
       entryPath: projectFile,
@@ -1125,6 +1122,7 @@ bounds = { min = [0, 0, 0], max = [64, 64, 0] }
     });
     const result = JSON.parse(response.content[0].text);
 
+    if (response.isError) throw new Error(JSON.stringify(result));
     expect(response.isError).not.toBe(true);
     expect(reloadProjectAndWait).not.toHaveBeenCalled();
     expect(result).toEqual(
@@ -1458,7 +1456,7 @@ runtimeScene._instances.length;
       expect.objectContaining({
         severity: 'error',
         phase: 'parse-settings',
-        code: 'MULTIFILE_INVALID_TOML',
+        code: 'SETTINGS_SYNTAX',
         fileUri: 'game://project.gdevelop',
         filePath: projectFile,
       }),
@@ -2019,9 +2017,9 @@ runtimeScene._instances.length;
         files: {
           ...baseFiles,
           'game://extensions/Billboard/extension.settings':
-            'kind = "extension"\nsettingsFormatVersion = 5\norder = 0\nname = "Billboard"\n',
+            'extension {\n order = 0\n name = "Billboard"\n}\n',
           'game://extensions/Billboard/functions/Initialize.settings':
-            'kind = "function"\nsettingsFormatVersion = 5\norder = 0\nextension = "Billboard"\nname = "Initialize"\nfunctionType = "Action"\n',
+            'function {\n order = 0\n extension = "Billboard"\n name = "Initialize"\n functionType = "Action"\n}\n',
           'game://extensions/Billboard/functions/Initialize.events':
             '@event\nif BuiltinCommonInstructions::Once\n',
         },

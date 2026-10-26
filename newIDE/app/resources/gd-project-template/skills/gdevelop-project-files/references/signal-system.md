@@ -125,23 +125,42 @@ parameters are:
 
 Example settings shape:
 
-```toml
-kind = "function"
-settingsFormatVersion = 1
-folder = []
-order = 0
-name = "onSignal"
-functionType = "Action"
-fullName = "On signal"
-description = "Handles signals delivered to this prefab."
-sentence = "Handle a signal for _PARAM0_"
-group = ""
-getterName = ""
-private = false
-async = false
-parameters = [{ name = "Object", description = "Object", type = "object", supplementaryInformation = "Cards::CardSlot" }, { name = "SignalName", description = "Signal name", type = "string" }, { name = "Payload", description = "Payload", type = "string" }]
-events = "game://extensions/Cards/prefabs/CardSlot/functions/Lifecycle/onSignal/onSignal.events"
-objectGroups = { }
+```settings
+function {
+  folder = []
+  order = 0
+  name = "onSignal"
+  functionType = "Action"
+  fullName = "On signal"
+  description = "Handles signals delivered to this prefab."
+  sentence = "Handle a signal for _PARAM0_"
+  group = ""
+  getterName = ""
+  private = false
+  async = false
+
+  parameter {
+    name = "Object"
+    description = "Object"
+    type = "object"
+    supplementaryInformation = "Cards::CardSlot"
+  }
+
+  parameter {
+    name = "SignalName"
+    description = "Signal name"
+    type = "string"
+  }
+
+  parameter {
+    name = "Payload"
+    description = "Payload"
+    type = "string"
+  }
+
+  objectGroups {
+  }
+}
 ```
 
 The same prefab handler receives both subscribed scene signals and direct

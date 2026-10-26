@@ -1,6 +1,6 @@
 // @flow
 
-import parseToml from '@iarna/toml/parse-string';
+import { decodeSettingsDocument } from './SettingsDsl';
 import {
   encodeManagedName,
   MULTI_FILE_FORMAT_VERSION,
@@ -15,7 +15,7 @@ const sourcePath = (...segments: Array<string>): string =>
 
 const settingsAt = (files: { [string]: string }, path: string): Object => {
   const source = files[`game://${path}`];
-  return source ? parseToml(source) : {};
+  return source ? decodeSettingsDocument(source, `game://${path}`).payload : {};
 };
 
 const linksIn = (events: Array<Object>): Array<string> => {
