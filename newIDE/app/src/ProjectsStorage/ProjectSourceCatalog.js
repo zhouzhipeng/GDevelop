@@ -529,7 +529,8 @@ const shapeType = (
         : `${itemType} array`;
     }
     if (kind === 'object') return 'inline table';
-    if (kind === 'null') return 'unsupported null (not part of Settings DSL)';
+    if (kind === 'null')
+      return 'unsupported null (not part of GDevelop Language (GDL))';
     return kind;
   });
   if (types.includes('number') && types.includes('integer')) {
@@ -1067,77 +1068,77 @@ const SETTINGS_FILE_KINDS = [
   },
   {
     kind: 'global-object',
-    path: 'objects/<Object>.settings',
+    path: 'objects/<Object>.gdl',
     componentKind: 'object',
     schemaKey: 'object',
     layout: false,
   },
   {
     kind: 'resources',
-    path: 'resources.settings',
+    path: 'resources.gdl',
     componentKind: 'resources',
     schemaKey: 'resources',
     layout: false,
   },
   {
     kind: 'tests',
-    path: 'tests.settings',
+    path: 'tests.gdl',
     componentKind: 'tests',
     schemaKey: 'tests',
     layout: false,
   },
   {
     kind: 'scene',
-    path: 'scenes/<Scene>/scene.settings',
+    path: 'scenes/<Scene>/scene.gdl',
     componentKind: 'scene',
     schemaKey: 'scene',
     layout: true,
   },
   {
     kind: 'scene-lifecycle-function',
-    path: 'scenes/<Scene>/functions/<Role>.settings',
+    path: 'scenes/<Scene>/functions/<Role>.gdl',
     componentKind: 'function',
     schemaKey: 'sceneLifecycleFunction',
     layout: false,
   },
   {
     kind: 'external-events',
-    path: 'scenes/<Scene>/external-events/<Fragment>.settings',
+    path: 'scenes/<Scene>/external-events/<Fragment>.gdl',
     componentKind: 'externalEvents',
     schemaKey: 'externalEvents',
     layout: false,
   },
   {
     kind: 'external-layout',
-    path: 'scenes/<Scene>/external-layout/<ExternalLayout>.settings',
+    path: 'scenes/<Scene>/external-layout/<ExternalLayout>.gdl',
     componentKind: 'externalLayout',
     schemaKey: 'externalLayout',
     layout: true,
   },
   {
     kind: 'scene-object',
-    path: 'scenes/<Scene>/objects/<Object>.settings',
+    path: 'scenes/<Scene>/objects/<Object>.gdl',
     componentKind: 'object',
     schemaKey: 'object',
     layout: false,
   },
   {
     kind: 'extension',
-    path: 'extensions/<Extension>/extension.settings',
+    path: 'extensions/<Extension>/extension.gdl',
     componentKind: 'extension',
     schemaKey: 'extension',
     layout: false,
   },
   {
     kind: 'function',
-    path: 'extensions/<Extension>/functions/<Function>.settings',
+    path: 'extensions/<Extension>/functions/<Function>.gdl',
     componentKind: 'function',
     schemaKey: 'extensionFunction',
     layout: false,
   },
   {
     kind: 'prefab',
-    path: 'extensions/<Extension>/prefabs/<Prefab>/prefab.settings',
+    path: 'extensions/<Extension>/prefabs/<Prefab>/prefab.gdl',
     componentKind: 'prefab',
     schemaKey: 'prefab',
     layout: true,
@@ -1145,7 +1146,7 @@ const SETTINGS_FILE_KINDS = [
   {
     kind: 'prefab-variant',
     path:
-      'extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.settings',
+      'extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.gdl',
     componentKind: 'prefabVariant',
     schemaKey: 'prefabVariant',
     layout: true,
@@ -1153,22 +1154,21 @@ const SETTINGS_FILE_KINDS = [
   {
     kind: 'prefab-object',
     path:
-      'extensions/<Extension>/prefabs/<Prefab>/{objects|variants/<Variant>/objects}/<Object>.settings',
+      'extensions/<Extension>/prefabs/<Prefab>/{objects|variants/<Variant>/objects}/<Object>.gdl',
     componentKind: 'object',
     schemaKey: 'object',
     layout: false,
   },
   {
     kind: 'prefab-function',
-    path:
-      'extensions/<Extension>/prefabs/<Prefab>/functions/<Function>.settings',
+    path: 'extensions/<Extension>/prefabs/<Prefab>/functions/<Function>.gdl',
     componentKind: 'function',
     schemaKey: 'prefabFunction',
     layout: false,
   },
   {
     kind: 'behavior',
-    path: 'extensions/<Extension>/behaviors/<Behavior>/behavior.settings',
+    path: 'extensions/<Extension>/behaviors/<Behavior>/behavior.gdl',
     componentKind: 'behavior',
     schemaKey: 'behavior',
     layout: false,
@@ -1176,7 +1176,7 @@ const SETTINGS_FILE_KINDS = [
   {
     kind: 'behavior-function',
     path:
-      'extensions/<Extension>/behaviors/<Behavior>/functions/<Function>.settings',
+      'extensions/<Extension>/behaviors/<Behavior>/functions/<Function>.gdl',
     componentKind: 'function',
     schemaKey: 'behaviorFunction',
     layout: false,
@@ -1219,7 +1219,7 @@ const buildSettingsOwners = (serializedProject: Object): Array<Object> => {
           !!(scene[source.legacyField] || []).length,
         settingsUri: `game://scenes/${sceneFolder}/functions/${
           source.name
-        }.settings`,
+        }.gdl`,
       })),
     });
   });
@@ -1228,7 +1228,7 @@ const buildSettingsOwners = (serializedProject: Object): Array<Object> => {
     const name = String(externalEvents.name || '');
     const ownerBaseUri = `game://scenes/${encodeManagedName(
       sceneName
-    )}/external-events/${encodeManagedName(`${name}.settings`)}`;
+    )}/external-events/${encodeManagedName(`${name}.gdl`)}`;
     owners.push({
       kind: 'external-events',
       scene: sceneName,
@@ -1245,7 +1245,7 @@ const buildSettingsOwners = (serializedProject: Object): Array<Object> => {
       name,
       settingsUri: `game://scenes/${encodeManagedName(
         sceneName
-      )}/external-layout/${encodeManagedName(name)}.settings`,
+      )}/external-layout/${encodeManagedName(name)}.gdl`,
     });
   });
   (serializedProject.eventsFunctionsExtensions || []).forEach(extension => {
@@ -1285,7 +1285,7 @@ const buildSettingsOwners = (serializedProject: Object): Array<Object> => {
             extensionName
           )}/prefabs/${encodeManagedName(
             String(prefab.name || '')
-          )}/variants/${encodeManagedName(variantName)}/variant.settings`,
+          )}/variants/${encodeManagedName(variantName)}/variant.gdl`,
           objects: (variant.objects || []).map(summarizeObjectDefinition),
         });
       });
@@ -1337,25 +1337,25 @@ export const buildProjectSettingsCatalog = ({
     formatVersion: PROJECT_SETTINGS_CATALOG_FORMAT_VERSION,
     project: projectIdentity(project),
     authoring: {
-      sourceExtension: '.settings',
+      sourceExtension: '.gdl',
       syntax:
-        'Settings DSL: key = value and node { ... }. Only the current schema is supported.',
+        'GDevelop Language (GDL): key = value and node { ... }. Only the current schema is supported.',
       rules: [
         'Use one typed component root. Names and properties belong inside the root; never use TOML headers, named node arguments, kind, settingsFormatVersion, settings or layout wrappers.',
         'Read fileKinds[].schema and objectTypes[type].schema. Unknown fields are errors. Dynamic fields require registered type metadata.',
         'Declare repeated variable nodes directly on the owner. Infer types from value literals; extension defaults require scope. Descendant identity, enum and editor fields belong on nested variable declarations. Expanded containers require explicit structure/array type, omit value, and use named structure children or unnamed ordered array children. metadata/path annotations are forbidden. Never write variables, sceneVariables or globalVariables wrappers.',
         'Instances are root children in global serialized order. Each instance owns variables and behavior overrides. Layers own camera and effect nodes.',
-        'Object definitions and functions remain independent .settings components; event bodies are embedded in the same function.settings document.',
+        'Object definitions and functions remain independent .gdl components; event bodies are embedded in the same function.gdl document.',
         'Only project.gdevelop declares formatVersion. Paths determine ownership. constants.toml is separate and generated JSON is not author input.',
       ],
     },
     eventFileKinds: [
       {
         kind: 'external-events',
-        path: 'scenes/<Scene>/external-events/<Name>.settings',
-        syntax: 'Settings DSL',
+        path: 'scenes/<Scene>/external-events/<Name>.gdl',
+        syntax: 'GDevelop Language (GDL)',
         settingsRequired: true,
-        settingsPath: 'scenes/<Scene>/external-events/<Name>.settings',
+        settingsPath: 'scenes/<Scene>/external-events/<Name>.gdl',
         identity:
           'Scene from parent path; name from matching settings and filename stem.',
         execution:
@@ -1483,7 +1483,7 @@ const buildLayoutContexts = (serializedProject: Object): Array<Object> => {
           scene: String(scene.name || ''),
           settingsUri: `game://scenes/${encodeManagedName(
             String(scene.name || '')
-          )}/scene.settings`,
+          )}/scene.gdl`,
         },
         objects: mergeObjects(scene.objects || [], globalObjects),
         instances: scene.instances || [],
@@ -1503,7 +1503,7 @@ const buildLayoutContexts = (serializedProject: Object): Array<Object> => {
             prefab: prefabName,
             settingsUri: `game://extensions/${encodeManagedName(
               extensionName
-            )}/prefabs/${encodeManagedName(prefabName)}/prefab.settings`,
+            )}/prefabs/${encodeManagedName(prefabName)}/prefab.gdl`,
           },
           objects: prefab.objects || [],
           instances: prefab.instances || [],
@@ -1530,7 +1530,7 @@ const buildLayoutContexts = (serializedProject: Object): Array<Object> => {
                 prefabName
               )}/variants/${encodeManagedName(
                 String(variant.name || '')
-              )}/variant.settings`,
+              )}/variant.gdl`,
             },
             objects: variantObjects,
             instances: variant.instances || [],
@@ -1557,7 +1557,7 @@ const buildLayoutContexts = (serializedProject: Object): Array<Object> => {
             linkedSceneName
           )}/external-layout/${encodeManagedName(
             String(external.name || '')
-          )}.settings`,
+          )}.gdl`,
         },
         objects: linkedScene
           ? mergeObjects(linkedScene.objects || [], globalObjects)
@@ -1594,9 +1594,9 @@ const buildEmbeddedLayoutCatalog = ({
   const contexts = buildLayoutContexts(serializedProject);
   return {
     authoring: {
-      sourceExtension: '.settings',
+      sourceExtension: '.gdl',
       storage: 'component-root',
-      syntax: 'Settings DSL',
+      syntax: 'GDevelop Language (GDL)',
       rules: [
         'Place layer and instance directly below scene/prefab/variant/external. Nest camera/effect below layer, variable/behavior below instance. Preserve instance order and UUIDs.',
       ],
@@ -1718,7 +1718,9 @@ export const validateProjectSettingsCatalog = (catalog: any): Object => {
     }
     if (!objectType.schema.fields || !objectType.schema.children)
       fail(
-        `Object type ${objectType.type} requires a Settings DSL node schema.`
+        `Object type ${
+          objectType.type
+        } requires a GDevelop Language (GDL) node schema.`
       );
   });
   validateUniqueEntries(
@@ -1804,7 +1806,7 @@ export const validateProjectSettingsCatalog = (catalog: any): Object => {
     !validated.layoutAuthoring ||
     typeof validated.layoutAuthoring !== 'object' ||
     validated.layoutAuthoring.storage !== 'component-root' ||
-    validated.layoutAuthoring.syntax !== 'Settings DSL'
+    validated.layoutAuthoring.syntax !== 'GDevelop Language (GDL)'
   ) {
     fail('Settings catalog must declare embedded layout authoring metadata.');
   }

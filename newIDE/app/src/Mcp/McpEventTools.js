@@ -159,9 +159,7 @@ const resolveSceneEventsTarget = (
       functionSettingsUri: null,
       settingsUri: `game://scenes/${encodeManagedName(
         associatedSceneName
-      )}/external-events/${encodeManagedName(
-        `${externalEventsName}.settings`
-      )}`,
+      )}/external-events/${encodeManagedName(`${externalEventsName}.gdl`)}`,
     };
   } else {
     if (!sceneName) throw new Error('Missing scene_name.');
@@ -185,8 +183,8 @@ const resolveSceneEventsTarget = (
     ownerKind,
     ownerName,
     externalEventsName: externalEventsName || null,
-    functionSettingsUri: `${functionBaseUri}.settings`,
-    settingsUri: `${functionBaseUri}.settings`,
+    functionSettingsUri: `${functionBaseUri}.gdl`,
+    settingsUri: `${functionBaseUri}.gdl`,
   };
 };
 

@@ -23,7 +23,7 @@ guidance must agree on the new contract.
 ## Goals
 
 - Add `run_gameplay_tests` to start one authored gameplay test selected by its
-  canonical `tests.settings` `file`, or all authored gameplay tests when
+  canonical `tests.gdl` `file`, or all authored gameplay tests when
   `file` is omitted.
 - Add `get_gameplay_test_results` to fetch an operation's progress, aggregate
   outcome, and paginated completed test results.
@@ -94,7 +94,7 @@ sources.
 The editor and local CLI independently enumerate project tests first, followed
 by extension tests in project extension order. The multi-file adapter owns the
 canonical mapping from test scope/name to the flat path stored in
-`tests.settings` as `file`.
+`tests.gdl` as `file`.
 
 Project catalog generation currently writes three JSON catalogs and two
 JavaScript authoring declarations: `.gdevelop/runtime-api.d.ts` and
@@ -103,7 +103,7 @@ JavaScript authoring declarations: `.gdevelop/runtime-api.d.ts` and
 of that API from examples or runtime implementation.
 
 The bundled project-files skill has a JavaScript-event reference but no routed
-gameplay-test reference. It neither documents the strict `tests.settings` plus
+gameplay-test reference. It neither documents the strict `tests.gdl` plus
 flat `tests/*.js` authoring workflow nor introduces MCP gameplay-test execution
 and result retrieval.
 
@@ -140,7 +140,7 @@ Its input schema is:
 ```
 
 - When `file` is present, it must exactly match one canonical `file` value in
-  the active project's transient version 5 `tests.settings` projection, for
+  the active project's transient version 5 `tests.gdl` projection, for
   example `tests/Player%20can%20jump.js`.
 - When `file` is omitted, all tests run in canonical project order: project
   tests in container order, then each extension in project order and its tests
@@ -313,7 +313,7 @@ The multi-file adapter will expose a pure internal helper used by decomposition
 and MCP selection. Given the serialized in-memory project, it returns each
 test's logical identity and allocated canonical `file` without writing files.
 The decomposition writer continues to use the same helper, preventing MCP file
-selection from drifting from `tests.settings`.
+selection from drifting from `tests.gdl`.
 
 The `file` argument is only an identity selector. The runner receives the
 matching scope and test name and resolves source from the active `gdProject`.
@@ -462,7 +462,7 @@ It must explain:
 
 The bundled skill's progressive-disclosure routing requires this reference to
 be read in full before creating or materially modifying a test script. The
-skill itself gains the strict `tests.settings`/flat `tests/*.js` file contract,
+skill itself gains the strict `tests.gdl`/flat `tests/*.js` file contract,
 lists `.gdevelop/harness-api.d.ts` next to the other generated declarations,
 introduces both MCP tools in the exact allowlist, and requires callers to poll
 the result tool until a terminal operation state. A behavior change is not
@@ -513,7 +513,7 @@ tools. The exact public allowlist grows from 23 to 25 tools.
     existing decomposition path.
   - Keep `decomposeLegacyProjectToFiles` on that same allocator.
 - `newIDE/app/src/ProjectsStorage/MultiFileProjectFormat/index.spec.js`
-  - Prove descriptor paths exactly match emitted `tests.settings` `file`
+  - Prove descriptor paths exactly match emitted `tests.gdl` `file`
     values, including encoding and collision suffixes.
 
 ### Gameplay-test runner
@@ -591,7 +591,7 @@ tools. The exact public allowlist grows from 23 to 25 tools.
   - Change the exact allowlist count from 23 to 25.
   - Add gameplay tests to the trigger/routing contract and require the
     dedicated reference before test authoring.
-  - Add `tests.settings`, flat `tests/*.js`, and
+  - Add `tests.gdl`, flat `tests/*.js`, and
     `.gdevelop/harness-api.d.ts` to the source/generated-artifact workflow.
   - Document the start/query workflow, canonical `file` selector, polling,
     result interpretation, and the validation/reload prerequisite for direct
@@ -623,7 +623,7 @@ authoring artifact version changes; the multi-file project remains strict
 version 5.
 
 The operation registry is transient editor state. Full MCP results are not
-written to `tests.settings`, test scripts, project/extension settings,
+written to `tests.gdl`, test scripts, project/extension settings,
 `.gdevelop/gameplay-test-results.json`, or any new disk file. The existing
 `.gdevelop/gameplay-test-results.json` continues to store only the latest four
 summary values per authored test.
@@ -635,7 +635,7 @@ migration. Clients that discover tools dynamically see two additional names.
 
 Existing project folders receive `harness-api.d.ts` on their next save,
 catalog generation, validation catalog phase, or reload/open catalog refresh.
-No migration rewrites `project.gdevelop`, `tests.settings`, or a test script.
+No migration rewrites `project.gdevelop`, `tests.gdl`, or a test script.
 Older builds ignore the extra generated file. New builds regenerate a missing
 or stale file rather than treating it as authored input.
 
@@ -808,7 +808,7 @@ retrieval, and two narrow schemas are easier to discover and validate.
 ### Select by test name and optional extension
 
 Rejected because names alone are ambiguous across scopes and do not match the
-file-first workflow. The canonical `tests.settings` `file` is unique and is the
+file-first workflow. The canonical `tests.gdl` `file` is unique and is the
 identifier the caller already edits.
 
 ### Open and execute the supplied JavaScript path

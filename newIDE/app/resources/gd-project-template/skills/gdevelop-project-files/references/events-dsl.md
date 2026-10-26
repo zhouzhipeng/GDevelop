@@ -1,8 +1,8 @@
-# Events in Settings DSL
+# Events in GDevelop Language (GDL)
 
-Events are part of Settings DSL format 11, not a separate language. Each
-function's signature and body live in one functions/<Name>.settings file.
-External fragments use external-events/<Name>.settings. Never create .events
+Events are part of GDevelop Language (GDL) format 11, not a separate language. Each
+function's signature and body live in one functions/<Name>.gdl file.
+External fragments use external-events/<Name>.gdl. Never create .events
 files or write IfDo syntax. Read the current settings and instruction catalogs.
 
 ## Complete function
@@ -154,7 +154,7 @@ strict = true for new code and the generated public API declarations. Parent
 picking does not automatically turn object names into JavaScript variables;
 use the actual JS event object-parameter bridge. Javascript events are leaves.
 
-Initialization belongs in sceneLoad.settings, per-frame logic in
-sceneUpdate.settings. Preserve lifecycle signatures. Guard per-frame actions
+Initialization belongs in sceneLoad.gdl, per-frame logic in
+sceneUpdate.gdl. Preserve lifecycle signatures. Guard per-frame actions
 with effective conditions. Validate, reload, then verify behavior using the
 project workflow; successful parsing alone is not runtime verification.

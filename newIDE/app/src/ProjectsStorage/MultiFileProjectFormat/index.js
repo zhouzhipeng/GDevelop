@@ -25,11 +25,11 @@ import {
 export const MULTI_FILE_FORMAT_VERSION = SETTINGS_FORMAT_VERSION;
 export const MULTI_FILE_ENTRY_NAME = 'project.gdevelop';
 export const MULTI_FILE_ENTRY_URI = 'game://project.gdevelop';
-export const MULTI_FILE_RESOURCES_URI = 'game://resources.settings';
+export const MULTI_FILE_RESOURCES_URI = 'game://resources.gdl';
 export const MULTI_FILE_CONSTANTS_URI = 'game://constants.toml';
-export const MULTI_FILE_TESTS_URI = 'game://tests.settings';
+export const MULTI_FILE_TESTS_URI = 'game://tests.gdl';
 export const MULTI_FILE_RETIRED_EXTERNAL_SETTINGS_URI =
-  'game://externals/external.settings';
+  'game://externals/external.gdl';
 
 const PROJECT_SPLIT_FIELDS = new Set([
   'resources',
@@ -292,7 +292,7 @@ const expectString = (value, label, fileUri) => {
 // SerializerElement represents multiline string values as an array of lines
 // in the legacy JSON projection. Accept that representation at the legacy
 // boundary and restore the exact string before writing the dedicated source
-// file. Authored tests.settings values remain strictly string-only.
+// file. Authored tests.gdl values remain strictly string-only.
 const expectLegacyMultilineString = (value, label, fileUri) => {
   if (typeof value === 'string') return value;
   if (Array.isArray(value) && value.every(line => typeof line === 'string')) {
@@ -1325,7 +1325,7 @@ const settingsNamespacePathForUri = (uri, payload) => {
   if (
     segments.length === 3 &&
     segments[0] === 'scenes' &&
-    segments[2] === 'scene.settings'
+    segments[2] === 'scene.gdl'
   )
     return ['scenes', name];
   if (
@@ -1338,41 +1338,41 @@ const settingsNamespacePathForUri = (uri, payload) => {
     segments.length === 4 &&
     segments[0] === 'scenes' &&
     segments[2] === 'functions' &&
-    segments[3].endsWith('.settings')
+    segments[3].endsWith('.gdl')
   )
     return ['scenes', segments[1], 'functions', name];
   if (
     segments.length === 4 &&
     segments[0] === 'scenes' &&
     segments[2] === 'external-events' &&
-    segments[3].endsWith('.settings')
+    segments[3].endsWith('.gdl')
   )
     return ['scenes', segments[1], 'externalEvents', name];
   if (
     segments.length === 4 &&
     segments[0] === 'scenes' &&
     segments[2] === 'external-layout' &&
-    segments[3].endsWith('.settings')
+    segments[3].endsWith('.gdl')
   )
     return ['scenes', segments[1], 'externalLayouts', name];
   if (
     segments.length === 3 &&
     segments[0] === 'extensions' &&
-    segments[2] === 'extension.settings'
+    segments[2] === 'extension.gdl'
   )
     return ['extensions', name];
   if (
     segments.length === 4 &&
     segments[0] === 'extensions' &&
     segments[2] === 'functions' &&
-    segments[3].endsWith('.settings')
+    segments[3].endsWith('.gdl')
   )
     return ['extensions', segments[1], 'functions', name];
   if (
     segments.length === 5 &&
     segments[0] === 'extensions' &&
-    ((segments[2] === 'prefabs' && segments[4] === 'prefab.settings') ||
-      (segments[2] === 'behaviors' && segments[4] === 'behavior.settings'))
+    ((segments[2] === 'prefabs' && segments[4] === 'prefab.gdl') ||
+      (segments[2] === 'behaviors' && segments[4] === 'behavior.gdl'))
   )
     return ['extensions', segments[1], segments[2], name];
   if (
@@ -1404,7 +1404,7 @@ const settingsNamespacePathForUri = (uri, payload) => {
     segments[0] === 'extensions' &&
     segments[2] === 'prefabs' &&
     segments[4] === 'variants' &&
-    segments[6] === 'variant.settings'
+    segments[6] === 'variant.gdl'
   )
     return [
       'extensions',
@@ -1419,7 +1419,7 @@ const settingsNamespacePathForUri = (uri, payload) => {
     segments[0] === 'extensions' &&
     (segments[2] === 'prefabs' || segments[2] === 'behaviors') &&
     segments[4] === 'functions' &&
-    segments[5].endsWith('.settings')
+    segments[5].endsWith('.gdl')
   )
     return [
       'extensions',
@@ -1535,11 +1535,11 @@ const splitOwnerFunctions = ({
     const functionFileName = encodeManagedName(functionName);
     const settingsUri = encodeUriPath([
       ...baseSegments,
-      `${functionFileName}.settings`,
+      `${functionFileName}.gdl`,
     ]);
     const bodySettingsUri = encodeUriPath([
       ...baseSegments,
-      `${functionFileName}.settings`,
+      `${functionFileName}.gdl`,
     ]);
     putSettingsFile(
       files,
@@ -1593,12 +1593,12 @@ const splitSceneLifecycleFunctions = ({
     const settingsUri = encodeUriPath([
       ...baseSegments,
       'functions',
-      `${definition.name}.settings`,
+      `${definition.name}.gdl`,
     ]);
     const bodySettingsUri = encodeUriPath([
       ...baseSegments,
       'functions',
-      `${definition.name}.settings`,
+      `${definition.name}.gdl`,
     ]);
     putSettingsFile(
       files,
@@ -1647,7 +1647,7 @@ const splitObjectDefinitions = ({
   (objects || []).forEach((object, order) => {
     const name = String(object.name || '');
     const fileName = uniqueManagedName(name, objectFileNames);
-    const uri = encodeUriPath([...baseSegments, `${fileName}.settings`]);
+    const uri = encodeUriPath([...baseSegments, `${fileName}.gdl`]);
     putSettingsFile(
       files,
       uri,
@@ -1672,7 +1672,7 @@ const splitPrefab = ({
   eventOptions,
 }) => {
   const prefabName = String(prefab.name || '');
-  const prefabSettingsUri = encodeUriPath([...baseSegments, 'prefab.settings']);
+  const prefabSettingsUri = encodeUriPath([...baseSegments, 'prefab.gdl']);
   const layoutDocument = decompileOwnedLayoutDocument(
     'gdevelop-prefab-layout',
     takeFields(prefab, PREFAB_LAYOUT_FIELDS),
@@ -1721,7 +1721,7 @@ const splitPrefab = ({
     const variantBaseSegments = [...baseSegments, 'variants', variantFileName];
     const variantSettingsUri = encodeUriPath([
       ...variantBaseSegments,
-      'variant.settings',
+      'variant.gdl',
     ]);
     splitObjectDefinitions({
       objects: variant.objects,
@@ -2003,7 +2003,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
       {};
     putSettingsFile(
       files,
-      encodeUriPath([...baseSegments, encodeManagedName(`${name}.settings`)]),
+      encodeUriPath([...baseSegments, encodeManagedName(`${name}.gdl`)]),
       {
         scenes: {
           [sceneInfo.name]: {
@@ -2022,7 +2022,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
     );
     putEmbeddedEvents(
       files,
-      encodeUriPath([...baseSegments, encodeManagedName(`${name}.settings`)]),
+      encodeUriPath([...baseSegments, encodeManagedName(`${name}.gdl`)]),
       external.events,
       options.eventOptions
     );
@@ -2048,7 +2048,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
       'scenes',
       sceneInfo.folderName,
       'external-layout',
-      `${fileName}.settings`,
+      `${fileName}.gdl`,
     ]);
     const metadata = omitFields(
       external,
@@ -2104,11 +2104,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
       order,
       folderName,
     }) => {
-      const settingsUri = encodeUriPath([
-        'scenes',
-        folderName,
-        'scene.settings',
-      ]);
+      const settingsUri = encodeUriPath(['scenes', folderName, 'scene.gdl']);
       const settingsPayload = omitFields(
         layoutWithoutEmptyBehaviorSharedData,
         new Set([
@@ -2176,7 +2172,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
     const extensionName = String(extension.name || '');
     const extensionFolder = uniqueManagedName(extensionName, extensionNames);
     const extensionBase = ['extensions', extensionFolder];
-    const settingsUri = encodeUriPath([...extensionBase, 'extension.settings']);
+    const settingsUri = encodeUriPath([...extensionBase, 'extension.gdl']);
     const functionNames = new Set();
     const prefabNames = new Set();
     const behaviorNames = new Set();
@@ -2187,12 +2183,12 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
       const functionSettingsUri = encodeUriPath([
         ...extensionBase,
         'functions',
-        `${folder}.settings`,
+        `${folder}.gdl`,
       ]);
       const bodySettingsUri = encodeUriPath([
         ...extensionBase,
         'functions',
-        `${folder}.settings`,
+        `${folder}.gdl`,
       ]);
       putSettingsFile(files, functionSettingsUri, {
         extensions: {
@@ -2219,7 +2215,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
       const name = String(prefab.name || '');
       const folder = uniqueManagedName(name, prefabNames);
       const base = [...extensionBase, 'prefabs', folder];
-      const prefabSettingsUri = encodeUriPath([...base, 'prefab.settings']);
+      const prefabSettingsUri = encodeUriPath([...base, 'prefab.gdl']);
       const { payload, layoutDocument } = splitPrefab({
         extensionName,
         prefab,
@@ -2248,7 +2244,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
       const name = String(behavior.name || '');
       const folder = uniqueManagedName(name, behaviorNames);
       const base = [...extensionBase, 'behaviors', folder];
-      const behaviorSettingsUri = encodeUriPath([...base, 'behavior.settings']);
+      const behaviorSettingsUri = encodeUriPath([...base, 'behavior.gdl']);
       putSettingsFile(files, behaviorSettingsUri, {
         extensions: {
           [extensionName]: {
@@ -2542,11 +2538,11 @@ const validateOwnedV5ScenePath = (settingsUri, entry) => {
   if (
     settingsSegments.length !== 3 ||
     settingsSegments[0] !== 'scenes' ||
-    settingsSegments[2] !== 'scene.settings'
+    settingsSegments[2] !== 'scene.gdl'
   ) {
     fail(
       'MULTIFILE_INVALID_MANIFEST_PATH',
-      `Scene ${entry.name} must own scene.settings in its scene folder.`,
+      `Scene ${entry.name} must own scene.gdl in its scene folder.`,
       settingsUri
     );
   }
@@ -2557,7 +2553,7 @@ const validateExtensionSettingsPath = entry => {
   if (
     segments.length !== 3 ||
     segments[0] !== 'extensions' ||
-    segments[2] !== 'extension.settings'
+    segments[2] !== 'extension.gdl'
   ) {
     fail(
       'MULTIFILE_INVALID_MANIFEST_PATH',
@@ -2576,14 +2572,14 @@ const validateChildSettingsPath = (ownerUri, childUri, childKind) => {
       ? 'prefabs'
       : 'behaviors';
   const expectedSettings =
-    childKind === 'prefabFiles' ? 'prefab.settings' : 'behavior.settings';
+    childKind === 'prefabFiles' ? 'prefab.gdl' : 'behavior.gdl';
   const functionPathIsValid =
     childKind === 'functionFiles' &&
     childSegments.length === 4 &&
     childSegments[0] === 'extensions' &&
     childSegments[1] === ownerSegments[1] &&
     childSegments[2] === expectedFolder &&
-    childSegments[3].endsWith('.settings');
+    childSegments[3].endsWith('.gdl');
   if (
     !functionPathIsValid &&
     (childSegments.length !== 5 ||
@@ -2730,14 +2726,14 @@ const composePrefab = (
   if (payload.objects !== undefined) {
     fail(
       'MULTIFILE_OWNERSHIP_CONFLICT',
-      'Prefab objects must be stored in physical objects/**/*.settings files.',
+      'Prefab objects must be stored in physical objects/**/*.gdl files.',
       uri
     );
   }
   if (payload.functions !== undefined) {
     fail(
       'MULTIFILE_OWNERSHIP_CONFLICT',
-      'Prefab functions must be stored in physical functions/<Function>.settings files.',
+      'Prefab functions must be stored in physical functions/<Function>.gdl files.',
       uri
     );
   }
@@ -2770,7 +2766,7 @@ const composePrefab = (
     if (entry.objects !== undefined) {
       fail(
         'MULTIFILE_OWNERSHIP_CONFLICT',
-        'Prefab variant objects must be stored in physical objects/**/*.settings files.',
+        'Prefab variant objects must be stored in physical objects/**/*.gdl files.',
         uri
       );
     }
@@ -2836,7 +2832,7 @@ const composeBehavior = (
   if (payload.functions !== undefined) {
     fail(
       'MULTIFILE_OWNERSHIP_CONFLICT',
-      'Behavior functions must be stored as flat functions/<Function>.settings files.',
+      'Behavior functions must be stored as flat functions/<Function>.gdl files.',
       uri
     );
   }
@@ -2915,14 +2911,14 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   if (projectNamespace.tests !== undefined) {
     fail(
       'MULTIFILE_TEST_OWNERSHIP_CONFLICT',
-      'Project gameplay tests must be stored in tests.settings.',
+      'Project gameplay tests must be stored in tests.gdl.',
       MULTI_FILE_ENTRY_URI
     );
   }
   if (files[MULTI_FILE_RETIRED_EXTERNAL_SETTINGS_URI] !== undefined) {
     fail(
       'MULTIFILE_RETIRED_EXTERNAL_SETTINGS',
-      'external.settings is retired; store External Events and external layouts in independent owner settings below the associated scene.',
+      'external.gdl is retired; store External Events and external layouts in independent owner settings below the associated scene.',
       MULTI_FILE_RETIRED_EXTERNAL_SETTINGS_URI
     );
   }
@@ -2950,7 +2946,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
         return (
           segments.length === baseSegments.length + 1 &&
           baseSegments.every((segment, index) => segments[index] === segment) &&
-          segments[segments.length - 1].endsWith('.settings')
+          segments[segments.length - 1].endsWith('.gdl')
         );
       })
       .map(objectUri => {
@@ -2981,8 +2977,8 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
         }
         const encodedName = encodeManagedName(name);
         const expectedFilenames = [
-          `${decodeURIComponent(encodedName)}.settings`,
-          `${decodeURIComponent(encodedName)}~${stableHash8(name)}.settings`,
+          `${decodeURIComponent(encodedName)}.gdl`,
+          `${decodeURIComponent(encodedName)}~${stableHash8(name)}.gdl`,
         ];
         if (!expectedFilenames.includes(segments[segments.length - 1])) {
           fail(
@@ -3041,7 +3037,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
         return (
           segments.length === baseSegments.length + 1 &&
           baseSegments.every((segment, index) => segments[index] === segment) &&
-          segments[segments.length - 1].endsWith('.settings')
+          segments[segments.length - 1].endsWith('.gdl')
         );
       })
       .map(functionUri => {
@@ -3072,8 +3068,8 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
         }
         const encodedName = decodeURIComponent(encodeManagedName(name));
         const expectedFilenames = [
-          `${encodedName}.settings`,
-          `${encodedName}~${stableHash8(name)}.settings`,
+          `${encodedName}.gdl`,
+          `${encodedName}~${stableHash8(name)}.gdl`,
         ];
         if (!expectedFilenames.includes(segments[segments.length - 1])) {
           fail(
@@ -3140,7 +3136,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
           segments.length === baseSegments.length + 2 &&
           baseSegments.every((segment, index) => segments[index] === segment) &&
           segments[baseSegments.length] === 'functions' &&
-          segments[segments.length - 1].endsWith('.settings')
+          segments[segments.length - 1].endsWith('.gdl')
         );
       })
       .forEach(functionUri => {
@@ -3149,7 +3145,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
         const segments = rawGameUriSegments(functionUri);
         const physicalName = segments[segments.length - 1].slice(
           0,
-          -'.settings'.length
+          -'.gdl'.length
         );
         const document = parseSettings(files, functionUri);
         const functionsNamespace = requireNamespace(
@@ -3227,7 +3223,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       fail(
         'MULTIFILE_MISSING_FILE',
         `${label} must contain the required sceneUpdate lifecycle function.`,
-        encodeUriPath([...baseSegments, 'functions', 'sceneUpdate.settings'])
+        encodeUriPath([...baseSegments, 'functions', 'sceneUpdate.gdl'])
       );
     }
     return documentsByName;
@@ -3274,7 +3270,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
     if (projectNamespace.resources !== undefined) {
       fail(
         'MULTIFILE_OWNERSHIP_CONFLICT',
-        'Resources cannot be stored in both project.gdevelop and resources.settings.',
+        'Resources cannot be stored in both project.gdevelop and resources.gdl.',
         MULTI_FILE_RESOURCES_URI
       );
     }
@@ -3306,7 +3302,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   const constantsUri = registerUri(MULTI_FILE_CONSTANTS_URI);
   const constantsPayload = parseConstantsFromToml(files[constantsUri]);
   let sceneDocuments = Object.keys(files)
-    .filter(uri => /^game:\/\/scenes\/[^/]+\/scene\.settings$/.test(uri))
+    .filter(uri => /^game:\/\/scenes\/[^/]+\/scene\.gdl$/.test(uri))
     .map(uri => {
       registerUri(uri);
       settingsUris.push(uri);
@@ -3316,7 +3312,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       if (sceneNames.length !== 1) {
         fail(
           'MULTIFILE_INVALID_SCHEMA',
-          'scene.settings must contain exactly one scenes.<name> namespace.',
+          'scene.gdl must contain exactly one scenes.<name> namespace.',
           uri
         );
       }
@@ -3346,7 +3342,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       ) {
         fail(
           'MULTIFILE_INVALID_LOCAL_SETTINGS',
-          'Current Settings DSL scene settings must embed layout and must not own retired layout/events/external manifest fields.',
+          'Current GDevelop Language (GDL) scene settings must embed layout and must not own retired layout/events/external manifest fields.',
           uri
         );
       }
@@ -3366,18 +3362,14 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   Object.keys(files)
     .filter(uri => /^game:\/\/scenes\/[^/]+\/external-events\//.test(uri))
     .forEach(uri => {
-      if (
-        !/^game:\/\/scenes\/[^/]+\/external-events\/[^/]+\.(?:events|settings)$/.test(
-          uri
-        )
-      ) {
+      if (!/^game:\/\/scenes\/[^/]+\/external-events\/[^/]+\.gdl$/.test(uri)) {
         fail(
           'MULTIFILE_INVALID_EXTERNAL_SOURCE',
-          'External events must be flat same-stem .settings and .events pairs.',
+          'External events must be flat .gdl documents.',
           uri
         );
       }
-      if (!uri.endsWith('.settings')) return;
+      if (!uri.endsWith('.gdl')) return;
       registerUri(uri);
       const segments = rawGameUriSegments(uri);
       const sceneDocument = sceneDocuments.find(
@@ -3390,7 +3382,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
           uri
         );
       }
-      const name = segments[3].slice(0, -'.settings'.length);
+      const name = segments[3].slice(0, -'.gdl'.length);
       const document = parseSettings(files, uri);
       const sceneNamespace = requireNamespace(
         document,
@@ -3448,7 +3440,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
     });
   Object.keys(files)
     .filter(uri =>
-      /^game:\/\/scenes\/[^/]+\/external-layout\/[^/]+\.settings$/.test(uri)
+      /^game:\/\/scenes\/[^/]+\/external-layout\/[^/]+\.gdl$/.test(uri)
     )
     .forEach(uri => {
       registerUri(uri);
@@ -3505,7 +3497,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       const expectedFileNames = [
         decodeURIComponent(encodeManagedName(name)),
         `${decodeURIComponent(encodeManagedName(name))}~${stableHash8(name)}`,
-      ].map(fileName => `${fileName}.settings`);
+      ].map(fileName => `${fileName}.gdl`);
       if (!expectedFileNames.includes(segments[3])) {
         fail(
           'MULTIFILE_IDENTITY_MISMATCH',
@@ -3569,14 +3561,14 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
         manifestName: 'prefabFiles',
         namespaceName: 'prefabs',
         folderName: 'prefabs',
-        settingsFilename: 'prefab.settings',
+        settingsFilename: 'prefab.gdl',
         kind: 'prefab',
       },
       {
         manifestName: 'behaviorFiles',
         namespaceName: 'behaviors',
         folderName: 'behaviors',
-        settingsFilename: 'behavior.settings',
+        settingsFilename: 'behavior.gdl',
         kind: 'behavior',
       },
     ].forEach(childKind => {
@@ -3602,7 +3594,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
               segments[0] === 'extensions' &&
               segments[1] === ownerSegments[1] &&
               segments[2] === childKind.folderName &&
-              segments[3].endsWith('.settings')
+              segments[3].endsWith('.gdl')
             );
           }
           return (
@@ -3674,9 +3666,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   };
 
   const extensionDocuments = Object.keys(files)
-    .filter(uri =>
-      /^game:\/\/extensions\/[^/]+\/extension\.settings$/.test(uri)
-    )
+    .filter(uri => /^game:\/\/extensions\/[^/]+\/extension\.gdl$/.test(uri))
     .map(uri => {
       registerUri(uri);
       settingsUris.push(uri);
@@ -3769,7 +3759,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       if (prefabPayload.variants !== undefined) {
         fail(
           'MULTIFILE_MIXED_FORMAT_VERSION',
-          'Current Settings DSL prefab settings must not contain a nested variants array.',
+          'Current GDevelop Language (GDL) prefab settings must not contain a nested variants array.',
           childDocument.uri
         );
       }
@@ -3782,7 +3772,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
               (segment, index) => segments[index] === segment
             ) &&
             segments[componentSegments.length] === 'variants' &&
-            segments[segments.length - 1] === 'variant.settings'
+            segments[segments.length - 1] === 'variant.gdl'
           );
         })
         .map(variantUri => {
@@ -3825,7 +3815,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
           ) {
             fail(
               'MULTIFILE_INVALID_LOCAL_SETTINGS',
-              'Prefab variant settings must embed layout data and keep object definitions in objects/*.settings.',
+              'Prefab variant settings must embed layout data and keep object definitions in objects/*.gdl.',
               variantUri
             );
           }
@@ -3888,7 +3878,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   if (files[MULTI_FILE_TESTS_URI] === undefined) {
     fail(
       'MULTIFILE_MISSING_TESTS_SETTINGS',
-      'The project must contain tests.settings.',
+      'The project must contain tests.gdl.',
       MULTI_FILE_TESTS_URI
     );
   }
@@ -3901,20 +3891,20 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   assertOnlyFields(
     testsPayload,
     new Set(['kind', 'tests']),
-    'tests.settings',
+    'tests.gdl',
     testsUri
   );
   if (testsPayload.kind !== 'tests') {
     fail(
       'MULTIFILE_INVALID_TESTS_SETTINGS',
-      'Invalid tests.settings marker.',
+      'Invalid tests.gdl marker.',
       testsUri
     );
   }
   if (testsPayload.tests === undefined) {
     fail(
       'MULTIFILE_INVALID_TESTS_SETTINGS',
-      'tests.settings must contain a tests array.',
+      'tests.gdl must contain a tests array.',
       testsUri
     );
   }
@@ -3923,23 +3913,19 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   );
   const gameplayTestRecords = asArray(
     testsPayload.tests,
-    'tests.settings tests',
+    'tests.gdl tests',
     testsUri
   ).map((testValue, index) => {
-    const test = asObject(
-      testValue,
-      `tests.settings tests[${index}]`,
-      testsUri
-    );
+    const test = asObject(testValue, `tests.gdl tests[${index}]`, testsUri);
     assertOnlyFields(
       test,
       AUTHORED_TEST_FIELDS,
-      `tests.settings tests[${index}]`,
+      `tests.gdl tests[${index}]`,
       testsUri
     );
     const scope = expectString(
       test.scope,
-      `tests.settings tests[${index}].scope`,
+      `tests.gdl tests[${index}].scope`,
       testsUri
     );
     if (scope !== 'project' && scope !== 'extension') {
@@ -3961,7 +3947,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
     } else {
       extension = expectString(
         test.extension,
-        `tests.settings tests[${index}].extension`,
+        `tests.gdl tests[${index}].extension`,
         testsUri
       );
       if (!extensionOrderByName.has(extension)) {
@@ -3976,33 +3962,21 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
     }
     const order = readSettingsOrder(
       test,
-      `tests.settings tests[${index}]`,
+      `tests.gdl tests[${index}]`,
       testsUri
     );
     return {
       scope,
       ...(extension === undefined ? {} : { extension }),
       order,
-      name: expectString(
-        test.name,
-        `tests.settings tests[${index}].name`,
-        testsUri
-      ),
-      type: expectString(
-        test.type,
-        `tests.settings tests[${index}].type`,
-        testsUri
-      ),
+      name: expectString(test.name, `tests.gdl tests[${index}].name`, testsUri),
+      type: expectString(test.type, `tests.gdl tests[${index}].type`, testsUri),
       description: expectString(
         test.description,
-        `tests.settings tests[${index}].description`,
+        `tests.gdl tests[${index}].description`,
         testsUri
       ),
-      file: expectString(
-        test.file,
-        `tests.settings tests[${index}].file`,
-        testsUri
-      ),
+      file: expectString(test.file, `tests.gdl tests[${index}].file`, testsUri),
       recordIndex: index,
     };
   });
@@ -4107,22 +4081,22 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   if (retiredLayoutUri) {
     fail(
       'MULTIFILE_RETIRED_LAYOUT_SOURCE',
-      'Current Settings DSL projects must embed layout data in the owning settings file.',
+      'Current GDevelop Language (GDL) projects must embed layout data in the owning settings file.',
       retiredLayoutUri
     );
   }
   const retiredFunctionUri = Object.keys(files).find(uri =>
-    /\/functions\/(?:[^/]+\/)+function\.settings$/.test(uri)
+    /\/functions\/(?:[^/]+\/)+function\.gdl$/.test(uri)
   );
   if (retiredFunctionUri) {
     fail(
       'MULTIFILE_RETIRED_FUNCTION_SOURCE',
-      'Current Settings DSL functions must use a flat same-stem settings/events pair.',
+      'Current GDevelop Language (GDL) functions must use a flat same-stem settings/events pair.',
       retiredFunctionUri
     );
   }
 
-  const managedSettingsUriPattern = /^(?:game:\/\/(?:project|resources|tests)\.settings|game:\/\/objects\/(?:[^/]+\/)*[^/]+\.settings|game:\/\/scenes\/[^/]+\/(?:scene\.settings|objects\/(?:[^/]+\/)*[^/]+\.settings|functions\/[^/]+\.settings|external-layout\/[^/]+\.settings)|game:\/\/extensions\/[^/]+\/(?:extension\.settings|functions\/[^/]+\.settings|prefabs\/[^/]+\/(?:prefab\.settings|objects\/(?:[^/]+\/)*[^/]+\.settings|functions\/[^/]+\.settings|variants\/[^/]+\/(?:variant\.settings|objects\/(?:[^/]+\/)*[^/]+\.settings))|behaviors\/[^/]+\/(?:behavior\.settings|functions\/[^/]+\.settings)))$/;
+  const managedSettingsUriPattern = /^(?:game:\/\/(?:project|resources|tests)\.gdl|game:\/\/objects\/(?:[^/]+\/)*[^/]+\.gdl|game:\/\/scenes\/[^/]+\/(?:scene\.gdl|objects\/(?:[^/]+\/)*[^/]+\.gdl|functions\/[^/]+\.gdl|external-layout\/[^/]+\.gdl)|game:\/\/extensions\/[^/]+\/(?:extension\.gdl|functions\/[^/]+\.gdl|prefabs\/[^/]+\/(?:prefab\.gdl|objects\/(?:[^/]+\/)*[^/]+\.gdl|functions\/[^/]+\.gdl|variants\/[^/]+\/(?:variant\.gdl|objects\/(?:[^/]+\/)*[^/]+\.gdl))|behaviors\/[^/]+\/(?:behavior\.gdl|functions\/[^/]+\.gdl)))$/;
   Object.keys(files)
     .filter(uri => managedSettingsUriPattern.test(uri))
     .forEach(uri => {
@@ -4152,7 +4126,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   if (orphanTestSourceUri) {
     fail(
       'MULTIFILE_ORPHAN_TEST_SOURCE',
-      'Every gameplay test JavaScript source must be referenced by tests.settings.',
+      'Every gameplay test JavaScript source must be referenced by tests.gdl.',
       orphanTestSourceUri
     );
   }
@@ -4164,19 +4138,19 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   if (retiredOwnedEventsUri) {
     fail(
       'MULTIFILE_OWNERSHIP_CONFLICT',
-      'Current Settings DSL projects must not contain retired scene-owned flat events sources outside a functions directory.',
+      'Current GDevelop Language (GDL) projects must not contain retired scene-owned flat events sources outside a functions directory.',
       retiredOwnedEventsUri
     );
   }
   const retiredExternalOwnerUri = Object.keys(files).find(uri =>
-    /^game:\/\/scenes\/[^/]+\/externals\/[^/]+\/(?:external-events\.settings|external-layout\.settings|functions\/[^/]+\.(?:settings|events))$/.test(
+    /^game:\/\/scenes\/[^/]+\/externals\/[^/]+\/(?:external-events\.gdl|external-layout\.gdl|functions\/[^/]+\.(?:gdl|settings|events))$/.test(
       uri
     )
   );
   if (retiredExternalOwnerUri) {
     fail(
       'MULTIFILE_RETIRED_EXTERNAL_SOURCE',
-      'Current Settings DSL External Events and External Layout sources must use the external-events and external-layout directories.',
+      'Current GDevelop Language (GDL) External Events and External Layout sources must use the external-events and external-layout directories.',
       retiredExternalOwnerUri
     );
   }
@@ -4195,7 +4169,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   if (project.objects !== undefined) {
     fail(
       'MULTIFILE_OWNERSHIP_CONFLICT',
-      'Global objects must be stored in physical objects/**/*.settings files.',
+      'Global objects must be stored in physical objects/**/*.gdl files.',
       MULTI_FILE_ENTRY_URI
     );
   }
@@ -4229,7 +4203,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       if (settings.objects !== undefined) {
         fail(
           'MULTIFILE_OWNERSHIP_CONFLICT',
-          'Scene objects must be stored in physical objects/**/*.settings files.',
+          'Scene objects must be stored in physical objects/**/*.gdl files.',
           uri
         );
       }
@@ -4326,7 +4300,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
     if (extension.tests !== undefined) {
       fail(
         'MULTIFILE_TEST_OWNERSHIP_CONFLICT',
-        'Extension gameplay tests must be stored in tests.settings.',
+        'Extension gameplay tests must be stored in tests.gdl.',
         uri
       );
     }

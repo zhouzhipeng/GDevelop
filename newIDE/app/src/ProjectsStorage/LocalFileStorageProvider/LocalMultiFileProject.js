@@ -503,13 +503,13 @@ export const applyGameplayTestResultsToLegacyProject = (
 };
 
 const isCompositeOwnerSettingsUri = (uri: string): boolean =>
-  /^game:\/\/scenes\/[^/]+\/(?:scene\.settings|external-layout\/[^/]+\.settings)$/.test(
+  /^game:\/\/scenes\/[^/]+\/(?:scene\.gdl|external-layout\/[^/]+\.gdl)$/.test(
     uri
   ) ||
-  /^game:\/\/scenes\/[^/]+\/externals\/[^/]+\/external-layout\.settings$/.test(
+  /^game:\/\/scenes\/[^/]+\/externals\/[^/]+\/external-layout\.gdl$/.test(
     uri
   ) ||
-  /^game:\/\/extensions\/[^/]+\/prefabs\/[^/]+\/(?:prefab\.settings|variants\/[^/]+\/variant\.settings)$/.test(
+  /^game:\/\/extensions\/[^/]+\/prefabs\/[^/]+\/(?:prefab\.gdl|variants\/[^/]+\/variant\.gdl)$/.test(
     uri
   );
 
@@ -522,7 +522,7 @@ const discoverDirectSettingsFiles = async (
   const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
   for (const entry of entries) {
     const encodedName = physicalNameToGameUriSegment(entry.name);
-    if (entry.isFile() && entry.name.endsWith('.settings')) {
+    if (entry.isFile() && entry.name.endsWith('.gdl')) {
       output.push(`game://${[...uriSegments, encodedName].join('/')}`);
     }
   }
@@ -603,14 +603,14 @@ const discoverRetiredFunctionSettings = async (
     const settingsPath = path.join(
       functionsDirectoryPath,
       entry.name,
-      'function.settings'
+      'function.gdl'
     );
     if (!fs.existsSync(settingsPath)) continue;
     output.push(
       `game://${[
         ...uriSegments,
         physicalNameToGameUriSegment(entry.name),
-        'function.settings',
+        'function.gdl',
       ].join('/')}`
     );
   }
@@ -624,11 +624,11 @@ const discoverOwnedSettingsUris = async (
   if (fs.existsSync(constantsTomlPath)) {
     discovered.push(MULTI_FILE_CONSTANTS_URI);
   }
-  const resourcesSettingsPath = path.join(projectRoot, 'resources.settings');
+  const resourcesSettingsPath = path.join(projectRoot, 'resources.gdl');
   if (fs.existsSync(resourcesSettingsPath)) {
     discovered.push(MULTI_FILE_RESOURCES_URI);
   }
-  const testsSettingsPath = path.join(projectRoot, 'tests.settings');
+  const testsSettingsPath = path.join(projectRoot, 'tests.gdl');
   if (fs.existsSync(testsSettingsPath)) {
     discovered.push(MULTI_FILE_TESTS_URI);
   }
@@ -646,9 +646,9 @@ const discoverOwnedSettingsUris = async (
       if (!entry.isDirectory()) continue;
       const sceneSegment = physicalNameToGameUriSegment(entry.name);
       const sceneRoot = path.join(scenesRoot, entry.name);
-      const sceneSettingsPath = path.join(sceneRoot, 'scene.settings');
+      const sceneSettingsPath = path.join(sceneRoot, 'scene.gdl');
       if (fs.existsSync(sceneSettingsPath)) {
-        discovered.push(`game://scenes/${sceneSegment}/scene.settings`);
+        discovered.push(`game://scenes/${sceneSegment}/scene.gdl`);
       }
       await discoverDirectSettingsFiles(
         path.join(sceneRoot, 'objects'),
@@ -695,7 +695,7 @@ const discoverOwnedSettingsUris = async (
           if (entry.isDirectory()) {
             throw new MultiFileProjectError(
               'MULTIFILE_INVALID_EXTERNAL_SOURCE',
-              'External events must be flat .settings and .events pairs.',
+              'External events must be flat .gdl documents.',
               `game://scenes/${sceneSegment}/external-events/${physicalNameToGameUriSegment(
                 entry.name
               )}`
@@ -755,7 +755,7 @@ const discoverOwnedSettingsUris = async (
   const externalSettingsPath = path.join(
     projectRoot,
     'externals',
-    'external.settings'
+    'external.gdl'
   );
   if (fs.existsSync(externalSettingsPath)) {
     discovered.push(MULTI_FILE_RETIRED_EXTERNAL_SETTINGS_URI);
@@ -772,19 +772,16 @@ const discoverOwnedSettingsUris = async (
       const extensionUriSegment = physicalNameToGameUriSegment(
         extensionEntry.name
       );
-      const extensionSettingsPath = path.join(
-        extensionRoot,
-        'extension.settings'
-      );
+      const extensionSettingsPath = path.join(extensionRoot, 'extension.gdl');
       if (fs.existsSync(extensionSettingsPath)) {
         discovered.push(
-          `game://extensions/${extensionUriSegment}/extension.settings`
+          `game://extensions/${extensionUriSegment}/extension.gdl`
         );
       }
       for (const child of [
-        { folder: 'functions', settings: 'function.settings' },
-        { folder: 'prefabs', settings: 'prefab.settings' },
-        { folder: 'behaviors', settings: 'behavior.settings' },
+        { folder: 'functions', settings: 'function.gdl' },
+        { folder: 'prefabs', settings: 'prefab.gdl' },
+        { folder: 'behaviors', settings: 'behavior.gdl' },
       ]) {
         const childRoot = path.join(extensionRoot, child.folder);
         if (!fs.existsSync(childRoot)) continue;
@@ -887,11 +884,11 @@ const discoverOwnedSettingsUris = async (
             const variantSettingsPath = path.join(
               variantsRoot,
               variantEntry.name,
-              'variant.settings'
+              'variant.gdl'
             );
             if (fs.existsSync(variantSettingsPath)) {
               discovered.push(
-                `game://extensions/${extensionUriSegment}/prefabs/${childSegment}/variants/${variantSegment}/variant.settings`
+                `game://extensions/${extensionUriSegment}/prefabs/${childSegment}/variants/${variantSegment}/variant.gdl`
               );
             }
             await discoverDirectSettingsFiles(
@@ -963,7 +960,7 @@ export const readMultiFileSourceTree = async (
     }
     files[uri] = source;
     if (
-      (uri.endsWith('.settings') || uri === MULTI_FILE_ENTRY_URI) &&
+      (uri.endsWith('.gdl') || uri === MULTI_FILE_ENTRY_URI) &&
       uri !== MULTI_FILE_RETIRED_EXTERNAL_SETTINGS_URI
     ) {
       const syntax = parseSettingsSyntax(source, uri);
@@ -1058,9 +1055,9 @@ const sortForCommit = (left: string, right: string): number => {
   const priority = (uri: string): number =>
     uri === MULTI_FILE_ENTRY_URI
       ? 4
-      : uri.endsWith('/extension.settings')
+      : uri.endsWith('/extension.gdl')
       ? 3
-      : uri.endsWith('.settings')
+      : uri.endsWith('.gdl')
       ? 2
       : 1;
   return priority(left) - priority(right) || left.localeCompare(right);
@@ -1333,7 +1330,7 @@ export const writeLegacyProjectAsMultiFile = async (
   const externalEventSettingsByName: { [string]: Object } = {};
   Object.keys(previousFiles)
     .filter(uri =>
-      /^game:\/\/scenes\/[^/]+\/external-events\/[^/]+\.settings$/.test(uri)
+      /^game:\/\/scenes\/[^/]+\/external-events\/[^/]+\.gdl$/.test(uri)
     )
     .forEach(uri => {
       const settings = decodeSettingsDocument(previousFiles[uri], uri).payload;
@@ -1364,7 +1361,7 @@ export const writeLegacyProjectAsMultiFile = async (
   Object.keys(files).forEach(uri => {
     if (
       previousFiles[uri] &&
-      (uri.endsWith('.settings') || uri === MULTI_FILE_ENTRY_URI)
+      (uri.endsWith('.gdl') || uri === MULTI_FILE_ENTRY_URI)
     )
       files[uri] = preserveSettingsSourceComments(
         files[uri],

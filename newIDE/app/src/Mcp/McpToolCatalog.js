@@ -518,13 +518,7 @@ const glbMeshStructureSchema = {
       items: glbMaterialStructureSchema,
     },
   },
-  required: [
-    'name',
-    'skinned',
-    'morphTargets',
-    'materialArray',
-    'materials',
-  ],
+  required: ['name', 'skinned', 'morphTargets', 'materialArray', 'materials'],
   additionalProperties: false,
 };
 
@@ -721,7 +715,7 @@ const runGameplayTestsSchema = {
       minLength: 1,
       maxLength: 1024,
       description:
-        'Optional exact scheme-free canonical file value from tests.settings, for example tests/Player%20can%20jump.js. Omit to run every authored gameplay test in canonical order.',
+        'Optional exact scheme-free canonical file value from tests.gdl, for example tests/Player%20can%20jump.js. Omit to run every authored gameplay test in canonical order.',
     },
     timeout_ms: {
       type: 'integer',
@@ -1642,7 +1636,7 @@ const readTools: Array<McpTool> = [
   {
     name: 'run_gameplay_tests',
     description:
-      'Start one authored gameplay test selected by its exact canonical tests.settings file value, or all project and extension gameplay tests when file is omitted. Returns a stable operation_id immediately while the shared dedicated gameplay-test preview runs in the background. Uses current in-memory test sources, an unpaced deterministic harness, the requested per-test timeout, and no screenshot capture. When the batch finishes for any reason, its floating game window is automatically closed and unloaded. Poll get_gameplay_test_results until status is completed or failed.',
+      'Start one authored gameplay test selected by its exact canonical tests.gdl file value, or all project and extension gameplay tests when file is omitted. Returns a stable operation_id immediately while the shared dedicated gameplay-test preview runs in the background. Uses current in-memory test sources, an unpaced deterministic harness, the requested per-test timeout, and no screenshot capture. When the batch finishes for any reason, its floating game window is automatically closed and unloaded. Poll get_gameplay_test_results until status is completed or failed.',
     inputSchema: runGameplayTestsSchema,
     annotations: {
       readOnlyHint: false,
@@ -1786,7 +1780,7 @@ const writeTools: Array<McpTool> = [
   {
     name: 'import_extension',
     description:
-      'Import an official GDevelop extension by its registry name (persistence protocol v3). GDevelop downloads the legacy extension JSON with its required dependencies, loads it through the native extension model, waits for any active save, immediately saves the project again, reads the canonical multi-file extension sources back from disk before reporting success, and returns the original writer error when persistence fails. After this one conversion step, edit the returned .settings, .layout, and .events files directly.',
+      'Import an official GDevelop extension by its registry name (persistence protocol v3). GDevelop downloads the legacy extension JSON with its required dependencies, loads it through the native extension model, waits for any active save, immediately saves the project again, reads the canonical multi-file extension sources back from disk before reporting success, and returns the original writer error when persistence fails. After this one conversion step, edit the returned .gdl, .layout, and .events files directly.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1910,7 +1904,7 @@ const toolUsageExamples: { [string]: Array<Object> } = {
     },
     {
       description:
-        'Start one authored test using its exact flat tests.settings file identity.',
+        'Start one authored test using its exact flat tests.gdl file identity.',
       arguments: {
         file: 'tests/Player%20can%20jump.js',
         timeout_ms: 45000,

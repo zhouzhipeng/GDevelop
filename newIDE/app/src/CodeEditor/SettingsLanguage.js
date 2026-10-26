@@ -182,11 +182,11 @@ const initialized: WeakSet<any> = new WeakSet();
 export const registerSettingsLanguage = (monaco: any) => {
   if (initialized.has(monaco)) return;
   initialized.add(monaco);
-  const language = 'gdevelop-settings';
+  const language = 'gdevelop-gdl';
   monaco.languages.register({
     id: language,
-    extensions: ['.settings', '.gdevelop'],
-    aliases: ['GDevelop Settings'],
+    extensions: ['.gdl', '.gdevelop'],
+    aliases: ['GDevelop Language', 'GDL'],
   });
   monaco.languages.setMonarchTokensProvider(language, {
     tokenizer: {

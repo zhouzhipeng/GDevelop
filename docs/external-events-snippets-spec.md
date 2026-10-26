@@ -1,7 +1,7 @@
 # External Events 事件片段重构规格
 
 > Version 7 amendment: fragment execution semantics remain, but every
-> `.events` fragment now has a same-stem `.settings` description owner. See
+> `.events` fragment now has a same-stem `.gdl` description owner. See
 > [external-events-settings-project-module-map-spec.md](external-events-settings-project-module-map-spec.md).
 
 - 状态：用户已于 2026-09-20 批准实施；按随后指示取消兼容性支持，先验证引擎，再一次性迁移 JurassicWorld。
@@ -18,8 +18,8 @@
    `SceneLifecycleEventsFunctions`；`GetEvents()` 只是 `sceneUpdate` 的别名。
 2. `Core/GDCore/Events/Builtin/LinkEvent.cpp` 按调用方的生命周期角色选择
    外部容器中的同名函数，然后将事件插入引用位置。
-3. 多文件读写器要求一个 `external-events.settings`，再为每个生命周期
-   函数保存一对 `.settings` 和 `.events`。
+3. 多文件读写器要求一个 `external-events.gdl`，再为每个生命周期
+   函数保存一对 `.gdl` 和 `.events`。
 4. 编辑器、遍历器、校验器、搜索及生成的 authoring catalogs 都沿用了这个模型。
 
 因此，单独移动游戏目录中的文件不能完成重构：目前的文件发现器只扫描
@@ -72,9 +72,9 @@ External Layouts、IfDo 指令语法及游戏业务逻辑不属于此次设计�
 
 ```text
 scenes/Game/external-events/HUDMenuInput/
-  external-events.settings
+  external-events.gdl
   functions/
-    sceneUpdate.settings
+    sceneUpdate.gdl
     sceneUpdate.events
 ```
 
@@ -82,9 +82,9 @@ scenes/Game/external-events/HUDMenuInput/
 
 ```text
 scenes/Game/
-  scene.settings
+  scene.gdl
   functions/
-    sceneUpdate.settings
+    sceneUpdate.gdl
     sceneUpdate.events
   external-events/
     HUDBootstrap.events
@@ -101,10 +101,10 @@ scenes/Game/
 
 - 直接扫描 `external-events/` 下的 `.events` 文件，每个文件声明一份片段。
 - 片段名称由文件名解码并移除最后一个 `.events` 后缀获得；所属场景由
-  上级目录对应的 `scene.settings` 身份获得。
+  上级目录对应的 `scene.gdl` 身份获得。
 - 文件内容只使用 IfDo DSL。空文件、仅注释文件、暂未引用的文件均有效。
 - 不创建片段 settings、片段子目录、`functions/`、片段清单或 TOML 文件头。
-- 不向 `scene.settings` 增加 `externalEventFiles` 等登记数组。
+- 不向 `scene.gdl` 增加 `externalEventFiles` 等登记数组。
 - 继续使用项目级唯一片段名称，使用 `link "名称"` 引用片段。
   不在此次修改中引入同名片段的跨场景寻址语法。
 - 名称按 NFC 规范化，检查大小写折叠后的冲突；新建或导入冲突名称时明确报错。

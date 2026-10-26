@@ -1,6 +1,6 @@
-> Superseded authoring syntax. Current production source format is Settings DSL 8, defined in [settings-dsl-spec.md](settings-dsl-spec.md). TOML settings, embedded layout namespaces and earlier project versions are not supported. The material below is historical reference only.
+> Superseded authoring syntax. Current production source format is GDevelop Language (GDL) 8, defined in [settings-dsl-spec.md](settings-dsl-spec.md). TOML settings, embedded layout namespaces and earlier project versions are not supported. The material below is historical reference only.
 
-> 历史设计记录：事件作者格式和源码路径以 [统一 Settings DSL 格式 11](unified-settings-events-dsl-spec.md) 为准。函数/片段只使用一个 .settings 文件；旧 IfDo 与 .events 不再支持。项目模块地图为版本 2，只发布 settingsPath。
+> 历史设计记录：事件作者格式和源码路径以 [统一 GDevelop Language (GDL) 格式 12](unified-settings-events-dsl-spec.md) 为准。函数/片段只使用一个 .gdl 文件；旧 IfDo 与 .events 不再支持。项目模块地图为版本 2，只发布 settingsPath。
 
 
 # GDevelop Multi-file Project Format
@@ -24,20 +24,20 @@ for version 7 fragments and [embedded-layout-settings-format-spec.md](embedded-l
 for embedded layouts and other settings. Production accepts version 7 only. In particular:
 
 - scenes and default prefabs embed their layout below `[layout]` in
-  `scene.settings` or `prefab.settings`;
+  `scene.gdl` or `prefab.gdl`;
 - named variants use
-  `variants/<Variant>/variant.settings` and retain
-  `variants/<Variant>/objects/<Object>.settings`;
+  `variants/<Variant>/variant.gdl` and retain
+  `variants/<Variant>/objects/<Object>.gdl`;
 - External Events are directly discovered from same-stem
-  `scenes/<Scene>/external-events/<Fragment>.settings` and `.events` pairs,
+  `scenes/<Scene>/external-events/<Fragment>.gdl` and `.events` pairs,
   with no child directories, lifecycle functions or registration manifest;
 - external layouts use
-  `scenes/<Scene>/external-layout/<External>.settings`;
+  `scenes/<Scene>/external-layout/<External>.gdl`;
 - all functions use one same-stem
-  `functions/<Function>.settings` + `functions/<Function>.events` pair;
+  `functions/<Function>.gdl` + `functions/<Function>.events` pair;
 - external event fragments remain plain IfDo lists expanded at their Link
   positions; their settings hold identity and logic descriptions only;
-- root `tests.settings` owns all project and extension gameplay-test metadata,
+- root `tests.gdl` owns all project and extension gameplay-test metadata,
   with JavaScript bodies stored as direct children of root `tests/` and
   referenced by scheme-free root-relative paths;
 - no managed `.layout` file, layout URI, events URI, nested variant manifest,
@@ -60,7 +60,7 @@ an unsupported pre-v6 tree and must not be used for direct authoring.
 3. [Codebase compatibility basis](#3-codebase-compatibility-basis)
 4. [Canonical directory layout](#4-canonical-directory-layout)
 5. [Common file rules](#5-common-file-rules)
-6. [`project.gdevelop`, `resources.settings`, and `constants.toml`](#6-projectgdevelop-resourcessettings-and-constantstoml)
+6. [`project.gdevelop`, `resources.gdl`, and `constants.toml`](#6-projectgdevelop-resourcessettings-and-constantstoml)
 7. [Scene files](#7-scene-files)
 8. [Extension files](#8-extension-files)
 9. [Prefab files](#9-prefab-files)
@@ -133,12 +133,12 @@ phase 5 before they can store this directory format natively.
    generated `.gdevelop/game.json` compatibility snapshot.
 10. **`.layout` files contain placement and layout concepts only.** Object
     definitions (including their variables, effects, and behavior
-    configurations) belong to individual object `.settings` files. A scene
+    configurations) belong to individual object `.gdl` files. A scene
     `.layout` owns instances, layers, background/editor-view properties, and
     other spatial layout data; it never owns the object definitions instantiated
     there. Events remain in `.events`.
 11. **Settings use local-root TOML plus path-derived namespaces.** Every
-    `.settings` file is parsed independently. Its canonical physical path
+    `.gdl` file is parsed independently. Its canonical physical path
     determines where its local root is mounted in the combined settings tree;
     mounted documents are then recursively merged with conflicts rejected.
 12. **Managed event/layout references are project-root URIs.** Settings refer
@@ -146,8 +146,8 @@ phase 5 before they can store this directory format natively.
     at the directory containing `project.gdevelop`, never relative paths. The
     deliberate gameplay-test exception is a scheme-free canonical
     `tests/<Encoded basename>.js` path in the `file` field of root
-    `tests.settings`. A `.settings`
-    file never references another `.settings` file.
+    `tests.gdl`. A `.gdl`
+    file never references another `.gdl` file.
 13. **Settings stay separate on disk.** A settings file never includes or
     embeds another settings file. The editor creates the combined settings
     document only transiently during loading/compilation and writes changes
@@ -162,12 +162,12 @@ The design follows these existing implementation boundaries:
 | Concern                        | Current implementation                                                                | Consequence for the new format                                                                                                                           |
 | ------------------------------ | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Complete project serialization | `gd::Project::SerializeTo` and `UnserializeFrom` in `Core/GDCore/Project/Project.cpp` | The composer must produce the same root serializer fields.                                                                                               |
-| Scene data                     | `gd::Layout::SerializeTo` and `UnserializeFrom` in `Core/GDCore/Project/Layout.cpp`   | The adapter splits one current layout subtree into `scene.settings`, a visual `.layout`, and `.events`, then merges them before current unserialization. |
+| Scene data                     | `gd::Layout::SerializeTo` and `UnserializeFrom` in `Core/GDCore/Project/Layout.cpp`   | The adapter splits one current layout subtree into `scene.gdl`, a visual `.layout`, and `.events`, then merges them before current unserialization. |
 | Event data                     | `EventsListSerialization` and built-in event classes in `Core/GDCore/Events`          | `.events` compilation must emit the exact event and instruction arrays described in the DSL spec.                                                        |
 | Extensions                     | `EventsFunctionsExtension` and `Project::UnserializeAndInsertExtensionsFrom`          | Complete extension declarations must be available before implementations; the current three-pass load order must be retained.                            |
 | Functions                      | `EventsFunction::SerializeTo` and `UnserializeFrom`                                   | Function metadata is stored in TOML owner/function settings; only the `events` child is compiled from the pure DSL `.events` body.                       |
 | Prefabs/custom objects         | `EventsBasedObject`, `EventsBasedObjectVariant`, and `AbstractEventsBasedEntity`      | The default variant is the main prefab `.layout`; additional variants need separate optional layout files.                                               |
-| Behaviors                      | `EventsBasedBehavior` and `AbstractEventsBasedEntity`                                 | `behavior.settings` owns behavior metadata and each method owns one `.events` file.                                                                      |
+| Behaviors                      | `EventsBasedBehavior` and `AbstractEventsBasedEntity`                                 | `behavior.gdl` owns behavior metadata and each method owns one `.events` file.                                                                      |
 | Existing folder projects       | `LocalProjectWriter`, `LocalProjectOpener`, and `ObjectSplitter`                      | Existing split JSON projects are legacy input. Their reference tree must be unsplit before migration.                                                    |
 | Editor open path               | `ProjectsStorage` to `MainFrame`, then `gd.Serializer.fromJSObject`                   | A new storage adapter should return a composed legacy-shaped object to minimize editor changes.                                                          |
 | Preview/export                 | `gdjs::Exporter`, `ExporterHelper`, and preview launchers                             | Existing exporters can use the composed/in-memory `gd::Project`; runtime code parses neither settings TOML nor source DSL.                               |
@@ -181,72 +181,72 @@ The current optional folder-project mode is not this format. It still writes JSO
 ```text
 MyGame/
   project.gdevelop
-  resources.settings
+  resources.gdl
   constants.toml
-  tests.settings
+  tests.gdl
 
   tests/
     Player%20can%20jump.js
     Combat%20-%20Enemy%20takes%20damage.js
 
   objects/
-    Player.settings                 # folder = ["Shared"]
+    Player.gdl                 # folder = ["Shared"]
 
   scenes/
     Main/
-      scene.settings
+      scene.gdl
       Main.layout
       Main.events
       objects/
-        Player.settings             # folder = ["Actors"]
+        Player.gdl             # folder = ["Actors"]
       externals/
         Shared%20Combat.events
         Shared%20Combat.layout
     GameOver/
-      scene.settings
+      scene.gdl
       GameOver.layout
       GameOver.events
 
   extensions/
     Combat/
-      extension.settings
+      extension.gdl
 
       functions/
         CalculateDamage/
-          function.settings
+          function.gdl
           CalculateDamage.events
         ResetCombat/
-          function.settings
+          function.gdl
           ResetCombat.events
 
       prefabs/
         Enemy/
-          prefab.settings
+          prefab.gdl
           Enemy.layout
           objects/
-            Body.settings           # folder = ["Visuals"]
+            Body.gdl           # folder = ["Visuals"]
           functions/
             OnCreated/
-              function.settings     # folder = ["Lifecycle"]
+              function.gdl     # folder = ["Lifecycle"]
               OnCreated.events
             TakeDamage/
-              function.settings
+              function.gdl
               TakeDamage.events
           variants/
             Armored.layout
             Armored/
               objects/
-                Shield.settings     # folder = ["Equipment"]
+                Shield.gdl     # folder = ["Equipment"]
 
       behaviors/
         Health/
-          behavior.settings
+          behavior.gdl
           functions/
             OnCreated/
-              function.settings     # folder = ["Lifecycle"]
+              function.gdl     # folder = ["Lifecycle"]
               OnCreated.events
             TakeDamage/
-              function.settings
+              function.gdl
               TakeDamage.events
 
   .gdevelop/
@@ -263,37 +263,37 @@ MyGame/
 
 All settings fragments at the fixed paths defined below, plus the `.layout`
 and `.events` sources they reference, are managed project source.
-`project.gdevelop` and `extension.settings` do not enumerate or reference
+`project.gdevelop` and `extension.gdl` do not enumerate or reference
 other settings files. `.gdevelop/` is editor state and should normally be
 ignored by Git.
 
 Each scene may own an `externals/` directory beside its primary layout, events,
 and object sources. External event sheets and layouts are stored only below the
 scene they are associated with. Their manifest entries live in that scene's
-`scene.settings`; there is no project-root external manifest.
+`scene.gdl`; there is no project-root external manifest.
 
 ### 4.1 Required files
 
-- One `project.gdevelop` entry file and one `resources.settings` resource
+- One `project.gdevelop` entry file and one `resources.gdl` resource
   registry at the project root.
 - One root `constants.toml`, including an empty document when the project has
   no Constants.
-- One root `tests.settings`, including its canonical empty form when the
+- One root `tests.gdl`, including its canonical empty form when the
   project has no gameplay tests, plus one flat direct-child `tests/*.js` source
   per project or extension test.
-- One `objects/<Object>.settings` file for every global
+- One `objects/<Object>.gdl` file for every global
   object definition.
-- Exactly one scene subfolder containing `scene.settings`, one `.layout`, and
+- Exactly one scene subfolder containing `scene.gdl`, one `.layout`, and
   one `.events` file for every scene, plus one recursively discovered object
   settings file per scene object definition.
-- Exactly one `extension.settings` per project extension.
+- Exactly one `extension.gdl` per project extension.
 - Exactly one subfolder per extension-level function. Every function subfolder
-  contains exactly one `function.settings` and one matching
+  contains exactly one `function.gdl` and one matching
   `<FunctionName>.events` file.
-- Exactly one `prefab.settings`, one default `<PrefabName>.layout`, one object
+- Exactly one `prefab.gdl`, one default `<PrefabName>.layout`, one object
   settings file per default or variant child object, and one dedicated
   function subfolder per prefab function.
-- Exactly one `behavior.settings` and one dedicated function subfolder per
+- Exactly one `behavior.gdl` and one dedicated function subfolder per
   behavior function.
 
 ### 4.2 Optional files
@@ -356,7 +356,7 @@ scene they are associated with. Their manifest entries live in that scene's
 
 ### 5.1 Settings fragments and layout schema
 
-Every `.settings` file is a standalone, unindented TOML document whose owned
+Every `.gdl` file is a standalone, unindented TOML document whose owned
 component fields are written at the local document root. Long qualified TOML
 headers are forbidden. The loader derives the semantic namespace from the
 canonical physical path and mounts the parsed local document there before the
@@ -370,7 +370,7 @@ settingsFormatVersion = 3
 ```
 
 For example, the root above in
-`extensions/Combat/functions/CalculateDamage/function.settings` mounts at
+`extensions/Combat/functions/CalculateDamage/function.gdl` mounts at
 `extensions."Combat".functions."CalculateDamage"`. The path is the namespace;
 the file does not repeat it.
 
@@ -403,7 +403,7 @@ The three source extensions have non-overlapping responsibilities:
 
 | Extension   | Allowed content                                                                                                                                     | Forbidden content                                                                                                    |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `.settings` | TOML identity, metadata, signatures, per-object definitions and their behaviors/variables/effects, local ordering, and runtime/editor configuration | IfDo statements, instance placement, layer ordering, spatial layout payloads, and references to other settings files |
+| `.gdl` | TOML identity, metadata, signatures, per-object definitions and their behaviors/variables/effects, local ordering, and runtime/editor configuration | IfDo statements, instance placement, layer ordering, spatial layout payloads, and references to other settings files |
 | `.layout`   | Flat TOML instances, layers, positions, bounds/dimensions, background, and editor-canvas state                                                      | Object/attached-behavior definitions, events, signatures, runtime logic, and general non-layout settings             |
 | `.events`   | Typed IfDo event statements, DSL comments, metadata annotations, and exact catalog instructions                                                     | TOML front matter, settings tables, layout data, raw event/instruction JSON, or legacy project configuration         |
 
@@ -412,14 +412,14 @@ does not merge duplicated configuration from `.events` or `.layout` files.
 
 `.events` files contain IfDo DSL only. They never contain TOML front matter,
 JSON configuration, or duplicated owner/function settings. Their target and
-identity come from the owning `.settings` document and canonical path.
+identity come from the owning `.gdl` document and canonical path.
 
 ### 5.1.2 Path mounting and conflict-free settings merge
 
-All `.settings` files are combined in this deterministic dependency order:
+All `.gdl` files are combined in this deterministic dependency order:
 
 1. `project.gdevelop`.
-2. `resources.settings`.
+2. `resources.gdl`.
 3. Root object settings in global object order.
 4. Scene settings in project scene order, followed by that scene's flat
    object settings in object order.
@@ -433,17 +433,17 @@ All `.settings` files are combined in this deterministic dependency order:
 mounted into or merged with the combined project settings document.
 
 The loader discovers settings fragments only from the fixed paths
-`resources.settings`, `constants.toml`,
-`objects/*.settings`, `scenes/*/scene.settings`,
-`scenes/*/objects/*.settings`,
-`extensions/*/extension.settings`,
-`extensions/*/functions/*/function.settings`,
-`extensions/*/prefabs/*/prefab.settings`, and
-`extensions/*/prefabs/*/objects/*.settings`,
-`extensions/*/prefabs/*/variants/*/objects/*.settings`, and
-`extensions/*/prefabs/*/functions/*/function.settings`,
-`extensions/*/behaviors/*/behavior.settings`, and
-`extensions/*/behaviors/*/functions/*/function.settings`. No parent settings
+`resources.gdl`, `constants.toml`,
+`objects/*.gdl`, `scenes/*/scene.gdl`,
+`scenes/*/objects/*.gdl`,
+`extensions/*/extension.gdl`,
+`extensions/*/functions/*/function.gdl`,
+`extensions/*/prefabs/*/prefab.gdl`, and
+`extensions/*/prefabs/*/objects/*.gdl`,
+`extensions/*/prefabs/*/variants/*/objects/*.gdl`, and
+`extensions/*/prefabs/*/functions/*/function.gdl`,
+`extensions/*/behaviors/*/behavior.gdl`, and
+`extensions/*/behaviors/*/functions/*/function.gdl`. No parent settings
 file lists or references these children.
 
 For every discovered file the loader:
@@ -473,9 +473,9 @@ to the project directory.
 
 ### 5.1.3 Separate-write rule
 
-Every `.settings` file remains an independent canonical TOML file when stored:
+Every `.gdl` file remains an independent canonical TOML file when stored:
 
-- Canonical `.settings` and `.layout` writers use no indentation: every
+- Canonical `.gdl` and `.layout` writers use no indentation: every
   non-empty assignment or table header begins at column zero.
 - A settings file must not contain the TOML text or local payload owned by
   another settings file.
@@ -486,10 +486,10 @@ Every `.settings` file remains an independent canonical TOML file when stored:
 - Loading and compilation mount and merge the documents in memory; saving performs the
   inverse ownership projection and writes each changed subtree only to its
   owning file.
-- Editing `scene.settings`, `function.settings`, or another child fragment does
-  not rewrite `project.gdevelop` or `extension.settings`. Component identity,
+- Editing `scene.gdl`, `function.gdl`, or another child fragment does
+  not rewrite `project.gdevelop` or `extension.gdl`. Component identity,
   source references, and order are written in the component's own fragment.
-- The editor must not materialize a combined `.settings` file for preview,
+- The editor must not materialize a combined `.gdl` file for preview,
   export, autosave, or caching. A recovery snapshot may store fragments, but it
   must preserve their ownership boundaries.
 
@@ -629,7 +629,7 @@ objectGroups = { }
 ```
 
 This representation applies to project, scene, prefab, prefab-variant, and
-function settings. A prefab variant nested in `prefab.settings` uses its
+function settings. A prefab variant nested in `prefab.gdl` uses its
 corresponding nested table:
 
 ```toml
@@ -800,7 +800,7 @@ display names change.
 
 ### 5.6 Managed project-root references
 
-Managed `.layout` and `.events` references written in a `.settings` file use a
+Managed `.layout` and `.events` references written in a `.gdl` file use a
 canonical `game://` URI. Relative filesystem paths are forbidden for those
 domains. Settings fragments are found from fixed folder conventions and must
 never be referenced. For example:
@@ -839,7 +839,7 @@ for identity and diagnostics, but it never serializes one settings URI inside
 another settings fragment.
 
 Gameplay-test JavaScript references are the deliberate exception: the root
-`tests.settings` file stores canonical scheme-free `file` values such as
+`tests.gdl` file stores canonical scheme-free `file` values such as
 `file = "tests/Player%20can%20jump.js"`. They must resolve to direct `.js` children of
 root `tests/`; `game://`, subfolders, absolute paths, and traversal are
 forbidden. Last-run summaries are not authored references or settings and live
@@ -856,7 +856,7 @@ This file-path normalization never changes an existing resource `name`.
 
 ---
 
-## 6. `project.gdevelop`, `resources.settings`, and `constants.toml`
+## 6. `project.gdevelop`, `resources.gdl`, and `constants.toml`
 
 ### 6.1 Ownership
 
@@ -874,7 +874,7 @@ editor-only sources:
 It therefore owns project properties, versions, platforms, global object
 groups, global variables, and first/preview scene selection. Individual global
 object definitions are discovered from the root `objects/` directory.
-The sibling `resources.settings` owns the complete
+The sibling `resources.gdl` owns the complete
 legacy `resources` container, including resource entries, origins, metadata,
 and resource folders. The sibling `constants.toml` owns the complete editor-only,
 TOML-compatible Constants object.
@@ -931,7 +931,7 @@ Constants is likewise never written there; it belongs to
 Every global object definition has one physical source file:
 
 ```text
-objects/<Object>.settings
+objects/<Object>.gdl
 ```
 
 ```toml
@@ -954,7 +954,7 @@ folder path. Composition discovers these files recursively and reconstructs
 the in-memory global object array plus the transient legacy folder tree needed
 by the current editor. Empty logical folders are not source data.
 
-### 6.4 `resources.settings` example
+### 6.4 `resources.gdl` example
 
 ```toml
 kind = "resources"
@@ -982,7 +982,7 @@ byte-for-byte, including any `/` or `\` characters. Deserialization is not new
 resource registration, and the writer must not infer or enforce the new naming
 convention on loaded names.
 
-`resources.settings` is discovered through its fixed root path. Neither file
+`resources.gdl` is discovered through its fixed root path. Neither file
 references the other. The `kind` and `settingsFormatVersion` fields are removed
 when composing the legacy `resources` object.
 
@@ -1011,10 +1011,10 @@ other owned source. The normal project-save transaction also writes
 
 ### 6.6 Root rules
 
-- `project.gdevelop` contains no reference to any `.settings` file, including
+- `project.gdevelop` contains no reference to any `.gdl` file, including
   no self-reference. Its fixed root filename is the entry marker.
 - `project.gdevelop` must not contain resources in canonical output.
-  `resources.settings` is mounted as the sole writer of `project.resources`.
+  `resources.gdl` is mounted as the sole writer of `project.resources`.
 - `project.gdevelop` must not contain constants in canonical output.
   `constants.toml` is loaded separately into the editor's Constants model and
   is not part of the combined settings merge.
@@ -1024,14 +1024,14 @@ other owned source. The normal project-save transaction also writes
   intentionally rejected rather than rewritten during multi-file loading;
   legacy JSON import always emits the current grammar.
 - Scene and extension order are contiguous zero-based `order` values owned by
-  each `scene.settings` and `extension.settings` fragment respectively.
+  each `scene.gdl` and `extension.gdl` fragment respectively.
 - Names are unique within their current legacy container.
-- Every discovered `scene.settings` references one layout and one events file
+- Every discovered `scene.gdl` references one layout and one events file
   in its own scene subfolder.
 - Every managed `.layout` or `.events` reference is a canonical project-root
-  `game://` URI; relative paths and `.settings` references are invalid.
+  `game://` URI; relative paths and `.gdl` references are invalid.
 - A referenced path occurs only once in the complete project graph.
-- Each `scene.settings` may declare `externalEventFiles` and
+- Each `scene.gdl` may declare `externalEventFiles` and
   `externalLayoutFiles`. The owning scene supplies the association, while each
   entry supplies its external name, source URI, and project-wide
   legacy-container order.
@@ -1061,8 +1061,8 @@ from the parsed Constants payload. The project content has this shape:
 ```
 
 The global `objects` array is composed from root object settings in their
-locally owned order. Scenes come from `scene.settings`, extensions come from
-`extension.settings`, and both external containers are collected from all
+locally owned order. Scenes come from `scene.gdl`, extensions come from
+`extension.gdl`, and both external containers are collected from all
 scene settings and sorted by their project-wide `order` values.
 
 The storage loader initializes `gd::Project::constantsJson` from the separate
@@ -1079,19 +1079,19 @@ Every scene has its own subfolder:
 
 ```text
 scenes/<Scene>/
-  scene.settings
+  scene.gdl
   <Scene>.layout
   <Scene>.events
   objects/
-    <Object>.settings
-    <Object>.settings
+    <Object>.gdl
+    <Object>.gdl
 ```
 
 This is a required boundary, not merely a filename convention.
 
-### 7.1 `scene.settings`
+### 7.1 `scene.gdl`
 
-`scene.settings` owns scene identity and scene-wide non-layout configuration
+`scene.gdl` owns scene identity and scene-wide non-layout configuration
 extracted from the current `gd::Layout` serializer object:
 
 ```toml
@@ -1133,7 +1133,7 @@ These fields must not be duplicated in the `.layout` file.
 Every scene object definition has one physical source file:
 
 ```text
-scenes/<Scene>/objects/<Object>.settings
+scenes/<Scene>/objects/<Object>.gdl
 ```
 
 ```toml
@@ -1162,7 +1162,7 @@ folders are not source data.
 The `.layout` file contains only scene placement and layout data. It owns where
 instances are placed, how layers are arranged, the scene background, and
 editor-canvas state. An instance refers to an object definition owned by
-a scene object `.settings` file; the definition itself never appears in this
+a scene object `.gdl` file; the definition itself never appears in this
 file.
 
 ```toml
@@ -1207,7 +1207,7 @@ The `.layout` file must not contain:
 - Scene variables.
 - Scene loading/unloading, input, title, sound-startup, or sort settings.
 - Scene behavior shared data.
-- Any field owned by `scene.settings` or a scene object settings file.
+- Any field owned by `scene.gdl` or a scene object settings file.
 
 If an owned field appears in both files, loading fails instead of choosing one
 copy.
@@ -1215,7 +1215,7 @@ copy.
 ### 7.3 `<Scene>.events`
 
 The events file contains only the scene's IfDo DSL body. Its owning
-`scene.settings` supplies its identity and source reference:
+`scene.gdl` supplies its identity and source reference:
 
 ```events
 @comment "Initialize the scene." background=[255,230,109] text=[0,0,0]
@@ -1233,7 +1233,7 @@ The composer merges the three sources into the current single `gd::Layout`
 legacy object:
 
 ```text
-scene.settings non-visual fields
+scene.gdl non-visual fields
   + <Scene>.layout visual/editor fields
   + <Scene>.events compiled event array
       -> one legacy layouts[] item
@@ -1244,7 +1244,7 @@ write the three source files independently.
 
 ### 7.5 Cross-file validation
 
-- The `scene.settings` namespace name and `.events`/`.layout` basenames must
+- The `scene.gdl` namespace name and `.events`/`.layout` basenames must
   match exactly.
 - The settings/layout/events trio is indivisible. A missing member is a load
   error.
@@ -1257,11 +1257,11 @@ write the three source files independently.
 
 ## 8. Extension files
 
-### 8.1 `extension.settings`
+### 8.1 `extension.gdl`
 
 The settings file owns extension metadata and its project-wide extension
 `order`. Child settings are discovered from the extension's fixed subfolders;
-`extension.settings` neither lists nor references them. It mirrors
+`extension.gdl` neither lists nor references them. It mirrors
 `EventsFunctionsExtension::SerializeTo` except the implementations split into
 files.
 
@@ -1308,7 +1308,7 @@ Every extension-level function has its own subfolder:
 
 ```text
 functions/<FunctionName>/
-  function.settings
+  function.gdl
   <FunctionName>.events
 ```
 
@@ -1316,11 +1316,11 @@ For example:
 
 ```text
 functions/CalculateDamage/
-  function.settings
+  function.gdl
   CalculateDamage.events
 ```
 
-`function.settings` owns the complete current `gd::EventsFunction` metadata
+`function.gdl` owns the complete current `gd::EventsFunction` metadata
 except its `events` body:
 
 ```toml
@@ -1350,19 +1350,19 @@ objectGroups = { }
 
 Rules:
 
-- The loader discovers every `functions/*/function.settings` file. Each
+- The loader discovers every `functions/*/function.gdl` file. Each
   function owns its contiguous zero-based `order`; no settings file stores a
   second logical function tree.
 - The `events` value is a project-root
   `game://extensions/<Extension>/functions/<Function>/<Function>.events` URI,
-  never a path relative to `function.settings`.
+  never a path relative to `function.gdl`.
 - The function table owns function/expression type,
   presentation text, flags, ordered parameters, defaults, and object groups.
 - The subfolder name, function namespace name, `function.name`, and `.events`
   basename must match exactly.
-- Each function subfolder contains one managed `function.settings` and one
+- Each function subfolder contains one managed `function.gdl` and one
   managed `.events` file. Unlisted files are not silently imported.
-- The extension name must match the owning `extension.settings` file.
+- The extension name must match the owning `extension.gdl` file.
 
 The settings file does not contain event statements. The matching `.events`
 file contains only the IfDo DSL body and does not repeat function identity,
@@ -1370,7 +1370,7 @@ signature, parameters, or other TOML configuration.
 
 ### 8.3 Extension-level functions
 
-Every discovered per-function `function.settings` points to its sibling
+Every discovered per-function `function.gdl` points to its sibling
 `<FunctionName>.events`. The settings own `gd::EventsFunction` metadata and
 the pure DSL body owns only the legacy `events` array.
 
@@ -1396,7 +1396,7 @@ This ordering is necessary because prefabs may contain custom behaviors or other
 
 In current code, a prefab corresponds to an `EventsBasedObject` (also called an events-based custom object). The source format uses the user-facing term `prefab` while mapping to `eventsBasedObjects` in legacy JSON.
 
-### 9.1 `prefab.settings`
+### 9.1 `prefab.gdl`
 
 ```toml
 kind = "prefab"
@@ -1451,13 +1451,13 @@ The default layout maps to the default `EventsBasedObjectVariant` fields:
 - `editionSettings`
 
 The layout contains only spatial/default-variant layout settings.
-`prefab.settings` owns groups and other prefab-wide configuration; it does not
+`prefab.gdl` owns groups and other prefab-wide configuration; it does not
 duplicate layout fields, object definitions, or a logical folder tree.
 
 Every default-prefab child object has one physical source file:
 
 ```text
-extensions/<Extension>/prefabs/<Prefab>/objects/<Object>.settings
+extensions/<Extension>/prefabs/<Prefab>/objects/<Object>.gdl
 ```
 
 The file owns the complete child object definition and uses the namespace
@@ -1480,11 +1480,11 @@ Current prefabs may contain `variants`. Layout TOML stores each non-default
 variant's spatial data in `variants/<Variant>.layout` using prefab-variant
 context. Variant identity and asset-store identifiers
 as well as its groups and other variant metadata are configuration in the
-`[[variants]]` entry of `prefab.settings`, not in the `.layout` file. Variant
+`[[variants]]` entry of `prefab.gdl`, not in the `.layout` file. Variant
 child object definitions use:
 
 ```text
-extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/objects/<Object>.settings
+extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/objects/<Object>.gdl
 ```
 
 The path mounts each local document at
@@ -1496,12 +1496,12 @@ Every prefab function has a dedicated physical directory:
 
 ```text
 extensions/<Extension>/prefabs/<Prefab>/functions/<Function>/
-  function.settings
+  function.gdl
   <Function>.events
 ```
 
 There are no optional grouping directories after `functions/`. The final
-directory name matches the function name. `function.settings` stores grouping
+directory name matches the function name. `function.gdl` stores grouping
 as `folder = ["Parent", "Child"]`, or `folder = []` at the root. Composition
 derives the transient legacy folder tree exclusively from these values. For
 example:
@@ -1523,7 +1523,7 @@ parameters = []
 objectGroups = { }
 ```
 
-`function.settings` owns the complete function identity, signature, metadata,
+`function.gdl` owns the complete function identity, signature, metadata,
 and owner-local function order. Its sibling `.events` file owns only pure IfDo DSL:
 
 ```events
@@ -1535,7 +1535,7 @@ do Object.health -= amount
 
 ## 10. Behavior files
 
-### 10.1 `behavior.settings`
+### 10.1 `behavior.gdl`
 
 ```toml
 kind = "behavior"
@@ -1565,13 +1565,13 @@ Every behavior method uses:
 
 ```text
 extensions/<Extension>/behaviors/<Behavior>/functions/<Function>/
-  function.settings
+  function.gdl
   <Function>.events
 ```
 
 Its physical path supplies the mounted namespace
 `extensions."<Extension>".behaviors."<Behavior>".functions."<Function>"`.
-Its `folder` array reconstructs editor grouping; `function.settings` owns
+Its `folder` array reconstructs editor grouping; `function.gdl` owns
 identity/signature/order, and the sibling `.events` owns only the body. The
 legacy composer places the compiled result under the behavior's
 `eventsFunctions` array. Empty logical function folders are not source data.
@@ -1586,9 +1586,9 @@ owner:
 
 | Function owner | Complete metadata location                                    |
 | -------------- | ------------------------------------------------------------- |
-| Extension      | `functions/<Function>/function.settings`                      |
-| Prefab         | `prefabs/<Prefab>/functions/<Function>/function.settings`     |
-| Behavior       | `behaviors/<Behavior>/functions/<Function>/function.settings` |
+| Extension      | `functions/<Function>/function.gdl`                      |
+| Prefab         | `prefabs/<Prefab>/functions/<Function>/function.gdl`     |
+| Behavior       | `behaviors/<Behavior>/functions/<Function>/function.gdl` |
 
 Example extension function body:
 
@@ -1615,13 +1615,13 @@ External sources belong to their associated scene:
 
 ```text
 scenes/<Scene>/
-  scene.settings
+  scene.gdl
   externals/
     <ExternalName>.events
     <ExternalName>.layout
 ```
 
-No per-external subfolder is used. The owning `scene.settings` stores the
+No per-external subfolder is used. The owning `scene.gdl` stores the
 identity, source URI, and project-wide order for every external event and
 layout. The scene association is derived from this ownership; source manifests
 must not repeat it. The `.events` and `.layout` files own only their DSL body or
@@ -1630,7 +1630,7 @@ UI layout payload.
 ### 12.1 Scene-owned external entries
 
 External entries are optional child records in the local-root
-`scene.settings` document:
+`scene.gdl` document:
 
 ```toml
 kind = "scene"
@@ -1661,14 +1661,14 @@ every referenced URI resolves directly inside the declaring scene's
 `associatedLayout`, `linkedScene`, and `unresolvedScene` are forbidden in these
 source records. Composition derives legacy `associatedLayout` from the owning
 scene name. Empty, stale, or missing associations are rejected before a source
-tree is staged. The retired root `externals/external.settings` file is invalid
+tree is staged. The retired root `externals/external.gdl` file is invalid
 in format version 3 and is never parsed or mounted.
 
 ### 12.2 External events
 
 An external event sheet is one pure DSL
 `scenes/<Scene>/externals/<ExternalName>.events` file. Its `name` and global
-order come from the matching `scene.settings` `externalEventFiles` entry, and
+order come from the matching `scene.gdl` `externalEventFiles` entry, and
 its legacy `associatedLayout` is the owning scene:
 
 ```events
@@ -1688,7 +1688,7 @@ An external layout is one layout-only
 context.
 It owns only `instances` and `editionSettings`; its `[[layers]]` records reference
 the linked scene's existing layers rather than defining layers.
-Its `name` and global order come from the corresponding `scene.settings`
+Its `name` and global order come from the corresponding `scene.gdl`
 `externalLayoutFiles` entry. The composer derives `associatedLayout` from the
 owning scene to match `ExternalLayout::SerializeTo`.
 
@@ -1702,7 +1702,7 @@ Composition produces an in-memory object equivalent to current project JSON. It 
 
 ```text
 project.gdevelop
-  + resources.settings
+  + resources.gdl
   + constants.toml (editor-only placeholder source)
   + scene settings
   + visual scene layouts
@@ -1721,18 +1721,18 @@ project.gdevelop
 | New source                                                                 | Legacy destination                                                                                                          |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `project.gdevelop` ordinary payload                                        | Project root excluding resources, constants, global object definitions, and four split arrays                               |
-| Flat root `objects/*.settings`                                             | Project root `objects[]`; each `folder` array produces only the transient editor folder tree                                |
-| `resources.settings` local root                                            | Project root `resources` object after removing format-only markers                                                          |
+| Flat root `objects/*.gdl`                                             | Project root `objects[]`; each `folder` array produces only the transient editor folder tree                                |
+| `resources.gdl` local root                                            | Project root `resources` object after removing format-only markers                                                          |
 | `constants.toml` direct root                                               | Editor-only Constants object without adding or removing user keys                                                           |
-| Each scene `scene.settings` + flat object settings + `.layout` + `.events` | One `layouts[]` item, merging scene settings, object definitions/grouping, visual/editor layout data, and compiled `events` |
+| Each scene `scene.gdl` + flat object settings + `.layout` + `.events` | One `layouts[]` item, merging scene settings, object definitions/grouping, visual/editor layout data, and compiled `events` |
 | Scene `externalEventFiles` entry + owned external `.events`                | One `externalEvents[]` item; owning scene becomes `associatedLayout`                                                        |
 | Scene `externalLayoutFiles` entry + owned external `.layout`               | One `externalLayouts[]` item; owning scene becomes `associatedLayout`                                                       |
-| `extension.settings` + children                                            | One `eventsFunctionsExtensions[]` item                                                                                      |
+| `extension.gdl` + children                                            | One `eventsFunctionsExtensions[]` item                                                                                      |
 | Physical extension component directories + per-component `order`           | Extension functions, prefabs, and behaviors in deterministic order                                                          |
-| `extensions/<E>/functions/<F>/function.settings` + sibling `<F>.events`    | One extension `eventsFunctions[]` entry                                                                                     |
-| `prefabs/<P>/prefab.settings` + flat object/function settings + layouts    | Extension `eventsBasedObjects[]`                                                                                            |
-| `behaviors/<B>/behavior.settings` + flat function settings                 | Extension `eventsBasedBehaviors[]`                                                                                          |
-| Prefab/behavior `functions/<F>/function.settings` + sibling `<F>.events`   | One owner `EventsFunction`; `folder` reconstructs transient editor grouping                                                 |
+| `extensions/<E>/functions/<F>/function.gdl` + sibling `<F>.events`    | One extension `eventsFunctions[]` entry                                                                                     |
+| `prefabs/<P>/prefab.gdl` + flat object/function settings + layouts    | Extension `eventsBasedObjects[]`                                                                                            |
+| `behaviors/<B>/behavior.gdl` + flat function settings                 | Extension `eventsBasedBehaviors[]`                                                                                          |
+| Prefab/behavior `functions/<F>/function.gdl` + sibling `<F>.events`   | One owner `EventsFunction`; `folder` reconstructs transient editor grouping                                                 |
 
 ### 13.3 Two-pass catalog bootstrap
 
@@ -1744,7 +1744,7 @@ two logical passes:
    source in its owner context, and resolve every pure `.events` body through
    its owning settings document and path-derived namespace.
 2. Build a skeleton legacy tree with scenes, objects, variables, resources
-   from `resources.settings`, editor-only constants from `constants.toml`, extension
+   from `resources.gdl`, editor-only constants from `constants.toml`, extension
    declarations, behaviors, prefabs, and function signatures, but empty event
    bodies.
 3. Unserialize the skeleton into a temporary project/context and load required platform extensions.
@@ -1778,7 +1778,7 @@ and validated after bootstrap. The DSL has no `@exact` fallback.
 3. Discover settings fragments at the fixed folder paths, enforce project-root
    containment, bootstrap-parse each fragment, and sort every ordered
    component kind by its locally owned `order` value.
-4. Mount all local `.settings` documents by path in the deterministic order
+4. Mount all local `.gdl` documents by path in the deterministic order
    from section 5.1.2 and strictly merge the transient
    `CombinedProjectSettings` as the authoritative compilation input. Parse
    `constants.toml` separately into the editor-only Constants model.
@@ -1844,38 +1844,38 @@ The editor tracks last-read hashes in `.gdevelop/state.json`.
 ### 15.1 Dirty-component saves
 
 Only dirty owned files are serialized. Editing
-`scenes/Main/Main.events` should not rewrite `scene.settings`, `Main.layout`,
+`scenes/Main/Main.events` should not rewrite `scene.gdl`, `Main.layout`,
 unrelated extensions, or `project.gdevelop`.
 
 | Editor mutation                                                                                       | Source file marked dirty                                         |
 | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Project properties, global object groups, and global variables                                        | `project.gdevelop`                                               |
-| A global object definition or its editor-folder grouping                                              | `objects/<Object>.settings` (`folder`)                           |
-| Resource entries, origins, metadata, and resource folders                                             | `resources.settings`                                             |
+| A global object definition or its editor-folder grouping                                              | `objects/<Object>.gdl` (`folder`)                           |
+| Resource entries, origins, metadata, and resource folders                                             | `resources.gdl`                                             |
 | Editor-only Constants                                                                                 | `constants.toml`                                                 |
-| Gameplay-test identity, order, type, description, or file association                                | `tests.settings`                                                 |
+| Gameplay-test identity, order, type, description, or file association                                | `tests.gdl`                                                 |
 | Gameplay-test JavaScript body                                                                         | Its flat root `tests/<Encoded basename>.js` source                |
 | Gameplay-test last-run summary                                                                        | Ignored `.gdevelop/gameplay-test-results.json` editor state       |
-| Scene identity, object groups, variables, loading/input/sound/sort settings, and shared behavior data | The scene `scene.settings`                                       |
-| A scene object definition, attached behaviors, or editor-folder grouping                              | `scenes/<Scene>/objects/<Object>.settings` (`folder`)            |
+| Scene identity, object groups, variables, loading/input/sound/sort settings, and shared behavior data | The scene `scene.gdl`                                       |
+| A scene object definition, attached behaviors, or editor-folder grouping                              | `scenes/<Scene>/objects/<Object>.gdl` (`folder`)            |
 | Scene instances, layers, background, and scene-editor canvas/layout state                             | The scene `.layout`                                              |
 | Scene events                                                                                          | The scene `.events`                                              |
-| Extension metadata, dependencies, variables, and extension order                                      | `extension.settings`                                             |
-| Extension-level function metadata/signature                                                           | That function subfolder's `function.settings`                    |
+| Extension metadata, dependencies, variables, and extension order                                      | `extension.gdl`                                             |
+| Extension-level function metadata/signature                                                           | That function subfolder's `function.gdl`                    |
 | Extension function event body                                                                         | That function subfolder's `<Function>.events`                    |
-| Prefab declaration, flat property descriptors, groups, variables, and variants                        | `prefab.settings`                                                |
-| A default/variant prefab child object definition, attached behaviors, or editor-folder grouping       | The corresponding flat prefab object `.settings` file (`folder`) |
+| Prefab declaration, flat property descriptors, groups, variables, and variants                        | `prefab.gdl`                                                |
+| A default/variant prefab child object definition, attached behaviors, or editor-folder grouping       | The corresponding flat prefab object `.gdl` file (`folder`) |
 | Prefab default or variant instances, layers, spatial bounds, and editor layout state                  | The corresponding prefab `.layout`                               |
-| Prefab function metadata/signature or function-folder grouping                                        | Its flat `functions/<Function>/function.settings` (`folder`)     |
+| Prefab function metadata/signature or function-folder grouping                                        | Its flat `functions/<Function>/function.gdl` (`folder`)     |
 | Prefab function event body                                                                            | The sibling `<Function>.events`                                  |
-| Behavior declaration, flat property descriptors, and variables                                        | `behavior.settings`                                              |
-| Behavior function metadata/signature or function-folder grouping                                      | Its flat `functions/<Function>/function.settings` (`folder`)     |
+| Behavior declaration, flat property descriptors, and variables                                        | `behavior.gdl`                                              |
+| Behavior function metadata/signature or function-folder grouping                                      | Its flat `functions/<Function>/function.gdl` (`folder`)     |
 | Behavior function event body                                                                          | The sibling `<Function>.events`                                  |
-| External event/layout identity, owning scene, source URI, and global order                            | The owning `scene.settings` entry                                |
+| External event/layout identity, owning scene, source URI, and global order                            | The owning `scene.gdl` entry                                |
 | External event body                                                                                   | Its `.events`                                                    |
 | External layout instances/editor layout data                                                          | Its `.layout`                                                    |
 
-A function metadata/signature edit rewrites only its owning `.settings` file
+A function metadata/signature edit rewrites only its owning `.gdl` file
 unless a rename also changes the subfolder or `.events` filename. The existing
 pure event body is revalidated against the new signature but is never rewritten
 merely to duplicate configuration.
@@ -2013,10 +2013,10 @@ When a legacy project is opened and no associated `project.gdevelop` exists:
    unsupported-schema diagnostic before staging files if any construct is not.
 7. Canonically reserialize known data to obtain the normalized current schema.
 8. Split the normalized tree according to this specification, including a
-   `scene.settings`/visual `.layout`/`.events` trio for every scene. Require
+   `scene.gdl`/visual `.layout`/`.events` trio for every scene. Require
    every external's legacy `associatedLayout` to name an existing scene, place
    its source below that scene's `externals/` directory, and add the
-   corresponding entry to that `scene.settings`. Stop before staging if any
+   corresponding entry to that `scene.gdl`. Stop before staging if any
    association is empty or stale.
 9. Decompile known event arrays to IfDo with source maps.
 10. Stage all new files and run a full new-source -> legacy-tree -> `gd::Project` verification load.
@@ -2075,7 +2075,7 @@ an exact registry `extension_name`. The tool must:
    extension and every imported dependency.
 
 This is a conversion transaction, not a general MCP authoring surface. Once it
-succeeds, `.settings`, `.layout`, and `.events` are the editable source of truth;
+succeeds, `.gdl`, `.layout`, and `.events` are the editable source of truth;
 the AI edits those files directly and uses `reload_project` before preview. A
 failed import must not be replaced with a partial hand-authored conversion.
 
@@ -2137,7 +2137,7 @@ Content rename and path rename are distinct. Keeping an old path after a display
 
 Changing an external's associated scene moves its source between scene-owned
 `externals/` directories and moves its manifest record between the two
-`scene.settings` documents in one transaction. Renaming an external source
+`scene.gdl` documents in one transaction. Renaming an external source
 updates its scene manifest entry, filename, and `game://` URI transactionally.
 
 ### 18.2 Delete
@@ -2206,7 +2206,7 @@ Raw legacy blocks are data. They are never evaluated as code by the source loade
   and component ownership types.
 - Implement the `gd::Layout` field partition that writes scene object
   definitions and their behaviors plus non-layout configuration to
-  `scene.settings`, while `.layout` receives only instances, layers,
+  `scene.gdl`, while `.layout` receives only instances, layers,
   background, and editor/spatial layout data.
 - Add a legacy composer producing the current JS object/`SerializerElement` shape.
 
@@ -2274,13 +2274,13 @@ legacy JSON
   parsing rejects raw event or instruction JSON fallback constructs.
 - Scene settings/object/layout ownership: every object definition and its
   complete behavior/variable/effect data is extracted to one recursive
-  `objects/<Object>.settings` with a `folder` array; `.layout` contains only allowed
+  `objects/<Object>.gdl` with a `folder` array; `.layout` contains only allowed
   instances/layers/editor-spatial fields; forbidden cross-file fields are
   rejected; and the merged legacy layout is structurally equivalent.
 - Nested instruction `subInstructions`, OR/AND/NOT, inverted, awaited, and disabled instructions.
 - Local variable types, UUIDs, enums, arrays, structures, and editor folded state.
 - Async functions, lifecycle functions, `ExpressionAndCondition`, and `ActionWithOperator`.
-- Extension and owner-function `function.settings` metadata, recursive physical
+- Extension and owner-function `function.gdl` metadata, recursive physical
   folder mapping, matching sibling `.events` filename, missing/unlisted files,
   owner-identity validation, and the absence of every legacy
   `*FolderStructure` field.
@@ -2289,12 +2289,12 @@ legacy JSON
 - Scene-owned external events and layouts, including matching basenames,
   independent files, global container ordering across scene manifests, derived
   scene association, rejection of empty/stale associations and link metadata,
-  rejection of retired root `external.settings`, and owner-directory path
+  rejection of retired root `external.gdl`, and owner-directory path
   validation.
 - Legacy French/XML field fallbacks and version compatibility branches.
 - Existing folder-project split references.
 - Unicode, reserved filenames, case-fold collisions, and traversal attempts.
-- Parsing each `.settings` document, mounting it from its canonical path, and
+- Parsing each `.gdl` document, mounting it from its canonical path, and
   strictly merging the mounted trees produces the expected namespace tree
   without duplicate ownership.
 - No settings fragment embeds another fragment or uses an include directive;
@@ -2337,10 +2337,10 @@ Version 4 replaces the single scene/External Events body location with the
 same physical function shape used by prefab functions:
 
 ```text
-scenes/<Scene>/functions/<Lifecycle>/function.settings
+scenes/<Scene>/functions/<Lifecycle>/function.gdl
 scenes/<Scene>/functions/<Lifecycle>/<Lifecycle>.events
-scenes/<Scene>/externals/<External>/external-events.settings
-scenes/<Scene>/externals/<External>/functions/<Lifecycle>/function.settings
+scenes/<Scene>/externals/<External>/external-events.gdl
+scenes/<Scene>/externals/<External>/functions/<Lifecycle>/function.gdl
 scenes/<Scene>/externals/<External>/functions/<Lifecycle>/<Lifecycle>.events
 ```
 
@@ -2358,34 +2358,34 @@ writing.
 
 A conforming implementation must satisfy all of the following:
 
-1. Opening `project.gdevelop` discovers `resources.settings`,
+1. Opening `project.gdevelop` discovers `resources.gdl`,
    `constants.toml`, and the other fixed settings fragments, then reconstructs
    a complete current project without runtime changes.
 2. Opening legacy JSON converts once, commits atomically, preserves the original, and switches the editor to the new entry.
 3. Normal Save writes new-format source files plus ignored generated artifacts
    under `.gdevelop/`; it never recreates an editable root legacy JSON.
-4. `resources.settings` exclusively owns the project resource registry and is
+4. `resources.gdl` exclusively owns the project resource registry and is
    combined without a reference from `project.gdevelop`.
 5. `constants.toml` exclusively owns direct-root, editor-only Constants,
    has no format metadata or wrapper table, and is loaded separately without a
    reference from or merge into `project.gdevelop`. Generated compatibility
    JSON and runtime exports omit the Constants map.
-6. Every scene has its own subfolder with `scene.settings`, a placement-focused
+6. Every scene has its own subfolder with `scene.gdl`, a placement-focused
    layout TOML file, flat object settings, and fixed lifecycle function
    directories. Object definitions and their behaviors belong to individual
    object settings; instances and layers belong to the layout.
 7. Each scene may own an `externals/` directory containing External Events
    owner directories and external-layout sources. An External Events owner has
-   `external-events.settings` plus fixed lifecycle function directories;
+   `external-events.gdl` plus fixed lifecycle function directories;
    association is derived from its physical scene owner.
 8. Every extension-level function has a
-   `functions/<Function>/function.settings` and matching
+   `functions/<Function>/function.gdl` and matching
    `<Function>.events`. Every prefab and behavior function similarly has
-   `functions/<Function>/function.settings` with a `folder` array and a matching
+   `functions/<Function>/function.gdl` with a `folder` array and a matching
    sibling `<Function>.events`; the `folder` property replaces logical editor
    function trees.
 9. Every global, scene, default-prefab, and variant-prefab object definition
-   has one `<Object>.settings` file under its owner's physical `objects/`
+   has one `<Object>.gdl` file under its owner's physical `objects/`
    directory. Each file's `folder` property replaces logical object-folder
    trees.
 10. Preview/export composes current legacy data only at the compatibility boundary.
@@ -2395,7 +2395,7 @@ A conforming implementation must satisfy all of the following:
 12. Paths, ordering, formatting, and writes are deterministic.
 13. No managed save deletes unrecognized user files.
 14. A full new-source -> legacy -> current-project verification succeeds before migration is considered complete.
-15. All local-root `.settings` documents mount and merge conflict-free into one
+15. All local-root `.gdl` documents mount and merge conflict-free into one
     authoritative in-memory settings tree. Event/layout source references use
     project-root `game://` URIs; gameplay-test JavaScript references use the
     scheme-free root-relative `file` field defined by the gameplay-test
@@ -2409,10 +2409,10 @@ A conforming implementation must satisfy all of the following:
 18. Prefab and behavior property descriptors are flat ordered arrays. The
     format neither serializes nor reconstructs property folder structures.
 19. Scene and External Events functions use
-    `functions/<Lifecycle>/function.settings` with a matching sibling
+    `functions/<Lifecycle>/function.gdl` with a matching sibling
     `<Lifecycle>.events`; `sceneUpdate` is required and empty load, signal, and
     unload functions do not create managed files.
-20. Root `tests.settings` exclusively owns project and extension gameplay-test
+20. Root `tests.gdl` exclusively owns project and extension gameplay-test
     metadata, direct root `tests/*.js` files own their exact source text, and
     last-run summaries live only in ignored
     `.gdevelop/gameplay-test-results.json` state.

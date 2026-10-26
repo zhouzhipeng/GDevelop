@@ -3,7 +3,7 @@ import {
   registerSettingsLanguage,
   getSettingsVariableCompletions,
 } from './SettingsLanguage';
-test('registers a settings language, formatting and live syntax diagnostics once', () => {
+test('registers GDL, formatting and live syntax diagnostics once', () => {
   const languages = {
     register: jest.fn(),
     setMonarchTokensProvider: jest.fn(),
@@ -24,12 +24,17 @@ test('registers a settings language, formatting and live syntax diagnostics once
   registerSettingsLanguage(monaco);
   registerSettingsLanguage(monaco);
   expect(languages.register).toHaveBeenCalledTimes(1);
+  expect(languages.register).toHaveBeenCalledWith({
+    id: 'gdevelop-gdl',
+    extensions: ['.gdl', '.gdevelop'],
+    aliases: ['GDevelop Language', 'GDL'],
+  });
   const formatting =
     languages.registerDocumentFormattingEditProvider.mock.calls[0][1];
   const model = {
     getFullModelRange: () => ({}),
     getValue: () => 'scene {\n name="Main"\n}\n',
-    uri: { toString: () => 'game://scene.settings' },
+    uri: { toString: () => 'game://scene.gdl' },
   };
   expect(formatting.provideDocumentFormattingEdits(model)[0].text).toContain(
     '  name = "Main"'
@@ -37,7 +42,7 @@ test('registers a settings language, formatting and live syntax diagnostics once
   const attach = monaco.editor.onDidCreateModel.mock.calls[0][0];
   attach({
     ...model,
-    getModeId: () => 'gdevelop-settings',
+    getModeId: () => 'gdevelop-gdl',
     isDisposed: () => false,
     onDidChangeContent: jest.fn(() => ({ dispose: jest.fn() })),
     onWillDispose: jest.fn(),
@@ -155,7 +160,7 @@ test('routes embedded JavaScript completions through a JS worker and disposes it
   const onWillDispose = jest.fn();
   const model = {
     getValue: () => source,
-    uri: { toString: () => 'file:///Test.settings' },
+    uri: { toString: () => 'file:///Test.gdl' },
     onWillDispose,
     getOffsetAt: ({ lineNumber, column }) =>
       source

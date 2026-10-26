@@ -1,6 +1,6 @@
 ---
 name: gdevelop-project-files
-description: Create, inspect, modify, refactor, and verify GDevelop games through the version 11 multi-file project sources (`project.gdevelop`, `constants.toml`, `.settings`, `tests.settings`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
+description: Create, inspect, modify, refactor, and verify GDevelop games through the version 12 multi-file project sources (`project.gdevelop`, `constants.toml`, `.gdl`, `tests.gdl`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
 ---
 
 # GDevelop Project Files
@@ -58,16 +58,16 @@ engine issue remains unresolved.
 Read, in order:
 
 1. `project.gdevelop` for project metadata and non-constants project data.
-2. `resources.settings` for the complete project resource registry.
+2. `resources.gdl` for the complete project resource registry.
 3. `constants.toml` for the complete editor-only Constants object.
-4. `tests.settings`, then the selected flat `tests/*.js` source when gameplay
+4. `tests.gdl`, then the selected flat `tests/*.js` source when gameplay
    tests are in scope.
-5. `.gdevelop/settings-catalog.json`, then relevant child `.settings` files
+5. `.gdevelop/settings-catalog.json`, then relevant child `.gdl` files
    for semantic configuration, object definitions, and root layer and instance nodes, including instances, layers, spatial bounds, background, and
    editor-canvas state.
 6. `.gdevelop/project-module-map.json` to locate scene, external-fragment, and
    extension event sources and their static Link relationships; then read the
-   referenced `.settings` documents for current logic.
+   referenced `.gdl` documents for current logic.
 7. `.gdevelop/instructions-catalog.json` before adding or changing
    instructions.
 8. `.gdevelop/runtime-api.d.ts` and `.gdevelop/project-api.d.ts` before adding
@@ -125,7 +125,7 @@ Use the catalogs as authoring contracts:
 - If the relevant registered type, file kind, layout table, or effect is absent,
   stop instead of guessing. If a direct edit introduces a new object or
   attached behavior name, validate its registered type in the settings catalog,
-  define it first in the owning `.settings` file, and then reference that exact
+  define it first in the owning `.gdl` file, and then reference that exact
   new name in the same coherent owner-settings patch; the saved layout context will
   list it after GDevelop regenerates the catalogs.
 
@@ -161,8 +161,8 @@ generated compatibility/runtime output, not multi-file source.
 
 ## File contract
 
-All `.settings` and `project.gdevelop` use **Settings DSL**, not TOML. Read
-[Settings DSL](references/settings-dsl.md) before editing declarations.
+All `.gdl` and `project.gdevelop` use **GDevelop Language (GDL)**, not TOML. Read
+[GDevelop Language (GDL)](references/settings-dsl.md) before editing declarations.
 
 - Use `key = value` for properties and `node { ... }` for structure. Names,
   IDs and all properties belong inside the node. Two-space indentation is
@@ -170,7 +170,7 @@ All `.settings` and `project.gdevelop` use **Settings DSL**, not TOML. Read
 - Every document has exactly one typed root: project, resources, tests,
   scene, prefab, variant, external, external_events, object, function,
   extension or behavior. The physical path supplies the owning scope.
-- Only project.gdevelop has `formatVersion = 11`. Do not write kind,
+- Only project.gdevelop has `formatVersion = 12`. Do not write kind,
   settingsFormatVersion, TOML headers, per-document format versions, or
   settings/layout wrapper nodes. Extension metadata can still have a semantic
   version string when its schema defines one.
@@ -178,7 +178,7 @@ All `.settings` and `project.gdevelop` use **Settings DSL**, not TOML. Read
   and layout. Put layer and instance directly below that root. Layer contains
   camera/effect; instance contains properties/variable/behavior overrides.
   Root instance order is global serialized order; preserve UUIDs.
-- Object definitions remain flat `objects/<Object>.settings` files. An
+- Object definitions remain flat `objects/<Object>.gdl` files. An
   object.behavior defines an attachment; instance.behavior only overrides an
   existing attachment. Dynamic fields must be registered in the catalog.
 - Declare repeated `variable {}` nodes directly on the owner, with `name` and
@@ -196,9 +196,9 @@ All `.settings` and `project.gdevelop` use **Settings DSL**, not TOML. Read
   use child nodes.
 - Sprite points use structured originPoint/centerPoint/point nodes; collision
   masks use polygon nodes containing point nodes. No inline object literals.
-- Functions and external fragments keep signature/identity and events in one .settings file.
+- Functions and external fragments keep signature/identity and events in one .gdl file.
   Use a top-level events container; never create .events files.
-- tests.settings has a tests root with repeated test nodes. Scripts remain
+- tests.gdl has a tests root with repeated test nodes. Scripts remain
   direct children of tests/; `file` is a canonical root-relative path, with
   no game:// prefix. Run results are ignored state below .gdevelop.
 - constants.toml remains direct-root TOML for editor Constants. It is the
@@ -214,26 +214,26 @@ production and documentation directories are described separately below.
 
 ```text
 project.gdevelop
-resources.settings
+resources.gdl
 constants.toml
-tests.settings
+tests.gdl
 tests/<Encoded name>.js
-objects/<Object>.settings
-scenes/<Scene>/scene.settings
-scenes/<Scene>/objects/<Object>.settings
-scenes/<Scene>/functions/sceneUpdate.settings
-scenes/<Scene>/functions/<OptionalLifecycle>.settings # only when non-empty
-scenes/<Scene>/external-events/<Fragment>.settings
-scenes/<Scene>/external-layout/<External>.settings
-extensions/<Extension>/extension.settings
-extensions/<Extension>/functions/<Function>.settings
-extensions/<Extension>/prefabs/<Prefab>/prefab.settings
-extensions/<Extension>/prefabs/<Prefab>/functions/<Function>.settings
-extensions/<Extension>/prefabs/<Prefab>/objects/<Object>.settings
-extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.settings
-extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/objects/<Object>.settings
-extensions/<Extension>/behaviors/<Behavior>/behavior.settings
-extensions/<Extension>/behaviors/<Behavior>/functions/<Function>.settings
+objects/<Object>.gdl
+scenes/<Scene>/scene.gdl
+scenes/<Scene>/objects/<Object>.gdl
+scenes/<Scene>/functions/sceneUpdate.gdl
+scenes/<Scene>/functions/<OptionalLifecycle>.gdl # only when non-empty
+scenes/<Scene>/external-events/<Fragment>.gdl
+scenes/<Scene>/external-layout/<External>.gdl
+extensions/<Extension>/extension.gdl
+extensions/<Extension>/functions/<Function>.gdl
+extensions/<Extension>/prefabs/<Prefab>/prefab.gdl
+extensions/<Extension>/prefabs/<Prefab>/functions/<Function>.gdl
+extensions/<Extension>/prefabs/<Prefab>/objects/<Object>.gdl
+extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.gdl
+extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/objects/<Object>.gdl
+extensions/<Extension>/behaviors/<Behavior>/behavior.gdl
+extensions/<Extension>/behaviors/<Behavior>/functions/<Function>.gdl
 .gdevelop/instructions-catalog.json
 .gdevelop/deprecated-instructions-catalog.json # legacy read/edit only; never for new events
 .gdevelop/settings-catalog.json
@@ -249,7 +249,7 @@ Do not create optional component-grouping folders. Canonical component directori
 fixed; object/function grouping belongs in each settings file's `folder`
 array. Settings files never reference other settings files.
 
-In format version 11, each `.settings` document under
+In format version 12, each `.gdl` document under
 `external-events/` declares a fragment. Its decoded filename and settings
 `name` supply its project-unique NFC identity; the physical scene supplies its
 authoring context. Names must also be unique ignoring case. There is no
@@ -258,11 +258,11 @@ positions. `link "Name"` expands the same body in every caller lifecycle and
 inherits parent conditions, picked objects and local variables. Empty,
 comment-only and unreferenced event bodies are valid, but the settings file is
 still required. Declare an external layout
-independently with `scenes/<Scene>/external-layout/<External>.settings`; it owns
+independently with `scenes/<Scene>/external-layout/<External>.gdl`; it owns
 its identity, project-wide contiguous `order`, and root layout nodes subtree.
 Do not write `externalEventFiles`, `externalLayoutFiles`, layout URIs,
 `associatedLayout`, `linkedScene`, or `unresolvedScene`, and never create a
-root `externals/external.settings`.
+root `externals/external.gdl`.
 
 ### Auxiliary directories and outputs
 
@@ -317,7 +317,7 @@ Load only the references required by the task:
   creating or changing layout nodes. Preserve existing UUIDs and use its
   exact scene, prefab/variant, or external-layout context rules.
 - Read [references/events-dsl.md](references/events-dsl.md) in full before
-  creating or changing embedded events in a `.settings` file. Use only its canonical Settings event
+  creating or changing embedded events in a `.gdl` file. Use only its canonical Settings event
   structures and the exact types and `dslName` parameters found in the
   generated project instruction catalog.
 - Also read [references/javascript-api.md](references/javascript-api.md) in
@@ -326,8 +326,8 @@ Load only the references required by the task:
   compatibility mode only for existing legacy JavaScript.
 - Read
   [references/gameplay-test-harness.md](references/gameplay-test-harness.md)
-  in full before creating or materially modifying `tests.settings` or any
-  `tests/*.js` script. Use the exact flat version 11 file identity, read the
+  in full before creating or materially modifying `tests.gdl` or any
+  `tests/*.js` script. Use the exact flat version 12 file identity, read the
   generated `.gdevelop/harness-api.d.ts` contract, and complete its
   validation, reload, run, and result-polling workflow.
 - Read [references/tsl-materials.md](references/tsl-materials.md) in full
@@ -376,8 +376,8 @@ implementation is materially simpler. Record that decision in the task result.
 ## Event authoring
 
 Read [the unified event syntax](references/events-dsl.md) before editing function
-or fragment bodies. Only Settings DSL format 11 is supported. Function signatures
-and events share one .settings file; .events files are rejected. Use explicit
+or fragment bodies. Only GDevelop Language (GDL) format 11 is supported. Function signatures
+and events share one .gdl file; .events files are rejected. Use explicit
 conditions/actions blocks containing bare catalog instructions, typed event
 nodes, independent group/comment/link nodes, and raw multiline code blocks.
 
@@ -392,7 +392,7 @@ order semantics. New JavaScript uses strict=true and the generated public API.
    object, behavior, effect, component, or embedded layout definitions. Search
    its `layoutTables` and `layoutContexts` for the exact layout schema and
    matching project context before adding or changing layout content. For
-   gameplay tests, inspect `tests.settings` and the exact selected flat source
+   gameplay tests, inspect `tests.gdl` and the exact selected flat source
    before editing either one.
 2. Search `.gdevelop/instructions-catalog.json` for required instructions and
    expressions. The generated catalog excludes editor-hidden and deprecated
@@ -418,9 +418,9 @@ order semantics. New JavaScript uses strict=true and the generated public API.
    generated metadata read before the structural change. Repeat this step
    after each later structural phase.
 5. Re-read every changed manifest reference. Verify each `game://` URI exists
-   and stays inside the project; separately verify each `tests.settings` file
+   and stays inside the project; separately verify each `tests.gdl` file
    identity is a scheme-free canonical flat `tests/<Encoded name>.js` path.
-6. Check settings and Settings DSL layout syntax/semantics, duplicate
+6. Check settings and GDevelop Language (GDL) layout syntax/semantics, duplicate
    namespaces, event depth, instruction names, named parameters, gameplay-test
    manifest/source ownership, and asset paths.
 7. Call the no-input GDevelop MCP `validate_project_files` tool after the most
@@ -475,7 +475,7 @@ order semantics. New JavaScript uses strict=true and the generated public API.
     `validate_project_files` call and Git commit for those edits.
 11. When an authored gameplay test covers the behavior, run it only after the
     final successful validation, commit, and reload. Call `run_gameplay_tests`
-    with the exact scheme-free `tests.settings` `file`, or omit `file` to run
+    with the exact scheme-free `tests.gdl` `file`, or omit `file` to run
     all tests. Record the returned `operation_id` and poll
     `get_gameplay_test_results` until `status` is `completed` or `failed`.
     The floating gameplay-test game window closes automatically when the MCP
@@ -486,11 +486,11 @@ order semantics. New JavaScript uses strict=true and the generated public API.
     run.
 
 For assets, write the asset file inside the project, add/update its resource
-entry in `resources.settings`, then reference its project-relative path from UI
+entry in `resources.gdl`, then reference its project-relative path from UI
 configuration. Do not create generated images when a code-native or existing
 asset is appropriate.
 
-For an existing `.glb`, resolve its resource path through `resources.settings`,
+For an existing `.glb`, resolve its resource path through `resources.gdl`,
 then call the read-only MCP tool before authoring an animation, bone-name, or
 TSL mesh/material reference:
 
@@ -593,7 +593,7 @@ behaviors, prefabs, or events. Never use generic editor-call, command, patch,
 sync, or save tools for authoring.
 
 `run_gameplay_tests` starts an asynchronous run of existing authored tests. To
-select one test, pass its exact scheme-free `tests.settings` `file`, such as
+select one test, pass its exact scheme-free `tests.gdl` `file`, such as
 `tests/Player%20can%20jump.js`; never pass a name, `game://` URI, absolute
 path, nested path, or guessed alias. Omit `file` to run all project tests first
 and then extension tests in canonical project order. `timeout_ms`, when used,
@@ -677,19 +677,19 @@ second reload while the recorded operation is still running.
 
 Before finishing:
 
-- Confirm every changed `.settings` parses as latest Settings DSL and validates against its registered component and layout schemas.
+- Confirm every changed `.gdl` parses as latest GDevelop Language (GDL) and validates against its registered component and layout schemas.
 - Confirm layer and instance nodes contain only placement/layout concepts and
   contain no `objects`, `objectGroups`, or behavior definitions.
-- Confirm no `.settings` file contains a legacy `*FolderStructure` property;
+- Confirm no `.gdl` file contains a legacy `*FolderStructure` property;
   object/function grouping uses only a valid local `folder` array.
 - Confirm every global, scene, and prefab object definition and its complete
-  behaviors are at the local root of its individual `<Object>.settings` file.
+  behaviors are at the local root of its individual `<Object>.gdl` file.
 - Confirm attached behaviors use catalog-listed properties for new edits and
   use the complete registered serializer schema; unknown fields are errors.
 - Confirm prefab and behavior property descriptor arrays are flat and contain
   no grouping/folder metadata.
 - Confirm every prefab/behavior function has one flat
-  `<Function>.settings` document containing signature and events, and
+  `<Function>.gdl` document containing signature and events, and
   owner settings contain no embedded function entries.
 - Confirm settings references use `game://` and resolve to existing files.
 - Confirm settings file kinds and every object/behavior/effect type against
@@ -713,7 +713,7 @@ Before finishing:
 - For every changed JavaScript event, confirm `strict=true`, validate all
   context globals/project literals/public members against both generated
   `.d.ts` files, and confirm no forbidden private or ambient API is used.
-- For every changed gameplay test, confirm its `tests.settings` record and
+- For every changed gameplay test, confirm its `tests.gdl` record and
   unique source agree, its scheme-free `file` is flat and canonical, and its
   script is an async body rather than a wrapper. Confirm every advancing
   harness call is awaited, waits are bounded, inputs are released, snapshots

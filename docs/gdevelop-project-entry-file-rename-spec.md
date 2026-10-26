@@ -1,6 +1,6 @@
 # GDevelop Project Entry File Rename
 
-## `project.settings` to `project.gdevelop`
+## `project.gdl` to `project.gdevelop`
 
 **Status:** Implemented breaking change
 
@@ -14,14 +14,14 @@
 
 ## 1. Problem
 
-The multi-file project format currently uses `project.settings` as its root
+The multi-file project format currently uses `project.gdl` as its root
 entry file. This is consistent with component fragments such as
-`scene.settings` and `extension.settings`, but it is weak as the user-facing
+`scene.gdl` and `extension.gdl`, but it is weak as the user-facing
 project entry:
 
-- `.settings` is generic and does not identify GDevelop.
+- `.gdl` is generic and does not identify GDevelop.
 - Operating systems cannot give the root entry a useful GDevelop-specific file
-  association without also associating every unrelated `.settings` file.
+  association without also associating every unrelated `.gdl` file.
 - The root entry is visually difficult to distinguish from the component
   settings fragments that must not be opened as projects.
 - Double-clicking the entry is not a packaged desktop application contract.
@@ -33,12 +33,12 @@ breaking format change rather than a cosmetic UI rename.
 
 ## 2. Goals
 
-1. Rename the only valid multi-file project entry from `project.settings` to
+1. Rename the only valid multi-file project entry from `project.gdl` to
    `project.gdevelop`.
-2. Rename its only valid canonical URI from `game://project.settings` to
+2. Rename its only valid canonical URI from `game://project.gdl` to
    `game://project.gdevelop`.
 3. Reserve `.gdevelop` for a user-facing GDevelop project entry while keeping
-   `.settings` for component settings fragments.
+   `.gdl` for component settings fragments.
 4. Make installed desktop builds register `.gdevelop` files as editable
    GDevelop projects.
 5. Make double-clicking `project.gdevelop` open that project in GDevelop on
@@ -49,30 +49,30 @@ breaking format change rather than a cosmetic UI rename.
 
 ## 3. Non-goals
 
-- Supporting `project.settings` as an alias or legacy entry.
-- Automatically renaming an existing `project.settings`.
+- Supporting `project.gdl` as an alias or legacy entry.
+- Automatically renaming an existing `project.gdl`.
 - Discovering or importing an old multi-file tree.
 - Writing both entry names.
 - Adding a format-version migration for the old entry name.
-- Renaming component fragments such as `scene.settings`,
-  `resources.settings`, `extension.settings`, or `function.settings`.
+- Renaming component fragments such as `scene.gdl`,
+  `resources.gdl`, `extension.gdl`, or `function.gdl`.
 - Renaming the generated `.gdevelop/` directory.
 - Changing the TOML schema or the ownership split beyond the entry URI.
-- Associating generic `.settings`, `.json`, or `.gdg.json` files with the
+- Associating generic `.gdl`, `.json`, or `.gdg.json` files with the
   desktop application as part of this change.
 
 ## 4. Current behavior
 
-- `project.settings` is hard-coded as the multi-file entry name and
-  `game://project.settings` as its source URI.
+- `project.gdl` is hard-coded as the multi-file entry name and
+  `game://project.gdl` as its source URI.
 - New local projects and Save As choose a project folder and write
-  `project.settings`.
+  `project.gdl`.
 - Opening legacy JSON migrates it to a sibling multi-file tree rooted at
-  `project.settings`.
+  `project.gdl`.
 - File watching, modification-time calculation, autosave, transaction ordering,
   generated catalogs, recent-project metadata, MCP validation, and preview
   composition all identify the project through that path.
-- The local picker exposes `.settings` and `.json`.
+- The local picker exposes `.gdl` and `.json`.
 - The Electron packaging configuration has no `.gdevelop` file association.
 - Windows and Linux desktop launches can already receive a positional path.
   The second-instance handler forwards positional arguments into a new editor
@@ -89,7 +89,7 @@ Every multi-file project root contains exactly:
 ```text
 MyGame/
   project.gdevelop
-  resources.settings
+  resources.gdl
   constants.toml
   scenes/
   extensions/
@@ -125,7 +125,7 @@ name.
 
 ### 5.3 No compatibility
 
-`project.settings` is not recognized as a multi-file entry after this change:
+`project.gdl` is not recognized as a multi-file entry after this change:
 
 - it is not shown by the project picker;
 - it is not accepted by the multi-file opener;
@@ -140,7 +140,7 @@ name.
 An existing old-format tree must be manually recreated or explicitly renamed
 outside GDevelop before it can be opened. Renaming only the physical file is
 sufficient only when every persisted or generated
-`game://project.settings` marker in that tree has also been changed to
+`game://project.gdl` marker in that tree has also been changed to
 `game://project.gdevelop`.
 
 Legacy single-file JSON remains a supported import input. Its one-time
@@ -267,7 +267,7 @@ including:
 - bundled project authoring skill documentation and references.
 
 After implementation, a repository-wide search excluding historical Git data
-and dependencies must find no unintended `project.settings` occurrence. This
+and dependencies must find no unintended `project.gdl` occurrence. This
 rename spec's description of the former name and explicit incompatibility is
 the only intentional historical discussion.
 
@@ -278,7 +278,7 @@ the only intentional historical discussion.
   `game://project.gdevelop`.
 - Opening a noncanonical `OtherName.gdevelop` reports that the multi-file entry
   must be named `project.gdevelop`.
-- Opening a removed `project.settings` path is not routed as a multi-file
+- Opening a removed `project.gdl` path is not routed as a multi-file
   project. No fallback reader attempts to interpret it as a supported entry.
 - A desktop file-open event for a missing path reports the normal local open
   failure and must not crash the main process.
@@ -308,7 +308,7 @@ Update existing tests and add focused assertions proving:
 3. The local writer always creates `project.gdevelop`.
 4. Save As and new-project location selection resolve to
    `<chosen-folder>/project.gdevelop`.
-5. The open picker accepts `.gdevelop` and legacy `.json`, but not `.settings`.
+5. The open picker accepts `.gdevelop` and legacy `.json`, but not `.gdl`.
 6. Legacy JSON migration creates `project.gdevelop`.
 7. Autosave uses `.gdevelop/autosave/current/project.gdevelop`.
 8. Modification-time calculation includes `project.gdevelop` and excludes the
@@ -366,7 +366,7 @@ conform to `project.gdevelop`.
 
 ## 12. Alternatives considered
 
-### Keep `project.settings`
+### Keep `project.gdl`
 
 Rejected because the extension is generic, cannot safely represent only the
 root entry in desktop associations, and does not identify GDevelop.

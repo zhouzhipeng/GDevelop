@@ -1457,7 +1457,7 @@ export const getEventsJsonExamples = ({
     eventJsonShape:
       'Serialized scene events are a JSON array. A standard event uses type "BuiltinCommonInstructions::Standard", conditions: [{ type: { value: "<condition type>" }, parameters: [...] }], actions: [{ type: { value: "<action type>" }, parameters: [...] }], and optional nested events: [...].',
     projectFileEventsShape:
-      'Author scene events in function .settings events blocks, following the Settings DSL schema and generated instruction catalog.',
+      'Author scene events in function .gdl events blocks, following the GDevelop Language (GDL) schema and generated instruction catalog.',
     // Quoting and expression-syntax rules. These are the most common cause of
     // parameter validation failures.
     parameterSyntaxRules: {
@@ -2905,14 +2905,14 @@ const withActionableSuggestion = (issue: Object): Object => {
           issue.parameterIndex
         } is a resource name (${resourceParameterType}) and must be BARE with NO quotes — this is the OPPOSITE of string parameters. You wrote ${JSON.stringify(
           value
-        )}; use ${bare} instead. The resource must already exist in resources.settings.`,
+        )}; use ${bare} instead. The resource must already exist in resources.gdl.`,
       };
     }
     return {
       ...issue,
       suggestion: `Parameter ${
         issue.parameterIndex
-      } is a resource name (${resourceParameterType}): pass the BARE resource name with NO quotes (e.g. Shoot, not "Shoot"). The resource must already exist in resources.settings.`,
+      } is a resource name (${resourceParameterType}): pass the BARE resource name with NO quotes (e.g. Shoot, not "Shoot"). The resource must already exist in resources.gdl.`,
     };
   }
 

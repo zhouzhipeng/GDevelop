@@ -26,13 +26,13 @@ Date: 2026-08-07
 
 > Version 5 storage amendment (2026-08-09): lifecycle semantics in this
 > document are unchanged, but every persisted function now uses the flat
-> same-stem pair `functions/<Function>.settings` and
+> same-stem pair `functions/<Function>.gdl` and
 > `functions/<Function>.events`. Function settings contain no events URI, and
-> an `.events` file without its same-stem `.settings` owner is invalid. Scene
-> layout is embedded in `scene.settings`; External Events owners live below
+> an `.events` file without its same-stem `.gdl` owner is invalid. Scene
+> layout is embedded in `scene.gdl`; External Events owners live below
 > `scenes/<Scene>/external-events/<External>/`, and external layouts use
-> `scenes/<Scene>/external-layout/<External>.settings`. Any nested
-> `functions/<Function>/function.settings` or standalone `.layout` example
+> `scenes/<Scene>/external-layout/<External>.gdl`. Any nested
+> `functions/<Function>/function.gdl` or standalone `.layout` example
 > below is unsupported v4 migration history. See
 > [embedded-layout-settings-format-spec.md](embedded-layout-settings-format-spec.md).
 
@@ -77,7 +77,7 @@ never causes it to execute.
 
 The multi-file representation follows Prefab functions exactly: every
 persisted lifecycle function has its own
-`functions/<Function>/function.settings` plus sibling `<Function>.events`.
+`functions/<Function>/function.gdl` plus sibling `<Function>.events`.
 Fixed lifecycle metadata is validated rather than offered as editable function
 configuration.
 
@@ -978,40 +978,40 @@ project subtree is:
 MyGame/
   scenes/
     Main/
-      scene.settings
+      scene.gdl
       Main.layout
       objects/
-        Player.settings
+        Player.gdl
 
       functions/
         sceneLoad/
-          function.settings
+          function.gdl
           sceneLoad.events
         sceneSignal/
-          function.settings
+          function.gdl
           sceneSignal.events
         sceneUpdate/
-          function.settings
+          function.gdl
           sceneUpdate.events
         sceneUnload/
-          function.settings
+          function.gdl
           sceneUnload.events
 
       externals/
         Shared%20Combat/
-          external-events.settings
+          external-events.gdl
           functions/
             sceneLoad/
-              function.settings
+              function.gdl
               sceneLoad.events
             sceneSignal/
-              function.settings
+              function.gdl
               sceneSignal.events
             sceneUpdate/
-              function.settings
+              function.gdl
               sceneUpdate.events
             sceneUnload/
-              function.settings
+              function.gdl
               sceneUnload.events
 
         Shared%20Combat.layout
@@ -1026,9 +1026,9 @@ directory synthesizes the corresponding fixed empty function in memory.
 The canonical templates are:
 
 ```text
-Scene settings:   scenes/<Scene>/functions/<Role>/function.settings
+Scene settings:   scenes/<Scene>/functions/<Role>/function.gdl
 Scene body:       scenes/<Scene>/functions/<Role>/<Role>.events
-External settings: scenes/<Scene>/externals/<External>/functions/<Role>/function.settings
+External settings: scenes/<Scene>/externals/<External>/functions/<Role>/function.gdl
 External body:     scenes/<Scene>/externals/<External>/functions/<Role>/<Role>.events
 ```
 
@@ -1041,7 +1041,7 @@ Scene `functions/` contains only the four reserved lifecycle names in version
 
 ### 14.2 Owner settings
 
-In version 4, `scene.settings` no longer owns an `events` URI. The scene's
+In version 4, `scene.gdl` no longer owns an `events` URI. The scene's
 physical lifecycle function directories are authoritative:
 
 ```toml
@@ -1053,7 +1053,7 @@ layout = "game://scenes/Main/Main.layout"
 ```
 
 Each External Events resource has owner settings analogous to
-`prefab.settings`:
+`prefab.gdl`:
 
 ```toml
 kind = "externalEvents"
@@ -1064,29 +1064,29 @@ name = "Shared Combat"
 
 Its associated scene is derived from the parent
 `scenes/<Scene>/externals/<External>/` path. `associatedLayout`, `linkedScene`,
-and source-file lists are forbidden in `external-events.settings`. `order` is
+and source-file lists are forbidden in `external-events.gdl`. `order` is
 unique and contiguous in project-wide External Events order. Version 4 removes
-`[[externalEventFiles]]` from `scene.settings`; external layouts continue using
+`[[externalEventFiles]]` from `scene.gdl`; external layouts continue using
 their existing scene-owned records.
 
 The loader discovers exactly
-`scenes/*/externals/*/external-events.settings`. The canonical decoded owner
+`scenes/*/externals/*/external-events.gdl`. The canonical decoded owner
 directory name and the settings `name` must agree under the same managed-name
 rules used for Prefabs; duplicate identities or normalized/case-folded path
 collisions fail before sources are mounted. No deeper directory is inferred as
 another owner.
 
 Neither scene nor external owner settings enumerate `functionFiles`. As with
-Prefab functions, physical `functions/<Function>/function.settings` documents
+Prefab functions, physical `functions/<Function>/function.gdl` documents
 are the component structure.
 
-### 14.3 Lifecycle `function.settings`
+### 14.3 Lifecycle `function.gdl`
 
 Every materialized lifecycle function uses the Prefab two-file shape:
 
 ```text
 functions/<Function>/
-  function.settings
+  function.gdl
   <Function>.events
 ```
 
@@ -1148,7 +1148,7 @@ a lossless, import-only upgrade path:
 3. Each flat `scenes/<Scene>/externals/<External>.events` body becomes the
    matching External Events owner's `sceneUpdate` body. Its three other
    lifecycle functions are synthesized empty, and its legacy project order is
-   copied to `external-events.settings`.
+   copied to `external-events.gdl`.
 4. Opening alone does not mutate the source tree.
 5. The first successful version-4 save stages the new owner/function
    directories, compiles them, composes legacy JSON, and proves canonical
@@ -1174,7 +1174,7 @@ Required validation:
 - `sceneUpdate` exists exactly once for every scene and External Events owner;
 - each optional lifecycle role exists at most once, with a missing role meaning
   an empty body;
-- every function directory contains exactly one `function.settings` and its
+- every function directory contains exactly one `function.gdl` and its
   declared sibling `.events` body;
 - owner directories, settings filenames, function names, roles, orders, and
   normalized/case-folded URIs do not collide;
@@ -1196,7 +1196,7 @@ empty managed function rather than deleting user data.
 
 Each `<Function>.events` contains the existing pure event-list DSL and no lifecycle
 header. Identity, role, signature, and owner come exclusively from the sibling
-`function.settings` and physical owner path, matching Prefab functions. This
+`function.gdl` and physical owner path, matching Prefab functions. This
 keeps the IfDo grammar unchanged and prevents duplicated ownership.
 
 The project instruction catalog attaches
@@ -1426,14 +1426,14 @@ lifecycleFunctionName: "sceneLoad" | "sceneSignal" | "sceneUpdate" | "sceneUnloa
 
 The argument defaults to `sceneUpdate` for existing tool calls. Responses
 always return the resolved fixed function name, lifecycle role, owner kind,
-`function.settings` URI, and `.events` URI. Bulk search and signal inspection
+`function.gdl` URI, and `.events` URI. Bulk search and signal inspection
 return lifecycle identity for every site.
 
 In a version-4 project, direct update edits target
 `scenes/<Scene>/functions/sceneUpdate/sceneUpdate.events` or
 `scenes/<Scene>/externals/<External>/functions/sceneUpdate/sceneUpdate.events`.
 Tools discover functions from validated
-`function.settings`; they must not infer lifecycle identity from an unowned
+`function.gdl`; they must not infer lifecycle identity from an unowned
 filename alone. A v3 `Main.events` source remains readable only through the
 migration adapter.
 
@@ -1681,7 +1681,7 @@ function directories but omit them on save.
   version 4, creates required update function directories, and does not create
   empty optional function directories.
 - Scene and External Events functions use the exact Prefab-shaped
-  `functions/<Function>/function.settings + <Function>.events` structure.
+  `functions/<Function>/function.gdl + <Function>.events` structure.
 - External Events owner directories and sources are transactionally created,
   moved, renamed, duplicated, watched, autosaved, and removed.
 - Decompose -> compose preserves all four function bodies and fixed metadata
@@ -1785,7 +1785,7 @@ Files such as `Main.scene-load.events` or
 `externals/Shared.scene-unload.events` were rejected. They do not have a natural
 place for function signature/role metadata, scale poorly as lifecycle
 capabilities grow, and diverge from Prefab authoring. Version 4 uses
-`functions/<Function>/function.settings` plus `<Function>.events`; v3 flat
+`functions/<Function>/function.gdl` plus `<Function>.events`; v3 flat
 update files are migration inputs only.
 
 ### 25.8 Automatically execute associated External Events

@@ -4,7 +4,7 @@ Unmodified native JSON downloads captured on 2026-10-26, compressed with gzip
 (mtime 0). They intentionally retain obsolete custom properties, wrapped
 behaviors and invalid unused ambient channels to exercise the real URL import
 boundary. Tests must normalize them through the production importer, not edit
-the fixtures to satisfy the Settings DSL schema.
+the fixtures to satisfy the GDevelop Language (GDL) schema.
 
 - `platformer.json.gz`: https://resources.gdevelop-app.com/examples/platformer/platformer.json
 - `starting-3D-platformer.json.gz`: https://resources.gdevelop-app.com/examples/starting-3D-platformer/starting-3D-platformer.json

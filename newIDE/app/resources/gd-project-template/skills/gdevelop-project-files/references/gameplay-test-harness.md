@@ -27,7 +27,7 @@ harness.assert(
 );
 ```
 
-All project and extension tests are declared in the root `tests.settings`.
+All project and extension tests are declared in the root `tests.gdl`.
 Their JavaScript sources are flat files directly below `tests/`:
 
 ```settings
@@ -74,7 +74,7 @@ The `file` is a canonical identity, not a URI:
   one test, and `source` is not an authored path-field alias.
 
 The empty manifest uses `tests = [ ]`. Never store last-run state in
-`tests.settings`; the editor owns the generated
+`tests.gdl`; the editor owns the generated
 `.gdevelop/gameplay-test-results.json` summary.
 
 ## Deterministic simulation
@@ -407,7 +407,7 @@ The required sequence is:
 ```text
 generate-catalogs
   -> read the three declarations and this reference
-  -> edit tests.settings and the flat tests/*.js source directly
+  -> edit tests.gdl and the flat tests/*.js source directly
   -> validate_project_files
   -> reload_project
   -> run_gameplay_tests
@@ -419,7 +419,7 @@ Apply it as follows:
 1. Call no-input `generate-catalogs`. Require
    `catalogsRegenerated: true` and a verified receipt for all three catalogs
    plus all three declarations, including the `harnessApi` path.
-2. Read the exact `tests.settings` record, selected source, this reference, and
+2. Read the exact `tests.gdl` record, selected source, this reference, and
    the three generated declarations. Patch authored files directly; never
    edit `.gdevelop/harness-api.d.ts` or use MCP to author a test.
 3. Call no-input `validate_project_files` after the final source edit. Fix all

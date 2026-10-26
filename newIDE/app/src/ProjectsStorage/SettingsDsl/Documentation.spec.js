@@ -15,7 +15,7 @@ for (const file of [
   'springbone-behavior.md',
   'tsl-materials.md',
 ]) {
-  test(`bundled ${file} uses current Settings DSL examples`, () => {
+  test(`bundled ${file} uses current GDevelop Language (GDL) examples`, () => {
     const text = fs.readFileSync(path.join(directory, file), 'utf8');
     const blocks = Array.from(
       text.matchAll(/^([ \t]*)```settings\n([\s\S]*?)^\1```/gm)

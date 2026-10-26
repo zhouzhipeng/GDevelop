@@ -928,12 +928,12 @@ test('unified operand diagnostics identify the exact argument value in the ownin
     compileSettingsEvents(
       source,
       { resolveInstruction: createCatalogInstructionResolver(catalogFixture) },
-      'game://Test.settings'
+      'game://Test.gdl'
     );
     throw new Error('Expected invalid operand');
   } catch (failure) {
     expect(failure.code).toBe('SETTINGS_INSTRUCTION_ARGUMENT');
-    expect(failure.fileUri).toBe('game://Test.settings');
+    expect(failure.fileUri).toBe('game://Test.gdl');
     expect(source.slice(failure.offset, failure.endOffset)).toBe('42');
   }
 });

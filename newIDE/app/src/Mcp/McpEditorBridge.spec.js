@@ -1054,12 +1054,12 @@ describe('McpEditorBridge', () => {
       serializeProjectWithConstants(project)
     );
     files[
-      'game://scenes/Scene/functions/sceneUpdate.settings'
+      'game://scenes/Scene/functions/sceneUpdate.gdl'
     ] = replaceEmbeddedEventBody(
-      files['game://scenes/Scene/functions/sceneUpdate.settings'],
+      files['game://scenes/Scene/functions/sceneUpdate.gdl'],
       'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n    }\n  }\n}\n'
     );
-    files['game://extensions/Local/extension.settings'] = `extension {
+    files['game://extensions/Local/extension.gdl'] = `extension {
   order = 0
   name = "Local"
   description = ""
@@ -1069,7 +1069,7 @@ describe('McpEditorBridge', () => {
 }
 `;
     files[
-      'game://extensions/Local/prefabs/UnreferencedCard/prefab.settings'
+      'game://extensions/Local/prefabs/UnreferencedCard/prefab.gdl'
     ] = `prefab {
   order = 0
   name = "UnreferencedCard"
@@ -1201,9 +1201,9 @@ describe('McpEditorBridge', () => {
       serializeProjectWithConstants(project)
     );
     files[
-      'game://scenes/Scene/functions/sceneUpdate.settings'
+      'game://scenes/Scene/functions/sceneUpdate.gdl'
     ] = replaceEmbeddedEventBody(
-      files['game://scenes/Scene/functions/sceneUpdate.settings'],
+      files['game://scenes/Scene/functions/sceneUpdate.gdl'],
       'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n    }\n  }\n}\n'
     );
     await writeMultiFileSourceTree({
@@ -1345,9 +1345,9 @@ describe('McpEditorBridge', () => {
       serializeProjectWithConstants(diskProject)
     );
     files[
-      'game://scenes/Scene/functions/sceneUpdate.settings'
+      'game://scenes/Scene/functions/sceneUpdate.gdl'
     ] = replaceEmbeddedEventBody(
-      files['game://scenes/Scene/functions/sceneUpdate.settings'],
+      files['game://scenes/Scene/functions/sceneUpdate.gdl'],
       `function {
 
   events {
@@ -1421,9 +1421,9 @@ describe('McpEditorBridge', () => {
       serializeProjectWithConstants(project)
     );
     files[
-      'game://scenes/Scene/functions/sceneUpdate.settings'
+      'game://scenes/Scene/functions/sceneUpdate.gdl'
     ] = replaceEmbeddedEventBody(
-      files['game://scenes/Scene/functions/sceneUpdate.settings'],
+      files['game://scenes/Scene/functions/sceneUpdate.gdl'],
       'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nruntimeScene._instances.length;\n      }\n    }\n  }\n}\n'
     );
     await writeMultiFileSourceTree({ entryPath: projectFile, files });
@@ -1442,16 +1442,16 @@ describe('McpEditorBridge', () => {
         expect.objectContaining({
           severity: 'error',
           code: 'JS_API_PRIVATE_MEMBER',
-          fileUri: 'game://scenes/Scene/functions/sceneUpdate.settings',
+          fileUri: 'game://scenes/Scene/functions/sceneUpdate.gdl',
           filePath: path.join(
             temporaryDirectory,
             'scenes',
             'Scene',
             'functions',
-            'sceneUpdate.settings'
+            'sceneUpdate.gdl'
           ),
           line:
-            files['game://scenes/Scene/functions/sceneUpdate.settings']
+            files['game://scenes/Scene/functions/sceneUpdate.gdl']
               .split('\n')
               .findIndex(line => line.includes('runtimeScene._instances')) + 1,
           sourceExcerpt: expect.arrayContaining([
@@ -1598,9 +1598,9 @@ describe('McpEditorBridge', () => {
       serializeProjectWithConstants(project)
     );
     files[
-      'game://scenes/Scene/functions/sceneUpdate.settings'
+      'game://scenes/Scene/functions/sceneUpdate.gdl'
     ] = replaceEmbeddedEventBody(
-      files['game://scenes/Scene/functions/sceneUpdate.settings'],
+      files['game://scenes/Scene/functions/sceneUpdate.gdl'],
       'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n    }\n  }\n}\n'
     );
     await writeMultiFileSourceTree({ entryPath: projectFile, files });
@@ -2007,11 +2007,11 @@ describe('McpEditorBridge', () => {
       })
     );
     expect(result.generatedSources.StarRatingBar).toContain(
-      'game://extensions/StarRatingBar/extension.settings'
+      'game://extensions/StarRatingBar/extension.gdl'
     );
     expect(result.generatedSources.StarRatingBar).toEqual(
       expect.arrayContaining([
-        'game://extensions/StarRatingBar/functions/FormatRating.settings',
+        'game://extensions/StarRatingBar/functions/FormatRating.gdl',
       ])
     );
     project.delete();
@@ -2054,9 +2054,9 @@ describe('McpEditorBridge', () => {
         entryPath: projectFile,
         files: {
           ...baseFiles,
-          'game://extensions/Billboard/extension.settings':
+          'game://extensions/Billboard/extension.gdl':
             'extension {\n order = 0\n name = "Billboard"\n}\n',
-          'game://extensions/Billboard/functions/Initialize.settings':
+          'game://extensions/Billboard/functions/Initialize.gdl':
             'function {\n order = 0\n extension = "Billboard"\n name = "Initialize"\n functionType = "Action"\n events {\n event {\n conditions {\n BuiltinCommonInstructions::Once\n }\n }\n }\n }\n',
         },
       });
@@ -2086,8 +2086,8 @@ describe('McpEditorBridge', () => {
     );
     expect(result.generatedSources.Billboard).toEqual(
       expect.arrayContaining([
-        'game://extensions/Billboard/extension.settings',
-        'game://extensions/Billboard/functions/Initialize.settings',
+        'game://extensions/Billboard/extension.gdl',
+        'game://extensions/Billboard/functions/Initialize.gdl',
       ])
     );
     project.delete();

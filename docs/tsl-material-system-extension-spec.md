@@ -434,7 +434,7 @@ serialized into the authoritative resource entry. These are derived artifacts.
 
 ### 7.3 Multi-file projects
 
-In the multi-file project format, `resources.settings` continues to own the
+In the multi-file project format, `resources.gdl` continues to own the
 entire resource registry. The `.tsl.ts` file remains a sibling project
 asset referenced by its `tslMaterial` entry. This specification does not create
 a second material registry in `project.gdevelop` or a new root settings file.
@@ -1483,7 +1483,7 @@ The external AI workflow is:
    plus diagnostics as an inactive draft.
 
 This single-file result does not replace `validate_project_files` when the AI
-also changed `resources.settings`, behaviors, events, or other project structure.
+also changed `resources.gdl`, behaviors, events, or other project structure.
 It also does not replace a normal paused preview for scene-level visual/runtime
 verification. The tool's `next_action` must say which broader check remains.
 
@@ -2777,7 +2777,7 @@ same visual/semantic conformance fixtures when Three's backend emits WGSL.
 Test:
 
 - JSON round-trip of `tslMaterial` resources;
-- multi-file `resources.settings` ownership and reconstruction;
+- multi-file `resources.gdl` ownership and reconstruction;
 - resource rename, replace, delete, missing file, duplicate name, and path
   normalization;
 - reference discovery through behavior and every event instruction;

@@ -1,11 +1,11 @@
-> Superseded authoring syntax. Current production source format is Settings DSL 8, defined in [settings-dsl-spec.md](settings-dsl-spec.md). TOML settings, embedded layout namespaces and earlier project versions are not supported. The material below is historical reference only.
+> Superseded authoring syntax. Current production source format is GDevelop Language (GDL) 8, defined in [settings-dsl-spec.md](settings-dsl-spec.md). TOML settings, embedded layout namespaces and earlier project versions are not supported. The material below is historical reference only.
 
 # GDevelop flat layout TOML
 
 **Status:** normative version 1  
 **Implementation:** `newIDE/app/src/ProjectsStorage/LayoutToml`  
 **Canonical storage:** embedded `[layout]` subtree in the component owner
-`.settings` file
+`.gdl` file
 **Syntax:** standard TOML with a strict GDevelop schema
 
 Version 5 has no managed `.layout` source files. This document remains the
@@ -14,8 +14,8 @@ examples are embedded by prefixing every non-root layout header with
 `layout.`: `[editor]` becomes `[layout.editor]`, `[[instances]]` becomes
 `[[layout.instances]]`, and so on. Scene and default-prefab layout data lives
 in their existing owner settings; named variants have independent
-`variant.settings` owners and external layouts use
-`scenes/<Scene>/external-layout/<External>.settings`. See
+`variant.gdl` owners and external layouts use
+`scenes/<Scene>/external-layout/<External>.gdl`. See
 [embedded-layout-settings-format-spec.md](embedded-layout-settings-format-spec.md).
 
 ## 1. Purpose
@@ -31,7 +31,7 @@ Layout TOML is the editable source for visual and spatial project data:
 - scene background and editor canvas state.
 
 Object definitions, attached behavior definitions, resources, owner variables,
-events, functions, and runtime logic are forbidden. Those remain in `.settings`
+events, functions, and runtime logic are forbidden. Those remain in `.gdl`
 or `.events` sources.
 
 The format replaces the retired nested markup. There is no
@@ -71,7 +71,7 @@ One `.layout` is compiled in exactly one context:
 | Named prefab variant   | bounds, editor state, layers, cameras, effects, instances     | background and definitions                        |
 | External layout        | editor state, linked-scene layer references, instances        | background, bounds, cameras, effects, definitions |
 
-The owning `.settings` source supplies the context and `game://` reference.
+The owning `.gdl` source supplies the context and `game://` reference.
 The `.layout` never repeats its scene, prefab, variant, external-layout, or
 project identity.
 
@@ -340,7 +340,7 @@ property_visibility = { acceleration = "hidden" }
 ```
 
 `instance` and `name` are required. The name must identify a behavior already
-attached to the instance object's `.settings` definition. `properties` uses
+attached to the instance object's `.gdl` definition. `properties` uses
 serialized keys from `behaviorOverrideSchemas`; editor-facing keys are rejected
 when they differ. `quick` and every `property_visibility` value are `default`,
 `visible`, or `hidden`.

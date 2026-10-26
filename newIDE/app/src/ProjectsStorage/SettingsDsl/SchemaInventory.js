@@ -1,7 +1,7 @@
 // @noflow
 // Shared authoring field inventory. SettingsDsl converts these descriptors to
 // strict node schemas; catalogs publish the same schemas used by the parser.
-export const SETTINGS_FORMAT_VERSION = 11;
+export const SETTINGS_FORMAT_VERSION = 12;
 const MULTI_FILE_FORMAT_VERSION = SETTINGS_FORMAT_VERSION;
 const MULTI_FILE_ENTRY_URI = 'game://project.gdevelop';
 const SCENE_LIFECYCLE_SOURCES = [

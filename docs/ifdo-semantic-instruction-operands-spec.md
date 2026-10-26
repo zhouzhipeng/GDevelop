@@ -1,4 +1,4 @@
-# Settings DSL semantic instruction operands
+# GDevelop Language (GDL) semantic instruction operands
 
 The independent IfDo syntax has been removed. The semantic operand contract is
 now implemented in `ProjectsStorage/SettingsDsl/InstructionCatalog.js` and the
@@ -15,4 +15,4 @@ unified parser. See [the complete format 11 specification](unified-settings-even
 - Instructions project into native positional strings only at the model
   boundary; raw positional author syntax and raw JSON are forbidden.
 - The generated instruction catalog format is gdevelop-settings-instruction-catalog,
-  version 3. It is metadata for Settings DSL, not another author language.
+  version 3. It is metadata for GDevelop Language (GDL), not another author language.

@@ -58,7 +58,7 @@ by stable domain ownership such as `Combat`, `Inventory`, or `UIWidgets`.
    instruction/object/behavior types exist before changing callers.
 4. Move one coherent behavior at a time:
    - Copy each child object definition and its attached behaviors into an
-     individual flat `prefab/objects/<Object>.settings` with `folder` arrays; copy
+     individual flat `prefab/objects/<Object>.gdl` with `folder` arrays; copy
      only instances/layers/spatial composition into the prefab layout.
    - Move per-instance variables and logic into behavior settings/functions.
    - Move shared calculations into extension-level functions.
@@ -94,31 +94,31 @@ Refactor as follows:
 
 ```text
 extensions/Combat/
-  extension.settings
-  functions/CalculateDamage.settings
+  extension.gdl
+  functions/CalculateDamage.gdl
   prefabs/Enemy/
-    prefab.settings
+    prefab.gdl
     objects/
-      Sprite.settings
-      HealthBar.settings
-    functions/Initialize.settings
+      Sprite.gdl
+      HealthBar.gdl
+    functions/Initialize.gdl
   behaviors/Health/
-    behavior.settings
-    functions/TakeDamage.settings
-    functions/IsDead.settings
+    behavior.gdl
+    functions/TakeDamage.gdl
+    functions/IsDead.gdl
 ```
 
 1. Put the sprite/health-bar child object definitions and their attached
-   behaviors in `Enemy/objects/Sprite.settings` and
-   `Enemy/objects/HealthBar.settings`; put layers and default instances in
-   the root layout nodes of `Enemy/prefab.settings`. Keep prefab
+   behaviors in `Enemy/objects/Sprite.gdl` and
+   `Enemy/objects/HealthBar.gdl`; put layers and default instances in
+   the root layout nodes of `Enemy/prefab.gdl`. Keep prefab
    property descriptors flat in the same owner settings.
-2. Put health properties/variables in `Health/behavior.settings`. Put each
+2. Put health properties/variables in `Health/behavior.gdl`. Put each
    `TakeDamage`/`IsDead` signature in its flat same-stem
-   `functions/<Function>.settings` (including `folder`) and only its DSL body in the
-   sibling `<Function>.settings`.
-3. Put the stateless damage formula in `CalculateDamage.settings` and
-   its DSL body in `CalculateDamage.settings`.
+   `functions/<Function>.gdl` (including `folder`) and only its DSL body in the
+   sibling `<Function>.gdl`.
+3. Put the stateless damage formula in `CalculateDamage.gdl` and
+   its DSL body in `CalculateDamage.gdl`.
 4. Attach `Combat::Health` to the prefab configuration and expose only the
    minimum prefab methods needed by scene callers.
 5. Reload and confirm the generated catalog contains the new prefab, behavior,

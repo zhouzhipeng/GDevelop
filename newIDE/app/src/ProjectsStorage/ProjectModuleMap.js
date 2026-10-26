@@ -78,13 +78,11 @@ export const buildProjectModuleMap = (
     const sceneBase = sourcePath('scenes', scene.name);
     return {
       name: scene.name,
-      settingsPath: `${sceneBase}/scene.settings`,
+      settingsPath: `${sceneBase}/scene.gdl`,
       events: lifecycleFields
         .map(([name, field]) => {
           const base = `${sceneBase}/functions`;
-          const settingsPath = `${base}/${encodeManagedName(
-            `${name}.settings`
-          )}`;
+          const settingsPath = `${base}/${encodeManagedName(`${name}.gdl`)}`;
           if (!files[`game://${settingsPath}`]) return null;
           return register(
             eventEntry(
@@ -107,7 +105,7 @@ export const buildProjectModuleMap = (
         fragment.associatedLayout
       )}/external-events`;
       const settingsPath = `${base}/${encodeManagedName(
-        `${fragment.name}.settings`
+        `${fragment.name}.gdl`
       )}`;
       const entry = register(
         eventEntry(
@@ -131,7 +129,7 @@ export const buildProjectModuleMap = (
     (functions || []).map(fn => {
       const functionBase = `${base}/functions`;
       const settingsPath = `${functionBase}/${encodeManagedName(
-        `${fn.name}.settings`
+        `${fn.name}.gdl`
       )}`;
       return {
         ownerKind,
@@ -153,7 +151,7 @@ export const buildProjectModuleMap = (
       const base = sourcePath('extensions', extension.name);
       return {
         name: extension.name,
-        settingsPath: `${base}/extension.settings`,
+        settingsPath: `${base}/extension.gdl`,
         events: [
           ...functionEntries(
             extension.eventsFunctions,

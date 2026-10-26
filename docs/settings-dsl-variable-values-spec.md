@@ -1,4 +1,4 @@
-# Settings DSL 变量语法
+# GDevelop Language (GDL) 变量语法
 
 状态：已批准实施。日期：2026-10-26。当前作者格式版本为 11，Settings catalog 版本为 10；本文件变量规则与统一事件契约共同生效。
 

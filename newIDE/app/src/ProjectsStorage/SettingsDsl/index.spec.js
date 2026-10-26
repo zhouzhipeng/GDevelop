@@ -9,7 +9,28 @@ import {
 } from '.';
 import { compileLayoutDocument } from '../LayoutDocument';
 
-describe('Settings DSL', () => {
+describe('GDevelop Language (GDL)', () => {
+  test.each(['project', 'scene', 'function', 'prefab'])(
+    'omits empty objectGroups when saving %s and retains declared groups',
+    kind => {
+      const source = serializeSettingsDocument(kind, {
+        ...(kind === 'project' ? { formatVersion: 12 } : {}),
+        name: 'Example',
+        objectGroups: {},
+      });
+      expect(source).not.toContain('objectGroups');
+      expect(decodeSettingsDocument(source).payload.objectGroups).toEqual({});
+      const populated = { Empty: [], Actors: ['Player'] };
+      const populatedSource = serializeSettingsDocument(kind, {
+        ...(kind === 'project' ? { formatVersion: 12 } : {}),
+        name: 'Example',
+        objectGroups: populated,
+      });
+      expect(
+        decodeSettingsDocument(populatedSource).payload.objectGroups
+      ).toEqual(populated);
+    }
+  );
   test('round trips declared prefab child overrides, including nested prefabs and source-only registration', () => {
     const extension = {
       name: 'OverrideTest',
@@ -44,12 +65,12 @@ describe('Settings DSL', () => {
     const files = {};
     extension.eventsBasedObjects.forEach(prefab => {
       const prefix = `game://extensions/OverrideTest/prefabs/${prefab.name}`;
-      files[`${prefix}/prefab.settings`] = serializeSettingsDocument('prefab', {
+      files[`${prefix}/prefab.gdl`] = serializeSettingsDocument('prefab', {
         name: prefab.name,
       });
       prefab.objects.forEach(object => {
         files[
-          `${prefix}/objects/${encodeURIComponent(object.name)}.settings`
+          `${prefix}/objects/${encodeURIComponent(object.name)}.gdl`
         ] = serializeSettingsDocument('object', object);
       });
     });
@@ -214,11 +235,11 @@ describe('Settings DSL', () => {
     try {
       decodeSettingsDocument(
         'scene {\n name = "Main"\n unknown = 42\n}\n',
-        'game://scene.settings'
+        'game://scene.gdl'
       );
     } catch (error) {
       expect(error).toMatchObject({
-        fileUri: 'game://scene.settings',
+        fileUri: 'game://scene.gdl',
         line: 3,
         column: 12,
         endColumn: 14,
@@ -267,7 +288,7 @@ describe('Settings DSL', () => {
     );
     expect(compiled.instances[1199].initialVariables[0].value).toBe(100);
     console.info(
-      'Settings DSL large-scene measurement',
+      'GDevelop Language (GDL) large-scene measurement',
       JSON.stringify({
         instances: 1200,
         characters: source.length,

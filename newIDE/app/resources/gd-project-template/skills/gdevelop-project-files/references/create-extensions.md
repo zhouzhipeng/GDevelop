@@ -20,15 +20,15 @@ Use the narrowest reusable abstraction:
 | A reusable visual object that also owns stateful logic                  | Prefab plus one or more behaviors |
 
 Keep each child object definition and all of its behaviors in an individual
-`objects/<Object>.settings` file. Store its editor grouping in
+`objects/<Object>.gdl` file. Store its editor grouping in
 `folder = ["Parent", "Child"]`. Keep prefab-wide
 metadata, groups, variables, and flat property descriptors in
-`prefab.settings`, its root layer and instance nodes for instance/layer/spatial
-composition, and executable logic in `.settings`.
+`prefab.gdl`, its root layer and instance nodes for instance/layer/spatial
+composition, and executable logic in `.gdl`.
 
 ## Required workflow
 
-1. Read the current `extension.settings` and every sibling component settings
+1. Read the current `extension.gdl` and every sibling component settings
    file before editing. Preserve unknown fields and existing order.
 2. Search the official extension repository according to
    [reuse-community-extensions.md](reuse-community-extensions.md) before
@@ -37,8 +37,8 @@ composition, and executable logic in `.settings`.
 4. Create the owner settings and every required child file in one patch.
 5. Keep each settings document independently valid and local-root. Its path
    supplies the mounted namespace. Never add
-   child-settings indexes to `project.gdevelop` or `extension.settings`.
-6. Keep each function signature and its events in one `.settings` document.
+   child-settings indexes to `project.gdevelop` or `extension.gdl`.
+6. Keep each function signature and its events in one `.gdl` document.
    Do not derive, create or read a sibling body file. The events examples below
    are blocks to insert inside that same function root.
 7. Write variables blocks with scalar shorthand or typed variable children, following settings-dsl.md.
@@ -60,18 +60,18 @@ their exact parameters against the current project catalog.
 
 ```text
 extensions/CombatKit/
-  extension.settings
-  functions/ResetCombat.settings
+  extension.gdl
+  functions/ResetCombat.gdl
   prefabs/Enemy/
-    prefab.settings
-    objects/Body.settings
-    functions/Initialize.settings
+    prefab.gdl
+    objects/Body.gdl
+    functions/Initialize.gdl
   behaviors/Health/
-    behavior.settings
-    functions/TakeDamage.settings
+    behavior.gdl
+    functions/TakeDamage.gdl
 ```
 
-`extensions/CombatKit/extension.settings`:
+`extensions/CombatKit/extension.gdl`:
 
 ```settings
 extension {
@@ -98,7 +98,7 @@ paths. Fixed-folder discovery finds the children. Do not add any legacy
 `*FolderStructure` table: `functions/`, `prefabs/`, and `behaviors/` are the
 structure.
 
-`extensions/CombatKit/functions/ResetCombat.settings`:
+`extensions/CombatKit/functions/ResetCombat.gdl`:
 
 ```settings
 function {
@@ -123,7 +123,7 @@ function {
 }
 ```
 
-`ResetCombat.settings`:
+`ResetCombat.gdl`:
 
 ```text
 events {
@@ -144,7 +144,7 @@ events {
 }
 ```
 
-`extensions/CombatKit/prefabs/Enemy/prefab.settings`:
+`extensions/CombatKit/prefabs/Enemy/prefab.gdl`:
 
 ```settings
 prefab {
@@ -177,7 +177,7 @@ prefab {
 }
 ```
 
-`extensions/CombatKit/prefabs/Enemy/functions/Initialize.settings`:
+`extensions/CombatKit/prefabs/Enemy/functions/Initialize.gdl`:
 
 ```settings
 function {
@@ -203,7 +203,7 @@ function {
 }
 ```
 
-`Initialize.settings`:
+`Initialize.gdl`:
 
 ```text
 events {
@@ -224,7 +224,7 @@ events {
 }
 ```
 
-`extensions/CombatKit/prefabs/Enemy/objects/Body.settings`:
+`extensions/CombatKit/prefabs/Enemy/objects/Body.gdl`:
 
 ```settings
 object {
@@ -242,12 +242,12 @@ object {
 Add every child object definition, its variables/effects, and every attached
 behavior to its own flat object settings file. Its `folder` array is the editor
 object grouping. Add only instances, layers,
-spatial bounds, and editor layout state to `prefab.settings` directly below the component root. Copy the complete
-object-definition shape from an existing compatible object `.settings` file
+spatial bounds, and editor layout state to `prefab.gdl` directly below the component root. Copy the complete
+object-definition shape from an existing compatible object `.gdl` file
 rather than inventing serializer fields. For attached behaviors, copy only
 author-writable properties listed for that type in `settings-catalog.json` when
 creating a new attachment. When migrating an existing attachment, use only its registered serialized fields. Keep
-`propertyDescriptors` as one flat ordered array in `prefab.settings`; never add
+`propertyDescriptors` as one flat ordered array in `prefab.gdl`; never add
 property folders.
 
 Ordinary behavior and shared-data deserialization overlays authored fields on
@@ -257,7 +257,7 @@ protects legacy/partial sources from missing runtime defaults, but new
 attachments must still author every writable property required by the generated
 catalog and use only registered serializer fields.
 
-`extensions/CombatKit/behaviors/Health/behavior.settings`:
+`extensions/CombatKit/behaviors/Health/behavior.gdl`:
 
 ```settings
 behavior {
@@ -274,7 +274,7 @@ behavior {
 }
 ```
 
-`extensions/CombatKit/behaviors/Health/functions/TakeDamage.settings`:
+`extensions/CombatKit/behaviors/Health/functions/TakeDamage.gdl`:
 
 ```settings
 function {
@@ -312,7 +312,7 @@ function {
 }
 ```
 
-`TakeDamage.settings`:
+`TakeDamage.gdl`:
 
 ```text
 events {
@@ -345,16 +345,16 @@ selection through child events and nested private behavior-function calls.
 
 ## Add or change components
 
-- Add a free function as a flat `functions/<Name>.settings` owner. Put its complete
+- Add a free function as a flat `functions/<Name>.gdl` owner. Put its complete
   signature and embedded events together in that document.
 - Add every prefab or behavior function as a flat function document. Put its
-  complete metadata and `folder` grouping array in `<Name>.settings` and
+  complete metadata and `folder` grouping array in `<Name>.gdl` and
   its body in that same function root. Never embed a
-  function entry in `prefab.settings` or `behavior.settings`.
-- Add prefab variants under `variants/<Variant>/variant.settings`; keep the
+  function entry in `prefab.gdl` or `behavior.gdl`.
+- Add prefab variants under `variants/<Variant>/variant.gdl`; keep the
   variant's identity, order, groups, and root layout nodes in that owner. Put each
   variant child definition and its behaviors in
-  `variants/<Variant>/objects/<Object>.settings` and store grouping in `folder`.
+  `variants/<Variant>/objects/<Object>.gdl` and store grouping in `folder`.
 - On rename, update the component directory or function document, path-derived
   namespace, `name`, and every caller atomically.
 - On delete, remove callers and scene instances first, reload and verify, then
@@ -362,11 +362,11 @@ selection through child events and nested private behavior-function calls.
 
 ## Validate the extension
 
-1. Parse every changed Settings DSL independently, mount it from its canonical
+1. Parse every changed GDevelop Language (GDL) independently, mount it from its canonical
    path, and verify the strict combined merge; semantically compile every
    changed root layer and instance nodes as current layout schema.
 2. Verify component orders are contiguous and names/folders/basenames match.
-3. Verify every required function `.settings` contains its signature and events and no layout URI is present.
+3. Verify every required function `.gdl` contains its signature and events and no layout URI is present.
 4. Verify prefab layouts contain no object definitions or behaviors and that
    every definition is present in its own flat object settings file.
    Verify property descriptor arrays are flat and no property folder metadata

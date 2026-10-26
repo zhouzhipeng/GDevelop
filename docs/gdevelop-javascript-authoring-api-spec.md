@@ -136,7 +136,7 @@ The JavaScript authoring API must:
 2. Give an AI model exact method names, parameter types, return types, and
    nullability.
 3. Describe project-specific symbols using the names already owned by
-   `.settings` and `.layout` sources.
+   `.gdl` and `.layout` sources.
 4. Type each `@js` block according to its owning scene, external event sheet,
    extension function, prefab function, or behavior function.
 5. Reuse the existing `@js ... @end js` Events DSL representation.
@@ -201,7 +201,7 @@ Examples of deliberate non-duplication:
 - Instruction sentences and named Events DSL parameters stay only in the
   instruction catalog.
 - Object serializer fields stay only in the settings catalog and object
-  `.settings` sources.
+  `.gdl` sources.
 - Instance coordinates stay only in `.layout` sources.
 - `project-api.d.ts` may declare that `Player` is a Sprite runtime object, but
   it must not copy the Sprite's animations or every object setting.
@@ -220,7 +220,7 @@ Both declaration files are generated editor state below `.gdevelop/`:
 - They are ignored by Git with the rest of `.gdevelop/`.
 - They must never be edited by an AI model or user.
 - Direct edits are overwritten on the next generation.
-- Project source remains the `.settings`, `.layout`, and `.events` files.
+- Project source remains the `.gdl`, `.layout`, and `.events` files.
 
 ### 6.2 Determinism
 
@@ -517,7 +517,7 @@ The checking context includes:
 
 - `runtimeScene` when the function scope supplies it.
 - The supported `eventsFunctionContext` public surface.
-- Function parameters and result value according to `function.settings`.
+- Function parameters and result value according to `function.gdl`.
 - Object parameters as typed picked-object arrays.
 
 ### 10.4 Prefab function
@@ -869,7 +869,7 @@ not guess.
 
 A project rename remains one coherent source transaction:
 
-1. Update authoritative `.settings`, `.layout`, and `.events` sources.
+1. Update authoritative `.gdl`, `.layout`, and `.events` sources.
 2. Update affected JavaScript literals explicitly (or, in a future version,
    through proven AST-aware edits).
 3. Regenerate all catalogs and declaration files.
@@ -884,7 +884,7 @@ A project rename remains one coherent source transaction:
 The declaration files are generated after the project model and extensions are
 fully available:
 
-1. Read and merge all `.settings` files.
+1. Read and merge all `.gdl` files.
 2. Compile embedded `[layout]` subtrees and parse all `.events` files.
 3. Compose and validate the in-memory project model.
 4. Register built-in and project extensions.

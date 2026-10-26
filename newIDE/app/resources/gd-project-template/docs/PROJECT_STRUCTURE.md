@@ -4,9 +4,9 @@ Paths are relative to the directory containing `project.gdevelop`. This document
 
 | Path | Purpose | Version control |
 | --- | --- | --- |
-| `project.gdevelop`, `resources.settings`, `constants.toml` | Project entry, resource registry and editor constants | Track |
+| `project.gdevelop`, `resources.gdl`, `constants.toml` | Project entry, resource registry and editor constants | Track |
 | `scenes/`, `extensions/`, `objects/` | Canonical scene, extension and global-object sources | Track components when created; preserve prescribed hierarchy |
-| `tests.settings`, `tests/*.js` | Gameplay-test manifest and flat test sources | Track; no nested test source directories |
+| `tests.gdl`, `tests/*.js` | Gameplay-test manifest and flat test sources | Track; no nested test source directories |
 | `assets/` | Runtime resources, accompanying manifests and license notices | Track; preserve registered resource paths |
 | `sources/` | Editable art, model and audio production sources | Track; existing `.gitattributes` applies LFS to `.blend` |
 | `materials/` | `.tsl.ts` material source | Track when used; this is runtime source, not an output cache |

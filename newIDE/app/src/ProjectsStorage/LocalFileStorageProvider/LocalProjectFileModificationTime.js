@@ -10,10 +10,10 @@ const path = optionalRequire('path');
 const multiFileProjectDirectories = ['scenes', 'externals', 'extensions'];
 const multiFileProjectRootFiles = [
   MULTI_FILE_ENTRY_NAME,
-  'resources.settings',
-  'tests.settings',
+  'resources.gdl',
+  'tests.gdl',
 ];
-const multiFileProjectExtensions = new Set(['.settings']);
+const multiFileProjectExtensions = new Set(['.gdl']);
 const gameplayTestSourceExtensions = new Set(['.js']);
 
 const getFileModificationTime = async (filePath: string): Promise<?number> => {

@@ -1,6 +1,6 @@
-> Superseded authoring syntax. Current production source format is Settings DSL 8, defined in [settings-dsl-spec.md](settings-dsl-spec.md). TOML settings, embedded layout namespaces and earlier project versions are not supported. The material below is historical reference only.
+> Superseded authoring syntax. Current production source format is GDevelop Language (GDL) 8, defined in [settings-dsl-spec.md](settings-dsl-spec.md). TOML settings, embedded layout namespaces and earlier project versions are not supported. The material below is historical reference only.
 
-> 历史设计记录：事件作者格式和源码路径以 [统一 Settings DSL 格式 11](unified-settings-events-dsl-spec.md) 为准。函数/片段只使用一个 .settings 文件；旧 IfDo 与 .events 不再支持。项目模块地图为版本 2，只发布 settingsPath。
+> 历史设计记录：事件作者格式和源码路径以 [统一 GDevelop Language (GDL) 格式 12](unified-settings-events-dsl-spec.md) 为准。函数/片段只使用一个 .gdl 文件；旧 IfDo 与 .events 不再支持。项目模块地图为版本 2，只发布 settingsPath。
 
 
 # External Events settings and project module map
@@ -9,7 +9,7 @@
 
 ## Problem and current behavior
 
-Version 6 discovers each External Events fragment from a single `scenes/<Scene>/external-events/<Fragment>.events` file. The reader rejects any sibling `.settings` file. Fragment identity comes from its filename and owning scene; `link "Fragment"` expands it at the caller's position. The existing `.gdevelop/settings-catalog.json` describes this settings-free event kind. Catalog generation is owned by `LocalProjectWriter.js`, while multi-file composition and decomposition are owned by `MultiFileProjectFormat/index.js`.
+Version 6 discovers each External Events fragment from a single `scenes/<Scene>/external-events/<Fragment>.events` file. The reader rejects any sibling `.gdl` file. Fragment identity comes from its filename and owning scene; `link "Fragment"` expands it at the caller's position. The existing `.gdevelop/settings-catalog.json` describes this settings-free event kind. Catalog generation is owned by `LocalProjectWriter.js`, while multi-file composition and decomposition are owned by `MultiFileProjectFormat/index.js`.
 
 The current files offer no structured place to describe a fragment's intent. The generated catalogs describe how to author files but do not give an AI reader a short route from a scene to its event bodies, linked fragments, and extension functions.
 
@@ -24,7 +24,7 @@ The current files offer no structured place to describe a fragment's intent. The
 
 - No change to the runtime `gd::ExternalEvents` model, Link expansion, event order, or compiled event JSON.
 - No AI-generated descriptions or guesses about gameplay behavior.
-- No new registration manifest in `scene.settings` and no embedded event body in settings.
+- No new registration manifest in `scene.gdl` and no embedded event body in settings.
 - No cross-scene duplicate fragment names or new Link syntax.
 - No runtime loading of the module map.
 
@@ -34,10 +34,10 @@ The new format requires a same-stem pair:
 
 ```text
 scenes/Game/external-events/HUD.events
-scenes/Game/external-events/HUD.settings
+scenes/Game/external-events/HUD.gdl
 ```
 
-`HUD.settings` uses the canonical managed filename encoding and TOML settings conventions:
+`HUD.gdl` uses the canonical managed filename encoding and TOML settings conventions:
 
 ```toml
 kind = "externalEvents"
@@ -70,11 +70,11 @@ Output path: `.gdevelop/project-module-map.json`. Initial schema:
   "scenes": [
     {
       "name": "Game",
-      "settingsPath": "scenes/Game/scene.settings",
+      "settingsPath": "scenes/Game/scene.gdl",
       "events": [
         {
           "name": "sceneUpdate",
-          "settingsPath": "scenes/Game/functions/sceneUpdate.settings",
+          "settingsPath": "scenes/Game/functions/sceneUpdate.gdl",
           "eventsPath": "scenes/Game/functions/sceneUpdate.events",
           "purpose": "Scene update",
           "purposeSource": "settings",
@@ -87,7 +87,7 @@ Output path: `.gdevelop/project-module-map.json`. Initial schema:
     {
       "name": "HUD",
       "scene": "Game",
-      "settingsPath": "scenes/Game/external-events/HUD.settings",
+      "settingsPath": "scenes/Game/external-events/HUD.gdl",
       "eventsPath": "scenes/Game/external-events/HUD.events",
       "purpose": "更新 HUD 并处理菜单交互。",
       "eventsLogic": "读取玩家状态，刷新显示，并响应菜单操作。",

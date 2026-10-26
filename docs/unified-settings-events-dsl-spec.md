@@ -1,15 +1,17 @@
-# 统一 Settings DSL：函数、事件与 JavaScript 作者格式规范
+# 统一 GDevelop Language (GDL)：函数、事件与 JavaScript 作者格式规范
 
-- 状态：已实施。当前作者格式 11；验证记录见 [实施与验证报告](unified-settings-events-implementation-report-2026-10-26.md)。
+- 状态：已实施。当前作者格式 12；验证记录见 [实施与验证报告](unified-settings-events-implementation-report-2026-10-26.md)。
 - 日期：2026-10-26。
-- 决策依据：函数声明和事件正文合入同一个 `.settings` 文件；只保留 Settings DSL，不考虑任何作者格式兼容性。
-- 基线：当前 Settings DSL 作者格式 10，变量使用直接声明、字面量及嵌套 `variable`，不使用 metadata/path。
-- 当前作者格式：11。Settings catalog 版本：10；instruction catalog 版本：3，发布本文的新指令结构契约。
+- 决策依据：函数声明和事件正文合入同一个 `.gdl` 文件；只保留 GDevelop Language (GDL)，不考虑任何作者格式兼容性。
+- 基线：当前 GDevelop Language (GDL) 作者格式 10，变量使用直接声明、字面量及嵌套 `variable`，不使用 metadata/path。
+- 当前作者格式：12。Settings catalog 版本：10；instruction catalog 版本：3，发布本文的新指令结构契约。
 - 运行时边界：仍投影到 GDevelop 原生事件模型与代码生成器；不重新定义对象 picking、事件调度或表达式求值。
+
+文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdevelop`，`constants.toml` 和 JavaScript 测试文件保持各自格式。格式 12 不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
 
 ## 1. 最终结论
 
-Settings DSL 成为唯一的项目配置及事件作者语言。函数签名、参数和事件正文属于一个 `function` 根；外部事件片段的声明和正文属于一个 `external_events` 根。函数和片段的顶层事件正文放在唯一可选的 `events {}` 容器中；子事件直接嵌套，不再包一层 events。
+GDevelop Language (GDL) 成为唯一的项目配置及事件作者语言。函数签名、参数和事件正文属于一个 `function` 根；外部事件片段的声明和正文属于一个 `external_events` 根。函数和片段的顶层事件正文放在唯一可选的 `events {}` 容器中；子事件直接嵌套，不再包一层 events。
 
 统一规则：
 
@@ -28,7 +30,7 @@ Settings DSL 成为唯一的项目配置及事件作者语言。函数签名、�
 
 ### 2.1 目标
 
-- 消除 `.settings` / `.events` 配对文件及跨文件声明一致性问题。
+- 消除 `.gdl` / `.events` 配对文件及跨文件声明一致性问题。
 - 消除隐式事件切分、`>` 深度前缀、`?` 子指令前缀和前置 `@` 注解。
 - 保留紧凑、具名、catalog 驱动的指令表达。
 - 完整覆盖当前可持久化事件、指令子树及有效编辑元数据。
@@ -42,28 +44,28 @@ Settings DSL 成为唯一的项目配置及事件作者语言。函数签名、�
 - 重写 GDevelop 表达式语言、JS 运行时 API 或原生代码生成器。
 - 增加对象父子布局、UI 自动布局或差量继承。
 - 把所有场景、对象和函数合并成单个巨型文件。
-- 删除 Constants TOML、测试 `.js` 或资源文件；本文的“只保留 Settings DSL”针对配置和事件作者格式，不改变这些既有独立领域。
+- 删除 Constants TOML、测试 `.js` 或资源文件；本文的“只保留 GDevelop Language (GDL)”针对配置和事件作者格式，不改变这些既有独立领域。
 - 自动迁移旧项目、兼容读写旧语法或保留隐藏 fallback。
 
 ## 3. 文件组织与所有权
 
 ```text
 project.gdevelop
-resources.settings
-tests.settings
+resources.gdl
+tests.gdl
 constants.toml
-scenes/Battle/scene.settings
-scenes/Battle/objects/Player.settings
-scenes/Battle/functions/sceneLoad.settings
-scenes/Battle/functions/sceneUpdate.settings
-scenes/Battle/functions/TakeDamage.settings
-scenes/Battle/external-events/SharedCombat.settings
-extensions/Combat/functions/ApplyDamage.settings
-extensions/Combat/behaviors/Health/functions/TakeDamage.settings
-extensions/Combat/prefabs/Knight/functions/sceneUpdate.settings
+scenes/Battle/scene.gdl
+scenes/Battle/objects/Player.gdl
+scenes/Battle/functions/sceneLoad.gdl
+scenes/Battle/functions/sceneUpdate.gdl
+scenes/Battle/functions/TakeDamage.gdl
+scenes/Battle/external-events/SharedCombat.gdl
+extensions/Combat/functions/ApplyDamage.gdl
+extensions/Combat/behaviors/Health/functions/TakeDamage.gdl
+extensions/Combat/prefabs/Knight/functions/sceneUpdate.gdl
 ```
 
-所有函数仍按现有 owner 和目录边界独立存储；文件 stem、函数 name、生命周期注册信息继续由现有项目规则校验。Scene 的 scene.settings 不直接容纳函数事件；Behavior、Prefab、Extension 同理，事件属于其函数文件。
+所有函数仍按现有 owner 和目录边界独立存储；文件 stem、函数 name、生命周期注册信息继续由现有项目规则校验。Scene 的 scene.gdl 不直接容纳函数事件；Behavior、Prefab、Extension 同理，事件属于其函数文件。
 
 | 根类型 | 允许 events | 原因 |
 | --- | --- | --- |
@@ -515,7 +517,7 @@ code 是原始多行区域，不解码反斜杠、不做字符串插值、不自
 
 新建代码可按示例缩进，但 formatter 和事件块移动不得机械缩进 code 内容，尤其不能改变模板字符串文本。只调整 code 开启行、关闭行和外层 event 的缩进；代码内容的格式化必须是独立且显式的 JS 编辑操作。
 
-作者多行区域统一使用 LF；非空代码内容以换行结束。原生 inlineCode 无末尾换行时，writer 在生成作者格式时仅规范化一个末尾 LF；CRLF 规范化为 LF，不改动其他代码内容。此规范化属于格式 11 的明确等价规则，比较前对两侧应用同一规则，不允许整个字符串 trim。不会因不存在字符串备用写法而偷偷回退。
+作者多行区域统一使用 LF；非空代码内容以换行结束。原生 inlineCode 无末尾换行时，writer 在生成作者格式时仅规范化一个末尾 LF；CRLF 规范化为 LF，不改动其他代码内容。此规范化属于格式 12 的明确等价规则，比较前对两侧应用同一规则，不允许整个字符串 trim。不会因不存在字符串备用写法而偷偷回退。
 
 原生字符串若包含会受换行规范化影响的特殊 JavaScript 字面量，应经同版本 JS parser 确认语义保持；无法证明或发现不合法源码时保存失败并给出范围和原因，不输出转义字符串绕过规则。代码原始内容仍计入共享文件大小和 JS 解析预算。
 
@@ -588,7 +590,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 ## 17. 项目读取、写入与事务
 
-读取顺序：入口格式 11 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
+读取顺序：入口格式 12 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
 
 签名注册先于事件调用解析，支持跨文件函数和现有合法递归调用；不能通过文件枚举顺序决定可见性。
 
@@ -641,7 +643,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 可以复用现有 catalog 参数编解码和原生事件验证算法，但必须重命名/搬迁为统一 Settings 模块，不保留旧源码入口作为隐藏兼容层。
 
-原生 JSON 模板服务不是旧 DSL 作者格式。URL 导入边界仍可从当前有效原生模型直接生成格式 11 settings；这是模型导入，不是 `.events` 迁移。内部原生事件 JSON 和生成 game.json 仍存在，不属于公开作者语言。
+原生 JSON 模板服务不是旧 DSL 作者格式。URL 导入边界仍可从当前有效原生模型直接生成格式 12 settings；这是模型导入，不是 `.events` 迁移。内部原生事件 JSON 和生成 game.json 仍存在，不属于公开作者语言。
 
 ## 20. 实施步骤
 
@@ -652,11 +654,11 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 5. 同步本地/云/下载存储、事务、恢复和 watcher；删除配对路径逻辑。
 6. 更新 Settings catalog、instruction catalog、项目模块地图、JS 声明生成和 MCP 源定位。
 7. 更新编辑器语法服务及内嵌 JS 服务；移除 IfDo 入口。
-8. 更新新项目模板、原生 JSON 模板导入、示例、技能及测试夹具；作者格式切至 11。
+8. 更新新项目模板、原生 JSON 模板导入、示例、技能及测试夹具；作者格式切至 12。
 9. 删除旧 IfDo 实现和测试；将仍有价值的运行语义断言转写为新格式测试。
 10. 完成全部验收后发布新契约；不得以同时支持旧格式作为过渡发布方案。
 
-实施过程中可以在未发布分支分步开发，但最终入口只接受格式 11。实施与验证结果记录在独立报告中。
+实施过程中可以在未发布分支分步开发，但最终入口只接受格式 12。实施与验证结果记录在独立报告中。
 
 ## 21. 验收矩阵
 

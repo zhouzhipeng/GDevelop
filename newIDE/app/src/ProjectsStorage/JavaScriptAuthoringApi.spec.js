@@ -348,12 +348,12 @@ harness.getRenderer();
 
   test('extracts JavaScript with exact Settings source locations', () => {
     const blocks = collectSourceFileJavaScriptBlocks({
-      'game://scenes/Main/Main.settings':
+      'game://scenes/Main/Main.gdl':
         'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n\n      event {\n        type = "javascript"\n        strict = true\n        objects = "Player"\n        expanded = false\n\n        code {\nconst value = 1;\n        }\n      }\n    }\n  }\n}\n',
     });
     expect(blocks).toEqual([
       expect.objectContaining({
-        fileUri: 'game://scenes/Main/Main.settings',
+        fileUri: 'game://scenes/Main/Main.gdl',
         parameterObjects: 'Player',
         useStrict: true,
         headerLine: 12,
@@ -384,7 +384,7 @@ harness.getRenderer();
       collectSerializedProjectJavaScriptBlocks(projectWithExternal)
     ).toEqual([
       expect.objectContaining({
-        fileUri: 'game://scenes/Main/external-events/Shared%20Combat.settings',
+        fileUri: 'game://scenes/Main/external-events/Shared%20Combat.gdl',
       }),
     ]);
     expect(
@@ -395,8 +395,7 @@ harness.getRenderer();
       expect.arrayContaining([
         expect.objectContaining({
           code: 'JS_API_TYPE_MISMATCH',
-          fileUri:
-            'game://scenes/Main/external-events/Shared%20Combat.settings',
+          fileUri: 'game://scenes/Main/external-events/Shared%20Combat.gdl',
         }),
       ])
     );
@@ -429,7 +428,7 @@ harness.getRenderer();
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.settings':
+        'game://scenes/Main/Main.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code {\nfor (const player of objects) {\n  player.setX(player.getX() + 1);\n  player.getVariables().get("Health").sub(1);\n  const platformer = player.getBehavior("Platformer");\n  if (platformer) platformer.activate(true);\n}\nruntimeScene.getVariables().get("Score").add(10);\nruntimeScene.getGame().getVariables().get("HighScore").add(10);\nif (runtimeScene.getElapsedTime() < 0) return;\nconst bullet = runtimeScene.createObject("Bullet");\nif (bullet) bullet.addPolarForce(0, 720, 1);\n      }\n    }\n  }\n}\n',
       },
     });
@@ -443,7 +442,7 @@ harness.getRenderer();
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.settings':
+        'game://scenes/Main/Main.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code {\ngdjs.evtTools.input.requestPointerLock(runtimeScene, "first-person-camera");\nif (gdjs.evtTools.input.isPointerLocked(runtimeScene)) {\n  const movementX = gdjs.evtTools.input.getPointerMovementX(runtimeScene);\n  const movementY = gdjs.evtTools.input.getPointerMovementY(runtimeScene);\n  objects[0].setPosition(movementX, movementY);\n  gdjs.evtTools.input.exitPointerLock(runtimeScene);\n}\nconst hits = gdjs.evtTools.scene3d.raycastObjects(\n  0, 0, 0, 1, 0, 0, objects, 0, 1000, true\n);\nif (hits.length > 0) hits[0].object.setX(hits[0].pointX);\n      }\n    }\n  }\n}\n',
       },
     });
@@ -456,7 +455,7 @@ harness.getRenderer();
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.settings':
+        'game://scenes/Main/Main.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code {\nruntimeScene.getObjects("Plaeyr");\nruntimeScene.getLayer("HUD");\nruntimeScene.getVariables().get("Scroe");\nobjects[0].getVariables().get("HP");\nobjects[0].getBehavior("Physics");\n      }\n    }\n  }\n}\n',
       },
     });
@@ -466,7 +465,7 @@ harness.getRenderer();
       expect.arrayContaining([
         expect.objectContaining({
           code: 'JS_API_TYPE_MISMATCH',
-          fileUri: 'game://scenes/Main/Main.settings',
+          fileUri: 'game://scenes/Main/Main.gdl',
         }),
       ])
     );
@@ -476,7 +475,7 @@ harness.getRenderer();
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.settings':
+        'game://scenes/Main/Main.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code {\nobjects[0]._behaviorData;\nobjects[0].notAPublicMethod();\nfetch("https://example.com");\n      }\n    }\n  }\n}\n',
       },
     });
@@ -485,7 +484,7 @@ harness.getRenderer();
       expect.arrayContaining([
         expect.objectContaining({
           code: 'JS_API_PRIVATE_MEMBER',
-          fileUri: 'game://scenes/Main/Main.settings',
+          fileUri: 'game://scenes/Main/Main.gdl',
           line: 12,
         }),
         expect.objectContaining({ code: 'JS_API_UNKNOWN_MEMBER' }),
@@ -498,7 +497,7 @@ harness.getRenderer();
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.settings':
+        'game://scenes/Main/Main.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = false\n      objects = "Player"\n      expanded = false\n\n      code {\nobjects[0]._behaviorData;\n      }\n    }\n  }\n}\n',
       },
     });
@@ -610,7 +609,7 @@ harness.getRenderer();
         ],
       },
       sourceFiles: {
-        'game://extensions/MousePointerLock/functions/RequestPointerLock.settings':
+        'game://extensions/MousePointerLock/functions/RequestPointerLock.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\ndocument.body.requestPointerLock();\ngdjs._MousePointerLockExtension.handler.requestPointerLock();\nconst broken = ;\n      }\n    }\n  }\n}\n',
       },
     });
@@ -643,7 +642,7 @@ harness.getRenderer();
           eventsFunctionsExtensions: [extension],
         },
         sourceFiles: {
-          'game://extensions/MousePointerLock/functions/RequestPointerLock.settings': extensionSource,
+          'game://extensions/MousePointerLock/functions/RequestPointerLock.gdl': extensionSource,
         },
       });
 
@@ -696,7 +695,7 @@ harness.getRenderer();
         ],
       },
       sourceFiles: {
-        'game://scenes/Main/Main.settings':
+        'game://scenes/Main/Main.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\ndocument.body.requestPointerLock();\n      }\n    }\n  }\n}\n',
       },
     });
@@ -706,7 +705,7 @@ harness.getRenderer();
       expect.arrayContaining([
         expect.objectContaining({
           code: 'JS_API_FORBIDDEN_GLOBAL',
-          fileUri: 'game://scenes/Main/Main.settings',
+          fileUri: 'game://scenes/Main/Main.gdl',
         }),
       ])
     );
@@ -716,7 +715,7 @@ harness.getRenderer();
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.settings':
+        'game://scenes/Main/Main.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nruntimeScene.getObjects("Player");\n      }\n    }\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nruntimeScene._instances.length;\n      }\n    }\n  }\n}\n',
       },
     });
@@ -735,7 +734,7 @@ harness.getRenderer();
     const syntaxValidation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.settings':
+        'game://scenes/Main/Main.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = false\n      objects = ""\n      expanded = false\n\n      code {\nif (\n      }\n    }\n  }\n}\n',
       },
     });
@@ -748,7 +747,7 @@ harness.getRenderer();
     const loopValidation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.settings':
+        'game://scenes/Main/Main.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nwhile (true) {}\n      }\n    }\n  }\n}\n',
       },
     });
@@ -764,7 +763,7 @@ harness.getRenderer();
     const functionValidation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://extensions/Combat/functions/Damage.settings':
+        'game://extensions/Combat/functions/Damage.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nconst amount = eventsFunctionContext.getArgument("Amount");\neventsFunctionContext.returnValue = typeof amount === "number" ? amount : 0;\n      }\n    }\n  }\n}\n',
       },
     });
@@ -773,7 +772,7 @@ harness.getRenderer();
     const lifecycleValidation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/functions/sceneSignal.settings':
+        'game://scenes/Main/functions/sceneSignal.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nconst signalName = eventsFunctionContext.getArgument("SignalName");\nif (typeof signalName === "string" && signalName.length > 0) runtimeScene.getElapsedTime();\n      }\n    }\n  }\n}\n',
       },
     });
@@ -782,7 +781,7 @@ harness.getRenderer();
     const sceneValidation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.settings':
+        'game://scenes/Main/Main.gdl':
           'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\neventsFunctionContext.returnValue = 1;\n      }\n    }\n  }\n}\n',
       },
     });

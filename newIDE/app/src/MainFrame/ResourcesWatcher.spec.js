@@ -24,7 +24,7 @@ describe('ResourcesWatcher', () => {
     ).toBe(false);
     expect(
       shouldHardReloadForExternallyChangedResource(
-        'D:\\project\\scenes\\Game\\objects\\Player.settings'
+        'D:\\project\\scenes\\Game\\objects\\Player.gdl'
       )
     ).toBe(false);
   });

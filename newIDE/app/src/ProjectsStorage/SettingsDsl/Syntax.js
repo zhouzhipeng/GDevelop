@@ -147,7 +147,7 @@ export const parseSettingsSyntax = (source, fileUri) => {
       rest.match(/^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*/);
     if (!match)
       error(
-        'Expected a node, property, or value. Only Settings DSL is supported.'
+        'Expected a node, property, or value. Only GDevelop Language (GDL) is supported.'
       );
     for (let i = 0; i < match[0].length; i++) advance();
     const text = match[0];

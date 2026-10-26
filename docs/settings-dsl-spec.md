@@ -1,12 +1,12 @@
-# GDevelop Settings DSL 规范提案
+# GDevelop Language (GDL) 规范提案
 
-- 状态：已批准实施；当前语法格式版本 11
-- 统一事件契约：[统一 Settings DSL：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。作者格式 11 将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
+- 状态：已批准实施；当前语法格式版本 12
+- 统一事件契约：[统一 GDevelop Language (GDL)：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。作者格式 12 将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
 - 已批准的变量语法修订：[直接 variable 声明与值字面量](settings-dsl-variable-values-spec.md)。已取代第 8.2 节及相关变量示例。
 - 日期：2026-10-25
-- 范围：全部现有 `.settings` 作者文件；项目入口 `project.gdevelop` 同时使用本语法
-- 工作名称：Settings DSL
-- 文件扩展名：保留 `.settings`；不新增 `.layout` 文件或单独的 Layout DSL
+- 范围：全部现有 `.gdl` 作者文件；项目入口 `project.gdevelop` 同时使用本语法
+- 工作名称：GDevelop Language (GDL)
+- 文件扩展名：统一使用 `.gdl`；不新增 `.layout` 文件或单独的 Layout DSL
 - 决策：完整替代 TOML；只支持本规范最新语法，不提供旧语法兼容、回退、双读双写或迁移器
 - 所有普通属性直接放所属节点内，不增加 `settings` 包装块。
 - 实现：`newIDE/app/src/ProjectsStorage/SettingsDsl`；共享布局数据验证：`LayoutDocument`；组件拆分/组合：`MultiFileProjectFormat`。
@@ -43,28 +43,28 @@ node {
 6. 保留 UUID、图层顺序、全局实例顺序和现有序列化数据。
 7. 对格式未知字段报错，不悄悄忽略。
 
-对象定义、行为定义、函数签名、资源清单和测试配置都在本规范范围内。事件作者语法统一由上方格式 11 契约定义。非目标：重写 JavaScript 测试正文、图片模型音频资源或生成的运行时 JSON；支持配置中的任意表达式或完整 CSS。
+对象定义、行为定义、函数签名、资源清单和测试配置都在本规范范围内。事件作者语法统一由上方格式 12 契约定义。非目标：重写 JavaScript 测试正文、图片模型音频资源或生成的运行时 JSON；支持配置中的任意表达式或完整 CSS。
 
 ## 3. 文件归属
 
-每个组件使用自己的 `.settings` 声明文件。场景、Prefab、Variant 和 External 的配置与布局一起声明，不拆成 settings/layout 文件对。其他组件保留独立文件边界，只统一语法。
+每个组件使用自己的 `.gdl` 声明文件。场景、Prefab、Variant 和 External 的配置与布局一起声明，不拆成 settings/layout 文件对。其他组件保留独立文件边界，只统一语法。
 
 ```text
 scenes/Battle/
-  scene.settings
+  scene.gdl
   objects/
-    Player.settings
+    Player.gdl
   functions/
-    sceneUpdate.settings
+    sceneUpdate.gdl
   external-layout/
-    BonusRoom.settings
+    BonusRoom.gdl
 
 extensions/Combat/prefabs/Knight/
-  prefab.settings
+  prefab.gdl
   objects/
   functions/
   variants/Armored/
-    variant.settings
+    variant.gdl
     objects/
 ```
 
@@ -74,13 +74,13 @@ extensions/Combat/prefabs/Knight/
 - 名称、描述、排序、组件变量和运行配置，与背景、边界、图层、实例共同属于同一个声明文件。
 - 普通属性直接放根节点；禁止额外的 `settings {}`、`metadata {}`、`layout {}` 包装块。
 - 子块只用于具有结构、集合或作用域的数据，例如 variable、对象组、行为共享数据、editor、layer、instance。
-- 对象定义保持独立组件；每个函数的签名和事件正文合并在一个 .settings 文件中，统一使用 Settings DSL。
+- 对象定义保持独立组件；每个函数的签名和事件正文合并在一个 .gdl 文件中，统一使用 GDevelop Language (GDL)。
 - 所属关系由路径确定。根 `name` 表示组件名称，必须与解码后的所属目录名（External 为文件 stem）一致；命名空间包装不再重复名称。
 - 根不写 `kind`、`settingsFormatVersion` 或每文件 `version`。根节点类型提供组件种类，整个项目只支持当前 schema；`project.gdevelop` 的 `formatVersion` 是精确匹配的格式标记，不是版本协商入口。
-- 所有 `.settings` 只由新解析器读取，不探测 TOML。禁止根级 `layout` 包装和独立 `.layout` 布局源；同一组件数据只允许一个所有者。
+- 所有 `.gdl` 只由新解析器读取，不探测 TOML。禁止根级 `layout` 包装和独立 `.layout` 布局源；同一组件数据只允许一个所有者。
 - 编辑器状态暂保留在 `editor`，个人视图状态是否迁出另行评估。
 - `project.gdevelop` 使用相同 DSL，根为 `project`，保留引导入口文件名。formatVersion 使用最新常量 11。任何不匹配直接拒绝，不尝试旧读取器。
-- 事件正文合入所属 .settings；测试 `.js` 正文不变。`constants.toml` 是显式例外，仍为独立的编辑器常量文档；它不是 settings，也不属于本轮替换。生成的 catalog JSON 与运行时 JSON 不改语法。
+- 事件正文合入所属 .gdl；测试 `.js` 正文不变。`constants.toml` 是显式例外，仍为独立的编辑器常量文档；它不是 settings，也不属于本轮替换。生成的 catalog JSON 与运行时 JSON 不改语法。
 - 单文件内配置与布局一起验证、保存；重命名或跨文件引用更新仍须事务保存。
 
 合并的收益是减少配对文件和所有权分界；代价是修改配置与移动实例会触及同一文件。通过内容比较和 AST 局部编辑减轻 diff，而不声称能消除文件级冲突。
@@ -171,17 +171,17 @@ array      := "[" (value ("," value)* ","?)? "]"
 | 文件/组件 | 根节点 | 主要内容 |
 | --- | --- | --- |
 | project.gdevelop | project | 入口、精确格式标记、项目配置 |
-| resources.settings | resources | 资源清单 |
-| tests.settings | tests | 测试元数据与脚本引用 |
-| scene.settings | scene | 场景自有配置与布局 |
-| prefab.settings | prefab | Prefab 自有配置与默认布局 |
-| variant.settings | variant | Variant 自有配置与布局 |
-| external-layout/*.settings | external | External 自有配置与布局 |
-| objects/*.settings | object | 对象类型、资源引用、变量、行为 |
-| functions/*.settings | function | 函数签名、参数、返回信息 |
-| behaviors/*/behavior.settings | behavior | 行为定义、自有配置与属性声明 |
-| extensions/*/extension.settings | extension | 扩展元数据与自有配置 |
-| external-events/*.settings | external_events | 外部事件元数据 |
+| resources.gdl | resources | 资源清单 |
+| tests.gdl | tests | 测试元数据与脚本引用 |
+| scene.gdl | scene | 场景自有配置与布局 |
+| prefab.gdl | prefab | Prefab 自有配置与默认布局 |
+| variant.gdl | variant | Variant 自有配置与布局 |
+| external-layout/*.gdl | external | External 自有配置与布局 |
+| objects/*.gdl | object | 对象类型、资源引用、变量、行为 |
+| functions/*.gdl | function | 函数签名、参数、返回信息 |
+| behaviors/*/behavior.gdl | behavior | 行为定义、自有配置与属性声明 |
+| extensions/*/extension.gdl | extension | 扩展元数据与自有配置 |
+| external-events/*.gdl | external_events | 外部事件元数据 |
 
 路径中具名所有者的具体分配保持当前目录契约；表格中的 behavior 路径只表示所属作用域，不要求重构已有目录。全局、场景、Prefab 和 Variant 对象共用 object 根，所属目录决定解析作用域。生命周期函数及扩展/行为/Prefab 函数共用 function 根。
 
@@ -191,7 +191,7 @@ project formatVersion 固定为 11；入口、模板和读取器共用 SETTINGS_
 
 ```text
 project {
-  formatVersion = 11
+  formatVersion = 12
   name = "Adventure"
 }
 ```
@@ -876,7 +876,7 @@ ComponentDocument 分别持有组件配置和 LayoutDocument，内部共享现�
 
 ```text
 LAYOUT_UNKNOWN_OBJECT
-scene.settings:42:14
+scene.gdl:42:14
 instance[id=ef3ef49d-f20f-4450-b373-0ce43291a002].object
 Object "Playre" does not exist in this scene context.
 Did you mean "Player"?
@@ -903,11 +903,11 @@ Did you mean "Player"?
 
 本规范明确不考虑任何旧作者格式兼容性：
 
-- 只有一个 Settings DSL 解析器和一套最新 schema。
+- 只有一个 GDevelop Language (GDL) 解析器和一套最新 schema。
 - 删除生产路径中的 TOML settings 读取/写入、格式探测、旧版本分支、双读双写、兼容适配和 fallback。
 - 不开发迁移器、升级向导、旧项目转换器或兼容测试套件。
 - TOML 输入、未知根、旧命名空间包装和不匹配的项目 formatVersion 直接报错。
-- 不能通过内容猜测另一种语法；报错明确说明只支持当前 Settings DSL。
+- 不能通过内容猜测另一种语法；报错明确说明只支持当前 GDevelop Language (GDL)。
 - 现有模板、示例项目、测试夹具、内置项目 authoring skill、catalog 生成器与工具输出一并改用最新语法。更新这些仓库资产属于实现工作，不是提供历史项目迁移能力。
 - 重新保存新 DSL 项目必须保持当前有效模型完整；不需要保持历史格式的文本或特殊兼容状态。
 
@@ -936,7 +936,7 @@ Dirty 保存只更新发生变化的组件文件。改变场景布局不重写�
 
 ## 20. 实施范围与待定细节
 
-已确定：全量替换 settings 语法；保留 .settings；配置直接放根；统一解析器；只支持最新格式；没有独立 Layout DSL；不提供任何旧语法兼容。
+已确定：全量替换 settings 语法；保留 .gdl；配置直接放根；统一解析器；只支持最新格式；没有独立 Layout DSL；不提供任何旧语法兼容。
 
 建议实施顺序：
 
@@ -964,7 +964,7 @@ Dirty 保存只更新发生变化的组件文件。改变场景布局不重写�
 - `newIDE/app/src/ProjectsStorage/ProjectSourceCatalog.js`：发布实际节点 schema 和注册类型信息；catalog 格式版本为 6。
 - `newIDE/app/src/CodeEditor/SettingsLanguage.js`：现有 Monaco 版本的语法高亮、格式化及实时语法诊断。
 
-回归覆盖包括全部组件根、本地事务/恢复、首次打开和 catalog 重建、MCP 校验/生成、实际引擎模型保存、Sprite 多边形、物理行为字段、全局实例顺序、UUID、非活动相机尺寸、变量树、拒绝未知字段与 TOML、以及随项目分发的 Settings DSL 示例。
+回归覆盖包括全部组件根、本地事务/恢复、首次打开和 catalog 重建、MCP 校验/生成、实际引擎模型保存、Sprite 多边形、物理行为字段、全局实例顺序、UUID、非活动相机尺寸、变量树、拒绝未知字段与 TOML、以及随项目分发的 GDevelop Language (GDL) 示例。
 
 存储、MCP 与编辑器语言的完整相关测试：17 个测试套件，291 项测试、5 个快照通过。命令为 `CI=true npm test -- --watchAll=false --runInBand src/ProjectsStorage src/CodeEditor/SettingsLanguage.spec.js src/Mcp/McpEditorBridge.spec.js`（在 newIDE/app 运行）。
 
@@ -983,13 +983,13 @@ Dirty 保存只更新发生变化的组件文件。改变场景布局不重写�
 
 ## 22. 官方模板导入边界与回归（2026-10-26）
 
-模板服务提供的原生 JSON 快照在 URL 导入边界转换为当前项目模型；这不增加旧 `.settings` 语法的读取、回退或迁移支持。转换规则：
+模板服务提供的原生 JSON 快照在 URL 导入边界转换为当前项目模型；这不增加旧 `.gdl` 语法的读取、回退或迁移支持。转换规则：
 
 - 自定义行为、行为共享配置和自定义对象 `content` 仅保留模板所附扩展定义仍声明的属性，包含隐藏属性。已删除、运行时不再读取的属性不进入新项目。内建或未知类型的属性不按猜测清理。
 - 全局对象、场景对象、Prefab、Variant 和嵌套子对象配置使用同一规则；有效值、子对象覆盖和其他作者数据保留。
 - 旧行为包装只有在内外 `name`、`type` 完全相同时才展开。
 - 非光照图层中越界的、未使用的环境光颜色恢复为原生默认值 `[200, 200, 200]`；真正光照图层和有效颜色仍严格验证。
-- 本地 `.settings` 的未知字段仍报错，不从用户文档内容推断或扩展 schema。
+- 本地 `.gdl` 的未知字段仍报错，不从用户文档内容推断或扩展 schema。
 
 DSL 序列化保留对象组的声明顺序。类型的惰性加载只补充缺失 schema，不能覆盖已注册的项目自定义类型；自定义对象动画中的 `loop` 映射到原生 `looping` 字段。
 
@@ -1016,4 +1016,4 @@ DSL 序列化保留对象组的声明顺序。类型的惰性加载只补充缺�
 
 ## 26. 统一事件作者格式（2026-10-26）
 
-作者格式 11、Settings catalog 10、instruction catalog 3。函数和外部片段正文只保存在其 .settings 的顶层 events 中。conditions/actions 使用无 if/do 前缀的精确 catalog 指令；执行事件使用 event.type，默认 standard；group/comment/link 为独立节点；子节点直接嵌套；JavaScript 使用原始多行 code 块。移除旧 IfDo 解析器及 .events 配对读写。完整边界、模型映射和验收见统一事件契约。
+作者格式 12、Settings catalog 10、instruction catalog 3。函数和外部片段正文只保存在其 .gdl 的顶层 events 中。conditions/actions 使用无 if/do 前缀的精确 catalog 指令；执行事件使用 event.type，默认 standard；group/comment/link 为独立节点；子节点直接嵌套；JavaScript 使用原始多行 code 块。移除旧 IfDo 解析器及 .events 配对读写。完整边界、模型映射和验收见统一事件契约。

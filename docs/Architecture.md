@@ -725,43 +725,43 @@ A representative source tree is:
 
 ```text
 project.gdevelop
-resources.settings
+resources.gdl
 constants.toml
-tests.settings
+tests.gdl
 tests/<encoded-project-test>.js
 tests/<encoded-extension-and-test>.js
-objects/<encoded-name>.settings
+objects/<encoded-name>.gdl
 scenes/<encoded-name>/
-  scene.settings
-  objects/<encoded-name>.settings
-  functions/<lifecycle>.settings
+  scene.gdl
+  objects/<encoded-name>.gdl
+  functions/<lifecycle>.gdl
   functions/<lifecycle>.events
   external-events/<encoded-name>.events
-  external-layout/<encoded-name>.settings
-extensions/<encoded-name>/extension.settings
-extensions/<encoded-name>/functions/<encoded-name>.settings|.events
+  external-layout/<encoded-name>.gdl
+extensions/<encoded-name>/extension.gdl
+extensions/<encoded-name>/functions/<encoded-name>.gdl|.events
 extensions/<encoded-name>/behaviors/<encoded-name>/
-  behavior.settings
-  functions/<encoded-name>.settings|.events
+  behavior.gdl
+  functions/<encoded-name>.gdl|.events
 extensions/<encoded-name>/prefabs/<encoded-name>/
-  prefab.settings
-  objects/<encoded-name>.settings
-  functions/<encoded-name>.settings|.events
+  prefab.gdl
+  objects/<encoded-name>.gdl
+  functions/<encoded-name>.gdl|.events
   variants/<encoded-name>/
-    variant.settings
-    objects/<encoded-name>.settings
+    variant.gdl
+    objects/<encoded-name>.gdl
 ```
 
-- `*.settings` and `constants.toml` use TOML. Layout-bearing owners embed the
+- `*.gdl` and `constants.toml` use TOML. Layout-bearing owners embed the
   strict layout schema below `[layout]`; there are no managed `.layout` files.
 - `*.events` uses the IfDo DSL in
   `newIDE/app/src/EventsSheet/IfDoEventsDsl`.
-- Root `tests.settings` owns all project and extension gameplay-test metadata;
+- Root `tests.gdl` owns all project and extension gameplay-test metadata;
   each scheme-free `file` points to one direct child of root `tests/`.
 - Physical owner paths derive component association. Same-stem function event
   bodies and embedded layouts do not use URI fields.
 - Every managed `.events` file is a function body and has a same-stem
-  `.settings` file in the same `functions/` directory.
+  `.gdl` file in the same `functions/` directory.
 - Display names are encoded into portable, case-safe physical segments.
 - Objects remain first-class sources below a dedicated `objects/` directory in
   every object-owning scope, including named prefab variants.

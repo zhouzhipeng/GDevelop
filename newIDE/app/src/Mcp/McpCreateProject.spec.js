@@ -36,7 +36,7 @@ describe('createLocalProject', () => {
     expect(loaded).toBeTruthy();
     for (const file of [
       'project.gdevelop',
-      'resources.settings',
+      'resources.gdl',
       'constants.toml',
       'AGENTS.md',
       'skills/gdevelop-project-files/SKILL.md',

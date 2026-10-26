@@ -1,9 +1,9 @@
-> Superseded authoring syntax. Current production source format is Settings DSL 8, defined in [settings-dsl-spec.md](settings-dsl-spec.md). TOML settings, embedded layout namespaces and earlier project versions are not supported. The material below is historical reference only.
+> Superseded authoring syntax. Current production source format is GDevelop Language (GDL) 8, defined in [settings-dsl-spec.md](settings-dsl-spec.md). TOML settings, embedded layout namespaces and earlier project versions are not supported. The material below is historical reference only.
 
 # Embedded layout settings and flattened source paths
 
 > Version 7 amendment: External Events now require same-stem
-> `external-events/<Fragment>.settings` and `.events` files. Their settings
+> `external-events/<Fragment>.gdl` and `.events` files. Their settings
 > contain `kind = "externalEvents"`, `name`, `description`, and `eventsLogic`.
 > See [external-events-settings-project-module-map-spec.md](external-events-settings-project-module-map-spec.md).
 > Statements below describing settings-free fragments document version 6.
@@ -29,22 +29,22 @@
 Multi-file format version 5 removes managed `.layout` source files. Spatial
 and visual layout data remains a strict, independently validated layout
 domain, but it is stored as a namespaced `[layout]` subtree inside the
-`.settings` file that owns the component.
+`.gdl` file that owns the component.
 
 The ownership model is:
 
 | Component              | Version 4 sources                                                             | Version 5 source                                                        |
 | ---------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Scene                  | `scene.settings` + `<Scene>.layout`                                           | `scene.settings` with embedded layout                                   |
-| Prefab default variant | `prefab.settings` + `<Prefab>.layout`                                         | `prefab.settings` with embedded layout                                  |
-| Named prefab variant   | `[[variants]]` in `prefab.settings` + `variants/<Variant>.layout`             | `variants/<Variant>/variant.settings` with metadata and embedded layout |
-| External layout        | `[[externalLayoutFiles]]` in `scene.settings` + `externals/<External>.layout` | `external-layout/<External>.settings` with metadata and embedded layout |
-| Function pair          | `functions/<Function>/function.settings` + `<Function>.events`                | `functions/<Function>.settings` + `functions/<Function>.events`         |
+| Scene                  | `scene.gdl` + `<Scene>.layout`                                           | `scene.gdl` with embedded layout                                   |
+| Prefab default variant | `prefab.gdl` + `<Prefab>.layout`                                         | `prefab.gdl` with embedded layout                                  |
+| Named prefab variant   | `[[variants]]` in `prefab.gdl` + `variants/<Variant>.layout`             | `variants/<Variant>/variant.gdl` with metadata and embedded layout |
+| External layout        | `[[externalLayoutFiles]]` in `scene.gdl` + `externals/<External>.layout` | `external-layout/<External>.gdl` with metadata and embedded layout |
+| Function pair          | `functions/<Function>/function.gdl` + `<Function>.events`                | `functions/<Function>.gdl` + `functions/<Function>.events`         |
 | Event body syntax      | IfDo `.events`                                                                | IfDo `.events`, unchanged                                               |
-| Gameplay tests         | Inline project/extension records and JavaScript                               | Root `tests.settings` + flat root `tests/*.js` sources                   |
+| Gameplay tests         | Inline project/extension records and JavaScript                               | Root `tests.gdl` + flat root `tests/*.js` sources                   |
 
 There are no managed `.layout` files in a version 5 source tree. The editable
-component fragments use `.settings` for declarative data and `.events` for
+component fragments use `.gdl` for declarative data and `.events` for
 event logic. `project.gdevelop` remains the bootstrap entry file and
 `constants.toml` remains the direct-root editor-only constants document; this
 proposal does not rename those deliberate exceptions.
@@ -85,17 +85,17 @@ This produces several costs:
 3. Missing layout sources and stale layout URIs create failure modes unrelated
    to authored game semantics.
 4. Source authors and AI tools must select among three editable extensions
-   even though both `.settings` and `.layout` are strict TOML declarations.
+   even though both `.gdl` and `.layout` are strict TOML declarations.
 5. Named prefab variants are not self-contained: their metadata belongs to the
    parent while their objects and layout are stored below a variant path.
 6. External layouts are not self-contained and cause high-level
-   `scene.settings` edits when only external-layout identity changes.
+   `scene.gdl` edits when only external-layout identity changes.
 7. Format discovery, ownership validation, rename transactions, source
    catalogs, and recovery logic all carry layout-reference-specific branches.
 
 The physical split does provide useful write isolation for high-churn scene
 placement data. Version 5 preserves component-level isolation where it is
-valuable by giving named variants and external layouts their own `.settings`
+valuable by giving named variants and external layouts their own `.gdl`
 owners. It accepts that the default scene and default prefab layout change
 their existing owner settings files.
 
@@ -103,7 +103,7 @@ their existing owner settings files.
 
 The source tree should communicate two primary concepts:
 
-- `.settings` declares what a component is and all non-event data it owns;
+- `.gdl` declares what a component is and all non-event data it owns;
 - `.events` declares what event logic a function or lifecycle phase executes.
 
 Layout remains a strongly typed subdomain inside settings rather than becoming
@@ -112,23 +112,23 @@ generic serializer data.
 ## 3. Goals
 
 1. Emit no managed `.layout` files in multi-file format version 5.
-2. Make every layout-bearing component self-contained in one `.settings`
+2. Make every layout-bearing component self-contained in one `.gdl`
    owner, excluding its separately owned object definitions and functions.
 3. Embed scene and default-prefab layout data in their existing settings
    owners.
 4. Promote every named prefab variant to an independently discovered
-   `variant.settings` component.
+   `variant.gdl` component.
 5. Promote every external layout to an independently discovered
-   `external-layout.settings` component below its associated scene.
+   `external-layout.gdl` component below its associated scene.
 6. Preserve the strict layout version 1 schema and all current compilation,
    decompilation, validation, and canonicalization semantics.
 7. Preserve exact normalized legacy-project round trips through
    `gd::Project::UnserializeFrom`.
-8. Keep object definitions in their existing `objects/*.settings` sources and
+8. Keep object definitions in their existing `objects/*.gdl` sources and
    all event bodies in `.events` sources.
 9. Flatten every function pair from
-   `functions/<Function>/function.settings` plus `<Function>.events` to
-   `functions/<Function>.settings` plus `functions/<Function>.events`.
+   `functions/<Function>/function.gdl` plus `<Function>.events` to
+   `functions/<Function>.gdl` plus `functions/<Function>.events`.
 10. Preserve a dedicated `objects/` directory for every object-owning scope,
     including named variants, because objects are first-class components.
 11. Continue content-addressed dirty writes: an unchanged canonical component
@@ -152,7 +152,7 @@ generic serializer data.
 3. It does not merge object definitions into scene, prefab, or variant owner
    settings.
 4. It does not embed `.events` text or compiled event arrays in settings.
-5. It does not merge all named variants into `prefab.settings`.
+5. It does not merge all named variants into `prefab.gdl`.
 6. It does not weaken layout validation, introduce generic `rawJson` inside
    layout tables, or accept unknown layout fields.
 7. It does not add TOML include/import directives or textual source expansion.
@@ -170,7 +170,7 @@ generic serializer data.
 
 ## 5. Normative terminology and invariants
 
-- **Owner settings** is the `.settings` file that contains component identity,
+- **Owner settings** is the `.gdl` file that contains component identity,
   metadata, and its embedded layout subtree.
 - **Embedded layout** is the root `[layout]` table and its namespaced child
   tables in an owner settings file.
@@ -200,9 +200,9 @@ The following invariants are normative:
     are not serialized again as URI or name references.
 11. Every function settings file and event body share one filename stem in one
     `functions/` directory. Function settings do not store an events URI.
-12. A named variant directory contains `variant.settings` plus
-    `objects/<Object>.settings`. Object settings never share the owner directory
-    with `variant.settings`.
+12. A named variant directory contains `variant.gdl` plus
+    `objects/<Object>.gdl`. Object settings never share the owner directory
+    with `variant.gdl`.
 
 ## 6. Current version 4 behavior
 
@@ -210,20 +210,20 @@ The implemented version 4 adapter currently uses these relevant paths:
 
 ```text
 scenes/<Scene>/
-  scene.settings
+  scene.gdl
   <Scene>.layout
-  objects/<Object>.settings
+  objects/<Object>.gdl
   functions/<Lifecycle>/
-    function.settings
+    function.gdl
     <Lifecycle>.events
 
 extensions/<Extension>/prefabs/<Prefab>/
-  prefab.settings
+  prefab.gdl
   <Prefab>.layout
-  objects/<Object>.settings
+  objects/<Object>.gdl
   variants/
     <Variant>.layout
-    <Variant>/objects/<Object>.settings
+    <Variant>/objects/<Object>.gdl
 
 scenes/<Scene>/externals/
   <ExternalLayout>.layout
@@ -236,7 +236,7 @@ The current split fields are:
 - external layout: `editionSettings` and `instances`, with linked scene layer
   references compiled in external context.
 
-Version 4 `scene.settings` owns a layout URI. Version 4 `prefab.settings` owns
+Version 4 `scene.gdl` owns a layout URI. Version 4 `prefab.gdl` owns
 the default layout URI and a `[[variants]]` array containing variant metadata
 and layout URIs. Scene settings also contain `[[externalLayoutFiles]]` records
 with external-layout name, global order, and layout URI.
@@ -252,50 +252,50 @@ legacy object to the existing model.
 
 ```text
 project.gdevelop
-resources.settings
+resources.gdl
 constants.toml
-tests.settings
+tests.gdl
 tests/
   Player%20can%20jump.js
   Combat%20-%20Enemy%20takes%20damage.js
 objects/
-  GlobalObject.settings
+  GlobalObject.gdl
 scenes/
   Main/
-    scene.settings
+    scene.gdl
     objects/
-      Player.settings
+      Player.gdl
     functions/
-      sceneLoad.settings
+      sceneLoad.gdl
       sceneLoad.events
-      sceneSignal.settings
+      sceneSignal.gdl
       sceneSignal.events
-      sceneUpdate.settings
+      sceneUpdate.gdl
       sceneUpdate.events
-      sceneUnload.settings
+      sceneUnload.gdl
       sceneUnload.events
     external-events/
       SharedCombat.events
     external-layout/
-      BonusRoom.settings
+      BonusRoom.gdl
 extensions/
   Combat/
-    extension.settings
+    extension.gdl
     functions/
-      CalculateDamage.settings
+      CalculateDamage.gdl
       CalculateDamage.events
     prefabs/
       Enemy/
-        prefab.settings
+        prefab.gdl
         objects/
-          Body.settings
+          Body.gdl
         variants/
           Armored/
-            variant.settings
+            variant.gdl
             objects/
-              Body.settings
+              Body.gdl
         functions/
-          TakeDamage.settings
+          TakeDamage.gdl
           TakeDamage.events
 .gdevelop/
   gameplay-test-results.json
@@ -315,13 +315,13 @@ levels that repeat a type already expressed by a filename or owning path.
 All function owners use one sibling pair:
 
 ```text
-<Owner>/functions/<Function>.settings
+<Owner>/functions/<Function>.gdl
 <Owner>/functions/<Function>.events
 ```
 
 This applies uniformly to project extension functions, prefab functions,
 behavior functions and scene lifecycle functions. External Events are settings-free
-event fragments. The old per-function directory and generic `function.settings`
+event fragments. The old per-function directory and generic `function.gdl`
 filename are retired. The settings and events filenames have the same encoded
 stem; the settings `name` must match that decoded identity, and the event path
 is derived without an `events` URI field.
@@ -330,8 +330,8 @@ A named variant keeps both its movable owner directory and an explicit object
 component directory:
 
 ```text
-prefabs/<Prefab>/variants/<Variant>/variant.settings
-prefabs/<Prefab>/variants/<Variant>/objects/<Object>.settings
+prefabs/<Prefab>/variants/<Variant>/variant.gdl
+prefabs/<Prefab>/variants/<Variant>/objects/<Object>.gdl
 ```
 
 The `objects/` level is semantic, not redundant. Objects are first-class
@@ -346,11 +346,11 @@ Representative target mappings are:
 
 | Version 4 path                                                            | Version 5 path                                                   |
 | ------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `scenes/Game/functions/sceneUpdate/function.settings`                     | `scenes/Game/functions/sceneUpdate.settings`                     |
+| `scenes/Game/functions/sceneUpdate/function.gdl`                     | `scenes/Game/functions/sceneUpdate.gdl`                     |
 | `scenes/Game/functions/sceneUpdate/sceneUpdate.events`                    | `scenes/Game/functions/sceneUpdate.events`                       |
-| `scenes/Game/externals/HUD/functions/sceneUpdate/function.settings`       | `scenes/Game/external-events/HUD/functions/sceneUpdate.settings` |
-| `extensions/Local/functions/Function/function.settings`                   | `extensions/Local/functions/Function.settings`                   |
-| `extensions/Local/prefabs/MyObject/functions/onCreated/function.settings` | `extensions/Local/prefabs/MyObject/functions/onCreated.settings` |
+| `scenes/Game/externals/HUD/functions/sceneUpdate/function.gdl`       | `scenes/Game/external-events/HUD/functions/sceneUpdate.gdl` |
+| `extensions/Local/functions/Function/function.gdl`                   | `extensions/Local/functions/Function.gdl`                   |
+| `extensions/Local/prefabs/MyObject/functions/onCreated/function.gdl` | `extensions/Local/prefabs/MyObject/functions/onCreated.gdl` |
 
 ### 7.3 Removed paths
 
@@ -361,16 +361,16 @@ scenes/<Scene>/<Scene>.layout
 scenes/<Scene>/externals/<External>.layout
 extensions/<Extension>/prefabs/<Prefab>/<Prefab>.layout
 extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>.layout
-**/functions/<Function>/function.settings
+**/functions/<Function>/function.gdl
 **/functions/<Function>/<Function>.events
 ```
 
 The writer also removes the following version 4 association fields:
 
-- root `layout` URI in `scene.settings`;
-- root `layout` URI in `prefab.settings`;
-- the complete nested `variants` collection in `prefab.settings`;
-- the complete `externalLayoutFiles` collection in `scene.settings`.
+- root `layout` URI in `scene.gdl`;
+- root `layout` URI in `prefab.gdl`;
+- the complete nested `variants` collection in `prefab.gdl`;
+- the complete `externalLayoutFiles` collection in `scene.gdl`.
 - `events` URI fields in every function settings source.
 
 ## 8. Embedded layout TOML schema
@@ -520,13 +520,13 @@ configuration, and compatible unknown scene metadata. The embedded layout
 owns the same scene fields previously owned by `<Scene>.layout`.
 
 Scene lifecycle roles and `.events` bodies remain unchanged, but their files
-use the flat version 5 function pair. `scene.settings` does not regain an
+use the flat version 5 function pair. `scene.gdl` does not regain an
 events URI.
 
 ### 9.2 Discovery and identity
 
 Scenes continue to be discovered only from
-`scenes/<SceneFolder>/scene.settings`. The document contains exactly one scene
+`scenes/<SceneFolder>/scene.gdl`. The document contains exactly one scene
 owner and a contiguous project-wide `order`. Scene display identity remains
 the `name` field; the physical folder uses the existing portable managed-name
 algorithm.
@@ -563,17 +563,17 @@ layer = "base"
 at = [0, 0, 0]
 ```
 
-`prefab.settings` continues to own prefab declaration metadata, variables,
+`prefab.gdl` continues to own prefab declaration metadata, variables,
 attached behavior metadata, flat property descriptors, object groups, and
 required behaviors. It now also owns the default variant's bounds, editor
 state, layers, effects, instances, per-instance variables, and behavior
 overrides.
 
 Default child object definitions remain in
-`prefabs/<Prefab>/objects/<Object>.settings`. Prefab functions remain in their
+`prefabs/<Prefab>/objects/<Object>.gdl`. Prefab functions remain in their
 existing function settings and events files.
 
-`prefab.settings` must not contain a `variants` array in version 5. Named
+`prefab.gdl` must not contain a `variants` array in version 5. Named
 variants are physical child settings components.
 
 ## 11. Named prefab variant settings
@@ -583,16 +583,16 @@ variants are physical child settings components.
 Every named, non-default variant has exactly one owner:
 
 ```text
-extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.settings
+extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.gdl
 ```
 
 Its child object definitions remain at:
 
 ```text
-extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/objects/<Object>.settings
+extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/objects/<Object>.gdl
 ```
 
-No `variant.settings` file is created for the default variant represented by
+No `variant.gdl` file is created for the default variant represented by
 the prefab itself.
 
 ### 11.2 Canonical example
@@ -639,7 +639,7 @@ child object definitions remain independent sources below the physical
 ### 11.3 Discovery and composition
 
 The loader discovers variant owners from the fixed path
-`prefabs/<Prefab>/variants/*/variant.settings`, validates the physical parent,
+`prefabs/<Prefab>/variants/*/variant.gdl`, validates the physical parent,
 then sorts them by `order`. Duplicate names or order values, gaps, negative
 orders, and orphan variant owners are errors.
 
@@ -654,7 +654,7 @@ entries into the legacy `variants[]` array. It must not depend on TOML table or
 filesystem enumeration order.
 
 Variant object definitions are composed from
-`variants/<Variant>/objects/<Object>.settings` using the existing
+`variants/<Variant>/objects/<Object>.gdl` using the existing
 complete-variant object semantics. The embedded layout is compiled only after
 those definitions are available, so instance object and behavior references
 use the correct variant context.
@@ -663,7 +663,7 @@ use the correct variant context.
 
 Renaming a variant moves its complete variant directory, changes its `name`,
 and applies existing project-model reference refactoring in one transaction.
-Deleting a variant removes only its previously tracked `variant.settings` and
+Deleting a variant removes only its previously tracked `variant.gdl` and
 owned object sources. Unrecognized files in the directory are never deleted
 recursively.
 
@@ -674,11 +674,11 @@ recursively.
 Every external layout has one scene-owned settings component:
 
 ```text
-scenes/<Scene>/external-layout/<ExternalLayout>.settings
+scenes/<Scene>/external-layout/<ExternalLayout>.gdl
 ```
 
 Its association is derived from the physical scene owner. Its identity and
-global order are no longer stored in `scene.settings`.
+global order are no longer stored in `scene.gdl`.
 
 ### 12.2 Canonical example
 
@@ -732,7 +732,7 @@ scene context.
 ### 12.4 Relationship to External Events
 
 External Events use a single `external-events/<Fragment>.events` file. External
-layouts use their own `.settings` file with embedded layout data. Neither kind
+layouts use their own `.gdl` file with embedded layout data. Neither kind
 owns the other; a same-named pair requires no shared directory or manifest.
 
 ## 13. Events and other settings sources
@@ -740,24 +740,24 @@ owns the other; a same-named pair requires no shared directory or manifest.
 Event semantics and owner roles introduced by multi-file format version 4
 remain unchanged, but their physical function pair is flattened:
 
-- scene lifecycle bodies use `functions/<Lifecycle>.settings` and
+- scene lifecycle bodies use `functions/<Lifecycle>.gdl` and
   `functions/<Lifecycle>.events`;
 - External Events use standalone `external-events/<Fragment>.events` bodies;
 - extension, prefab, and behavior function bodies remain sibling `.events`
-  files beside `<Function>.settings`;
+  files beside `<Function>.gdl`;
 - real function identity, signature, phase role, and grouping remain in settings;
   fragment identity comes from its filename and it inherits the Link caller scope;
 - compiled event arrays exist only in the temporary legacy projection.
 
 Every function settings file removes its `events` URI. The loader derives the
-required sibling `.events` path by replacing the final `.settings` extension
+required sibling `.events` path by replacing the final `.gdl` extension
 with `.events`. A missing member, mismatched stem, duplicate case-insensitive
 stem, or directory-form version 4 function owner is a load error. Optional
 empty lifecycle functions may omit both files; they may not leave one member
 of the pair.
 
 Global, scene, prefab, and variant object definitions remain individual
-`objects/<Object>.settings` files. Resources and Constants ownership are not
+`objects/<Object>.gdl` files. Resources and Constants ownership are not
 changed.
 
 ## 14. Format versioning and discovery
@@ -776,14 +776,14 @@ must not infer version 5 merely because a `[layout]` table is present.
 The managed settings-path allowlist adds:
 
 ```text
-extensions/*/prefabs/*/variants/*/variant.settings
-extensions/*/prefabs/*/variants/*/objects/*.settings
-scenes/*/external-layout/*.settings
-**/functions/*.settings
+extensions/*/prefabs/*/variants/*/variant.gdl
+extensions/*/prefabs/*/variants/*/objects/*.gdl
+scenes/*/external-layout/*.gdl
+**/functions/*.gdl
 ```
 
-The dedicated variant `objects/*.settings` pattern cannot collide with the
-fixed `variant.settings` owner filename. The function pattern is expanded into
+The dedicated variant `objects/*.gdl` pattern cannot collide with the
+fixed `variant.gdl` owner filename. The function pattern is expanded into
 the finite set of valid owner locations; `**` is explanatory shorthand, not
 recursive filesystem discovery.
 
@@ -795,7 +795,7 @@ registers `.layout` references.
 The deterministic settings discovery and merge order becomes:
 
 1. `project.gdevelop`;
-2. `resources.settings`;
+2. `resources.gdl`;
 3. global object settings;
 4. each scene settings owner;
 5. that scene's object settings and flat lifecycle function pairs;
@@ -867,7 +867,7 @@ document. It also builds a prefix-aware location index for:
 [[layout.behaviors]]
 ```
 
-Every existing `LAYOUT_*` semantic error reports the owner `.settings` URI and
+Every existing `LAYOUT_*` semantic error reports the owner `.gdl` URI and
 the original line/column of the embedded record. Parser errors continue to
 report native TOML locations.
 
@@ -911,13 +911,13 @@ Version 5 uses this write ownership:
 
 | Editor mutation                                                                    | Dirty source                    |
 | ---------------------------------------------------------------------------------- | ------------------------------- |
-| Scene metadata, variables, groups, shared data                                     | `scene.settings`                |
-| Scene background, editor state, layers, effects, instances, overrides              | `scene.settings`                |
-| Prefab declaration, properties, variables, groups                                  | `prefab.settings`               |
-| Default-prefab bounds, editor state, layers, instances, overrides                  | `prefab.settings`               |
-| Named variant metadata, groups, bounds, editor state, layers, instances, overrides | Its `variant.settings`          |
-| Named variant child definition                                                     | Its `objects/<Object>.settings` |
-| External-layout metadata, order, editor state, layer references, instances         | Its `external-layout.settings`  |
+| Scene metadata, variables, groups, shared data                                     | `scene.gdl`                |
+| Scene background, editor state, layers, effects, instances, overrides              | `scene.gdl`                |
+| Prefab declaration, properties, variables, groups                                  | `prefab.gdl`               |
+| Default-prefab bounds, editor state, layers, instances, overrides                  | `prefab.gdl`               |
+| Named variant metadata, groups, bounds, editor state, layers, instances, overrides | Its `variant.gdl`          |
+| Named variant child definition                                                     | Its `objects/<Object>.gdl` |
+| External-layout metadata, order, editor state, layer references, instances         | Its `external-layout.gdl`  |
 | Any event body                                                                     | Its existing `.events` file     |
 
 The initial implementation may continue decomposing the complete in-memory
@@ -951,9 +951,9 @@ The existing staged transaction and rollback journal remain authoritative.
 For version 5, commit priority is:
 
 1. event bodies and object-definition content sources;
-2. `variant.settings`, `external-layout.settings`, ordinary function settings,
+2. `variant.gdl`, `external-layout.gdl`, ordinary function settings,
    scene settings, and prefab settings after their owned children are staged;
-3. `extension.settings`;
+3. `extension.gdl`;
 4. `project.gdevelop` last.
 
 Normal production v5 saves never process old sources. During the sole
@@ -1059,39 +1059,39 @@ The harness performs these transformations in memory.
 
 #### Scenes `Game` and `Test`
 
-1. Resolve and strictly compile each `scene.settings` layout URI.
+1. Resolve and strictly compile each `scene.gdl` layout URI.
 2. Embed the normalized logical layout in its scene owner.
 3. Remove the layout URI and set `settingsFormatVersion = 5`.
 4. Retire `Game.layout` and `Test.layout`.
 5. Move every lifecycle pair from
-   `functions/<Phase>/function.settings` and `<Phase>.events` to
-   `functions/<Phase>.settings` and `<Phase>.events`.
+   `functions/<Phase>/function.gdl` and `<Phase>.events` to
+   `functions/<Phase>.gdl` and `<Phase>.events`.
 6. Remove the derived `events` URI from each function settings file.
 
 #### Prefab `Local/MyObject`
 
-1. Embed `MyObject.layout` in `prefab.settings` and remove its layout URI.
+1. Embed `MyObject.layout` in `prefab.gdl` and remove its layout URI.
 2. Extract the `New variant` metadata from `[[variants]]`.
-3. Create `variants/New variant/variant.settings` with explicit `order = 0`
+3. Create `variants/New variant/variant.gdl` with explicit `order = 0`
    and the embedded normalized `New variant.layout`.
 4. Keep
-   `variants/New variant/objects/NewSprite.settings` at its existing
+   `variants/New variant/objects/NewSprite.gdl` at its existing
    first-class object path, changing only the required format marker or
    canonical content if validation requires it.
-5. Remove the complete `variants` array from `prefab.settings`.
+5. Remove the complete `variants` array from `prefab.gdl`.
 6. Retire both prefab layout files.
 7. Flatten every prefab function pair and remove every function `events` URI.
 
 #### External owners `Game/HUD`
 
-1. Keep `external-events.settings` and its event semantics unchanged while
+1. Keep `external-events.gdl` and its event semantics unchanged while
    raising its marker to 5.
 2. Flatten its lifecycle function pair and remove the function `events` URI.
 3. Extract the `HUD` external-layout identity, global `order = 0`, and metadata
-   from `Game/scene.settings`.
-4. Create `external-layout/HUD.settings` with the normalized embedded content
+   from `Game/scene.gdl`.
+4. Create `external-layout/HUD.gdl` with the normalized embedded content
    of `externals/HUD.layout`.
-5. Remove `externalLayoutFiles` from `Game/scene.settings` and retire the old
+5. Remove `externalLayoutFiles` from `Game/scene.gdl` and retire the old
    external layout file.
 
 The two independent `HUD` component kinds intentionally coexist in separate
@@ -1100,7 +1100,7 @@ type directories.
 #### Extension function and all remaining settings
 
 1. Flatten `extensions/Local/functions/Function` into sibling
-   `Function.settings` and `Function.events` files.
+   `Function.gdl` and `Function.events` files.
 2. Remove its `events` URI.
 3. Raise every managed settings marker, including all object settings and
    function settings, from 4 to 5.
@@ -1161,8 +1161,8 @@ present:
 - any managed owner has `settingsFormatVersion` other than 5;
 - an embedded layout is paired with a layout URI;
 - a canonical retired `.layout` exists;
-- `prefab.settings` contains a version 4 `variants` array;
-- `scene.settings` contains `externalLayoutFiles`;
+- `prefab.gdl` contains a version 4 `variants` array;
+- `scene.gdl` contains `externalLayoutFiles`;
 - a function settings file contains an `events` URI;
 - a version 4 per-function directory exists;
 - a v5-only owner appears below an old project entry.
@@ -1174,7 +1174,7 @@ fallback policy.
 
 ### 18.1 Scene rename
 
-A scene rename updates its folder, `scene.settings` identity, lifecycle source
+A scene rename updates its folder, `scene.gdl` identity, lifecycle source
 paths, scene references in project data and events, and owned external paths in
 one transaction. There is no layout filename or URI to rename.
 
@@ -1187,7 +1187,7 @@ move with the owner. There is no default or variant layout URI rewrite.
 ### 18.3 Variant rename/reorder
 
 A variant rename moves one variant directory and updates variant references.
-A reorder rewrites only affected `variant.settings` order fields. Neither
+A reorder rewrites only affected `variant.gdl` order fields. Neither
 operation rewrites the default prefab layout unless the in-memory prefab model
 itself changed.
 
@@ -1200,7 +1200,7 @@ is preserved unless the operation explicitly reorders it.
 
 ### 18.5 Function rename
 
-A function rename atomically renames its same-stem `.settings` and `.events`
+A function rename atomically renames its same-stem `.gdl` and `.events`
 files, updates the settings identity and project references, and preserves the
 event body bytes except where semantic reference refactoring is required. It
 never creates an intermediate per-function directory or stores a replacement
@@ -1220,9 +1220,9 @@ validated inside-root cleanup.
 `.gdevelop/settings-catalog.json` adds file kinds for:
 
 - `prefabVariant` at
-  `extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.settings`;
+  `extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.gdl`;
 - `externalLayout` at
-  `scenes/<Scene>/external-layout/<ExternalLayout>.settings`.
+  `scenes/<Scene>/external-layout/<ExternalLayout>.gdl`.
 
 Scene and prefab file kinds remove required layout URI fields and add a
 required embedded-layout reference to the layout schema within the same
@@ -1230,10 +1230,10 @@ settings catalog. Prefab no longer declares a nested `variants` table. Scene
 no longer declares `externalLayoutFiles`.
 
 Every function file kind changes from
-`functions/<Function>/function.settings` to
-`functions/<Function>.settings`, removes its required `events` URI field, and
+`functions/<Function>/function.gdl` to
+`functions/<Function>.gdl`, removes its required `events` URI field, and
 declares the same-stem `.events` sibling as a path-derived body. Variant object
-file kinds retain `variants/<Variant>/objects/<Object>.settings`; the catalog
+file kinds retain `variants/<Variant>/objects/<Object>.gdl`; the catalog
 continues to describe objects as independently addressable first-class
 components below a dedicated `objects/` directory.
 
@@ -1258,7 +1258,7 @@ the project is saved. `layoutAuthoring` declares:
 ```text
 storage: embedded-settings
 rootTable: layout
-sourceExtension: .settings
+sourceExtension: .gdl
 ```
 
 Every `layoutContexts` entry points at an owner settings URI and identifies one
@@ -1291,12 +1291,12 @@ The multi-file layer adds or specializes these errors:
 | `MULTIFILE_RETIRED_LAYOUT_REFERENCE`           | A version 5 settings field contains a `.layout` URI.                                              |
 | `MULTIFILE_RETIRED_LAYOUT_SOURCE`              | A canonical retired `.layout` file exists in a version 5 source tree.                             |
 | `MULTIFILE_RETIRED_FUNCTION_SOURCE`            | A version 4 per-function directory or function `events` URI exists.                               |
-| `MULTIFILE_MISSING_FUNCTION_PAIR`              | Exactly one of the same-stem function `.settings`/`.events` files exists.                         |
-| `MULTIFILE_ORPHAN_EVENTS`                      | A managed `.events` body has no same-stem function `.settings` owner.                             |
+| `MULTIFILE_MISSING_FUNCTION_PAIR`              | Exactly one of the same-stem function `.gdl`/`.events` files exists.                         |
+| `MULTIFILE_ORPHAN_EVENTS`                      | A managed `.events` body has no same-stem function `.gdl` owner.                             |
 | `MULTIFILE_FUNCTION_PATH_IDENTITY_MISMATCH`    | Function name, encoded stem, or sibling body stem disagree.                                       |
 | `MULTIFILE_RETIRED_EXTERNAL_SOURCE`            | A version 5 source tree contains a retired combined `scenes/<Scene>/externals/<External>/` owner. |
-| `MULTIFILE_ORPHAN_VARIANT_SETTINGS`            | `variant.settings` has no valid prefab owner.                                                     |
-| `MULTIFILE_ORPHAN_EXTERNAL_LAYOUT_SETTINGS`    | `external-layout.settings` has no valid scene owner.                                              |
+| `MULTIFILE_ORPHAN_VARIANT_SETTINGS`            | `variant.gdl` has no valid prefab owner.                                                     |
+| `MULTIFILE_ORPHAN_EXTERNAL_LAYOUT_SETTINGS`    | `external-layout.gdl` has no valid scene owner.                                              |
 | `MULTIFILE_DUPLICATE_VARIANT_IDENTITY`         | Variant name or order collides within a prefab.                                                   |
 | `MULTIFILE_DUPLICATE_EXTERNAL_LAYOUT_IDENTITY` | External-layout name or global order collides.                                                    |
 | `MULTIFILE_MIXED_FORMAT_VERSION`               | Old and new ownership models appear in one source tree.                                           |
@@ -1361,7 +1361,7 @@ limit and a project with many small variants and external layouts.
    checks, traversal prevention, symlink policy, and inside-root assertions
    remain unchanged.
 4. Settings discovery remains fixed-path and bounded; it does not recursively
-   parse arbitrary `.settings` files.
+   parse arbitrary `.gdl` files.
 5. Layout relationships continue to resolve only against cataloged objects,
    behaviors, effects, instances, and owning-scene layers.
 6. Migration reads and hashes all inputs before staging and never deletes an
@@ -1379,8 +1379,8 @@ limit and a project with many small variants and external layouts.
 - raise the format version;
 - replace standalone layout emission with embedded logical documents;
 - remove v5 scene and prefab layout URI fields;
-- split named variants into `variant.settings` owners;
-- split external layouts into `external-layout.settings` owners;
+- split named variants into `variant.gdl` owners;
+- split external layouts into `external-layout.gdl` owners;
 - flatten every function settings/events pair and derive its body path;
 - preserve and discover variant object settings below the variant's dedicated
   `objects/` directory;
@@ -1567,7 +1567,7 @@ worktree is dirty.
 - convert both scene layouts, the default prefab, `New variant`, and the `HUD`
   external layout;
 - flatten all eight current function pairs without changing `.events` bytes;
-- preserve the named variant object's existing `objects/NewSprite.settings`
+- preserve the named variant object's existing `objects/NewSprite.gdl`
   path and payload, apart from any required version marker;
 - preserve normalized serializer equivalence with no new allowance;
 - verify recovery bundle bytes and manifest hashes;
@@ -1586,7 +1586,7 @@ worktree is dirty.
   settings files;
 - reject canonical retired layout and function paths in v5 managed locations;
 - require variant object sources to be below the fixed variant `objects/`
-  directory and reject object settings beside `variant.settings`;
+  directory and reject object settings beside `variant.gdl`;
 - reject missing/mismatched same-stem function pairs;
 - preserve unrelated user files during rename and deletion;
 - commit child definitions before their owner and `project.gdevelop` last;
@@ -1601,7 +1601,7 @@ worktree is dirty.
 - scene and prefab schemas require embedded layout and forbid old URI fields;
 - function schemas use flat paths and forbid events URI fields;
 - variant object schemas retain
-  `variants/<Variant>/objects/<Object>.settings` paths;
+  `variants/<Variant>/objects/<Object>.gdl` paths;
 - settings catalog `layoutTables` and `layoutContexts` emit embedded table
   headers and owner settings URIs;
 - every layout context resolves the same objects, behaviors, effects, layers,
@@ -1616,9 +1616,9 @@ worktree is dirty.
   equivalent composed data;
 - scene, prefab, variant, and external-layout rename/move operations are atomic;
 - Git diffs for moving one instance change only its owner settings source;
-- editing one named variant does not rewrite `prefab.settings` or sibling
+- editing one named variant does not rewrite `prefab.gdl` or sibling
   variants;
-- editing one external layout does not rewrite `scene.settings`;
+- editing one external layout does not rewrite `scene.gdl`;
 - editing one function does not rewrite a sibling function pair;
 - layout-only edits do not rewrite any `.events` source.
 
@@ -1656,22 +1656,22 @@ This preserves maximal scene/default-prefab write isolation but retains the
 cross-file ownership, URI, discovery, rename, and authoring complexity that
 motivated the change.
 
-### 27.2 Rename `.layout` to a layout-kind `.settings` file
+### 27.2 Rename `.layout` to a layout-kind `.gdl` file
 
 This would reduce the number of extensions without making the component
 self-contained. Identity and layout would still be split across two settings
 files and require an association. It achieves naming uniformity but not the
 ownership simplification.
 
-### 27.3 Store every variant inside `prefab.settings`
+### 27.3 Store every variant inside `prefab.gdl`
 
 This removes variant files but makes one prefab source contain every variant's
 metadata and potentially large placement data. Editing one variant would
 rewrite the parent and increase conflict and parse scope. Nested TOML arrays of
 variants containing arrays of layout records also make canonical ownership and
-diagnostics harder. Independent `variant.settings` owners are preferred.
+diagnostics harder. Independent `variant.gdl` owners are preferred.
 
-### 27.4 Keep variant metadata in `prefab.settings`
+### 27.4 Keep variant metadata in `prefab.gdl`
 
 This would embed variant layout in a new settings file while leaving identity
 and order in the parent, preserving the same split-brain ownership as version
@@ -1693,10 +1693,10 @@ outside the requested two-domain model and rejected.
 
 The directory repeats the function identity already present in both filenames
 and settings metadata, creates the deepest paths in the inspected project, and
-requires a generic `function.settings` basename. A same-stem sibling pair under
+requires a generic `function.gdl` basename. A same-stem sibling pair under
 one `functions/` directory preserves ownership without that extra level.
 
-### 27.8 Place variant objects beside `variant.settings`
+### 27.8 Place variant objects beside `variant.gdl`
 
 This saves one path segment but makes variants the only object-owning scope
 without an `objects/` boundary, mixes first-class object components with owner
@@ -1705,8 +1705,8 @@ The variant `objects/` directory is therefore retained.
 
 ### 27.9 Flatten every semantic directory into compound filenames
 
-Paths such as `scenes/Game.Player.settings` or
-`prefabs/MyObject.Armored.Body.settings` would reduce depth further but require
+Paths such as `scenes/Game.Player.gdl` or
+`prefabs/MyObject.Armored.Body.gdl` would reduce depth further but require
 escaping delimiters, create more basename collisions, and make component moves
 less local. Version 5 removes redundant levels while retaining meaningful
 scene, object, prefab, variant, external, and function boundaries.
@@ -1717,15 +1717,15 @@ The refactor is complete only when:
 
 1. A newly saved version 5 project contains zero managed `.layout` sources.
 2. Scene and prefab default layouts are canonical embedded settings subtrees.
-3. Every named variant is independently owned by `variant.settings`.
+3. Every named variant is independently owned by `variant.gdl`.
 4. Every external layout is independently owned by
-   `external-layout.settings`.
+   `external-layout.gdl`.
 5. No v5 scene/prefab/variant/external owner contains a layout URI or retired
    parent manifest entry.
-6. Every function uses `functions/<Function>.settings` plus
+6. Every function uses `functions/<Function>.gdl` plus
    `functions/<Function>.events`, with no per-function directory or events URI.
 7. Every object-owning scope, including a named variant, stores each object at
-   `objects/<Object>.settings`; no object definition sits beside owner settings.
+   `objects/<Object>.gdl`; no object definition sits beside owner settings.
 8. Production accepts v5 only and rejects version 3/4 or mixed trees before
    composition.
 9. The exact authorized `My project116` project converts with no undocumented

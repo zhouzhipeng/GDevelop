@@ -34,7 +34,7 @@ const document = () => ({
   })),
 });
 
-describe('shared layout data validation through Settings DSL', () => {
+describe('shared layout data validation through GDevelop Language (GDL)', () => {
   test('preserves interleaved global order, inactive dimensions, camera modes and 3D fields', () => {
     const data = document();
     Object.assign(data.layers[0], {

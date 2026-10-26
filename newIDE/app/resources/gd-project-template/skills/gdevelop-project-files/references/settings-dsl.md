@@ -1,6 +1,6 @@
-# Settings DSL — current authoring syntax
+# GDevelop Language (GDL) — current authoring syntax
 
-Only format 11 is accepted. `.settings` and `project.gdevelop` use the same
+Only format 11 is accepted. `.gdl` and `project.gdevelop` use the same
 parser. constants.toml remains TOML; event bodies are embedded in function/fragment settings. .events files are forbidden.
 
 ## Syntax
@@ -128,7 +128,7 @@ properties without a type declaration; the object already owns that behavior.
 
 Each component has one settings document. Objects and functions remain separate
 components. Scene configuration, background, layers and instances are one scene
-root. Prefab/variant require bounds with min/max arrays. Function declarations and event bodies share one .settings file. JavaScript uses raw multiline code blocks inside event { type = "javascript" ... }. No .layout file or layout URI exists.
+root. Prefab/variant require bounds with min/max arrays. Function declarations and event bodies share one .gdl file. JavaScript uses raw multiline code blocks inside event { type = "javascript" ... }. No .layout file or layout URI exists.
 
 Never edit generated catalogs or .gdevelop/game.json. Validate direct source
 edits, reload, and verify behavior using the project workflow in SKILL.md.

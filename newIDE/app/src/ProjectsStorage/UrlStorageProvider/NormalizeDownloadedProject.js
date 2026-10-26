@@ -1,10 +1,10 @@
 // @flow
 
-// Downloaded examples are native JSON snapshots, not Settings DSL sources.
+// Downloaded examples are native JSON snapshots, not GDevelop Language (GDL) sources.
 // Custom behaviors retain removed properties in their serialized content even
 // though the extension can no longer read them. Discard only those obsolete
 // properties at this import boundary, using the bundled extension definitions.
-// The Settings DSL reader and writer still reject undeclared authored fields.
+// The GDevelop Language (GDL) reader and writer still reject undeclared authored fields.
 export const normalizeDownloadedProject = (project: Object): Object => {
   const behaviorProperties: Map<string, Set<string>> = new Map();
   const sharedProperties: Map<string, Set<string>> = new Map();

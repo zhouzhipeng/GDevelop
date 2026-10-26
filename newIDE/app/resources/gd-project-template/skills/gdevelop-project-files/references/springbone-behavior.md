@@ -69,7 +69,7 @@ Place the configuration inside the project, for example:
 assets/config/hero_spring_bones.json
 ```
 
-Register it in `resources.settings` with a stable resource name:
+Register it in `resources.gdl` with a stable resource name:
 
 ```settings
 resources {
@@ -87,7 +87,7 @@ The behavior property uses the resource `name`, not the file path.
 
 ## Attach the behavior
 
-Add one behavior record to the model object's `.settings` file. Initialize all
+Add one behavior record to the model object's `.gdl` file. Initialize all
 properties listed by the current settings catalog. A typical record is:
 
 ```settings

@@ -13,7 +13,7 @@ import {
 } from './SettingsDsl';
 
 const gd = global.gd;
-describe('Settings DSL authoring catalogs', () => {
+describe('GDevelop Language (GDL) authoring catalogs', () => {
   let project;
   beforeEach(() => {
     project = gd.ProjectHelper.createNewGDJSProject();
@@ -50,7 +50,7 @@ describe('Settings DSL authoring catalogs', () => {
     ).toBe(true);
     expect(catalog.layoutAuthoring).toMatchObject({
       storage: 'component-root',
-      syntax: 'Settings DSL',
+      syntax: 'GDevelop Language (GDL)',
     });
     expect(
       catalog.objectTypes.every(

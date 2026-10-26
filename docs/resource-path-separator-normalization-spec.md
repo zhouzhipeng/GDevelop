@@ -64,7 +64,7 @@ assigned when a resource is newly registered.
 ## 4. Current behavior
 
 The multi-file decompiler clones the legacy `project.resources` container into
-`resources.settings` without normalizing resource names or files.
+`resources.gdl` without normalizing resource names or files.
 
 Local resource discovery currently uses the host operating system's
 `path.relative` result as both the proposed resource name and file. On Windows,

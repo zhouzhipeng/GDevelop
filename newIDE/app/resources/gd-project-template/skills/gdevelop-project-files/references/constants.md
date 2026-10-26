@@ -491,7 +491,7 @@ The property descriptor's JSON example and an individual object's configured
 property value are different responsibilities. Do not replace the example with
 `{{cards.Sunflower}}`: keep a concrete JSON schema example, then put the
 placeholder in the actual object/behavior configuration value. Exact serialized
-locations vary by object type and owner; inspect the target `.settings` data and
+locations vary by object type and owner; inspect the target `.gdl` data and
 `settings-catalog.json`, and copy a compatible existing property configuration
 shape rather than inventing serializer fields.
 
@@ -672,7 +672,7 @@ error with a fabricated value unless that default is part of the user's design.
 ## Authoring checklist
 
 - Decide explicitly why the value belongs in Constants rather than runtime state.
-- Read the complete `constants.toml` and relevant owner `.settings`/events.
+- Read the complete `constants.toml` and relevant owner `.gdl`/events.
 - Author user data directly at the TOML root with no wrapper or metadata.
 - Use only values TOML represents losslessly.
 - Choose stable, case-consistent, typed paths.

@@ -329,7 +329,7 @@ const useCreateProject = ({
         initialiseProjectProperties(currentProject, newProjectSetup);
         // The initial save must already contain the default scene. Creating it
         // later while opening the editor leaves the multi-file project without
-        // scene.settings, layout and events files until a manual save.
+        // scene.gdl, layout and events files until a manual save.
         ensureProjectHasDefaultScene(currentProject);
 
         // Now that the project has its final UUID (assigned by

@@ -1224,7 +1224,7 @@ const safeDecode = (value: string): string => {
 };
 
 const getSourceContext = (fileUri: string, model: Object): Object => {
-  const externalFragmentMatch = /^game:\/\/scenes\/([^/]+)\/external-events\/([^/]+)\.settings$/.exec(
+  const externalFragmentMatch = /^game:\/\/scenes\/([^/]+)\/external-events\/([^/]+)\.gdl$/.exec(
     fileUri
   );
   if (externalFragmentMatch) {
@@ -1245,7 +1245,7 @@ const getSourceContext = (fileUri: string, model: Object): Object => {
       external: true,
     };
   }
-  const sceneLifecycleMatch = /^game:\/\/scenes\/([^/]+)\/functions\/(sceneLoad|sceneSignal|sceneUpdate|sceneUnload)\.settings$/.exec(
+  const sceneLifecycleMatch = /^game:\/\/scenes\/([^/]+)\/functions\/(sceneLoad|sceneSignal|sceneUpdate|sceneUnload)\.gdl$/.exec(
     fileUri
   );
   if (sceneLifecycleMatch) {
@@ -1314,7 +1314,7 @@ export const collectSerializedProjectJavaScriptBlocks = (
     lifecycleSources.forEach(([role, legacyField]) =>
       collectEventsJavaScriptBlocks(
         layout[legacyField],
-        `game://scenes/${sceneName}/functions/${role}.settings`,
+        `game://scenes/${sceneName}/functions/${role}.gdl`,
         blocks
       )
     );
@@ -1324,7 +1324,7 @@ export const collectSerializedProjectJavaScriptBlocks = (
       String(external.associatedLayout || '')
     );
     const externalFileName = encodeManagedName(
-      `${String(external.name || '')}.settings`
+      `${String(external.name || '')}.gdl`
     );
     collectEventsJavaScriptBlocks(
       external.events,
@@ -1341,7 +1341,7 @@ export const collectSerializedProjectJavaScriptBlocks = (
         );
         collectEventsJavaScriptBlocks(
           eventsFunction.events,
-          `${base}/functions/${functionName}.settings`,
+          `${base}/functions/${functionName}.gdl`,
           blocks
         );
       });
@@ -1372,7 +1372,7 @@ export const collectSourceFileJavaScriptBlocks = (files: {
 }): Array<Object> => {
   const blocks: Array<Object> = [];
   Object.keys(files)
-    .filter(fileUri => fileUri.endsWith('.settings'))
+    .filter(fileUri => fileUri.endsWith('.gdl'))
     .sort()
     .forEach(fileUri => {
       extractSettingsJavaScriptBlocks(files[fileUri]).forEach(block =>

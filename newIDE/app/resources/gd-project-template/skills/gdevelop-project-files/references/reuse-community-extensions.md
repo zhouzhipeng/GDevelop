@@ -91,8 +91,8 @@ version, and any later local adaptations in the final report.
 ## Install into multi-file sources
 
 Repository extensions are legacy JSON interchange artifacts, not project
-source. Do not reference or retain them in `project.gdevelop`, `.settings`,
-or `.settings` and do not ask the model to translate their event trees
+source. Do not reference or retain them in `project.gdevelop`, `.gdl`,
+or `.gdl` and do not ask the model to translate their event trees
 by hand.
 
 1. Before making direct project-file edits, call the GDevelop MCP tool:
@@ -128,9 +128,9 @@ by hand.
    failures remain blocking. A spoofed or mismatched extension identity must be
    rejected.
 3. Verify that the requested extension has a non-empty generated source list
-   containing `extension.settings`. Treat those returned files as the only
+   containing `extension.gdl`. Treat those returned files as the only
    editable source from this point onward.
-4. Read and adapt the generated `.settings` files
+4. Read and adapt the generated `.gdl` files
    directly. Never edit the downloaded JSON or `.gdevelop/game.json`.
 5. After the final adaptation, run `validate_project_files`, fix every
    structural/generated-code/JavaScript/semantic failure, and commit the
@@ -145,21 +145,21 @@ The native conversion maps the legacy extension as follows:
 
 | Downloaded extension field                                                        | Multi-file destination                                                                         |
 | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Top-level metadata except implementation arrays                                   | `extensions/<E>/extension.settings`                                                            |
-| `eventsFunctions[]` metadata                                                      | One `functions/<F>.settings` each                                                              |
-| `eventsFunctions[].events`                                                        | Matching `functions/<F>.settings`                                                                |
-| `eventsBasedObjects[]` metadata, flat property descriptors, groups, and variables | One `prefabs/<P>/prefab.settings` each                                                         |
-| Default child object definitions and attached behaviors                           | One flat `prefabs/<P>/objects/<Object>.settings` each; grouping is `folder`                    |
-| Prefab default-variant instances/layers/spatial bounds/editor layout state        | Root layout nodes in `prefabs/<P>/prefab.settings`                                           |
-| Prefab `eventsFunctions[]` metadata/bodies and function grouping                  | `prefabs/<P>/functions/<F>.settings` (`folder`) with embedded events                    |
-| Prefab non-default variant metadata/groups                                        | `prefabs/<P>/variants/<Variant>/variant.settings`                                              |
-| Prefab non-default variant child definitions/behaviors                            | One flat `prefabs/<P>/variants/<Variant>/objects/<Object>.settings` each; grouping is `folder` |
-| Prefab non-default variant instances/layers/spatial bounds/editor state           | Root layout nodes in `variants/<Variant>/variant.settings`                                  |
-| `eventsBasedBehaviors[]` owner metadata                                           | One `behaviors/<B>/behavior.settings` each                                                     |
-| Behavior `eventsFunctions[]` metadata/bodies and function grouping                | `behaviors/<B>/functions/<F>.settings` (`folder`) with embedded events                  |
+| Top-level metadata except implementation arrays                                   | `extensions/<E>/extension.gdl`                                                            |
+| `eventsFunctions[]` metadata                                                      | One `functions/<F>.gdl` each                                                              |
+| `eventsFunctions[].events`                                                        | Matching `functions/<F>.gdl`                                                                |
+| `eventsBasedObjects[]` metadata, flat property descriptors, groups, and variables | One `prefabs/<P>/prefab.gdl` each                                                         |
+| Default child object definitions and attached behaviors                           | One flat `prefabs/<P>/objects/<Object>.gdl` each; grouping is `folder`                    |
+| Prefab default-variant instances/layers/spatial bounds/editor layout state        | Root layout nodes in `prefabs/<P>/prefab.gdl`                                           |
+| Prefab `eventsFunctions[]` metadata/bodies and function grouping                  | `prefabs/<P>/functions/<F>.gdl` (`folder`) with embedded events                    |
+| Prefab non-default variant metadata/groups                                        | `prefabs/<P>/variants/<Variant>/variant.gdl`                                              |
+| Prefab non-default variant child definitions/behaviors                            | One flat `prefabs/<P>/variants/<Variant>/objects/<Object>.gdl` each; grouping is `folder` |
+| Prefab non-default variant instances/layers/spatial bounds/editor state           | Root layout nodes in `variants/<Variant>/variant.gdl`                                  |
+| `eventsBasedBehaviors[]` owner metadata                                           | One `behaviors/<B>/behavior.gdl` each                                                     |
+| Behavior `eventsFunctions[]` metadata/bodies and function grouping                | `behaviors/<B>/functions/<F>.gdl` (`folder`) with embedded events                  |
 
 The conversion keeps hidden property descriptors in the owning
-`behavior.settings` because generated runtime code needs their defaults, but it
+`behavior.gdl` because generated runtime code needs their defaults, but it
 also keeps any existing hidden or extension-owned values on attached behaviors.
 Such properties are absent from `settings-catalog.json`, so models must not
 invent or generically edit them; absence from the catalog is not permission to
@@ -184,7 +184,7 @@ dependency/compatibility issue before retrying.
    as layout TOML version 1.
 2. Confirm no downloaded `.json` file was added to project source.
 3. Confirm the import receipt lists the requested extension, its generated
-   `extension.settings`, source files for all imported dependencies, and the
+   `extension.gdl`, source files for all imported dependencies, and the
    successful pre-mutation compatibility receipts.
 4. Confirm all dependency instruction types resolve after `reload_project`.
 5. Confirm imported event bodies obey condition and single-instance picking

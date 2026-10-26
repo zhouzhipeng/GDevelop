@@ -49,7 +49,7 @@ test('catalog kind comes from its explicit container, and named completion omits
   ).toEqual([]);
 });
 test('cloud and custom editors can bind an exact project catalog without filesystem access', () => {
-  const uri = { toString: () => 'game://Test.settings' };
+  const uri = { toString: () => 'game://Test.gdl' };
   const binding = bindSettingsInstructionCatalog(uri.toString(), catalog);
   expect(getSettingsInstructionCatalog(uri)).toBe(catalog);
   binding.dispose();

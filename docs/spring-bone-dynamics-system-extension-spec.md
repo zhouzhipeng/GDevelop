@@ -573,7 +573,7 @@ TwinKunai migration after the extension ships:
 
 1. Convert the current bake recipe's chain/collider subset into a version-1
    runtime JSON resource.
-2. Register that JSON in `resources.settings`.
+2. Register that JSON in `resources.gdl`.
 3. Attach one `SpringBoneDynamics::SpringBone3DBehavior` to `TwinKunai3D`.
 4. Remove `TwinKunaiHairCloth`, its Test-scene instance, its head attachment,
    and its wind event.
@@ -665,11 +665,11 @@ serialized data, and runtime behavior remain unchanged.
 ### 17.3 Expected project files
 
 ```text
-resources.settings
+resources.gdl
 assets/config/twin_kunai_spring_bones.json
-scenes/Test/objects/TwinKunai3D.settings
-scenes/Test/objects/TwinKunaiHairCloth.settings       # removed
-scenes/Test/scene.settings
+scenes/Test/objects/TwinKunai3D.gdl
+scenes/Test/objects/TwinKunaiHairCloth.gdl       # removed
+scenes/Test/scene.gdl
 scenes/Test/functions/sceneUpdate.events
 ```
 

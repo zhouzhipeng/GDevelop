@@ -31,7 +31,7 @@ profile is intentionally smaller than every export in upstream `three/tsl`.
 
 The authoritative inputs are the saved project source and the `.tsl.ts` file:
 
-- `resources.settings` owns the resource registry.
+- `resources.gdl` owns the resource registry.
 - The `.tsl.ts` file contains the material definition.
 - A Model3D object settings file or an event instruction contains the binding.
 
@@ -84,7 +84,7 @@ The `.ts` ending keeps TypeScript tooling working; the preceding `.tsl` segment
 identifies the resource domain. Do not use `.gdmaterial.ts`, `.tsl`, or a
 generic JavaScript resource for a TSL material.
 
-In a current multi-file project, register the source in `resources.settings`.
+In a current multi-file project, register the source in `resources.gdl`.
 The exact resource schema comes from `settings-catalog.json`; a minimal entry is:
 
 ```settings
@@ -478,7 +478,7 @@ The built-in `TSLMaterial::Material` behavior has these properties:
 | `fallback`     | `KeepOriginal` only in version one.                          |
 
 For direct multi-file edits, the behavior record belongs in the Model3D object's
-own `.settings` file, not in the layout subtree. Use the current
+own `.gdl` file, not in the layout subtree. Use the current
 `settings-catalog.json` entry for exact field casing and required fields. A
 conceptual record is:
 
@@ -678,7 +678,7 @@ mutating the original GLB. The version-one fallback is always `KeepOriginal`.
 
 ## Project-level verification
 
-`validate_tsl_file` does not validate `resources.settings`, behavior settings,
+`validate_tsl_file` does not validate `resources.gdl`, behavior settings,
 events, or the generated runtime registry. When any of those files changed:
 
 1. Run `generate-catalogs` after structural changes and re-read the relevant

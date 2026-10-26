@@ -32,7 +32,7 @@ type Props = {|
   onBlur: () => void,
   /** See `CodeEditor`. */
   suppressedDiagnosticsMessages?: Array<string>,
-  language?: 'javascript' | 'typescript' | 'gdevelop-settings',
+  language?: 'javascript' | 'typescript' | 'gdevelop-gdl',
   modelPath?: string,
   extraLibraries?: Array<{| filePath: string, content: string |}>,
   markers?: Array<Object>,

@@ -48,7 +48,7 @@ describe('getLocalProjectLastModifiedDate', () => {
       200000
     );
     writeFileWithModificationTime(
-      path.join(temporaryDirectory, 'scenes', 'Main', 'Main.settings'),
+      path.join(temporaryDirectory, 'scenes', 'Main', 'Main.gdl'),
       300000
     );
     writeFileWithModificationTime(
@@ -56,7 +56,7 @@ describe('getLocalProjectLastModifiedDate', () => {
       350000
     );
     writeFileWithModificationTime(
-      path.join(temporaryDirectory, 'tests.settings'),
+      path.join(temporaryDirectory, 'tests.gdl'),
       360000
     );
     writeFileWithModificationTime(
@@ -83,7 +83,7 @@ describe('getLocalProjectLastModifiedDate', () => {
     const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
     writeFileWithModificationTime(entryPath, 100000);
     writeFileWithModificationTime(
-      path.join(temporaryDirectory, 'scenes', 'Main', 'scene.settings'),
+      path.join(temporaryDirectory, 'scenes', 'Main', 'scene.gdl'),
       200000
     );
     writeFileWithModificationTime(
@@ -108,7 +108,7 @@ describe('getLocalProjectLastModifiedDate', () => {
     const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
     writeFileWithModificationTime(entryPath, 100000);
     writeFileWithModificationTime(
-      path.join(temporaryDirectory, 'scenes', 'Main', 'Main.settings'),
+      path.join(temporaryDirectory, 'scenes', 'Main', 'Main.gdl'),
       200000
     );
     writeFileWithModificationTime(
@@ -130,7 +130,7 @@ describe('getLocalProjectLastModifiedDate', () => {
     const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
     writeFileWithModificationTime(entryPath, 100000);
     writeFileWithModificationTime(
-      path.join(temporaryDirectory, 'scenes', 'Main', 'Main.settings'),
+      path.join(temporaryDirectory, 'scenes', 'Main', 'Main.gdl'),
       700000
     );
     const statSpy = jest

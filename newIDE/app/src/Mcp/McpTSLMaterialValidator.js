@@ -325,7 +325,7 @@ const getRegisteredResourceName = (
     .sort();
   // File-first authoring registers resources before reloading editor memory.
   // When present, the saved registry is authoritative (including removals).
-  const registryPath = path.join(projectRoot, 'resources.settings');
+  const registryPath = path.join(projectRoot, 'resources.gdl');
   let resources = names.map(name => {
     const resource = resourcesManager.getResource(name);
     return { name, kind: resource.getKind(), file: resource.getFile() };
@@ -346,7 +346,7 @@ const getRegisteredResourceName = (
     } catch (error) {
       throw new TSLMcpValidationError(
         'TSL-MCP-RESOURCE-REGISTRY-INVALID',
-        'Cannot read the saved resources.settings registry. Validate project files before retrying.'
+        'Cannot read the saved resources.gdl registry. Validate project files before retrying.'
       );
     }
   }

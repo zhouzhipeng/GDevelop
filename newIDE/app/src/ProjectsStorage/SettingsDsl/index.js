@@ -434,7 +434,7 @@ export const registerLocalSettingsSources = files => {
   const extensions = new Map();
   Object.entries(files)
     .filter(([uri]) =>
-      /\/extensions\/[^/]+\/(prefabs|behaviors)\/[^/]+\/(prefab|behavior)\.settings$/.test(
+      /\/extensions\/[^/]+\/(prefabs|behaviors)\/[^/]+\/(prefab|behavior)\.gdl$/.test(
         uri
       )
     )
@@ -463,7 +463,7 @@ export const registerLocalSettingsSources = files => {
               `game://extensions/${encodeURIComponent(
                 extension.name
               )}/prefabs/${encodeURIComponent(prefab.name)}/objects/`
-            ) && uri.endsWith('.settings')
+            ) && uri.endsWith('.gdl')
         )
         .map(([, source]) => values(parseSettingsSyntax(source).root));
     });
@@ -813,6 +813,8 @@ const decodeRecord = (n, schema, fileUri, path, locations) => {
       );
     else out[entry.key] = decoded;
   });
+  if (schema.children.objectGroups && out.objectGroups === undefined)
+    out.objectGroups = {};
   return out;
 };
 const encodeRecord = (type, data, schema, fileUri) => {
@@ -864,6 +866,14 @@ const encodeRecord = (type, data, schema, fileUri) => {
     );
     if (childEntry) {
       const [childType, entry] = childEntry;
+      if (
+        childType === 'objectGroups' &&
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        Object.keys(value).length === 0
+      )
+        return;
       if (entry.configurations) {
         const container = node(childType);
         Object.entries(value).forEach(([name, configuration]) => {
@@ -1144,7 +1154,7 @@ export const decodeSettingsDocument = (source, fileUri) => {
   }
   if (kind === 'project' && payload.formatVersion !== SETTINGS_FORMAT_VERSION)
     fail(
-      `Only Settings DSL format ${SETTINGS_FORMAT_VERSION} is supported.`,
+      `Only GDevelop Language (GDL) format ${SETTINGS_FORMAT_VERSION} is supported.`,
       root,
       fileUri,
       root.type,

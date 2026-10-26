@@ -169,13 +169,11 @@ const projectFixture = {
   ],
 };
 
-describe('Settings DSL multi-file project format', () => {
+describe('GDevelop Language (GDL) multi-file project format', () => {
   test('writes only DSL for every component and round trips the complete project', () => {
     const files = decomposeLegacyProjectToFiles(projectFixture);
     Object.entries(files)
-      .filter(
-        ([uri]) => uri.endsWith('.settings') || uri === MULTI_FILE_ENTRY_URI
-      )
+      .filter(([uri]) => uri.endsWith('.gdl') || uri === MULTI_FILE_ENTRY_URI)
       .forEach(([uri, source]) => {
         const decoded = decodeSettingsDocument(source, uri);
         expect(decoded.kind).toBeTruthy();
@@ -197,8 +195,8 @@ describe('Settings DSL multi-file project format', () => {
     for (const source of [
       'kind = "project"\nsettingsFormatVersion = 7\n',
       files[MULTI_FILE_ENTRY_URI].replace(
-        'formatVersion = 11',
-        'formatVersion = 8'
+        'formatVersion = 12',
+        'formatVersion = 11'
       ),
     ]) {
       expect(() =>
@@ -211,7 +209,7 @@ describe('Settings DSL multi-file project format', () => {
   });
   test('rejects arbitrary scene properties and nested layout wrappers', () => {
     const files = decomposeLegacyProjectToFiles(projectFixture);
-    const uri = Object.keys(files).find(uri => uri.endsWith('/scene.settings'));
+    const uri = Object.keys(files).find(uri => uri.endsWith('/scene.gdl'));
     if (!uri) throw new Error('Scene settings fixture is missing.');
     for (const field of ['madeUp = 1', 'layout {}', 'settings {}'])
       expect(() =>
@@ -221,7 +219,7 @@ describe('Settings DSL multi-file project format', () => {
         })
       ).toThrow();
   });
-  test('keeps Constants TOML separate from the Settings DSL', () => {
+  test('keeps Constants TOML separate from the GDevelop Language (GDL)', () => {
     const constants = { sheet: { value: 42 }, enabled: true };
     expect(parseConstantsFromToml(serializeConstantsToToml(constants))).toEqual(
       constants
@@ -403,14 +401,14 @@ describe('Settings DSL multi-file project format', () => {
 
   test('rejects missing or mutable lifecycle function identity', () => {
     const missingUpdate = decomposeLegacyProjectToFiles(projectFixture);
-    delete missingUpdate['game://scenes/Main/functions/sceneUpdate.settings'];
+    delete missingUpdate['game://scenes/Main/functions/sceneUpdate.gdl'];
     delete missingUpdate['game://scenes/Main/functions/sceneUpdate.events'];
     expect(() => composeLegacyProjectFromFiles(missingUpdate)).toThrow(
       expect.objectContaining({ code: 'MULTIFILE_MISSING_FILE' })
     );
 
     const mutableRole = decomposeLegacyProjectToFiles(projectFixture);
-    const settingsUri = 'game://scenes/Main/functions/sceneUpdate.settings';
+    const settingsUri = 'game://scenes/Main/functions/sceneUpdate.gdl';
     mutableRole[settingsUri] = mutableRole[settingsUri].replace(
       'lifecycleRole = "sceneUpdate"',
       'lifecycleRole = "sceneLoad"'
@@ -443,9 +441,7 @@ describe('Settings DSL multi-file project format', () => {
     });
 
     const files = decomposeLegacyProjectToFiles(project);
-    expect(files['game://scenes/Main/scene.settings']).toContain(
-      'hidden = true'
-    );
+    expect(files['game://scenes/Main/scene.gdl']).toContain('hidden = true');
 
     const output = composeLegacyProjectFromFiles(files);
     expect(output.layouts[0].instances[0].hidden).toBe(true);
@@ -482,11 +478,11 @@ describe('Settings DSL multi-file project format', () => {
         functionObject => functionObject.name
       )
     ).toEqual(['CalculateDamage', 'ResetCombat']);
-    expect(files['game://extensions/Support/extension.settings']).toContain(
+    expect(files['game://extensions/Support/extension.gdl']).toContain(
       'order = 1'
     );
     expect(
-      files['game://extensions/Combat/functions/ResetCombat.settings']
+      files['game://extensions/Combat/functions/ResetCombat.gdl']
     ).toContain('order = 1');
   });
 
@@ -541,7 +537,7 @@ column2 = "ssfssdfsf"
 
   test('rejects a discovered child settings fragment without its owner', () => {
     const files = decomposeLegacyProjectToFiles(projectFixture);
-    delete files['game://extensions/Combat/extension.settings'];
+    delete files['game://extensions/Combat/extension.gdl'];
 
     expect(() => composeLegacyProjectFromFiles(files)).toThrow(
       expect.objectContaining({ code: 'MULTIFILE_ORPHAN_SETTINGS' })
@@ -574,7 +570,7 @@ column2 = "ssfssdfsf"
 
     expect(
       Object.entries(files)
-        .filter(([uri]) => uri.endsWith('.settings'))
+        .filter(([uri]) => uri.endsWith('.gdl'))
         .some(([, source]) => /FolderStructure/.test(source))
     ).toBe(false);
     expect(
@@ -589,7 +585,7 @@ column2 = "ssfssdfsf"
       { name: 'Player', type: 'Sprite', behaviors: [] },
     ];
     const files = decomposeLegacyProjectToFiles(project);
-    const objectUri = 'game://scenes/Main/objects/Player.settings';
+    const objectUri = 'game://scenes/Main/objects/Player.gdl';
     files[objectUri] = files[objectUri].replace(
       'folder = []',
       'folder = "Actors"'
@@ -603,7 +599,7 @@ column2 = "ssfssdfsf"
   test('rejects invalid or stray owner-function source paths', () => {
     const files = decomposeLegacyProjectToFiles(projectFixture);
     const functionUri =
-      'game://extensions/Combat/prefabs/Enemy/functions/TakeDamage.settings';
+      'game://extensions/Combat/prefabs/Enemy/functions/TakeDamage.gdl';
     files[functionUri] +=
       'events = "game://extensions/Combat/prefabs/Enemy/TakeDamage.events"\n';
     expect(() => composeLegacyProjectFromFiles(files)).toThrow(
@@ -618,7 +614,7 @@ column2 = "ssfssdfsf"
       projectFixture
     );
     filesWithStraySettings[
-      'game://extensions/Combat/behaviors/Health/functions/Recovery/Heal/function.settings'
+      'game://extensions/Combat/behaviors/Health/functions/Recovery/Heal/function.gdl'
     ] = `kind = "function"\nsettingsFormatVersion = ${MULTI_FILE_FORMAT_VERSION}\n`;
     expect(() => composeLegacyProjectFromFiles(filesWithStraySettings)).toThrow(
       expect.objectContaining({
@@ -637,7 +633,7 @@ column2 = "ssfssdfsf"
     };
     const files = decomposeLegacyProjectToFiles(project);
     expect(
-      files['game://extensions/Combat/prefabs/Enemy/prefab.settings']
+      files['game://extensions/Combat/prefabs/Enemy/prefab.gdl']
     ).toContain('grid_size = [16, 24, 32]');
     expect(
       areLegacyProjectsEquivalent(project, composeLegacyProjectFromFiles(files))
@@ -709,7 +705,7 @@ column2 = "ssfssdfsf"
     const files = decomposeLegacyProjectToFiles(projectFixture);
     Object.keys(files).forEach(uri => {
       if (
-        !uri.endsWith('.settings') &&
+        !uri.endsWith('.gdl') &&
         !uri.endsWith('.toml') &&
         !uri.endsWith('.layout')
       )
@@ -758,7 +754,7 @@ column2 = "ssfssdfsf"
     );
 
     const files = decomposeLegacyProjectToFiles(projectFixture);
-    files['game://externals/external.settings'] = 'not valid TOML';
+    files['game://externals/external.gdl'] = 'not valid TOML';
     expect(() => composeLegacyProjectFromFiles(files)).toThrow(
       expect.objectContaining({
         code: 'MULTIFILE_RETIRED_EXTERNAL_SETTINGS',
@@ -792,9 +788,7 @@ column2 = "ssfssdfsf"
     ]);
 
     expect(
-      files[
-        'game://scenes/Secondary/external-events/Secondary%20Logic.settings'
-      ]
+      files['game://scenes/Secondary/external-events/Secondary%20Logic.gdl']
     ).toBeDefined();
     const reordered = Object.fromEntries(Object.entries(files).reverse());
     expect(composeLegacyProjectFromFiles(reordered).externalEvents).toEqual(
@@ -805,7 +799,7 @@ column2 = "ssfssdfsf"
   test('rejects link metadata and external sources outside the owning scene folder', () => {
     const filesWithLinkMetadata = decomposeLegacyProjectToFiles(projectFixture);
     const ownerSettingsUri =
-      'game://scenes/Main/external-events/Shared%20Combat/external-events.settings';
+      'game://scenes/Main/external-events/Shared%20Combat/external-events.gdl';
     filesWithLinkMetadata[ownerSettingsUri] = `${
       filesWithLinkMetadata[ownerSettingsUri]
     }linkedScene = "Main"\n`;
@@ -829,7 +823,7 @@ column2 = "ssfssdfsf"
       projectFixture
     );
     const retiredOwnerUri =
-      'game://scenes/Main/externals/Shared%20Combat/external-events.settings';
+      'game://scenes/Main/externals/Shared%20Combat/external-events.gdl';
     filesWithRetiredExternalPath[retiredOwnerUri] = 'kind = "externalEvents"';
     Object.keys(filesWithRetiredExternalPath)
       .filter(uri => uri.includes('/external-events/Shared%20Combat/'))
@@ -856,8 +850,8 @@ column2 = "ssfssdfsf"
     expect(
       validateGameUri('game://scenes/Main/externals/Shared%20Combat.events')
     ).toBe('scenes/Main/externals/Shared Combat.events');
-    expect(validateGameUri('game://scenes/%4EUL/scene.settings')).toBe(
-      'scenes/NUL/scene.settings'
+    expect(validateGameUri('game://scenes/%4EUL/scene.gdl')).toBe(
+      'scenes/NUL/scene.gdl'
     );
   });
 
@@ -874,7 +868,7 @@ column2 = "ssfssdfsf"
 
   test('round-trips canonical embedded layout DSL through the multi-file project', () => {
     const files = decomposeLegacyProjectToFiles(projectFixture);
-    expect(files['game://scenes/Main/scene.settings']).toMatch(/background = /);
+    expect(files['game://scenes/Main/scene.gdl']).toMatch(/background = /);
     expect(
       areLegacyProjectsEquivalent(
         projectFixture,
@@ -897,7 +891,7 @@ column2 = "ssfssdfsf"
     );
     expect(fragmentUris).toHaveLength(names.length);
     names.forEach(name =>
-      ['settings'].forEach(extension =>
+      ['gdl'].forEach(extension =>
         expect(fragmentUris).toContain(
           `game://scenes/Main/external-events/${encodeManagedName(
             `${name}.${extension}`

@@ -10,11 +10,11 @@ implicit upgrade is provided for the retired external function directories.
 
 ```text
 scenes/<Scene>/
-  scene.settings
-  functions/<Lifecycle>.settings
+  scene.gdl
+  functions/<Lifecycle>.gdl
   functions/<Lifecycle>.events
   external-events/<Fragment>.events
-  external-layout/<Layout>.settings
+  external-layout/<Layout>.gdl
 ```
 
 External event fragments and external layouts are independent project items.
@@ -28,7 +28,7 @@ Each direct `.events` child declares one fragment. Its filename, decoded and
 stripped of the final `.events` suffix, is its project-wide name. Names are
 non-empty NFC strings and unique ignoring case, including across scenes. Use the
 managed reversible path encoding for unsafe characters and reserved filenames.
-Nested directories, fragment `.settings`, `functions/`, TOML headers and
+Nested directories, fragment `.gdl`, `functions/`, TOML headers and
 registration arrays are invalid. Empty, comment-only and unused files are valid.
 
 A fragment is a `gd::EventsList`. It has no function metadata, parameters, return
@@ -45,7 +45,7 @@ requires updating Link targets. Editor refactoring performs those updates.
 
 ## External layouts
 
-`external-layout/<Layout>.settings` retains identity, project-wide contiguous
+`external-layout/<Layout>.gdl` retains identity, project-wide contiguous
 `order`, and an embedded `[layout]` tree for layers and initial instances. It is
 independently discovered and has no companion `.events` file. See
 [embedded-layout-settings-format-spec.md](embedded-layout-settings-format-spec.md)

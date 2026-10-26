@@ -22,7 +22,7 @@ conditions.
 
 ## Read the catalog
 
-Before editing an `.settings` file, inspect the owner settings and search
+Before editing an `.gdl` file, inspect the owner settings and search
 `.gdevelop/instructions-catalog.json` for exact instruction types, parameter
 `dslName` values, expressions, and scopes:
 

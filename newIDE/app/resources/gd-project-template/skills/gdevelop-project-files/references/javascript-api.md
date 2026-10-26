@@ -89,7 +89,7 @@ policy, not an older author grammar; syntax still must validate.
 
 ## Context globals
 
-External fragment blocks live in `scenes/<Scene>/external-events/<Fragment>.settings`.
+External fragment blocks live in `scenes/<Scene>/external-events/<Fragment>.gdl`.
 They inherit the caller's scene/function context, including `eventsFunctionContext`;
 this does not give the fragment a signature or parameter declarations. Use signal
 parameters only in fragments linked from a compatible signal caller.
@@ -321,7 +321,7 @@ examples use `>` only on the directives because the JavaScript event is a child.
    `valid: true`, `structurallyValid: true`,
    `eventCodeGenerationValid: true`, `semanticLintPassed: true`, and no false
    generated-code or JavaScript-authoring phase. Fix diagnostics at their
-   reported `.settings` URI, line, and column. A successful pre-runtime result
+   reported `.gdl` URI, line, and column. A successful pre-runtime result
    still has `runtimeVerified: false` and `completionReady: false`; never report
    that the game works or that the task is complete from it alone.
 5. Commit all task-owned source changes with Git before `reload_project`.

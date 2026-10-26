@@ -79,7 +79,7 @@ Project source example:
 ```text
 project.gdevelop
 constants.toml
-resources.settings
+resources.gdl
 scenes/
 extensions/
 ```

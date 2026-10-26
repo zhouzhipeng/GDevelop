@@ -75,7 +75,7 @@ deleting an empty function must not allow the serializer to recreate it.
 The current single-file shape does not encode this difference. It omits empty
 optional body arrays, always serializes the update body as `events`, and then
 constructs all fixed functions on load. The current multi-file format always
-requires `sceneUpdate.settings` plus `sceneUpdate.events`, while optional
+requires `sceneUpdate.gdl` plus `sceneUpdate.events`, while optional
 roles exist only when their event bodies are non-empty. Both contracts must be
 changed together.
 
@@ -416,22 +416,22 @@ Version 6 keeps the flattened version-5 same-stem structure:
 
 ```text
 scenes/<Scene>/
-  scene.settings
+  scene.gdl
   functions/
-    sceneUpdate.settings
+    sceneUpdate.gdl
     sceneUpdate.events
-    sceneSignal.settings
+    sceneSignal.gdl
     sceneSignal.events
 
   external-events/<External>/
-    external-events.settings
+    external-events.gdl
     functions/
-      sceneLoad.settings
+      sceneLoad.gdl
       sceneLoad.events
 ```
 
 The example contains only the functions that exist. Each present role owns
-exactly one `.settings` and one same-stem `.events` file, including when the
+exactly one `.gdl` and one same-stem `.events` file, including when the
 body is empty. An absent role owns neither file. A half-pair remains invalid.
 
 There is no required `sceneUpdate` pair. An empty `functions/` directory may be

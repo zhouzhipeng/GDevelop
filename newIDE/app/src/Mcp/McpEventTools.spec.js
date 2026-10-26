@@ -38,10 +38,10 @@ describe('MCP scene lifecycle event tools', () => {
     expect(loadResult.ownerKind).toBe('scene');
     expect(loadResult.lifecycleFunctionName).toBe('sceneLoad');
     expect(loadResult.settingsUri).toBe(
-      'game://scenes/Main%20Scene/functions/sceneLoad.settings'
+      'game://scenes/Main%20Scene/functions/sceneLoad.gdl'
     );
     expect(loadResult.functionSettingsUri).toBe(
-      'game://scenes/Main%20Scene/functions/sceneLoad.settings'
+      'game://scenes/Main%20Scene/functions/sceneLoad.gdl'
     );
   });
 
@@ -62,7 +62,7 @@ describe('MCP scene lifecycle event tools', () => {
     expect(result.ownerName).toBe('Shared Logic');
     expect(result.lifecycleFunctionName).toBeUndefined();
     expect(result.settingsUri).toBe(
-      'game://scenes/Main%20Scene/external-events/Shared%20Logic.settings'
+      'game://scenes/Main%20Scene/external-events/Shared%20Logic.gdl'
     );
     expect(result.functionSettingsUri).toBeUndefined();
     expect(() =>

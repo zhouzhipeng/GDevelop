@@ -95,6 +95,27 @@ describe('Official Platformer template creation', () => {
           showAlert: jest.fn(),
           showConfirmation: jest.fn(),
         });
+        const listSources = directory =>
+          fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+            const file = path.join(directory, entry.name);
+            return entry.isDirectory() ? listSources(file) : [file];
+          });
+        const sources = listSources(temporaryDirectory);
+        expect(sources.some(file => file.endsWith('.gdl'))).toBe(true);
+        expect(sources.some(file => file.endsWith('.settings'))).toBe(false);
+        sources
+          .filter(file => file.endsWith('.gdl'))
+          .forEach(file =>
+            expect(fs.readFileSync(file, 'utf8')).not.toMatch(
+              /\bobjectGroups\s*\{\s*\}/
+            )
+          );
+        expect(
+          fs.existsSync(path.join(temporaryDirectory, 'resources.gdl'))
+        ).toBe(true);
+        expect(fs.existsSync(path.join(temporaryDirectory, 'tests.gdl'))).toBe(
+          true
+        );
         const reopened = await openMultiFileProject(entryPath);
         if (slug === 'starting-3D-platformer') {
           const layer = reopened.layouts[0].layers.find(

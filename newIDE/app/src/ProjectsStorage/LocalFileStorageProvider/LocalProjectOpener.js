@@ -198,7 +198,7 @@ export const onOpen = (
   return Promise.reject(
     new MultiFileProjectError(
       'MULTIFILE_UNSUPPORTED_VERSION',
-      'Only the current Settings DSL project.gdevelop format is supported.'
+      'Only the current GDevelop Language (GDL) project.gdevelop format is supported.'
     )
   );
 };

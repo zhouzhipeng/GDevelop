@@ -123,7 +123,7 @@ describe('MCP single-file TSL material validator', () => {
   });
 
   test('uses disk registrations and removals before editor reload', async () => {
-    const registryPath = path.join(root, 'resources.settings');
+    const registryPath = path.join(root, 'resources.gdl');
     fs.writeFileSync(
       registryPath,
       'kind = "resources"\nsettingsFormatVersion = 6\n[[resources]]\nkind = "tslMaterial"\nname = "DiskTint"\nfile = "materials/Tint.tsl.ts"\n'

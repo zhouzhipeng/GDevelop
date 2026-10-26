@@ -1,11 +1,11 @@
-# Events in Settings DSL
+# Events in GDevelop Language (GDL)
 
 The independent IfDo author language and `.events` files have been removed.
-The current contract is [Unified Settings DSL](unified-settings-events-dsl-spec.md),
+The current contract is [Unified GDevelop Language (GDL)](unified-settings-events-dsl-spec.md),
 format 11. This document is a navigation entry, not an alternate grammar.
 
 Functions and external fragments store declarations and an `events {}` body in
-one `.settings` document. Use explicit `conditions` and `actions` containing bare
+one `.gdl` document. Use explicit `conditions` and `actions` containing bare
 catalog instructions. Executable events use `event` with default standard type;
 `group`, `comment`, and `link` are independent nodes. Child nodes are nested
 directly. JavaScript uses a raw multiline `code { ... }` block within an event

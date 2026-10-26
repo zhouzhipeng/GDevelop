@@ -644,7 +644,7 @@ export const isTextLikeFile = (node: ProjectFileNode): boolean =>
     '.events',
     '.gdevelop',
     '.layout',
-    '.settings',
+    '.gdl',
   ].includes(node.extension);
 
 const getResourceMetadataForFile = (filePath: string): ?any => {

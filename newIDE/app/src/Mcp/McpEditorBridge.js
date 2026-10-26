@@ -5920,19 +5920,19 @@ const callMcpTool = async ({
       const missingGeneratedSources: Array<string> = [];
       namesToReport.forEach(name => {
         const extensionSettingsUri = savedSourceUris.find(uri => {
-          if (!uri.endsWith('/extension.settings')) return false;
+          if (!uri.endsWith('/extension.gdl')) return false;
           const decoded = decodeSettingsDocument(savedFiles[uri], uri);
           const settings = { ...decoded.payload, kind: decoded.kind };
           return settings.kind === 'extension' && settings.name === name;
         });
         if (!extensionSettingsUri) {
           generatedSources[name] = [];
-          missingGeneratedSources.push(`extension.settings for ${name}`);
+          missingGeneratedSources.push(`extension.gdl for ${name}`);
           return;
         }
         const extensionRoot = extensionSettingsUri.slice(
           0,
-          -'extension.settings'.length
+          -'extension.gdl'.length
         );
         generatedSources[name] = savedSourceUris
           .filter(uri => uri.indexOf(extensionRoot) === 0)

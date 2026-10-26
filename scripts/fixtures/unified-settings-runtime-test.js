@@ -1,5 +1,5 @@
 /* global gdjs, expect, describe, it */
-describe("unified Settings DSL runtime", function() {
+describe("unified GDevelop Language (GDL) runtime", function() {
   it("retains OR picking, parent-to-JS picking, deletion scope, Else and all loop counts", function() {
     // The producer is the real native code generator in NativeEvents.spec.js.
     // eslint-disable-next-line no-eval
