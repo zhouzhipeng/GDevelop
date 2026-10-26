@@ -2,7 +2,7 @@
 
 import { sha256 } from 'js-sha256';
 import optionalRequire from '../Utils/OptionalRequire';
-import { extractIfDoJavaScriptBlocks } from '../EventsSheet/IfDoEventsDsl';
+import { extractSettingsJavaScriptBlocks } from './SettingsDsl/Events';
 import { encodeManagedName } from './MultiFileProjectFormat';
 
 let cachedTypeScript = null;
@@ -1224,7 +1224,7 @@ const safeDecode = (value: string): string => {
 };
 
 const getSourceContext = (fileUri: string, model: Object): Object => {
-  const externalFragmentMatch = /^game:\/\/scenes\/([^/]+)\/external-events\/([^/]+)\.events$/.exec(
+  const externalFragmentMatch = /^game:\/\/scenes\/([^/]+)\/external-events\/([^/]+)\.settings$/.exec(
     fileUri
   );
   if (externalFragmentMatch) {
@@ -1245,7 +1245,7 @@ const getSourceContext = (fileUri: string, model: Object): Object => {
       external: true,
     };
   }
-  const sceneLifecycleMatch = /^game:\/\/scenes\/([^/]+)\/functions\/(sceneLoad|sceneSignal|sceneUpdate|sceneUnload)\.events$/.exec(
+  const sceneLifecycleMatch = /^game:\/\/scenes\/([^/]+)\/functions\/(sceneLoad|sceneSignal|sceneUpdate|sceneUnload)\.settings$/.exec(
     fileUri
   );
   if (sceneLifecycleMatch) {
@@ -1314,7 +1314,7 @@ export const collectSerializedProjectJavaScriptBlocks = (
     lifecycleSources.forEach(([role, legacyField]) =>
       collectEventsJavaScriptBlocks(
         layout[legacyField],
-        `game://scenes/${sceneName}/functions/${role}.events`,
+        `game://scenes/${sceneName}/functions/${role}.settings`,
         blocks
       )
     );
@@ -1324,7 +1324,7 @@ export const collectSerializedProjectJavaScriptBlocks = (
       String(external.associatedLayout || '')
     );
     const externalFileName = encodeManagedName(
-      `${String(external.name || '')}.events`
+      `${String(external.name || '')}.settings`
     );
     collectEventsJavaScriptBlocks(
       external.events,
@@ -1341,7 +1341,7 @@ export const collectSerializedProjectJavaScriptBlocks = (
         );
         collectEventsJavaScriptBlocks(
           eventsFunction.events,
-          `${base}/functions/${functionName}.events`,
+          `${base}/functions/${functionName}.settings`,
           blocks
         );
       });
@@ -1372,10 +1372,10 @@ export const collectSourceFileJavaScriptBlocks = (files: {
 }): Array<Object> => {
   const blocks: Array<Object> = [];
   Object.keys(files)
-    .filter(fileUri => fileUri.endsWith('.events'))
+    .filter(fileUri => fileUri.endsWith('.settings'))
     .sort()
     .forEach(fileUri => {
-      extractIfDoJavaScriptBlocks(files[fileUri]).forEach(block =>
+      extractSettingsJavaScriptBlocks(files[fileUri]).forEach(block =>
         blocks.push({ fileUri, ...block })
       );
     });

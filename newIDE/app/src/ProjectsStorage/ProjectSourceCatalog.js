@@ -26,7 +26,7 @@ const SCENE_LIFECYCLE_SOURCES = Object.freeze([
 
 export const PROJECT_SETTINGS_CATALOG_RELATIVE_PATH =
   '.gdevelop/settings-catalog.json';
-export const PROJECT_SETTINGS_CATALOG_FORMAT_VERSION = 8;
+export const PROJECT_SETTINGS_CATALOG_FORMAT_VERSION = 10;
 
 export class ProjectSourceCatalogError extends Error {
   code: string;
@@ -1220,9 +1220,6 @@ const buildSettingsOwners = (serializedProject: Object): Array<Object> => {
         settingsUri: `game://scenes/${sceneFolder}/functions/${
           source.name
         }.settings`,
-        eventsUri: `game://scenes/${sceneFolder}/functions/${
-          source.name
-        }.events`,
       })),
     });
   });
@@ -1231,13 +1228,12 @@ const buildSettingsOwners = (serializedProject: Object): Array<Object> => {
     const name = String(externalEvents.name || '');
     const ownerBaseUri = `game://scenes/${encodeManagedName(
       sceneName
-    )}/external-events/${encodeManagedName(`${name}.events`)}`;
+    )}/external-events/${encodeManagedName(`${name}.settings`)}`;
     owners.push({
       kind: 'external-events',
       scene: sceneName,
       name,
-      settingsUri: ownerBaseUri.replace(/\.events$/, '.settings'),
-      eventsUri: ownerBaseUri,
+      settingsUri: ownerBaseUri,
     });
   });
   (serializedProject.externalLayouts || []).forEach(externalLayout => {
@@ -1347,17 +1343,17 @@ export const buildProjectSettingsCatalog = ({
       rules: [
         'Use one typed component root. Names and properties belong inside the root; never use TOML headers, named node arguments, kind, settingsFormatVersion, settings or layout wrappers.',
         'Read fileKinds[].schema and objectTypes[type].schema. Unknown fields are errors. Dynamic fields require registered type metadata.',
-        'Declare repeated variable nodes directly on the owner. Infer types from value literals; extension defaults require scope. Descendant metadata uses typed paths. Never write variables, sceneVariables or globalVariables wrappers.',
+        'Declare repeated variable nodes directly on the owner. Infer types from value literals; extension defaults require scope. Descendant identity, enum and editor fields belong on nested variable declarations. Expanded containers require explicit structure/array type, omit value, and use named structure children or unnamed ordered array children. metadata/path annotations are forbidden. Never write variables, sceneVariables or globalVariables wrappers.',
         'Instances are root children in global serialized order. Each instance owns variables and behavior overrides. Layers own camera and effect nodes.',
-        'Object definitions and functions remain independent .settings components; event bodies use same-stem .events files.',
+        'Object definitions and functions remain independent .settings components; event bodies are embedded in the same function.settings document.',
         'Only project.gdevelop declares formatVersion. Paths determine ownership. constants.toml is separate and generated JSON is not author input.',
       ],
     },
     eventFileKinds: [
       {
         kind: 'external-events',
-        path: 'scenes/<Scene>/external-events/<Name>.events',
-        syntax: 'IfDo',
+        path: 'scenes/<Scene>/external-events/<Name>.settings',
+        syntax: 'Settings DSL',
         settingsRequired: true,
         settingsPath: 'scenes/<Scene>/external-events/<Name>.settings',
         identity:
@@ -1390,6 +1386,7 @@ export const buildProjectSettingsCatalog = ({
     }),
     settingsOwners,
     variableSchemas: getSettingsSchemas().variableSchemas,
+    eventSchemas: getSettingsSchemas().eventSchemas,
     objectTypes: registeredTypes.objectTypes,
     behaviorTypes: registeredTypes.behaviorTypes,
     effectTypes: registeredTypes.effectTypes,

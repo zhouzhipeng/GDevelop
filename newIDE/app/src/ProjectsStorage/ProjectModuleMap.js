@@ -5,7 +5,7 @@ import {
   encodeManagedName,
   MULTI_FILE_FORMAT_VERSION,
 } from './MultiFileProjectFormat';
-import { parseIfDoEvents } from '../EventsSheet/IfDoEventsDsl';
+import { compileSettingsEvents } from './SettingsDsl/Events';
 
 export const PROJECT_MODULE_MAP_RELATIVE_PATH =
   '.gdevelop/project-module-map.json';
@@ -34,7 +34,6 @@ const linksIn = (events: Array<Object>): Array<string> => {
 const eventEntry = (
   name: string,
   settingsPath: string,
-  eventsPath: string,
   events: Array<Object>,
   settings: Object,
   files: { [string]: string },
@@ -42,12 +41,11 @@ const eventEntry = (
 ): Object => ({
   name,
   settingsPath,
-  eventsPath,
   purpose: settings.description || '',
   eventsLogic: settings.eventsLogic || '',
   links: linksIn(
-    resolver && files[`game://${eventsPath}`] !== undefined
-      ? parseIfDoEvents(files[`game://${eventsPath}`], {
+    resolver && files[`game://${settingsPath}`] !== undefined
+      ? compileSettingsEvents(files[`game://${settingsPath}`], {
           resolveInstruction: resolver,
         })
       : events
@@ -65,7 +63,7 @@ export const buildProjectModuleMap = (
     allEventEntries.push(entry);
     entry.links.forEach(target => {
       const callers = callersByFragment.get(target) || new Set<string>();
-      callers.add(entry.eventsPath);
+      callers.add(entry.settingsPath);
       callersByFragment.set(target, callers);
     });
     return entry;
@@ -87,13 +85,11 @@ export const buildProjectModuleMap = (
           const settingsPath = `${base}/${encodeManagedName(
             `${name}.settings`
           )}`;
-          const eventsPath = `${base}/${encodeManagedName(`${name}.events`)}`;
           if (!files[`game://${settingsPath}`]) return null;
           return register(
             eventEntry(
               name,
               settingsPath,
-              eventsPath,
               scene[field],
               settingsAt(files, settingsPath),
               files,
@@ -113,14 +109,10 @@ export const buildProjectModuleMap = (
       const settingsPath = `${base}/${encodeManagedName(
         `${fragment.name}.settings`
       )}`;
-      const eventsPath = `${base}/${encodeManagedName(
-        `${fragment.name}.events`
-      )}`;
       const entry = register(
         eventEntry(
           fragment.name,
           settingsPath,
-          eventsPath,
           fragment.events,
           settingsAt(files, settingsPath),
           files,
@@ -141,9 +133,6 @@ export const buildProjectModuleMap = (
       const settingsPath = `${functionBase}/${encodeManagedName(
         `${fn.name}.settings`
       )}`;
-      const eventsPath = `${functionBase}/${encodeManagedName(
-        `${fn.name}.events`
-      )}`;
       return {
         ownerKind,
         ownerName,
@@ -151,7 +140,6 @@ export const buildProjectModuleMap = (
           eventEntry(
             fn.name,
             settingsPath,
-            eventsPath,
             fn.events,
             settingsAt(files, settingsPath),
             files,
@@ -199,7 +187,7 @@ export const buildProjectModuleMap = (
     ).sort();
   });
   const fragmentPathByName = new Map(
-    externalEvents.map(fragment => [fragment.name, fragment.eventsPath])
+    externalEvents.map(fragment => [fragment.name, fragment.settingsPath])
   );
   allEventEntries.forEach(entry => {
     entry.linkPaths = entry.links
@@ -212,13 +200,13 @@ export const buildProjectModuleMap = (
       .filter(target => !knownFragments.has(target))
       .map(target => ({
         code: 'UNRESOLVED_EXTERNAL_EVENTS_LINK',
-        eventsPath: entry.eventsPath,
+        settingsPath: entry.settingsPath,
         target,
       }))
   );
   return {
     format: 'gdevelop-project-module-map',
-    formatVersion: 1,
+    formatVersion: 2,
     sourceFormatVersion: MULTI_FILE_FORMAT_VERSION,
     project: {
       name:

@@ -24,7 +24,7 @@ Keep each child object definition and all of its behaviors in an individual
 `folder = ["Parent", "Child"]`. Keep prefab-wide
 metadata, groups, variables, and flat property descriptors in
 `prefab.settings`, its root layer and instance nodes for instance/layer/spatial
-composition, and executable logic in `.events`.
+composition, and executable logic in `.settings`.
 
 ## Required workflow
 
@@ -38,8 +38,9 @@ composition, and executable logic in `.events`.
 5. Keep each settings document independently valid and local-root. Its path
    supplies the mounted namespace. Never add
    child-settings indexes to `project.gdevelop` or `extension.settings`.
-6. Derive every function's `.events` sibling from its `.settings` stem. Never
-   store events or layout URI fields.
+6. Keep each function signature and its events in one `.settings` document.
+   Do not derive, create or read a sibling body file. The events examples below
+   are blocks to insert inside that same function root.
 7. Write variables blocks with scalar shorthand or typed variable children, following settings-dsl.md.
 8. Use exact instruction types and `dslName` parameters from
    `.gdevelop/instructions-catalog.json` in every event body.
@@ -61,16 +62,13 @@ their exact parameters against the current project catalog.
 extensions/CombatKit/
   extension.settings
   functions/ResetCombat.settings
-  functions/ResetCombat.events
   prefabs/Enemy/
     prefab.settings
     objects/Body.settings
     functions/Initialize.settings
-    functions/Initialize.events
   behaviors/Health/
     behavior.settings
     functions/TakeDamage.settings
-    functions/TakeDamage.events
 ```
 
 `extensions/CombatKit/extension.settings`:
@@ -125,12 +123,25 @@ function {
 }
 ```
 
-`ResetCombat.events`:
+`ResetCombat.settings`:
 
-```events
-@event aiGeneratedEventId="reset-combat"
-if BooleanVariable variable="ResetRequested" check_if_the_value_is="True"
-do SetBooleanVariable variable="ResetRequested" modification_sign="False"
+```text
+events {
+
+  event {
+    aiGeneratedEventId = "reset-combat"
+
+    conditions {
+
+      BooleanVariable variable="ResetRequested" check_if_the_value_is="True"
+    }
+
+    actions {
+
+      SetBooleanVariable variable="ResetRequested" modification_sign="False"
+    }
+  }
+}
 ```
 
 `extensions/CombatKit/prefabs/Enemy/prefab.settings`:
@@ -192,12 +203,25 @@ function {
 }
 ```
 
-`Initialize.events`:
+`Initialize.settings`:
 
-```events
-@event aiGeneratedEventId="initialize-enemy"
-if BooleanObjectVariable object="Object" variable="Initialized" check_if_the_value_is="False"
-do SetBooleanObjectVariable object="Object" variable="Initialized" modification_sign="True"
+```text
+events {
+
+  event {
+    aiGeneratedEventId = "initialize-enemy"
+
+    conditions {
+
+      BooleanObjectVariable object="Object" variable="Initialized" check_if_the_value_is="False"
+    }
+
+    actions {
+
+      SetBooleanObjectVariable object="Object" variable="Initialized" modification_sign="True"
+    }
+  }
+}
 ```
 
 `extensions/CombatKit/prefabs/Enemy/objects/Body.settings`:
@@ -288,12 +312,25 @@ function {
 }
 ```
 
-`TakeDamage.events`:
+`TakeDamage.settings`:
 
-```events
-@event aiGeneratedEventId="take-damage"
-if NumberObjectVariable object="Object" variable="HP" comparison_sign=">" value=0
-do SetNumberObjectVariable object="Object" variable="HP" modification_sign="-" value=expr(Amount)
+```text
+events {
+
+  event {
+    aiGeneratedEventId = "take-damage"
+
+    conditions {
+
+      NumberObjectVariable object="Object" variable="HP" comparison_sign=">" value=0
+    }
+
+    actions {
+
+      SetNumberObjectVariable object="Object" variable="HP" modification_sign="-" value=expr(Amount)
+    }
+  }
+}
 ```
 
 The object and behavior parameters identify one caller instance. Do not remove
@@ -309,16 +346,16 @@ selection through child events and nested private behavior-function calls.
 ## Add or change components
 
 - Add a free function as a flat `functions/<Name>.settings` owner. Put its complete
-  signature there and only its body in the same-stem `<Name>.events`.
-- Add every prefab or behavior function as a flat same-stem pair. Put its
+  signature and embedded events together in that document.
+- Add every prefab or behavior function as a flat function document. Put its
   complete metadata and `folder` grouping array in `<Name>.settings` and
-  only its body in the sibling `<Name>.events`. Never embed a
+  its body in that same function root. Never embed a
   function entry in `prefab.settings` or `behavior.settings`.
 - Add prefab variants under `variants/<Variant>/variant.settings`; keep the
   variant's identity, order, groups, and root layout nodes in that owner. Put each
   variant child definition and its behaviors in
   `variants/<Variant>/objects/<Object>.settings` and store grouping in `folder`.
-- On rename, update the component directory or same-stem pair, path-derived
+- On rename, update the component directory or function document, path-derived
   namespace, `name`, and every caller atomically.
 - On delete, remove callers and scene instances first, reload and verify, then
   remove the component files and close empty folders.
@@ -329,7 +366,7 @@ selection through child events and nested private behavior-function calls.
    path, and verify the strict combined merge; semantically compile every
    changed root layer and instance nodes as current layout schema.
 2. Verify component orders are contiguous and names/folders/basenames match.
-3. Verify every required same-stem `.events` file exists and no layout URI is present.
+3. Verify every required function `.settings` contains its signature and events and no layout URI is present.
 4. Verify prefab layouts contain no object definitions or behaviors and that
    every definition is present in its own flat object settings file.
    Verify property descriptor arrays are flat and no property folder metadata

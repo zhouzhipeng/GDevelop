@@ -1,4 +1,5 @@
 // @flow
+import { preserveSettingsSourceComments } from '../SettingsDsl/Syntax';
 
 import optionalRequire from '../../Utils/OptionalRequire';
 import {
@@ -31,7 +32,7 @@ import {
   createCatalogInstructionResolver,
   mergeProjectInstructionCatalogs,
   validateProjectInstructionCatalog,
-} from '../../EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog';
+} from '../SettingsDsl/InstructionCatalog';
 
 const fs = optionalRequire('fs-extra');
 const path = optionalRequire('path');
@@ -536,7 +537,9 @@ const discoverDirectEventsFiles = async (
   const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith('.events')) continue;
-    output.push(
+    throw new MultiFileProjectError(
+      'SETTINGS_RETIRED_EVENTS_FILE',
+      '.events author files have been removed.',
       `game://${[...uriSegments, physicalNameToGameUriSegment(entry.name)].join(
         '/'
       )}`
@@ -981,14 +984,6 @@ export const readMultiFileSourceTree = async (
           uri
         );
       }
-      if (
-        syntax.root.type === 'function' &&
-        /\/functions\/[^/]+\.settings$/.test(uri)
-      ) {
-        const eventsUri = uri.replace(/\.settings$/, '.events');
-        validateGameUri(eventsUri);
-        if (files[eventsUri] === undefined) pending.push(eventsUri);
-      }
     }
   }
   return { projectRoot, files };
@@ -1357,7 +1352,7 @@ export const writeLegacyProjectAsMultiFile = async (
     if (
       previousFiles[uri] &&
       files[uri] !== previousFiles[uri] &&
-      /\bvalue\s*=\s*[[{]/.test(files[uri])
+      /\b(?:value\s*=\s*[[{]|type\s*=\s*"(?:structure|array)")/.test(files[uri])
     ) {
       files[uri] = preserveVariableStructureOrder(
         files[uri],
@@ -1365,6 +1360,17 @@ export const writeLegacyProjectAsMultiFile = async (
         uri
       );
     }
+  });
+  Object.keys(files).forEach(uri => {
+    if (
+      previousFiles[uri] &&
+      (uri.endsWith('.settings') || uri === MULTI_FILE_ENTRY_URI)
+    )
+      files[uri] = preserveSettingsSourceComments(
+        files[uri],
+        previousFiles[uri],
+        uri
+      );
   });
   const verificationProject = composeLegacyProjectFromFiles(
     files,

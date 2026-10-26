@@ -346,23 +346,19 @@ harness.getRenderer();
     );
   });
 
-  test('extracts JavaScript with exact IfDo source locations', () => {
+  test('extracts JavaScript with exact Settings source locations', () => {
     const blocks = collectSourceFileJavaScriptBlocks({
-      'game://scenes/Main/Main.events': `@event
-if SceneJustBegins
-> @js objects="Player" strict=true
-const value = 1;
-> @end js
-`,
+      'game://scenes/Main/Main.settings':
+        'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n\n      event {\n        type = "javascript"\n        strict = true\n        objects = "Player"\n        expanded = false\n\n        code {\nconst value = 1;\n        }\n      }\n    }\n  }\n}\n',
     });
     expect(blocks).toEqual([
       expect.objectContaining({
-        fileUri: 'game://scenes/Main/Main.events',
+        fileUri: 'game://scenes/Main/Main.settings',
         parameterObjects: 'Player',
         useStrict: true,
-        headerLine: 3,
-        bodyLine: 4,
-        inlineCode: 'const value = 1;',
+        headerLine: 12,
+        bodyLine: 19,
+        inlineCode: 'const value = 1;\n',
       }),
     ]);
   });
@@ -388,7 +384,7 @@ const value = 1;
       collectSerializedProjectJavaScriptBlocks(projectWithExternal)
     ).toEqual([
       expect.objectContaining({
-        fileUri: 'game://scenes/Main/external-events/Shared%20Combat.events',
+        fileUri: 'game://scenes/Main/external-events/Shared%20Combat.settings',
       }),
     ]);
     expect(
@@ -399,7 +395,8 @@ const value = 1;
       expect.arrayContaining([
         expect.objectContaining({
           code: 'JS_API_TYPE_MISMATCH',
-          fileUri: 'game://scenes/Main/external-events/Shared%20Combat.events',
+          fileUri:
+            'game://scenes/Main/external-events/Shared%20Combat.settings',
         }),
       ])
     );
@@ -432,20 +429,8 @@ const value = 1;
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.events': `@js objects="Player" strict=true
-for (const player of objects) {
-  player.setX(player.getX() + 1);
-  player.getVariables().get("Health").sub(1);
-  const platformer = player.getBehavior("Platformer");
-  if (platformer) platformer.activate(true);
-}
-runtimeScene.getVariables().get("Score").add(10);
-runtimeScene.getGame().getVariables().get("HighScore").add(10);
-if (runtimeScene.getElapsedTime() < 0) return;
-const bullet = runtimeScene.createObject("Bullet");
-if (bullet) bullet.addPolarForce(0, 720, 1);
-@end js
-`,
+        'game://scenes/Main/Main.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code {\nfor (const player of objects) {\n  player.setX(player.getX() + 1);\n  player.getVariables().get("Health").sub(1);\n  const platformer = player.getBehavior("Platformer");\n  if (platformer) platformer.activate(true);\n}\nruntimeScene.getVariables().get("Score").add(10);\nruntimeScene.getGame().getVariables().get("HighScore").add(10);\nif (runtimeScene.getElapsedTime() < 0) return;\nconst bullet = runtimeScene.createObject("Bullet");\nif (bullet) bullet.addPolarForce(0, 720, 1);\n      }\n    }\n  }\n}\n',
       },
     });
     expect(validation.errors).toEqual([]);
@@ -458,20 +443,8 @@ if (bullet) bullet.addPolarForce(0, 720, 1);
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.events': `@js objects="Player" strict=true
-gdjs.evtTools.input.requestPointerLock(runtimeScene, "first-person-camera");
-if (gdjs.evtTools.input.isPointerLocked(runtimeScene)) {
-  const movementX = gdjs.evtTools.input.getPointerMovementX(runtimeScene);
-  const movementY = gdjs.evtTools.input.getPointerMovementY(runtimeScene);
-  objects[0].setPosition(movementX, movementY);
-  gdjs.evtTools.input.exitPointerLock(runtimeScene);
-}
-const hits = gdjs.evtTools.scene3d.raycastObjects(
-  0, 0, 0, 1, 0, 0, objects, 0, 1000, true
-);
-if (hits.length > 0) hits[0].object.setX(hits[0].pointX);
-@end js
-`,
+        'game://scenes/Main/Main.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code {\ngdjs.evtTools.input.requestPointerLock(runtimeScene, "first-person-camera");\nif (gdjs.evtTools.input.isPointerLocked(runtimeScene)) {\n  const movementX = gdjs.evtTools.input.getPointerMovementX(runtimeScene);\n  const movementY = gdjs.evtTools.input.getPointerMovementY(runtimeScene);\n  objects[0].setPosition(movementX, movementY);\n  gdjs.evtTools.input.exitPointerLock(runtimeScene);\n}\nconst hits = gdjs.evtTools.scene3d.raycastObjects(\n  0, 0, 0, 1, 0, 0, objects, 0, 1000, true\n);\nif (hits.length > 0) hits[0].object.setX(hits[0].pointX);\n      }\n    }\n  }\n}\n',
       },
     });
 
@@ -483,14 +456,8 @@ if (hits.length > 0) hits[0].object.setX(hits[0].pointX);
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.events': `@js objects="Player" strict=true
-runtimeScene.getObjects("Plaeyr");
-runtimeScene.getLayer("HUD");
-runtimeScene.getVariables().get("Scroe");
-objects[0].getVariables().get("HP");
-objects[0].getBehavior("Physics");
-@end js
-`,
+        'game://scenes/Main/Main.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code {\nruntimeScene.getObjects("Plaeyr");\nruntimeScene.getLayer("HUD");\nruntimeScene.getVariables().get("Scroe");\nobjects[0].getVariables().get("HP");\nobjects[0].getBehavior("Physics");\n      }\n    }\n  }\n}\n',
       },
     });
     expect(validation.valid).toBe(false);
@@ -499,7 +466,7 @@ objects[0].getBehavior("Physics");
       expect.arrayContaining([
         expect.objectContaining({
           code: 'JS_API_TYPE_MISMATCH',
-          fileUri: 'game://scenes/Main/Main.events',
+          fileUri: 'game://scenes/Main/Main.settings',
         }),
       ])
     );
@@ -509,12 +476,8 @@ objects[0].getBehavior("Physics");
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.events': `@js objects="Player" strict=true
-objects[0]._behaviorData;
-objects[0].notAPublicMethod();
-fetch("https://example.com");
-@end js
-`,
+        'game://scenes/Main/Main.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code {\nobjects[0]._behaviorData;\nobjects[0].notAPublicMethod();\nfetch("https://example.com");\n      }\n    }\n  }\n}\n',
       },
     });
     expect(validation.valid).toBe(false);
@@ -522,8 +485,8 @@ fetch("https://example.com");
       expect.arrayContaining([
         expect.objectContaining({
           code: 'JS_API_PRIVATE_MEMBER',
-          fileUri: 'game://scenes/Main/Main.events',
-          line: 2,
+          fileUri: 'game://scenes/Main/Main.settings',
+          line: 12,
         }),
         expect.objectContaining({ code: 'JS_API_UNKNOWN_MEMBER' }),
         expect.objectContaining({ code: 'JS_API_FORBIDDEN_GLOBAL' }),
@@ -535,10 +498,8 @@ fetch("https://example.com");
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.events': `@js objects="Player"
-objects[0]._behaviorData;
-@end js
-`,
+        'game://scenes/Main/Main.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = false\n      objects = "Player"\n      expanded = false\n\n      code {\nobjects[0]._behaviorData;\n      }\n    }\n  }\n}\n',
       },
     });
     expect(validation.valid).toBe(true);
@@ -649,12 +610,8 @@ objects[0]._behaviorData;
         ],
       },
       sourceFiles: {
-        'game://extensions/MousePointerLock/functions/RequestPointerLock.events': `@js strict=true
-document.body.requestPointerLock();
-gdjs._MousePointerLockExtension.handler.requestPointerLock();
-const broken = ;
-@end js
-`,
+        'game://extensions/MousePointerLock/functions/RequestPointerLock.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\ndocument.body.requestPointerLock();\ngdjs._MousePointerLockExtension.handler.requestPointerLock();\nconst broken = ;\n      }\n    }\n  }\n}\n',
       },
     });
 
@@ -677,10 +634,8 @@ const broken = ;
   });
 
   test('does not trust a local extension or mismatched store origin during project validation', () => {
-    const extensionSource = `@js strict=true
-document.body.requestPointerLock();
-@end js
-`;
+    const extensionSource =
+      'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\ndocument.body.requestPointerLock();\n      }\n    }\n  }\n}\n';
     const validateExtension = (extension: Object) =>
       validateProjectJavaScriptAuthoring({
         serializedProject: {
@@ -688,7 +643,7 @@ document.body.requestPointerLock();
           eventsFunctionsExtensions: [extension],
         },
         sourceFiles: {
-          'game://extensions/MousePointerLock/functions/RequestPointerLock.events': extensionSource,
+          'game://extensions/MousePointerLock/functions/RequestPointerLock.settings': extensionSource,
         },
       });
 
@@ -741,10 +696,8 @@ document.body.requestPointerLock();
         ],
       },
       sourceFiles: {
-        'game://scenes/Main/Main.events': `@js strict=true
-document.body.requestPointerLock();
-@end js
-`,
+        'game://scenes/Main/Main.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\ndocument.body.requestPointerLock();\n      }\n    }\n  }\n}\n',
       },
     });
 
@@ -753,7 +706,7 @@ document.body.requestPointerLock();
       expect.arrayContaining([
         expect.objectContaining({
           code: 'JS_API_FORBIDDEN_GLOBAL',
-          fileUri: 'game://scenes/Main/Main.events',
+          fileUri: 'game://scenes/Main/Main.settings',
         }),
       ])
     );
@@ -763,13 +716,8 @@ document.body.requestPointerLock();
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.events': `@js strict=true
-runtimeScene.getObjects("Player");
-@end js
-@js strict=true
-runtimeScene._instances.length;
-@end js
-`,
+        'game://scenes/Main/Main.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nruntimeScene.getObjects("Player");\n      }\n    }\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nruntimeScene._instances.length;\n      }\n    }\n  }\n}\n',
       },
     });
     expect(validation.blocks).toBe(2);
@@ -777,7 +725,7 @@ runtimeScene._instances.length;
       expect.arrayContaining([
         expect.objectContaining({
           code: 'JS_API_PRIVATE_MEMBER',
-          line: 5,
+          line: 23,
         }),
       ])
     );
@@ -787,25 +735,21 @@ runtimeScene._instances.length;
     const syntaxValidation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.events': `@js
-if (
-@end js
-`,
+        'game://scenes/Main/Main.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = false\n      objects = ""\n      expanded = false\n\n      code {\nif (\n      }\n    }\n  }\n}\n',
       },
     });
     expect(syntaxValidation.errors).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'JS_API_SYNTAX_ERROR', line: 2 }),
+        expect.objectContaining({ code: 'JS_API_SYNTAX_ERROR', line: 13 }),
       ])
     );
 
     const loopValidation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.events': `@js strict=true
-while (true) {}
-@end js
-`,
+        'game://scenes/Main/Main.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nwhile (true) {}\n      }\n    }\n  }\n}\n',
       },
     });
     expect(loopValidation.valid).toBe(true);
@@ -820,11 +764,8 @@ while (true) {}
     const functionValidation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://extensions/Combat/functions/Damage.events': `@js strict=true
-const amount = eventsFunctionContext.getArgument("Amount");
-eventsFunctionContext.returnValue = typeof amount === "number" ? amount : 0;
-@end js
-`,
+        'game://extensions/Combat/functions/Damage.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nconst amount = eventsFunctionContext.getArgument("Amount");\neventsFunctionContext.returnValue = typeof amount === "number" ? amount : 0;\n      }\n    }\n  }\n}\n',
       },
     });
     expect(functionValidation.errors).toEqual([]);
@@ -832,11 +773,8 @@ eventsFunctionContext.returnValue = typeof amount === "number" ? amount : 0;
     const lifecycleValidation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/functions/sceneSignal.events': `@js strict=true
-const signalName = eventsFunctionContext.getArgument("SignalName");
-if (typeof signalName === "string" && signalName.length > 0) runtimeScene.getElapsedTime();
-@end js
-`,
+        'game://scenes/Main/functions/sceneSignal.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nconst signalName = eventsFunctionContext.getArgument("SignalName");\nif (typeof signalName === "string" && signalName.length > 0) runtimeScene.getElapsedTime();\n      }\n    }\n  }\n}\n',
       },
     });
     expect(lifecycleValidation.errors).toEqual([]);
@@ -844,10 +782,8 @@ if (typeof signalName === "string" && signalName.length > 0) runtimeScene.getEla
     const sceneValidation = validateProjectJavaScriptAuthoring({
       serializedProject,
       sourceFiles: {
-        'game://scenes/Main/Main.events': `@js strict=true
-eventsFunctionContext.returnValue = 1;
-@end js
-`,
+        'game://scenes/Main/Main.settings':
+          'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\neventsFunctionContext.returnValue = 1;\n      }\n    }\n  }\n}\n',
       },
     });
     expect(sceneValidation.errors).toEqual(

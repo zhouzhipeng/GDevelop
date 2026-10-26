@@ -9,7 +9,7 @@ import { onSaveProject } from './LocalProjectWriter';
 import {
   mergeProjectInstructionCatalogs,
   normalizeLegacyProjectInstructionParameters,
-} from '../../EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog';
+} from '../SettingsDsl/InstructionCatalog';
 import { normalizeDownloadedProject } from '../UrlStorageProvider/NormalizeDownloadedProject';
 import {
   reloadProjectEventsFunctionsExtensionMetadata,

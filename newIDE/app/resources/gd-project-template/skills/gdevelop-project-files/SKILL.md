@@ -1,6 +1,6 @@
 ---
 name: gdevelop-project-files
-description: Create, inspect, modify, refactor, and verify GDevelop games through the version 9 multi-file project sources (`project.gdevelop`, `constants.toml`, `.settings`, `.events`, `tests.settings`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
+description: Create, inspect, modify, refactor, and verify GDevelop games through the version 11 multi-file project sources (`project.gdevelop`, `constants.toml`, `.settings`, `tests.settings`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
 ---
 
 # GDevelop Project Files
@@ -19,10 +19,9 @@ directly.
 
 Read `.gdevelop/project-module-map.json` first when locating project logic.
 `scenes[].events[]`, `externalEvents[]`, and `extensions[].events[]` provide
-`settingsPath`, `eventsPath`, and an authored `purpose`. Fragment entries also
+`settingsPath`, and an authored `purpose`. Fragment entries also
 provide `eventsLogic` and `linkedFrom`. `links` contains statically found Link
 target names; `linkPaths` gives their resolved event paths. Check `diagnostics`
-for unresolved targets. A Link may be conditional, so read the caller `.events`
 body before reasoning about execution. The map is generated with the catalogs;
 never edit it directly. Regenerate catalogs after source edits.
 
@@ -68,7 +67,7 @@ Read, in order:
    editor-canvas state.
 6. `.gdevelop/project-module-map.json` to locate scene, external-fragment, and
    extension event sources and their static Link relationships; then read the
-   referenced `.settings` and `.events` files for current logic.
+   referenced `.settings` documents for current logic.
 7. `.gdevelop/instructions-catalog.json` before adding or changing
    instructions.
 8. `.gdevelop/runtime-api.d.ts` and `.gdevelop/project-api.d.ts` before adding
@@ -171,7 +170,7 @@ All `.settings` and `project.gdevelop` use **Settings DSL**, not TOML. Read
 - Every document has exactly one typed root: project, resources, tests,
   scene, prefab, variant, external, external_events, object, function,
   extension or behavior. The physical path supplies the owning scope.
-- Only project.gdevelop has `formatVersion = 9`. Do not write kind,
+- Only project.gdevelop has `formatVersion = 11`. Do not write kind,
   settingsFormatVersion, TOML headers, per-document format versions, or
   settings/layout wrapper nodes. Extension metadata can still have a semantic
   version string when its schema defines one.
@@ -185,9 +184,11 @@ All `.settings` and `project.gdevelop` use **Settings DSL**, not TOML. Read
 - Declare repeated `variable {}` nodes directly on the owner, with `name` and
   `value`. Use `{ Key = value }` structures and `[]` arrays inside value; infer
   ordinary types and declare enum explicitly. Extension defaults require scope.
-  Descendant UUID/enum/editor data uses metadata nodes with typed path arrays.
+  Descendant UUID/enum/editor fields live directly on nested variable declarations.
+  Expanded containers require explicit structure/array type and omit value.
+  Structure children require unique names; array children forbid names and use source order.
   UUID id is optional; preserve existing ids for editor variable refactoring.
-  Collection wrappers, recursive variable children and shorthand are rejected.
+  Collection wrappers, metadata/path annotations and shorthand are rejected.
   Root variables and instance variables have different scopes.
 - Object groups use `objectGroups { Group = ["Player"] }`, expanded across
   lines. Required behaviors use objectGroupRequiredBehaviors. Empty repeated
@@ -195,8 +196,8 @@ All `.settings` and `project.gdevelop` use **Settings DSL**, not TOML. Read
   use child nodes.
 - Sprite points use structured originPoint/centerPoint/point nodes; collision
   masks use polygon nodes containing point nodes. No inline object literals.
-- Functions and external fragments use same-stem .settings/.events pairs.
-  Keep function signatures in settings and IfDo statements in events.
+- Functions and external fragments keep signature/identity and events in one .settings file.
+  Use a top-level events container; never create .events files.
 - tests.settings has a tests root with repeated test nodes. Scripts remain
   direct children of tests/; `file` is a canonical root-relative path, with
   no game:// prefix. Run results are ignored state below .gdevelop.
@@ -221,24 +222,18 @@ objects/<Object>.settings
 scenes/<Scene>/scene.settings
 scenes/<Scene>/objects/<Object>.settings
 scenes/<Scene>/functions/sceneUpdate.settings
-scenes/<Scene>/functions/sceneUpdate.events
 scenes/<Scene>/functions/<OptionalLifecycle>.settings # only when non-empty
-scenes/<Scene>/functions/<OptionalLifecycle>.events
 scenes/<Scene>/external-events/<Fragment>.settings
-scenes/<Scene>/external-events/<Fragment>.events
 scenes/<Scene>/external-layout/<External>.settings
 extensions/<Extension>/extension.settings
 extensions/<Extension>/functions/<Function>.settings
-extensions/<Extension>/functions/<Function>.events
 extensions/<Extension>/prefabs/<Prefab>/prefab.settings
 extensions/<Extension>/prefabs/<Prefab>/functions/<Function>.settings
-extensions/<Extension>/prefabs/<Prefab>/functions/<Function>.events
 extensions/<Extension>/prefabs/<Prefab>/objects/<Object>.settings
 extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.settings
 extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/objects/<Object>.settings
 extensions/<Extension>/behaviors/<Behavior>/behavior.settings
 extensions/<Extension>/behaviors/<Behavior>/functions/<Function>.settings
-extensions/<Extension>/behaviors/<Behavior>/functions/<Function>.events
 .gdevelop/instructions-catalog.json
 .gdevelop/deprecated-instructions-catalog.json # legacy read/edit only; never for new events
 .gdevelop/settings-catalog.json
@@ -254,7 +249,7 @@ Do not create optional component-grouping folders. Canonical component directori
 fixed; object/function grouping belongs in each settings file's `folder`
 array. Settings files never reference other settings files.
 
-In format version 9, each same-stem `.settings` and `.events` pair under
+In format version 11, each `.settings` document under
 `external-events/` declares a fragment. Its decoded filename and settings
 `name` supply its project-unique NFC identity; the physical scene supplies its
 authoring context. Names must also be unique ignoring case. There is no
@@ -322,17 +317,17 @@ Load only the references required by the task:
   creating or changing layout nodes. Preserve existing UUIDs and use its
   exact scene, prefab/variant, or external-layout context rules.
 - Read [references/events-dsl.md](references/events-dsl.md) in full before
-  creating or changing any `.events` file. Use only its canonical IfDo
+  creating or changing embedded events in a `.settings` file. Use only its canonical Settings event
   structures and the exact types and `dslName` parameters found in the
   generated project instruction catalog.
 - Also read [references/javascript-api.md](references/javascript-api.md) in
-  full before creating or changing any `@js` event. Use only the generated
+  full before creating or changing any event with type = "javascript". Use only the generated
   public declarations, author new blocks with `strict=true`, and preserve
   compatibility mode only for existing legacy JavaScript.
 - Read
   [references/gameplay-test-harness.md](references/gameplay-test-harness.md)
   in full before creating or materially modifying `tests.settings` or any
-  `tests/*.js` script. Use the exact flat version 9 file identity, read the
+  `tests/*.js` script. Use the exact flat version 11 file identity, read the
   generated `.gdevelop/harness-api.d.ts` contract, and complete its
   validation, reload, run, and result-polling workflow.
 - Read [references/tsl-materials.md](references/tsl-materials.md) in full
@@ -380,90 +375,15 @@ implementation is materially simpler. Record that decision in the task result.
 
 ## Event authoring
 
-Use the generated catalog for every instruction. Find the entry under
-`conditions` or `actions`, use its exact `type`, and supply parameters by their
-exact `dslName`. Write each value according to the parameter's `valueKind`.
-The DSL has no hardcoded instruction aliases:
+Read [the unified event syntax](references/events-dsl.md) before editing function
+or fragment bodies. Only Settings DSL format 11 is supported. Function signatures
+and events share one .settings file; .events files are rejected. Use explicit
+conditions/actions blocks containing bare catalog instructions, typed event
+nodes, independent group/comment/link nodes, and raw multiline code blocks.
 
-```events
-if Extension::Condition target="Player" threshold=expr(Variable(Limit))
-do Extension::Action target="Player" text="Ready"
-```
-
-Rules:
-
-- Never author the **At the beginning of the scene** condition
-  (`SceneJustBegins`), even if it appears in a catalog or existing example.
-  Scene initialization must use the **On scene load** lifecycle (`sceneLoad`),
-  which runs once after the scene loads and before its first update. Put the
-  initialization events in `scenes/<Scene>/functions/sceneLoad.events` with
-  its matching `sceneLoad.settings` declaration, following the settings catalog.
-  When modifying existing initialization guarded by `SceneJustBegins`, move
-  its actions and child events to `sceneLoad`, preserve any other conditions
-  and their picking semantics, and remove the scene-begin condition. Do not
-  emulate scene load in `sceneUpdate` with a timer, flag, or once-only trigger.
-- Write catalog instruction types directly; never prefix them with `@`.
-- Do not replace catalog types with prose aliases such as `scene begins`.
-- Use only catalog entries valid for the target event scope.
-- Supply every required parameter exactly once when authoring a new
-  instruction. Preserve an omitted named parameter in an existing migrated
-  instruction when its stored legacy slot is blank; do not invent a placeholder
-  value.
-- Omit every code-only parameter.
-- Write `text`, object, behavior, variable, resource, and name values as direct
-  strings; write numbers and booleans as unquoted literals.
-- Use `expr(...)` only for calculated `text` or `number` values.
-- If a persisted type is absent, first regenerate the catalog by saving with
-  the editor. Do not reuse it for new events if it stays absent; the catalog
-  intentionally excludes editor-hidden and deprecated APIs.
-- Guard every action that executes in `sceneUpdate` with at least one effective
-  condition in its event or an ancestor event (including Link callers). Never
-  place an action on an unconditional path that executes every frame. Use an
-  explicit trigger, state/input check, timer, comparison, or other condition
-  that expresses when the action is allowed to run. In `sceneLoad`, action-only
-  `@event` blocks are valid: the lifecycle itself supplies the once-per-load
-  execution boundary; do not add a `SceneJustBegins` condition.
-- Treat an object-targeting action as applying to every currently picked
-  instance of that object. When conditions leave multiple instances picked, or
-  do not narrow the object selection, the action executes on all of them. This
-  is normal and often intentional GDevelop behavior, so do not reject or
-  rewrite an event merely because an object action may affect multiple
-  instances. Narrow the selection only when the gameplay requires a specific
-  target; use `for each Object` when later conditions or actions need one
-  isolated instance at a time.
-- Keep OR alternatives as consecutive `if`/`or` lines.
-- Prefix every child-event line with `>` and every nested instruction with
-  `?`.
-- Keep JavaScript events opt-in; use native instructions first. New or changed
-  AI-authored JavaScript must use `strict=true`, must use only context globals
-  and members declared in `.gdevelop/runtime-api.d.ts` and
-  `.gdevelop/project-api.d.ts`, and must obey the JavaScript reference. Never
-  use underscore/private members, generated `.func` symbols, browser/Node
-  globals, filesystem, shell, DOM, storage, or direct networking APIs.
-
-Scene initialization (`scenes/<Scene>/functions/sceneLoad.events`):
-
-```events
-@event aiGeneratedEventId="descriptive-id"
-do DebuggerTools::ConsoleLog message_to_log="started"
-```
-
-Per-frame gameplay (`scenes/<Scene>/functions/sceneUpdate.events`):
-
-```events
-@group "Combat" source="" creationTime=0 color=[74,176,228] parameters=[]
-@event aiGeneratedEventId="damage-enemy"
-if CollisionNP first_object="Bullet" second_object="Enemy"
-do SetNumberObjectVariable object="Enemy" variable="HP" modification_sign="-" value=1
-do Delete object="Bullet"
-@end group
-```
-
-Use `local`, `else`, `repeat`, `while`, `for each`, `for each child`, `link`,
-`@group ... @end group`, and `@js ... @end js` only according to the canonical
-grammar. Write comments as one `@comment "content" background=[r,g,b] text=[r,g,b]` statement; never use hash-comment event syntax. Every `@end`
-requires its `group` or `js` suffix. Preserve `@event`, `@instruction`, group,
-loop, comment, and JavaScript metadata when editing existing sources.
+Use sceneLoad for initialization; never author SceneJustBegins. Guard per-frame
+sceneUpdate actions with effective conditions. Keep parent picking and source
+order semantics. New JavaScript uses strict=true and the generated public API.
 
 ## Direct-edit workflow
 
@@ -768,8 +688,8 @@ Before finishing:
   use the complete registered serializer schema; unknown fields are errors.
 - Confirm prefab and behavior property descriptor arrays are flat and contain
   no grouping/folder metadata.
-- Confirm every prefab/behavior function has a flat same-stem
-  `<Function>.settings` and matching `<Function>.events` pair, and
+- Confirm every prefab/behavior function has one flat
+  `<Function>.settings` document containing signature and events, and
   owner settings contain no embedded function entries.
 - Confirm settings references use `game://` and resolve to existing files.
 - Confirm settings file kinds and every object/behavior/effect type against

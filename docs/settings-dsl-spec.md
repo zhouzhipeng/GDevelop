@@ -1,6 +1,7 @@
 # GDevelop Settings DSL 规范提案
 
-- 状态：已批准实施；当前语法格式版本 9
+- 状态：已批准实施；当前语法格式版本 11
+- 统一事件契约：[统一 Settings DSL：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。作者格式 11 将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
 - 已批准的变量语法修订：[直接 variable 声明与值字面量](settings-dsl-variable-values-spec.md)。已取代第 8.2 节及相关变量示例。
 - 日期：2026-10-25
 - 范围：全部现有 `.settings` 作者文件；项目入口 `project.gdevelop` 同时使用本语法
@@ -42,7 +43,7 @@ node {
 6. 保留 UUID、图层顺序、全局实例顺序和现有序列化数据。
 7. 对格式未知字段报错，不悄悄忽略。
 
-对象定义、行为定义、函数签名、资源清单和测试配置都在本规范范围内。非目标：重写 `.events` 事件语言、JavaScript 测试正文、图片模型音频资源或生成的运行时 JSON；支持任意表达式或完整 CSS。
+对象定义、行为定义、函数签名、资源清单和测试配置都在本规范范围内。事件作者语法统一由上方格式 11 契约定义。非目标：重写 JavaScript 测试正文、图片模型音频资源或生成的运行时 JSON；支持配置中的任意表达式或完整 CSS。
 
 ## 3. 文件归属
 
@@ -55,7 +56,6 @@ scenes/Battle/
     Player.settings
   functions/
     sceneUpdate.settings
-    sceneUpdate.events
   external-layout/
     BonusRoom.settings
 
@@ -74,13 +74,13 @@ extensions/Combat/prefabs/Knight/
 - 名称、描述、排序、组件变量和运行配置，与背景、边界、图层、实例共同属于同一个声明文件。
 - 普通属性直接放根节点；禁止额外的 `settings {}`、`metadata {}`、`layout {}` 包装块。
 - 子块只用于具有结构、集合或作用域的数据，例如 variable、对象组、行为共享数据、editor、layer、instance。
-- 对象定义、函数签名与事件逻辑继续独立存储；所有声明文件统一改用 Settings DSL，事件正文仍为 IfDo。
+- 对象定义保持独立组件；每个函数的签名和事件正文合并在一个 .settings 文件中，统一使用 Settings DSL。
 - 所属关系由路径确定。根 `name` 表示组件名称，必须与解码后的所属目录名（External 为文件 stem）一致；命名空间包装不再重复名称。
 - 根不写 `kind`、`settingsFormatVersion` 或每文件 `version`。根节点类型提供组件种类，整个项目只支持当前 schema；`project.gdevelop` 的 `formatVersion` 是精确匹配的格式标记，不是版本协商入口。
 - 所有 `.settings` 只由新解析器读取，不探测 TOML。禁止根级 `layout` 包装和独立 `.layout` 布局源；同一组件数据只允许一个所有者。
 - 编辑器状态暂保留在 `editor`，个人视图状态是否迁出另行评估。
-- `project.gdevelop` 使用相同 DSL，根为 `project`，保留引导入口文件名。formatVersion 使用最新常量 8。任何不匹配直接拒绝，不尝试旧读取器。
-- `.events` 和测试 `.js` 正文不变。`constants.toml` 是显式例外，仍为独立的编辑器常量文档；它不是 settings，也不属于本轮替换。生成的 catalog JSON 与运行时 JSON 不改语法。
+- `project.gdevelop` 使用相同 DSL，根为 `project`，保留引导入口文件名。formatVersion 使用最新常量 11。任何不匹配直接拒绝，不尝试旧读取器。
+- 事件正文合入所属 .settings；测试 `.js` 正文不变。`constants.toml` 是显式例外，仍为独立的编辑器常量文档；它不是 settings，也不属于本轮替换。生成的 catalog JSON 与运行时 JSON 不改语法。
 - 单文件内配置与布局一起验证、保存；重命名或跨文件引用更新仍须事务保存。
 
 合并的收益是减少配对文件和所有权分界；代价是修改配置与移动实例会触及同一文件。通过内容比较和 AST 局部编辑减轻 diff，而不声称能消除文件级冲突。
@@ -134,7 +134,7 @@ flip = ["x", "y"]
 
 数字使用 JSON 数字词法，允许负数、小数和科学计数法，不允许 NaN、Infinity、十六进制、日期、前导加号。需要整数的字段必须是安全整数。数组可跨行，允许尾逗号；混合数值精度可接受，但元素类型由字段 schema 限定。
 
-不支持 `null` 和内联对象 `{ key = value }`。结构数据使用子节点。字符串中 `"{Player.Health}"` 仍然是普通字符串，不触发绑定。
+不支持 `null`。只有 variable.value 允许内联对象 `{ key = value }`；其他结构数据使用子节点。字符串中 `"{Player.Health}"` 仍然是普通字符串，不触发绑定。
 
 ### 4.3 简化语法定义
 
@@ -185,13 +185,13 @@ array      := "[" (value ("," value)* ","?)? "]"
 
 路径中具名所有者的具体分配保持当前目录契约；表格中的 behavior 路径只表示所属作用域，不要求重构已有目录。全局、场景、Prefab 和 Variant 对象共用 object 根，所属目录决定解析作用域。生命周期函数及扩展/行为/Prefab 函数共用 function 根。
 
-project formatVersion 固定为 8；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
+project formatVersion 固定为 11；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
 
 ### 5.2 Project 与资源清单示例
 
 ```text
 project {
-  formatVersion = 9
+  formatVersion = 11
   name = "Adventure"
 }
 ```
@@ -281,7 +281,7 @@ external_events {
 }
 ```
 
-函数 type、返回类型、参数细分类别、对象限制和表达式规则必须按函数 schema 补齐；示例只演示组织方式。函数和 External Events 的正文使用同 stem `.events`，声明文件不嵌入编译后事件数组或正文字符串。参数出现顺序就是签名顺序。
+函数 type、返回类型、参数细分类别、对象限制和表达式规则必须按函数 schema 补齐；示例只演示组织方式。函数和 External Events 的正文使用本文件内的 events 节点，不引用独立正文文件，也不嵌入编译后事件数组或正文字符串。参数出现顺序就是签名顺序。
 
 ### 5.5 Extension 与 Behavior 定义示例
 
@@ -514,7 +514,7 @@ variable {
 
 字符串、数字、布尔、结构和数组按 value 推导类型；enum 显式声明 type 和非空 values。空结构与空数组分别是 {} 和 []。普通 owner 的作用域由位置决定；Extension 同时拥有 global、scene 默认变量时，variable 必须声明 scope。
 
-原生 UUID、折叠状态等根元数据直接放在 variable；后代附加元数据用 metadata { path = [...] } 定位已有值，保持数据字面量简洁。结构字段和数组元素均保留顺序。完整规则、例子和错误要求见 [变量语法规范](settings-dsl-variable-values-spec.md)。
+原生 UUID、折叠状态和 enum 约束直接放在所属 variable 声明；后代有附加信息时使用嵌套 variable，容器显式声明 structure/array 且不写 value。禁止 metadata 节点和路径注解。结构字段和数组元素均保留顺序。完整规则、例子和错误要求见 [变量语法规范](settings-dsl-variable-values-spec.md)。
 
 ### 8.3 行为覆盖
 
@@ -772,7 +772,7 @@ external {
 | instances 的其他字段 | instance 同名字段 | 无 |
 | instances.properties | instance.properties | 内联表改块 |
 | layout.variables | instance.variable | 去掉 instance UUID 反向引用 |
-| variables.children | variable.value | 字面量树，附加元数据使用 metadata 路径注解 |
+| variables.children | variable.value | 普通字面量；附加信息随嵌套 variable 声明保存 |
 | layout.behaviors | instance.behavior | 去掉 instance UUID 反向引用 |
 | camera.size/viewport 默认对象 | 默认标记与 stored_* | 无损拆分 |
 
@@ -1009,3 +1009,11 @@ DSL 序列化保留对象组的声明顺序。类型的惰性加载只补充缺�
 当前作者格式为 9，生成 Settings catalog 为 8。直接 variable 声明、复合 value 字面量、Extension 双作用域与 metadata 路径注解取代旧变量容器。省略 id 不会由 DSL 编解码器生成 UUID；已有 id 用于编辑器变量重构，保存时保留。
 
 原生结构变量使用有序 map，编辑器中转会按键排序。保存器依据同版本已有源码保留结构字面量字段顺序，新增字段追加；比较原生项目时结构按名称比较，根变量和数组顺序仍有语义且不得重排。格式化 AST 独立保留所有结构键的源顺序，包括数字字符串键。
+
+## 25. 嵌套变量声明修订（2026-10-26）
+
+当前作者格式为 10，生成 Settings catalog 为 9。变量的 type、values、id、folded、hasMixedValues 与对应值放在同一 variable 内，移除 metadata/path。普通数据继续使用 value 字面量；后代有附加信息时展开必要祖先容器，显式 type = "structure" 或 "array"，禁止 value 与子声明混用。结构子变量具名且唯一，数组子变量无名且按出现顺序排列。旧 metadata 写法明确拒绝。完整契约见变量语法规范。
+
+## 26. 统一事件作者格式（2026-10-26）
+
+作者格式 11、Settings catalog 10、instruction catalog 3。函数和外部片段正文只保存在其 .settings 的顶层 events 中。conditions/actions 使用无 if/do 前缀的精确 catalog 指令；执行事件使用 event.type，默认 standard；group/comment/link 为独立节点；子节点直接嵌套；JavaScript 使用原始多行 code 块。移除旧 IfDo 解析器及 .events 配对读写。完整边界、模型映射和验收见统一事件契约。

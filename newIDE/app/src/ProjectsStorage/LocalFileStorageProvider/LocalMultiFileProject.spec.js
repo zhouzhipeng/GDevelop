@@ -1,4 +1,5 @@
 // @flow
+import { replaceEmbeddedEventBody } from '../SettingsDsl/TestHelpers';
 
 // $FlowFixMe[cannot-resolve-module] Jest runs these filesystem tests in Node.
 import fs from 'fs-extra';
@@ -339,7 +340,7 @@ describe('Local multi-file project storage', () => {
       fs.existsSync(
         path.join(
           temporaryDirectory,
-          'scenes/Main/functions/sceneUpdate.events'
+          'scenes/Main/functions/sceneUpdate.settings'
         )
       )
     ).toBe(true);
@@ -378,14 +379,17 @@ describe('Local multi-file project storage', () => {
     ).toBe(true);
   });
 
-  test('reports a missing same-stem function body as a managed source error', async () => {
+  test('reports a missing required lifecycle settings document as a managed source error', async () => {
     const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
     await writeLegacyProjectAsMultiFile(projectFixture, entryPath);
     fs.unlinkSync(
-      path.join(temporaryDirectory, 'scenes/Main/functions/sceneUpdate.events')
+      path.join(
+        temporaryDirectory,
+        'scenes/Main/functions/sceneUpdate.settings'
+      )
     );
 
-    await expect(readMultiFileSourceTree(entryPath)).rejects.toMatchObject({
+    await expect(openMultiFileProject(entryPath)).rejects.toMatchObject({
       code: 'MULTIFILE_MISSING_FILE',
     });
   });
@@ -459,7 +463,7 @@ describe('Local multi-file project storage', () => {
       fs.existsSync(
         path.join(
           temporaryDirectory,
-          'scenes/Main/external-events/Shared Combat.events'
+          'scenes/Main/external-events/Shared Combat.settings'
         )
       )
     ).toBe(true);
@@ -509,7 +513,7 @@ describe('Local multi-file project storage', () => {
     fs.writeFileSync(orphanEventsPath, '', 'utf8');
 
     await expect(openMultiFileProject(entryPath)).rejects.toMatchObject({
-      code: 'MULTIFILE_ORPHAN_EVENTS',
+      code: 'SETTINGS_RETIRED_EVENTS_FILE',
     });
   });
 
@@ -520,8 +524,9 @@ describe('Local multi-file project storage', () => {
     fs.ensureDirSync(root);
     fs.writeFileSync(path.join(root, 'New fragment.events'), '', 'utf8');
     await expect(openMultiFileProject(entryPath)).rejects.toMatchObject({
-      code: 'MULTIFILE_ORPHAN_EVENTS',
+      code: 'SETTINGS_RETIRED_EVENTS_FILE',
     });
+    fs.unlinkSync(path.join(root, 'New fragment.events'));
     fs.writeFileSync(
       path.join(root, 'New fragment.settings'),
       'external_events {\n name = "New fragment"\n description = ""\n eventsLogic = ""\n}\n',
@@ -596,7 +601,7 @@ describe('Local multi-file project storage', () => {
     fs.writeFileSync(sceneSettingsPath, sceneSource, 'utf8');
     const untouchedEventsPath = path.join(
       temporaryDirectory,
-      'scenes/Main/functions/sceneUpdate.events'
+      'scenes/Main/functions/sceneUpdate.settings'
     );
     const untouchedEvents = fs.readFileSync(untouchedEventsPath, 'utf8');
 
@@ -656,15 +661,19 @@ describe('Local multi-file project storage', () => {
     ).toBe(true);
   });
 
-  test('loads named IfDo instructions through the generated catalog', async () => {
+  test('loads named Settings instructions through the generated catalog', async () => {
     const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
     const files = decomposeLegacyProjectToFiles(projectFixture);
-    files['game://scenes/Main/functions/sceneUpdate.events'] =
-      '@event\ndo Network::Send url="https://example.com"\n';
+    files[
+      'game://scenes/Main/functions/sceneUpdate.settings'
+    ] = replaceEmbeddedEventBody(
+      files['game://scenes/Main/functions/sceneUpdate.settings'],
+      'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send url="https://example.com"\n      }\n    }\n  }\n}\n'
+    );
     await writeMultiFileSourceTree({ entryPath, files });
     const catalog = {
-      format: 'gdevelop-ifdo-instruction-catalog',
-      formatVersion: 2,
+      format: 'gdevelop-settings-instruction-catalog',
+      formatVersion: 3,
       actions: [
         {
           kind: 'action',
@@ -725,8 +734,12 @@ describe('Local multi-file project storage', () => {
       ...serializeToJSObject(project),
       constants: {},
     });
-    files[`game://scenes/${sceneName}/functions/sceneUpdate.events`] =
-      '@event\nif SceneJustBegins\ndo FirstOpenCatalogTest::Ping\n';
+    files[
+      `game://scenes/${sceneName}/functions/sceneUpdate.settings`
+    ] = replaceEmbeddedEventBody(
+      files[`game://scenes/${sceneName}/functions/sceneUpdate.settings`],
+      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n\n      actions {\n\n        FirstOpenCatalogTest::Ping\n      }\n    }\n  }\n}\n'
+    );
     project.delete();
     await writeMultiFileSourceTree({ entryPath, files });
 
@@ -836,7 +849,7 @@ describe('Local multi-file project storage', () => {
     ).toContainEqual({ serializedKey: 'useLegacyTrajectory', type: 'boolean' });
     expect(rebuiltSettingsCatalog).toMatchObject({
       format: 'gdevelop-settings-catalog',
-      formatVersion: 8,
+      formatVersion: 10,
       layoutAuthoring: {
         storage: 'component-root',
         syntax: 'Settings DSL',
@@ -1229,7 +1242,7 @@ describe('Local multi-file project storage', () => {
       fs.existsSync(
         path.join(
           temporaryDirectory,
-          'extensions/Local/behaviors/Health/functions/Heal.events'
+          'extensions/Local/behaviors/Health/functions/Heal.settings'
         )
       )
     ).toBe(true);
@@ -1289,14 +1302,14 @@ describe('Local multi-file project storage', () => {
       expect.arrayContaining([
         'game://scenes/Main/scene.settings',
         'game://scenes/Main/functions/sceneUpdate.settings',
-        'game://scenes/Main/functions/sceneUpdate.events',
+        'game://scenes/Main/functions/sceneUpdate.settings',
       ])
     );
     expect(
       fs.existsSync(
         path.join(
           temporaryDirectory,
-          'scenes/Main/functions/sceneUpdate.events'
+          'scenes/Main/functions/sceneUpdate.settings'
         )
       )
     ).toBe(false);
@@ -1374,7 +1387,7 @@ describe('Local multi-file project storage', () => {
     expect(exists('extensions/Combat/functions/ComputeDamage.settings')).toBe(
       true
     );
-    expect(exists('extensions/Combat/functions/ComputeDamage.events')).toBe(
+    expect(exists('extensions/Combat/functions/ComputeDamage.settings')).toBe(
       true
     );
     project = renamed;
@@ -1392,7 +1405,7 @@ describe('Local multi-file project storage', () => {
       exists('extensions/Combat/prefabs/Boss/functions/ReceiveDamage.settings')
     ).toBe(true);
     expect(
-      exists('extensions/Combat/prefabs/Boss/functions/ReceiveDamage.events')
+      exists('extensions/Combat/prefabs/Boss/functions/ReceiveDamage.settings')
     ).toBe(true);
     const prefabSettings = fs.readFileSync(
       path.join(
@@ -1403,7 +1416,7 @@ describe('Local multi-file project storage', () => {
     );
     expect(prefabSettings).toContain('bounds {');
     expect(prefabSettings).not.toContain('.functions.');
-    expect(prefabSettings).not.toContain('ReceiveDamage.events');
+    expect(prefabSettings).not.toContain('ReceiveDamage.settings');
     project = renamed;
 
     renamed = JSON.parse(JSON.stringify(project));
@@ -1420,7 +1433,7 @@ describe('Local multi-file project storage', () => {
       exists('extensions/Combat/behaviors/Vitality/functions/Restore.settings')
     ).toBe(true);
     expect(
-      exists('extensions/Combat/behaviors/Vitality/functions/Restore.events')
+      exists('extensions/Combat/behaviors/Vitality/functions/Restore.settings')
     ).toBe(true);
     project = renamed;
 
@@ -1429,12 +1442,12 @@ describe('Local multi-file project storage', () => {
     await writeLegacyProjectAsMultiFile(renamed, entryPath);
     expect(exists('extensions/Combat')).toBe(false);
     expect(exists('extensions/Battle/extension.settings')).toBe(true);
-    expect(exists('extensions/Battle/functions/ComputeDamage.events')).toBe(
+    expect(exists('extensions/Battle/functions/ComputeDamage.settings')).toBe(
       true
     );
     expect(exists('extensions/Battle/prefabs/Boss/prefab.settings')).toBe(true);
     expect(
-      exists('extensions/Battle/behaviors/Vitality/functions/Restore.events')
+      exists('extensions/Battle/behaviors/Vitality/functions/Restore.settings')
     ).toBe(true);
     expect(
       areLegacyProjectsEquivalent(
@@ -1497,7 +1510,7 @@ describe('Local multi-file project storage', () => {
     ).toBe(false);
     const serializedCatalog = fs.readFileSync(catalogPath, 'utf8');
     const parsedCatalog = JSON.parse(serializedCatalog);
-    expect(parsedCatalog.formatVersion).toBe(2);
+    expect(parsedCatalog.formatVersion).toBe(3);
     expect(parsedCatalog.authoring).toBeUndefined();
     expect(serializedCatalog).not.toContain('serialized operand');
     expect(serializedCatalog).not.toContain('embedded quotes');
@@ -1857,7 +1870,7 @@ describe('Local multi-file project storage', () => {
     );
     expect(moduleMap).toMatchObject({
       format: 'gdevelop-project-module-map',
-      sourceFormatVersion: 9,
+      sourceFormatVersion: 11,
       project: { name: 'Generated compatibility project' },
     });
     const generatedProject = JSON.parse(fs.readFileSync(generatedPath, 'utf8'));
@@ -2168,12 +2181,12 @@ column2 = "333"
       const eventsSource = fs.readFileSync(
         path.join(
           temporaryDirectory,
-          'scenes/Main/functions/sceneUpdate.events'
+          'scenes/Main/functions/sceneUpdate.settings'
         ),
         'utf8'
       );
       expect(eventsSource).toContain(
-        'if CollisionNP first_object="Player" second_object="Platform"'
+        'CollisionNP first_object="Player" second_object="Platform"'
       );
       expect(eventsSource).not.toContain(
         'ignore_objects_that_are_touching_each_other'
@@ -2261,11 +2274,11 @@ column2 = "333"
       const eventsSource = fs.readFileSync(
         path.join(
           temporaryDirectory,
-          'scenes/Main/functions/sceneUpdate.events'
+          'scenes/Main/functions/sceneUpdate.settings'
         ),
         'utf8'
       );
-      expect(eventsSource).toContain('do "Physics2::Remove joint"');
+      expect(eventsSource).toContain('"Physics2::Remove joint"');
       expect(eventsSource).not.toContain('@exact');
       const objectSource = fs.readFileSync(
         path.join(temporaryDirectory, 'scenes/Main/objects/Body.settings'),
@@ -2451,7 +2464,7 @@ column2 = "333"
       fs.readFileSync(path.join(sceneDirectory, 'scene.settings'), 'utf8')
     ).not.toContain('sceneLifecycleFunctions');
     expect(
-      fs.existsSync(path.join(sceneDirectory, 'functions/sceneUpdate.events'))
+      fs.existsSync(path.join(sceneDirectory, 'functions/sceneUpdate.settings'))
     ).toBe(true);
     project.delete();
   });

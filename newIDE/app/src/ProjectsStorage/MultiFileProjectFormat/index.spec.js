@@ -197,7 +197,7 @@ describe('Settings DSL multi-file project format', () => {
     for (const source of [
       'kind = "project"\nsettingsFormatVersion = 7\n',
       files[MULTI_FILE_ENTRY_URI].replace(
-        'formatVersion = 9',
+        'formatVersion = 11',
         'formatVersion = 8'
       ),
     ]) {
@@ -792,7 +792,9 @@ column2 = "ssfssdfsf"
     ]);
 
     expect(
-      files['game://scenes/Secondary/external-events/Secondary%20Logic.events']
+      files[
+        'game://scenes/Secondary/external-events/Secondary%20Logic.settings'
+      ]
     ).toBeDefined();
     const reordered = Object.fromEntries(Object.entries(files).reverse());
     expect(composeLegacyProjectFromFiles(reordered).externalEvents).toEqual(
@@ -818,7 +820,7 @@ column2 = "ssfssdfsf"
     filesWithMovedSource[movedUri] = filesWithMovedSource[canonicalUri];
     delete filesWithMovedSource[canonicalUri];
     expect(() => composeLegacyProjectFromFiles(filesWithMovedSource)).toThrow(
-      expect.objectContaining({ code: 'MULTIFILE_MISSING_FILE' })
+      expect.objectContaining({ code: 'SETTINGS_RETIRED_EVENTS_FILE' })
     );
   });
 
@@ -843,7 +845,7 @@ column2 = "ssfssdfsf"
       'game://scenes/Main/external-events/Shared%20Combat/functions/sceneLoad.events'
     ] = '';
     expect(() => composeLegacyProjectFromFiles(filesWithOrphanEvents)).toThrow(
-      expect.objectContaining({ code: 'MULTIFILE_INVALID_EXTERNAL_SOURCE' })
+      expect.objectContaining({ code: 'SETTINGS_RETIRED_EVENTS_FILE' })
     );
   });
 
@@ -893,9 +895,9 @@ column2 = "ssfssdfsf"
     const fragmentUris = Object.keys(files).filter(uri =>
       uri.includes('/external-events/')
     );
-    expect(fragmentUris).toHaveLength(names.length * 2);
+    expect(fragmentUris).toHaveLength(names.length);
     names.forEach(name =>
-      ['settings', 'events'].forEach(extension =>
+      ['settings'].forEach(extension =>
         expect(fragmentUris).toContain(
           `game://scenes/Main/external-events/${encodeManagedName(
             `${name}.${extension}`

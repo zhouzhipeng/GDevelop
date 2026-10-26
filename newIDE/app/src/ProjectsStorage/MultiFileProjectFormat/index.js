@@ -1,15 +1,13 @@
 // @noflow
+import {
+  appendSettingsEvents,
+  compileSettingsEvents,
+} from '../SettingsDsl/Events';
 
 import parseToml from '@iarna/toml/parse-string';
 import stringifyToml from '@iarna/toml/stringify';
 import { sha256 } from 'js-sha256';
-import {
-  IFDO_EVENTS_DSL_COVERAGE,
-  IfDoError,
-  compileIfDoToLegacyEventsJson,
-  convertLegacyEventsJsonToIfDo,
-  parseLegacyEventsJson,
-} from '../../EventsSheet/IfDoEventsDsl';
+import { parseLegacyEventsJson } from '../SettingsDsl/EventModel';
 import {
   LayoutDocumentError,
   compileLayoutDocument,
@@ -204,13 +202,6 @@ const rethrowLayoutDocumentError = (error, fileUri): empty => {
   wrapped.endLine = error.endLine;
   wrapped.endColumn = error.endColumn;
   wrapped.path = error.path;
-  throw wrapped;
-};
-
-const rethrowIfDoError = (error, fileUri): empty => {
-  const wrapped = new MultiFileProjectError(error.code, error.message);
-  wrapped.fileUri = fileUri;
-  wrapped.line = error.line;
   throw wrapped;
 };
 
@@ -1503,11 +1494,19 @@ const putSettingsFile = (files, uri, namespace, layoutDocument) => {
   );
 };
 
-const putEventsFile = (files, uri, events, eventsDslOptions) => {
-  validateGameUri(uri);
-  files[uri] = convertLegacyEventsJsonToIfDo(
-    JSON.stringify(events || []),
-    eventsDslOptions || {}
+const putEmbeddedEvents = (files, uri, events, options) => {
+  const settingsUri = uri;
+  if (files[settingsUri] === undefined)
+    fail(
+      'MULTIFILE_MISSING_FILE',
+      'Event owner settings are missing.',
+      settingsUri
+    );
+  files[settingsUri] = appendSettingsEvents(
+    files[settingsUri],
+    events || [],
+    options || {},
+    settingsUri
   );
 };
 
@@ -1525,7 +1524,7 @@ const splitOwnerFunctions = ({
   baseSegments,
   namespaceForFunction,
   files,
-  eventsDslOptions,
+  eventOptions,
 }) => {
   const foldersByFunctionName = ownedFolderValues(
     folderStructure,
@@ -1538,9 +1537,9 @@ const splitOwnerFunctions = ({
       ...baseSegments,
       `${functionFileName}.settings`,
     ]);
-    const eventsUri = encodeUriPath([
+    const bodySettingsUri = encodeUriPath([
       ...baseSegments,
-      `${functionFileName}.events`,
+      `${functionFileName}.settings`,
     ]);
     putSettingsFile(
       files,
@@ -1554,11 +1553,11 @@ const splitOwnerFunctions = ({
         name: functionName,
       })
     );
-    putEventsFile(
+    putEmbeddedEvents(
       files,
-      eventsUri,
+      bodySettingsUri,
       functionObject.events || [],
-      eventsDslOptions
+      eventOptions
     );
   });
 };
@@ -1585,7 +1584,7 @@ const splitSceneLifecycleFunctions = ({
   baseSegments,
   namespaceForFunction,
   files,
-  eventsDslOptions,
+  eventOptions,
 }) => {
   SCENE_LIFECYCLE_FUNCTION_DEFINITIONS.forEach(definition => {
     const events = owner[definition.legacyField] || [];
@@ -1596,10 +1595,10 @@ const splitSceneLifecycleFunctions = ({
       'functions',
       `${definition.name}.settings`,
     ]);
-    const eventsUri = encodeUriPath([
+    const bodySettingsUri = encodeUriPath([
       ...baseSegments,
       'functions',
-      `${definition.name}.events`,
+      `${definition.name}.settings`,
     ]);
     putSettingsFile(
       files,
@@ -1609,7 +1608,7 @@ const splitSceneLifecycleFunctions = ({
         lifecycleFunctionSettingsPayload(definition)
       )
     );
-    putEventsFile(files, eventsUri, events, eventsDslOptions);
+    putEmbeddedEvents(files, bodySettingsUri, events, eventOptions);
   });
 };
 
@@ -1670,7 +1669,7 @@ const splitPrefab = ({
   order,
   baseSegments,
   files,
-  eventsDslOptions,
+  eventOptions,
 }) => {
   const prefabName = String(prefab.name || '');
   const prefabSettingsUri = encodeUriPath([...baseSegments, 'prefab.settings']);
@@ -1713,7 +1712,7 @@ const splitPrefab = ({
       },
     }),
     files,
-    eventsDslOptions,
+    eventOptions,
   });
   const variantNames = new Set();
   (prefab.variants || []).forEach((variant, variantOrder) => {
@@ -1803,7 +1802,7 @@ const splitBehavior = ({
   order,
   baseSegments,
   files,
-  eventsDslOptions,
+  eventOptions,
 }) => {
   const behaviorName = String(behavior.name || '');
   splitOwnerFunctions({
@@ -1822,7 +1821,7 @@ const splitBehavior = ({
       },
     }),
     files,
-    eventsDslOptions,
+    eventOptions,
   });
   return {
     kind: 'behavior',
@@ -2021,11 +2020,11 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
         },
       }
     );
-    putEventsFile(
+    putEmbeddedEvents(
       files,
-      encodeUriPath([...baseSegments, encodeManagedName(`${name}.events`)]),
+      encodeUriPath([...baseSegments, encodeManagedName(`${name}.settings`)]),
       external.events,
-      options.eventsDslOptions
+      options.eventOptions
     );
   });
   const externalLayoutNames = new Set();
@@ -2168,7 +2167,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
           },
         }),
         files,
-        eventsDslOptions: options.eventsDslOptions,
+        eventOptions: options.eventOptions,
       });
     }
   );
@@ -2190,10 +2189,10 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
         'functions',
         `${folder}.settings`,
       ]);
-      const eventsUri = encodeUriPath([
+      const bodySettingsUri = encodeUriPath([
         ...extensionBase,
         'functions',
-        `${folder}.events`,
+        `${folder}.settings`,
       ]);
       putSettingsFile(files, functionSettingsUri, {
         extensions: {
@@ -2208,11 +2207,11 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
           },
         },
       });
-      putEventsFile(
+      putEmbeddedEvents(
         files,
-        eventsUri,
+        bodySettingsUri,
         functionObject.events || [],
-        options.eventsDslOptions
+        options.eventOptions
       );
     });
 
@@ -2227,7 +2226,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
         order,
         baseSegments: base,
         files,
-        eventsDslOptions: options.eventsDslOptions,
+        eventOptions: options.eventOptions,
       });
       putSettingsFile(
         files,
@@ -2260,7 +2259,7 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
                 order,
                 baseSegments: base,
                 files,
-                eventsDslOptions: options.eventsDslOptions,
+                eventOptions: options.eventOptions,
               }),
             },
           },
@@ -2297,7 +2296,6 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
   putSettingsFile(files, MULTI_FILE_ENTRY_URI, {
     gdevelop: {
       combinedSettingsFormatVersion: MULTI_FILE_FORMAT_VERSION,
-      eventsDslVersion: IFDO_EVENTS_DSL_COVERAGE.formatVersion,
     },
     project: projectNamespace,
   });
@@ -2325,7 +2323,6 @@ const parseSettings = (files, uri) => {
     return {
       gdevelop: {
         combinedSettingsFormatVersion: localDocument.formatVersion,
-        eventsDslVersion: IFDO_EVENTS_DSL_COVERAGE.formatVersion,
       },
       project: omitFields(localDocument, new Set(['formatVersion'])),
     };
@@ -2481,33 +2478,19 @@ const layoutObjectContext = (
 };
 
 const compileEvents = (files, uri, options) => {
-  validateGameUri(uri);
-  const source = files[uri];
-  if (source === undefined) {
-    fail('MULTIFILE_MISSING_FILE', 'Referenced events file is missing.', uri);
-  }
-  if (/^\s*(?:\[|\{|format\s*=)/.test(source)) {
+  const settingsUri = uri;
+  if (files[settingsUri] === undefined)
     fail(
-      'MULTIFILE_OWNERSHIP_CONFLICT',
-      'Events files must contain IfDo DSL only.',
-      uri
+      'MULTIFILE_MISSING_FILE',
+      'Event owner settings are missing.',
+      settingsUri
     );
-  }
-  // Catalog generation needs the project structure and extension metadata,
-  // but it cannot compile catalog-authored instructions until that catalog
-  // has been generated. Keep validating the file boundary above, then use an
-  // empty event list for this bootstrap pass only.
   if (options.skipEventsCompilation) return [];
-  try {
-    return JSON.parse(
-      compileIfDoToLegacyEventsJson(source, options.compileOptions || {})
-    );
-  } catch (error) {
-    if (error instanceof IfDoError) {
-      rethrowIfDoError(error, uri);
-    }
-    throw error;
-  }
+  return compileSettingsEvents(
+    files[settingsUri],
+    options.compileOptions || {},
+    settingsUri
+  );
 };
 
 const requireNamespace = (root, path, uri) => {
@@ -2731,7 +2714,7 @@ const buildLegacyFunctionsFolderStructure = functionDocuments =>
 const composeOwnerFunctions = (files, functionDocuments, options) =>
   functionDocuments.map(functionDocument => ({
     ...functionDocument.function,
-    events: compileEvents(files, functionDocument.eventsUri, options),
+    events: compileEvents(files, functionDocument.bodySettingsUri, options),
   }));
 
 const composePrefab = (
@@ -2873,6 +2856,14 @@ const composeBehavior = (
 export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   registerLocalSettingsSources(filesInput);
   const files = { ...filesInput };
+  Object.keys(files).forEach(uri => {
+    if (uri.endsWith('.events'))
+      fail(
+        'SETTINGS_RETIRED_EVENTS_FILE',
+        '.events author files have been removed; events belong to settings.',
+        uri
+      );
+  });
   const seenUris = new Set();
   const seenResolvedUris = new Set();
   const registerUri = uri => {
@@ -2902,7 +2893,6 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   const formatVersion = gdevelop.combinedSettingsFormatVersion;
   if (
     formatVersion !== MULTI_FILE_FORMAT_VERSION ||
-    gdevelop.eventsDslVersion !== IFDO_EVENTS_DSL_COVERAGE.formatVersion ||
     (gdevelop.entry !== undefined && gdevelop.entry !== MULTI_FILE_ENTRY_URI)
   ) {
     fail(
@@ -3092,7 +3082,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
             functionUri
           );
         }
-        const eventsUri = functionUri.replace(/\.settings$/, '.events');
+        const bodySettingsUri = functionUri;
         if (payload.events !== undefined) {
           fail(
             'MULTIFILE_RETIRED_FUNCTION_SOURCE',
@@ -3100,7 +3090,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
             functionUri
           );
         }
-        registerUri(eventsUri);
+
         const entry = {
           name,
           order: readSettingsOrder(
@@ -3114,7 +3104,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
           entry,
           uri: functionUri,
           document,
-          eventsUri,
+          bodySettingsUri,
           folder: readFolderValue(
             payload,
             `${label}.functions.${name}`,
@@ -3204,7 +3194,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
             functionUri
           );
         }
-        const eventsUri = functionUri.replace(/\.settings$/, '.events');
+        const bodySettingsUri = functionUri;
         const expectedMetadata = lifecycleFunctionSettingsPayload(definition);
         if (payload.events !== undefined) {
           fail(
@@ -3223,12 +3213,12 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
             functionUri
           );
         }
-        registerUri(eventsUri);
+
         documentsByName.set(name, {
           name,
           definition,
           uri: functionUri,
-          eventsUri,
+          bodySettingsUri,
           document,
         });
       });
@@ -3249,7 +3239,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
     SCENE_LIFECYCLE_FUNCTION_DEFINITIONS.forEach(definition => {
       const document = documentsByName.get(definition.name);
       if (!document) return;
-      const events = compileEvents(files, document.eventsUri, options);
+      const events = compileEvents(files, document.bodySettingsUri, options);
       if (
         definition.name !== 'sceneUpdate' &&
         !options.skipEventsCompilation &&
@@ -3434,15 +3424,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
           uri
         );
       }
-      const eventsUri = uri.replace(/\.settings$/, '.events');
-      if (files[eventsUri] === undefined) {
-        fail(
-          'MULTIFILE_MISSING_FILE',
-          'External Events settings require a matching .events file.',
-          eventsUri
-        );
-      }
-      registerUri(eventsUri);
+      const bodySettingsUri = uri;
       settingsUris.push(uri);
       const key = name.normalize('NFC').toLowerCase();
       if (
@@ -3459,25 +3441,11 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       externalEventNames.add(key);
       externalEventDocuments.push({
         name,
-        uri: eventsUri,
+        uri: bodySettingsUri,
         sceneName: sceneDocument.entry.name,
         sceneOrder: sceneDocument.entry.order,
       });
     });
-  Object.keys(files)
-    .filter(uri =>
-      /^game:\/\/scenes\/[^/]+\/external-events\/[^/]+\.events$/.test(uri)
-    )
-    .forEach(uri => {
-      if (files[uri.replace(/\.events$/, '.settings')] === undefined) {
-        fail(
-          'MULTIFILE_ORPHAN_EVENTS',
-          'External Events bodies require a same-stem settings file.',
-          uri
-        );
-      }
-    });
-
   Object.keys(files)
     .filter(uri =>
       /^game:\/\/scenes\/[^/]+\/external-layout\/[^/]+\.settings$/.test(uri)
@@ -4166,18 +4134,6 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
         );
       }
     });
-  const orphanFunctionEventsUri = Object.keys(files).find(
-    uri =>
-      /\/functions\/[^/]+\.events$/.test(uri) &&
-      files[uri.replace(/\.events$/, '.settings')] === undefined
-  );
-  if (orphanFunctionEventsUri) {
-    fail(
-      'MULTIFILE_ORPHAN_EVENTS',
-      'Every function events body must have a same-stem function settings file.',
-      orphanFunctionEventsUri
-    );
-  }
   const invalidTestSourceUri = Object.keys(files).find(
     uri =>
       uri.startsWith('game://tests/') &&
@@ -4409,11 +4365,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
         }
         extension.eventsFunctions.push({
           ...metadata,
-          events: compileEvents(
-            files,
-            registerUri(child.uri.replace(/\.settings$/, '.events')),
-            options
-          ),
+          events: compileEvents(files, child.uri, options),
         });
       } else if (child.manifestName === 'prefabFiles') {
         const payload = requireNamespace(

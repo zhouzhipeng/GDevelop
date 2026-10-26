@@ -1,4 +1,12 @@
 // @flow
+import {
+  getSettingsInstructionCatalog,
+  getSettingsInstructionCompletions,
+} from './SettingsInstructionCompletions';
+import {
+  compileSettingsEvents,
+  extractSettingsJavaScriptBlocks,
+} from '../ProjectsStorage/SettingsDsl/Events';
 /* eslint-disable no-template-curly-in-string -- Monaco snippet placeholders are intentionally literal. */
 import {
   parseSettingsSyntax,
@@ -17,6 +25,8 @@ export const getSettingsVariableCompletions = (
     literal: boolean,
     name: string,
     fields: Set<string>,
+    lastField?: string,
+    containerType?: string,
   }> = [];
   let previous = '';
   for (const match of source.matchAll(
@@ -28,10 +38,17 @@ export const getSettingsVariableCompletions = (
     if (token === '[' || token === '{') {
       const literal =
         token === '[' || previous === '=' || (parent && parent.literal);
+      if (!literal && parent) parent.fields.add(`@${previous}`);
+      if (!literal && previous === 'variable' && parent)
+        parent.fields.add('$children');
       stack.push({ literal, name: literal ? '' : previous, fields: new Set() });
     } else if (token === '}' || token === ']') stack.pop();
-    else if (token === '=' && parent && !parent.literal)
+    else if (token === '=' && parent && !parent.literal) {
       parent.fields.add(previous);
+      parent.lastField = previous;
+    } else if (parent && previous === '=' && parent.lastField === 'type') {
+      parent.containerType = token;
+    }
     previous = token;
   }
   const frame = stack[stack.length - 1];
@@ -42,7 +59,7 @@ export const getSettingsVariableCompletions = (
     insertText: string,
     detail: string = ''
   ): Object => ({ label, insertText, detail });
-  if (frame.name === 'variable' || frame.name === 'metadata') {
+  if (frame.name === 'variable') {
     const fields = [
       field(
         'type',
@@ -62,36 +79,81 @@ export const getSettingsVariableCompletions = (
       field('folded', 'folded = ${1|true,false|}'),
       field('hasMixedValues', 'hasMixedValues = ${1|false,true|}'),
     ];
-    if (frame.name === 'metadata')
+    if (
+      !(
+        parent &&
+        parent.name === 'variable' &&
+        parent.containerType === '"array"'
+      )
+    )
+      fields.unshift(field('name', 'name = "${1:Name}"'));
+    if (!frame.fields.has('$children'))
       fields.unshift(
-        field(
-          'path',
-          'path = [${1:0}, "${2:Field}"]',
-          'Existing descendant: string structure keys and integer array indexes.'
-        )
-      );
-    else {
-      fields.unshift(
-        field('name', 'name = "${1:Name}"'),
         field(
           'value',
           'value = ${1:0}',
           'Scalar, [] array or {} structure literal.'
         )
       );
-      if (parent && parent.name === 'extension')
-        fields.unshift(field('scope', 'scope = "${1|global,scene|}"'));
+    if (parent && parent.name === 'extension')
+      fields.unshift(field('scope', 'scope = "${1|global,scene|}"'));
+    if (
+      !frame.fields.has('value') &&
+      (frame.containerType === '"structure"' ||
+        frame.containerType === '"array"')
+    )
       fields.push(
         field(
-          'metadata',
-          'metadata {\n  path = [${1:0}]\n  folded = ${2:true}\n}',
-          'Optional descendant metadata.'
+          'variable',
+          frame.containerType === '"array"'
+            ? 'variable {\n  value = ${1:0}\n}'
+            : 'variable {\n  name = "${1:Name}"\n  value = ${2:0}\n}',
+          'Declare a child with its identity and constraints beside its value.'
         )
       );
-    }
     return fields.filter(
-      entry => entry.label === 'metadata' || !frame.fields.has(entry.label)
+      entry => entry.label === 'variable' || !frame.fields.has(entry.label)
     );
+  }
+  if (stack.some(entry => entry.name === 'code')) return [];
+  const eventSuggestions = [];
+  const snippet = (label, text) => eventSuggestions.push(field(label, text));
+  if (['function', 'external_events'].includes(frame.name)) {
+    if (!frame.fields.has('@events'))
+      snippet('events', 'events {\n  event {\n    $0\n  }\n}');
+  }
+  if (['events', 'group', 'event'].includes(frame.name)) {
+    const eventType = frame.containerType || '"standard"';
+    const leaf = ['"javascript"'].includes(eventType);
+    if (!leaf) {
+      snippet('event', 'event {\n  $0\n}');
+      snippet('group', 'group {\n  name = "${1:Group}"\n  $0\n}');
+      snippet('comment', 'comment {\n  text = "${1:Comment}"\n}');
+      snippet('link', 'link {\n  target = "${1:Fragment}"\n}');
+    }
+    if (frame.name === 'event') {
+      if (!frame.fields.has('type'))
+        snippet(
+          'type',
+          'type = "${1|standard,else,repeat,while,for_each,for_each_child,javascript|}"'
+        );
+      if (leaf) {
+        if (!frame.fields.has('strict')) snippet('strict', 'strict = true');
+        if (!frame.fields.has('@code')) snippet('code', 'code {\n  $0\n}');
+      } else {
+        if (!frame.fields.has('@conditions'))
+          snippet('conditions', 'conditions {\n  $0\n}');
+        if (!frame.fields.has('@actions'))
+          snippet('actions', 'actions {\n  $0\n}');
+        snippet(
+          'variable',
+          'variable {\n  name = "${1:Name}"\n  value = ${2:0}\n}'
+        );
+        if (eventType === '"while"' && !frame.fields.has('@while_conditions'))
+          snippet('while_conditions', 'while_conditions {\n  $0\n}');
+      }
+    }
+    return eventSuggestions;
   }
   const schemas = getSettingsSchemas();
   const kind = Object.keys(schemas.roots).find(
@@ -103,7 +165,7 @@ export const getSettingsVariableCompletions = (
       : kind
       ? schemas.components[kind]
       : null;
-  if (!schema || !schema.children.variable) return [];
+  if (!schema || !schema.children.variable) return eventSuggestions;
   return [
     field(
       'variable',
@@ -112,6 +174,7 @@ export const getSettingsVariableCompletions = (
         : 'variable {\n  name = "${1:Name}"\n  value = ${2:0}\n}',
       'Declare a variable directly on its owner; no collection wrapper.'
     ),
+    ...eventSuggestions,
   ];
 };
 
@@ -156,12 +219,96 @@ export const registerSettingsLanguage = (monaco: any) => {
       },
     ],
   });
+  const embeddedModels = new WeakMap();
+  const embeddedAt = (model, position) => {
+    if (!monaco.Uri || !monaco.editor.createModel) return null;
+    let blocks;
+    try {
+      blocks = extractSettingsJavaScriptBlocks(
+        model.getValue(),
+        model.uri.toString()
+      );
+    } catch (_) {
+      return null;
+    }
+    const index = blocks.findIndex(
+      block =>
+        position.lineNumber >= block.bodyLine &&
+        position.lineNumber <= block.endLine
+    );
+    if (index < 0) return null;
+    const block = blocks[index];
+    let models = embeddedModels.get(model);
+    if (!models) {
+      models = new Map();
+      embeddedModels.set(model, models);
+      model.onWillDispose(() => {
+        models.forEach(embedded => embedded.dispose());
+        embeddedModels.delete(model);
+      });
+    }
+    const prefix =
+      '/** @param {gdjs.RuntimeScene} runtimeScene @param {gdjs.RuntimeObject[]} objects */\nfunction __event(runtimeScene, objects, eventsFunctionContext) {\n';
+    const value = `${prefix}${block.inlineCode}\n}`;
+    let embedded = models.get(index);
+    if (!embedded) {
+      embedded = monaco.editor.createModel(
+        value,
+        'javascript',
+        monaco.Uri.parse(
+          `file:///settings-embedded/${encodeURIComponent(
+            model.uri.toString()
+          )}/${index}.js`
+        )
+      );
+      models.set(index, embedded);
+    } else if (embedded.getValue() !== value) embedded.setValue(value);
+    const originalStart = model.getOffsetAt({
+      lineNumber: block.bodyLine,
+      column: 1,
+    });
+    return {
+      model: embedded,
+      offset: prefix.length + model.getOffsetAt(position) - originalStart,
+      prefixLength: prefix.length,
+      originalStart,
+    };
+  };
   monaco.languages.registerCompletionItemProvider(language, {
-    provideCompletionItems: (model, position) => {
+    provideCompletionItems: async (model, position) => {
+      const embedded = embeddedAt(model, position);
+      if (embedded && monaco.languages.typescript.getJavaScriptWorker) {
+        const getWorker = await monaco.languages.typescript.getJavaScriptWorker();
+        const worker = await getWorker(embedded.model.uri);
+        const result = await worker.getCompletionsAtPosition(
+          embedded.model.uri.toString(),
+          embedded.offset
+        );
+        const word = model.getWordUntilPosition(position);
+        return {
+          suggestions: (result ? result.entries : []).map(entry => ({
+            label: entry.name,
+            insertText: entry.insertText || entry.name,
+            kind: monaco.languages.CompletionItemKind.Variable,
+            range: {
+              startLineNumber: position.lineNumber,
+              endLineNumber: position.lineNumber,
+              startColumn: word.startColumn,
+              endColumn: word.endColumn,
+            },
+          })),
+        };
+      }
       const source = model.getValue().slice(0, model.getOffsetAt(position));
       const word = model.getWordUntilPosition(position);
       return {
-        suggestions: getSettingsVariableCompletions(source).map(suggestion => ({
+        suggestions: [
+          ...getSettingsVariableCompletions(source),
+          ...getSettingsInstructionCompletions(
+            source,
+            getSettingsInstructionCatalog(model.uri)
+          ),
+        ].map(suggestion => ({
           ...suggestion,
           kind: monaco.languages.CompletionItemKind.Snippet,
           insertTextRules:
@@ -169,13 +316,94 @@ export const registerSettingsLanguage = (monaco: any) => {
           range: {
             startLineNumber: position.lineNumber,
             endLineNumber: position.lineNumber,
-            startColumn: word.startColumn,
+            startColumn:
+              suggestion.replacePrefixLength !== undefined
+                ? position.column - suggestion.replacePrefixLength
+                : word.startColumn,
             endColumn: word.endColumn,
           },
         })),
       };
     },
   });
+  if (monaco.languages.registerHoverProvider)
+    monaco.languages.registerHoverProvider(language, {
+      provideHover: async (model, position) => {
+        const embedded = embeddedAt(model, position);
+        if (!embedded || !monaco.languages.typescript.getJavaScriptWorker)
+          return null;
+        const getWorker = await monaco.languages.typescript.getJavaScriptWorker();
+        const worker = await getWorker(embedded.model.uri);
+        const info = await worker.getQuickInfoAtPosition(
+          embedded.model.uri.toString(),
+          embedded.offset
+        );
+        if (!info) return null;
+        const text = (info.displayParts || []).map(part => part.text).join('');
+        const documentation = (info.documentation || [])
+          .map(part => part.text)
+          .join('');
+        return {
+          contents: [
+            { language: 'javascript', value: text },
+            { value: documentation },
+          ],
+        };
+      },
+    });
+  const parseOutline = model => {
+    try {
+      return parseSettingsSyntax(model.getValue(), model.uri.toString()).root;
+    } catch (_) {
+      return null;
+    }
+  };
+  if (monaco.languages.registerFoldingRangeProvider)
+    monaco.languages.registerFoldingRangeProvider(language, {
+      provideFoldingRanges: model => {
+        const ranges = [];
+        const visit = node => {
+          if (node.location && node.location.endLine > node.location.line)
+            ranges.push({
+              start: node.location.line,
+              end: node.location.endLine,
+            });
+          node.children.forEach(visit);
+        };
+        const root = parseOutline(model);
+        if (root) visit(root);
+        return ranges;
+      },
+    });
+  if (monaco.languages.registerDocumentSymbolProvider)
+    monaco.languages.registerDocumentSymbolProvider(language, {
+      provideDocumentSymbols: model => {
+        const root = parseOutline(model);
+        if (!root) return [];
+        const symbol = node => {
+          const at = node.location;
+          const range = {
+            startLineNumber: at.line,
+            startColumn: at.column,
+            endLineNumber: at.endLine,
+            endColumn: at.endColumn,
+          };
+          const name =
+            node.properties.name ||
+            node.properties.type ||
+            node.properties.target;
+          return {
+            name: `${node.type}${name ? `: ${String(name.value)}` : ''}`,
+            detail: node.instruction ? node.source : '',
+            kind: monaco.languages.SymbolKind.Object,
+            range,
+            selectionRange: range,
+            children: node.children.map(symbol),
+          };
+        };
+        return [symbol(root)];
+      },
+    });
   const attached: WeakSet<any> = new WeakSet();
   const attach = (model: any) => {
     if (model.getModeId() !== language) {
@@ -191,7 +419,21 @@ export const registerSettingsLanguage = (monaco: any) => {
         return;
       }
       try {
-        parseSettingsSyntax(model.getValue(), model.uri.toString());
+        const syntax = parseSettingsSyntax(
+          model.getValue(),
+          model.uri.toString()
+        );
+        if (['function', 'external_events'].includes(syntax.root.type))
+          compileSettingsEvents(
+            model.getValue(),
+            {
+              resolveInstruction: ({ source }) => ({
+                type: { value: source },
+                parameters: [],
+              }),
+            },
+            model.uri.toString()
+          );
         monaco.editor.setModelMarkers(model, language, []);
       } catch (error) {
         monaco.editor.setModelMarkers(model, language, [

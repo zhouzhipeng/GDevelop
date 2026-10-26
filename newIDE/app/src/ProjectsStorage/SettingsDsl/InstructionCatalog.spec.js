@@ -1,10 +1,7 @@
 // @flow
 
-import {
-  areLegacyEventsEquivalent,
-  compileIfDoToLegacyEventsJson,
-  convertLegacyEventsJsonToIfDo,
-} from './index';
+import { appendSettingsEvents, compileSettingsEvents } from './Events';
+import { parseLegacyEventsJson } from './EventModel';
 import {
   buildProjectDeprecatedInstructionCatalog,
   buildProjectInstructionCatalog,
@@ -16,14 +13,22 @@ import {
   normalizeLegacyProjectInstructionParameters,
   serializeProjectInstructionCatalog,
   validateProjectInstructionCatalog,
-} from './ProjectInstructionCatalog';
+} from './InstructionCatalog';
 import { enumerateAllInstructions } from '../../InstructionOrExpression/EnumerateInstructions';
 import { enumerateAllExpressions } from '../../InstructionOrExpression/EnumerateExpressions';
 import { normalizeInstructionParameterDslName } from '../../Mcp/McpEventKnowledge';
 
+const compileSettingsJson = (source, options) =>
+  JSON.stringify(compileSettingsEvents(source, options));
+const serializeEventDocument = (json, options) =>
+  appendSettingsEvents('function {}\n', JSON.parse(json), options);
+const areLegacyEventsEquivalent = (left, right) =>
+  JSON.stringify(parseLegacyEventsJson(left)) ===
+  JSON.stringify(parseLegacyEventsJson(right));
+
 const catalogFixture = {
-  format: 'gdevelop-ifdo-instruction-catalog',
-  formatVersion: 2,
+  format: 'gdevelop-settings-instruction-catalog',
+  formatVersion: 3,
   actions: [
     {
       type: 'Network::Send',
@@ -68,14 +73,14 @@ const catalogFixture = {
   expressions: [],
 };
 
-describe('project IfDo instruction catalog', () => {
-  test('requires the semantic version 2 catalog without authoring prose', () => {
+describe('project Settings instruction catalog', () => {
+  test('requires the semantic version 3 catalog without authoring prose', () => {
     expect(() =>
       validateProjectInstructionCatalog({
         ...catalogFixture,
         formatVersion: 1,
       })
-    ).toThrow('expected version 2');
+    ).toThrow('expected version 3');
     expect(() =>
       validateProjectInstructionCatalog({
         ...catalogFixture,
@@ -133,7 +138,7 @@ describe('project IfDo instruction catalog', () => {
         ],
       },
     ]);
-    const dsl = convertLegacyEventsJsonToIfDo(input, {
+    const dsl = serializeEventDocument(input, {
       formatInstruction: createCatalogInstructionFormatter(
         digitParameterCatalog
       ),
@@ -143,7 +148,7 @@ describe('project IfDo instruction catalog', () => {
     expect(
       areLegacyEventsEquivalent(
         input,
-        compileIfDoToLegacyEventsJson(dsl, {
+        compileSettingsJson(dsl, {
           resolveInstruction: createCatalogInstructionResolver(
             digitParameterCatalog
           ),
@@ -153,22 +158,17 @@ describe('project IfDo instruction catalog', () => {
   });
 
   test('compiles named catalog instructions with semantic operands', () => {
-    const output = JSON.parse(
-      compileIfDoToLegacyEventsJson(
-        `if Network::Succeeded request_id="RequestId"\n` +
-          `do Network::Send url="https://example.com" body=expr(VariableString(Payload))\n`,
-        { resolveInstruction: createCatalogInstructionResolver(catalogFixture) }
-      )
-    );
-
-    expect(output[0].conditions[0]).toMatchObject({
-      type: { value: 'Network::Succeeded' },
-      parameters: ['RequestId'],
+    const source =
+      'function {\n events {\n event {\n conditions {\n Network::Succeeded request_id="RequestId"\n }\n actions {\n Network::Send url="https://example.com" body=expr(VariableString(Payload))\n }\n }\n }\n }\n';
+    const output = compileSettingsEvents(source, {
+      resolveInstruction: createCatalogInstructionResolver(catalogFixture),
     });
-    expect(output[0].actions[0]).toMatchObject({
-      type: { value: 'Network::Send' },
-      parameters: ['"https://example.com"', 'VariableString(Payload)', ''],
-    });
+    expect(output[0].conditions[0].parameters).toEqual(['RequestId']);
+    expect(output[0].actions[0].parameters).toEqual([
+      '"https://example.com"',
+      'VariableString(Payload)',
+      '',
+    ]);
   });
 
   test('omits empty legacy operands without encoding them as typed values', () => {
@@ -184,16 +184,16 @@ describe('project IfDo instruction catalog', () => {
         ],
       },
     ]);
-    const dsl = convertLegacyEventsJsonToIfDo(input, {
+    const dsl = serializeEventDocument(input, {
       formatInstruction: createCatalogInstructionFormatter(catalogFixture),
     });
 
-    expect(dsl).toContain('do Network::Send body="payload"');
+    expect(dsl).toContain('Network::Send body="payload"');
     expect(dsl).not.toContain('url=');
     expect(dsl).not.toContain('legacy runtime data');
     expect(
       JSON.parse(
-        compileIfDoToLegacyEventsJson(dsl, {
+        compileSettingsJson(dsl, {
           resolveInstruction: createCatalogInstructionResolver(catalogFixture),
         })
       )[0].actions[0].parameters
@@ -310,7 +310,7 @@ describe('project IfDo instruction catalog', () => {
       JSON.parse(input)
     );
     const catalog = mergeProjectInstructionCatalogs(catalogFixture, delta);
-    const dsl = convertLegacyEventsJsonToIfDo(input, {
+    const dsl = serializeEventDocument(input, {
       formatInstruction: createCatalogInstructionFormatter(catalog),
     });
 
@@ -321,7 +321,7 @@ describe('project IfDo instruction catalog', () => {
     expect(
       areLegacyEventsEquivalent(
         input,
-        compileIfDoToLegacyEventsJson(dsl, {
+        compileSettingsJson(dsl, {
           resolveInstruction: createCatalogInstructionResolver(catalog),
         })
       )
@@ -343,25 +343,31 @@ describe('project IfDo instruction catalog', () => {
       ],
     };
     const compile = (source: string): string =>
-      compileIfDoToLegacyEventsJson(source, {
+      compileSettingsJson(source, {
         resolveInstruction: createCatalogInstructionResolver(typedCatalog),
       });
 
     expect(() =>
-      compile('do Typed::Action count="1" object="Enemy"\n')
+      compile(
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action count="1" object="Enemy"\n      }\n    }\n  }\n}\n'
+      )
     ).toThrow('expects a semantic number');
     expect(() =>
-      compile('do Typed::Action count=1 object=expr("Enemy")\n')
+      compile(
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action count=1 object=expr("Enemy")\n      }\n    }\n  }\n}\n'
+      )
     ).toThrow('does not accept expr(...)');
     expect(() =>
-      compile('do Typed::Action count=1 object="Enemy" runtime="scene"\n')
+      compile(
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action count=1 object="Enemy" runtime="scene"\n      }\n    }\n  }\n}\n'
+      )
     ).toThrow('code-only and must be omitted');
   });
 
   test('scans nested calculated expressions without exposing raw operands', () => {
     const output = JSON.parse(
-      compileIfDoToLegacyEventsJson(
-        'do Network::Send url="https://example.com" body=expr(ToString(Max(Variable(A), Variable(B))))\n',
+      compileSettingsJson(
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send url="https://example.com" body=expr(ToString(Max(Variable(A), Variable(B))))\n      }\n    }\n  }\n}\n',
         { resolveInstruction: createCatalogInstructionResolver(catalogFixture) }
       )
     );
@@ -369,15 +375,15 @@ describe('project IfDo instruction catalog', () => {
       'ToString(Max(Variable(A), Variable(B)))'
     );
     expect(() =>
-      compileIfDoToLegacyEventsJson(
-        'do Network::Send url="https://example.com" body=expr()\n',
+      compileSettingsJson(
+        'function {\n events {\n event {\n actions {\n Network::Send url="https://example.com" body=expr()\n}\n}\n}\n}\n',
         { resolveInstruction: createCatalogInstructionResolver(catalogFixture) }
       )
     ).toThrow('cannot be empty');
     expect(
       JSON.parse(
-        compileIfDoToLegacyEventsJson(
-          'do Network::Send url="https://example.com" body=expr(ToString(\n  Max(Variable(A), Variable(B))\n))\n',
+        compileSettingsJson(
+          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send url="https://example.com" body=expr(ToString(\nMax(Variable(A), Variable(B))\n))\n      }\n    }\n  }\n}\n',
           {
             resolveInstruction: createCatalogInstructionResolver(
               catalogFixture
@@ -388,8 +394,8 @@ describe('project IfDo instruction catalog', () => {
     ).toContain('Max(Variable(A), Variable(B))');
     expect(
       JSON.parse(
-        compileIfDoToLegacyEventsJson(
-          'do Network::Send url="https://example.com" body=expr("first line\nsecond line")\n',
+        compileSettingsJson(
+          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send url="https://example.com" body=expr("first line\nsecond line")\n      }\n    }\n  }\n}\n',
           {
             resolveInstruction: createCatalogInstructionResolver(
               catalogFixture
@@ -429,16 +435,16 @@ describe('project IfDo instruction catalog', () => {
         ],
       },
     ]);
-    const dsl = convertLegacyEventsJsonToIfDo(input, {
+    const dsl = serializeEventDocument(input, {
       formatInstruction: createCatalogInstructionFormatter(textCatalog),
     });
-    const output = compileIfDoToLegacyEventsJson(dsl, {
+    const output = compileSettingsJson(dsl, {
       resolveInstruction: createCatalogInstructionResolver(textCatalog),
     });
 
-    expect(dsl).toContain('do Text::Set text=""');
+    expect(dsl).toContain('Text::Set text=""');
     expect(dsl).toContain(
-      'do Text::Set text=expr("Score: " + ToString(Variable(Score)))'
+      'Text::Set text=expr("Score: " + ToString(Variable(Score)))'
     );
     expect(dsl).not.toContain('\\"');
     expect(areLegacyEventsEquivalent(input, output)).toBe(true);
@@ -462,15 +468,15 @@ describe('project IfDo instruction catalog', () => {
         ],
       },
     ]);
-    const dsl = convertLegacyEventsJsonToIfDo(input, {
+    const dsl = serializeEventDocument(input, {
       formatInstruction: createCatalogInstructionFormatter(catalogFixture),
     });
-    const output = compileIfDoToLegacyEventsJson(dsl, {
+    const output = compileSettingsJson(dsl, {
       resolveInstruction: createCatalogInstructionResolver(catalogFixture),
     });
 
-    expect(dsl).toContain('if Network::Succeeded request_id="RequestId"');
-    expect(dsl).toContain('do Network::Send');
+    expect(dsl).toContain('Network::Succeeded request_id="RequestId"');
+    expect(dsl).toContain('Network::Send');
     expect(dsl).not.toContain('runtime=');
     expect(dsl).not.toContain('@exact');
     expect(areLegacyEventsEquivalent(input, output)).toBe(true);
@@ -506,14 +512,14 @@ describe('project IfDo instruction catalog', () => {
         ],
       },
     ]);
-    const dsl = convertLegacyEventsJsonToIfDo(input, {
+    const dsl = serializeEventDocument(input, {
       formatInstruction: createCatalogInstructionFormatter(spacedTypeCatalog),
     });
-    const output = compileIfDoToLegacyEventsJson(dsl, {
+    const output = compileSettingsJson(dsl, {
       resolveInstruction: createCatalogInstructionResolver(spacedTypeCatalog),
     });
 
-    expect(dsl).toContain('do "Physics2::Remove joint"');
+    expect(dsl).toContain('"Physics2::Remove joint"');
     expect(dsl).not.toContain('@exact');
     expect(areLegacyEventsEquivalent(input, output)).toBe(true);
   });
@@ -554,14 +560,14 @@ describe('project IfDo instruction catalog', () => {
           ],
         },
       ]);
-      const dsl = convertLegacyEventsJsonToIfDo(input, {
+      const dsl = serializeEventDocument(input, {
         formatInstruction: createCatalogInstructionFormatter(completeCatalog),
       });
-      const output = compileIfDoToLegacyEventsJson(dsl, {
+      const output = compileSettingsJson(dsl, {
         resolveInstruction: createCatalogInstructionResolver(completeCatalog),
       });
 
-      expect(dsl).toContain('do "Physics2::Remove joint"');
+      expect(dsl).toContain('"Physics2::Remove joint"');
       expect(dsl).not.toContain('@exact');
       expect(areLegacyEventsEquivalent(input, output)).toBe(true);
     } finally {
@@ -572,10 +578,13 @@ describe('project IfDo instruction catalog', () => {
 
   test('rejects the removed @ catalog prefix', () => {
     expect(() =>
-      compileIfDoToLegacyEventsJson('do @Network::Send url="x" body="y"\n', {
-        resolveInstruction: createCatalogInstructionResolver(catalogFixture),
-      })
-    ).toThrow('expected InstructionType');
+      compileSettingsJson(
+        'function {\n events {\n event {\n actions {\n @Network::Send url="x" body="y"\n}\n}\n}\n}\n',
+        {
+          resolveInstruction: createCatalogInstructionResolver(catalogFixture),
+        }
+      )
+    ).toThrow('Expected a node, property, or value');
   });
 
   test('generates a deterministic complete catalog from the loaded platform', () => {
@@ -680,7 +689,7 @@ describe('project IfDo instruction catalog', () => {
     expect(
       catalog.expressions.some(({ type }) => type === 'TextObject::String')
     ).toBe(false);
-    expect(catalog.formatVersion).toBe(2);
+    expect(catalog.formatVersion).toBe(3);
     expect(catalog.authoring).toBeUndefined();
     expect(serialized).not.toContain('"authoring"');
     expect(serialized).not.toContain('serialized operand');
@@ -727,16 +736,16 @@ describe('project IfDo instruction catalog', () => {
         actions: [],
       },
     ]);
-    const sceneDsl = convertLegacyEventsJsonToIfDo(sceneInput, {
+    const sceneDsl = serializeEventDocument(sceneInput, {
       formatInstruction: createCatalogInstructionFormatter(catalog),
     });
-    expect(sceneDsl).toContain('if SceneJustBegins');
+    expect(sceneDsl).toContain('SceneJustBegins');
     expect(sceneDsl).not.toContain('scene begins');
     expect(sceneDsl).not.toContain('parameter_0=');
     expect(
       areLegacyEventsEquivalent(
         sceneInput,
-        compileIfDoToLegacyEventsJson(sceneDsl, {
+        compileSettingsJson(sceneDsl, {
           resolveInstruction: createCatalogInstructionResolver(catalog),
         })
       )
@@ -767,7 +776,7 @@ describe('project IfDo instruction catalog', () => {
         ],
       },
     ]);
-    const emptyTextDsl = convertLegacyEventsJsonToIfDo(emptyTextInput, {
+    const emptyTextDsl = serializeEventDocument(emptyTextInput, {
       formatInstruction: createCatalogInstructionFormatter(catalog),
     });
     expect(emptyTextDsl).toContain('text=""');
@@ -775,7 +784,7 @@ describe('project IfDo instruction catalog', () => {
     expect(
       areLegacyEventsEquivalent(
         emptyTextInput,
-        compileIfDoToLegacyEventsJson(emptyTextDsl, {
+        compileSettingsJson(emptyTextDsl, {
           resolveInstruction: createCatalogInstructionResolver(catalog),
         })
       )
@@ -804,20 +813,20 @@ describe('project IfDo instruction catalog', () => {
         actions: [],
       },
     ]);
-    const omittedCollisionDefaultDsl = convertLegacyEventsJsonToIfDo(
+    const omittedCollisionDefaultDsl = serializeEventDocument(
       omittedCollisionDefaultInput,
       {
         formatInstruction: createCatalogInstructionFormatter(catalog),
       }
     );
     expect(omittedCollisionDefaultDsl).toContain(
-      'if CollisionNP first_object="Player" second_object="Platform"'
+      'CollisionNP first_object="Player" second_object="Platform"'
     );
     expect(omittedCollisionDefaultDsl).not.toContain(
       `${optionalCollisionParameter.dslName}=`
     );
     const normalizedCollisionDefaultOutput = JSON.parse(
-      compileIfDoToLegacyEventsJson(omittedCollisionDefaultDsl, {
+      compileSettingsJson(omittedCollisionDefaultDsl, {
         resolveInstruction: createCatalogInstructionResolver(catalog),
       })
     );
@@ -825,10 +834,23 @@ describe('project IfDo instruction catalog', () => {
       normalizedCollisionDefaultOutput[0].conditions[0].parameters
     ).toEqual(['Player', 'Platform', '', '', '']);
     const explicitCollisionDefaultOutput = JSON.parse(
-      compileIfDoToLegacyEventsJson(
-        `if CollisionNP first_object="Player" second_object="Platform" ${
+      compileSettingsJson(
+        `function {
+
+  events {
+
+    event {
+
+      conditions {
+
+        CollisionNP first_object="Player" second_object="Platform" ${
           optionalCollisionParameter.dslName
-        }=false\n`,
+        }=false
+      }
+    }
+  }
+}
+`,
         {
           resolveInstruction: createCatalogInstructionResolver(catalog),
         }
@@ -865,7 +887,7 @@ describe('project IfDo instruction catalog', () => {
         ],
       },
     ]);
-    const compatibilityDsl = convertLegacyEventsJsonToIfDo(compatibilityInput, {
+    const compatibilityDsl = serializeEventDocument(compatibilityInput, {
       formatInstruction: createCatalogInstructionFormatter(
         serializationCatalog
       ),
@@ -874,7 +896,7 @@ describe('project IfDo instruction catalog', () => {
     expect(
       areLegacyEventsEquivalent(
         compatibilityInput,
-        compileIfDoToLegacyEventsJson(compatibilityDsl, {
+        compileSettingsJson(compatibilityDsl, {
           resolveInstruction: createCatalogInstructionResolver(
             serializationCatalog
           ),
@@ -897,4 +919,21 @@ describe('project IfDo instruction catalog', () => {
     expect(serialized.endsWith('\n')).toBe(true);
     project.delete();
   });
+});
+
+test('unified operand diagnostics identify the exact argument value in the owning settings source', () => {
+  const source =
+    'function {\n events {\n event {\n actions {\n Network::Send url=42 body="payload"\n }\n }\n }\n}\n';
+  try {
+    compileSettingsEvents(
+      source,
+      { resolveInstruction: createCatalogInstructionResolver(catalogFixture) },
+      'game://Test.settings'
+    );
+    throw new Error('Expected invalid operand');
+  } catch (failure) {
+    expect(failure.code).toBe('SETTINGS_INSTRUCTION_ARGUMENT');
+    expect(failure.fileUri).toBe('game://Test.settings');
+    expect(source.slice(failure.offset, failure.endOffset)).toBe('42');
+  }
 });

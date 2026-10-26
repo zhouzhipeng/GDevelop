@@ -1,4 +1,5 @@
 // @noflow
+import { tokenizer } from 'acorn';
 
 export class SettingsDslError extends Error {
   constructor(code, message, fileUri, location, path) {
@@ -41,6 +42,8 @@ export const parseSettingsSyntax = (source, fileUri) => {
     );
   };
   if (typeof source !== 'string') error('Settings source must be UTF-8 text.');
+  if (source.length > 16 * 1024 * 1024)
+    error('Settings file size budget exceeded.');
   if (source.charCodeAt(0) === 0xfeff) error('UTF-8 BOM is forbidden.');
   const advance = () => {
     const character = source[offset++];
@@ -65,7 +68,11 @@ export const parseSettingsSyntax = (source, fileUri) => {
         const commentLine = line;
         while (offset < source.length && !/[\r\n]/.test(source[offset]))
           advance();
-        comments.push({ text: source.slice(start, offset), line: commentLine });
+        comments.push({
+          text: source.slice(start, offset),
+          line: commentLine,
+          offset: start,
+        });
         continue;
       }
       break;
@@ -112,8 +119,32 @@ export const parseSettingsSyntax = (source, fileUri) => {
         error('Invalid JSON string escape or control character.', location);
       }
     }
+    if (source.startsWith('expr(', offset)) {
+      const start = offset;
+      let depth = 0,
+        quote = null,
+        escaped = false;
+      while (offset < source.length) {
+        const c = advance();
+
+        if (quote) {
+          if (escaped) escaped = false;
+          else if (c === '\\') escaped = true;
+          else if (c === quote) quote = null;
+        } else if (c === '"') quote = c;
+        else if (c === '(') depth++;
+        else if (c === ')' && --depth === 0) {
+          const expression = source.slice(start + 5, offset - 1).trim();
+          if (!expression) error('expr(...) cannot be empty.', location);
+          return { type: 'expression', value: { expression }, location };
+        }
+      }
+      error('Unterminated expr(...).', location);
+    }
     const rest = source.slice(offset);
-    const match = rest.match(NUMBER) || rest.match(IDENT);
+    const match =
+      rest.match(NUMBER) ||
+      rest.match(/^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*/);
     if (!match)
       error(
         'Expected a node, property, or value. Only Settings DSL is supported.'
@@ -164,10 +195,14 @@ export const parseSettingsSyntax = (source, fileUri) => {
   const value = depth => {
     if (depth > MAX_SETTINGS_DEPTH)
       error('Settings nesting budget exceeded.', token.location);
-    if (['string', 'number', 'boolean'].includes(token.type)) {
+    if (['string', 'number', 'boolean', 'expression'].includes(token.type)) {
       const result = token;
       token = next();
-      return { value: result.value, location: result.location };
+      return {
+        value: result.value,
+        ...(result.type === 'expression' ? { expression: true } : {}),
+        location: result.location,
+      };
     }
     if (token.type === '{') {
       const start = consume('{').location;
@@ -235,15 +270,115 @@ export const parseSettingsSyntax = (source, fileUri) => {
       },
     };
   };
-  const node = (nameToken, depth) => {
+  const readCode = nameToken => {
+    const opening = token.location;
+    if (!/^[ \t]*\r?\n/.test(source.slice(offset)))
+      error('code must be a multiline block.', opening);
+    const start = opening.offset;
+    let balance = 0,
+      closing;
+    try {
+      const reader = tokenizer(source.slice(start), { ecmaVersion: 2022 });
+      while (true) {
+        const part = reader.getToken();
+        if (++count > MAX_TOKENS)
+          error('Settings token budget exceeded.', opening);
+        if (part.end > 2 * 1024 * 1024)
+          error('JavaScript code size budget exceeded.', opening);
+        if (part.type.label === 'eof')
+          error('Unterminated code block.', opening);
+        if (part.type.label === '{' || part.type.label === '${') balance++;
+        if (part.type.label === '}' && --balance === 0) {
+          closing = start + part.start;
+          break;
+        }
+      }
+      const lineStart = source.lastIndexOf('\n', closing - 1) + 1;
+      if (
+        !/^[ \t]*$/.test(source.slice(lineStart, closing)) ||
+        !/^[ \t]*(?:\r?\n|$)/.test(source.slice(closing + 1))
+      )
+        error('The code closing brace must occupy its own line.', opening);
+      const contentStart = source.indexOf('\n', start) + 1;
+      const code = source.slice(contentStart, lineStart);
+      while (offset <= closing) advance();
+      token = next();
+      const result = {
+        type: 'code',
+        properties: {},
+        children: [],
+        code,
+        contentLocation: {
+          offset: contentStart,
+          line: opening.line + 1,
+          column: 1,
+        },
+        location: {
+          ...nameToken.location,
+          endOffset: closing + 1,
+          endLine: line,
+          endColumn: column,
+        },
+      };
+      boundary();
+      return result;
+    } catch (cause) {
+      if (cause instanceof SettingsDslError) throw cause;
+      error(
+        `Invalid JavaScript code: ${cause.message}; near ${JSON.stringify(
+          source.slice(start, start + 240)
+        )}`,
+        opening
+      );
+    }
+  };
+  const instruction = (head, depth) => {
+    const start = head.location.offset;
+    const args = Object.create(null);
+    while (token.type === 'ident') {
+      const key = consume('ident');
+      consume('=');
+      if (own(args, key.value))
+        error(`Duplicate argument ${key.value}.`, key.location);
+      if (!['string', 'number', 'boolean', 'expression'].includes(token.type))
+        error('Expected a semantic instruction operand.', token.location);
+      args[key.value] = { ...value(depth + 1), keyLocation: key.location };
+    }
+    const headerEnd = token.location.offset;
+    const hasBlock = token.type === '{';
+    const result = hasBlock
+      ? node(head, depth, true)
+      : {
+          type: head.value,
+          properties: {},
+          children: [],
+          location: head.location,
+        };
+    result.instruction = true;
+    result.arguments = args;
+    const trailingComment = comments[comments.length - 1];
+    const sourceEnd =
+      trailingComment &&
+      trailingComment.offset >= start &&
+      trailingComment.offset < headerEnd
+        ? trailingComment.offset
+        : headerEnd;
+    result.source = source.slice(start, sourceEnd).trim();
+    if (!hasBlock) boundary();
+    return result;
+  };
+  const node = (nameToken, depth, instructionBody = false) => {
     if (depth > MAX_SETTINGS_DEPTH)
       error('Settings nesting budget exceeded.', nameToken.location);
+    if (nameToken.value === 'code' && !instructionBody)
+      return readCode(nameToken);
     consume('{');
     const result = {
       type: nameToken.value,
       properties: Object.create(null),
       children: [],
       location: nameToken.location,
+      members: [],
     };
     const childNames = new Set();
     if (token.type !== '}') {
@@ -254,13 +389,25 @@ export const parseSettingsSyntax = (source, fileUri) => {
           error('Expected a property or child node.', token.location);
         const key = token;
         token = next();
-        if (token.type === '{') {
+        if (
+          (instructionBody ||
+            ['conditions', 'actions', 'while_conditions'].includes(
+              result.type
+            )) &&
+          token.type !== '='
+        ) {
+          const child = instruction(key, depth + 1);
+          result.children.push(child);
+          result.members.push({ child });
+        } else if (token.type === '{') {
           if (key.type !== 'ident')
             error('Node types must be identifiers.', key.location);
           if (own(result.properties, key.value))
             error(`Property/node collision: ${key.value}.`, key.location);
           childNames.add(key.value);
-          result.children.push(node(key, depth + 1));
+          const child = node(key, depth + 1);
+          result.children.push(child);
+          result.members.push({ child });
         } else {
           consume('=');
           if (own(result.properties, key.value) || childNames.has(key.value))
@@ -268,6 +415,7 @@ export const parseSettingsSyntax = (source, fileUri) => {
               `Duplicate property or property/node collision: ${key.value}.`,
               key.location
             );
+          result.members.push({ key: key.value });
           result.properties[key.value] = {
             ...value(depth + 1),
             keyLocation: key.location,
@@ -315,7 +463,9 @@ export const printSettingsSyntax = (root, comments = []) => {
   };
   const emitLiteral = (prefix, item, depth, suffix = '') => {
     const indent = '  '.repeat(depth);
-    if (
+    if (item.expression === true) {
+      lines.push(`${prefix}expr(${item.value.expression})${suffix}`);
+    } else if (
       item.value &&
       typeof item.value === 'object' &&
       !Array.isArray(item.value)
@@ -368,23 +518,174 @@ export const printSettingsSyntax = (root, comments = []) => {
   const emit = (node, depth) => {
     const indent = '  '.repeat(depth);
     emitComments(node.location ? node.location.line : 0, indent);
-    lines.push(`${indent}${node.type} {`);
-    Object.keys(node.properties).forEach(key => {
+    if (node.type === 'code' && typeof node.code === 'string') {
+      lines.push(`${indent}code {`);
+      if (node.code) lines.push(node.code.replace(/\n$/, ''));
+      lines.push(`${indent}}`);
+      return;
+    }
+    let header = node.type;
+    if (node.instruction) {
+      header = node.source;
+      if (!Object.keys(node.properties).length && !node.children.length) {
+        lines.push(`${indent}${header}`);
+        return;
+      }
+    }
+    lines.push(`${indent}${header} {`);
+    const emitProperty = key => {
       const property = node.properties[key];
       emitComments(
         property.keyLocation ? property.keyLocation.line : 0,
         `${indent}  `
       );
       emitLiteral(`${indent}  ${keyText(key)} = `, property, depth + 1);
-    });
-    node.children.forEach(child => {
-      lines.push('');
-      emit(child, depth + 1);
-    });
+    };
+    // Event ownership is explicit, so formatting preserves category placement.
+    const preserveMembers =
+      node.members &&
+      (node.instruction || ['event', 'group'].includes(node.type));
+    if (preserveMembers) {
+      node.members.forEach(member => {
+        if (member.key) emitProperty(member.key);
+        else if (node.children.includes(member.child)) {
+          lines.push('');
+          emit(member.child, depth + 1);
+        }
+      });
+      // Writer-added flags/children do not have an original source member.
+      Object.keys(node.properties)
+        .filter(key => !node.members.some(m => m.key === key))
+        .forEach(emitProperty);
+      node.children
+        .filter(child => !node.members.some(m => m.child === child))
+        .forEach(child => {
+          lines.push('');
+          emit(child, depth + 1);
+        });
+    } else {
+      Object.keys(node.properties).forEach(emitProperty);
+      node.children.forEach(child => {
+        lines.push('');
+        emit(child, depth + 1);
+      });
+    }
     emitComments(node.location ? node.location.endLine - 1 : 0, `${indent}  `);
     lines.push(`${indent}}`);
   };
   emit(root, 0);
   emitComments(Infinity, '');
   return `${lines.join('\n')}\n`;
+};
+
+// Preserve source-only comments when the engine rewrites model-backed data.
+// Match named nodes/identities, otherwise their occurrence within a parent.
+export const preserveSettingsSourceComments = (
+  source,
+  previousSource,
+  fileUri
+) => {
+  const previous = parseSettingsSyntax(previousSource, fileUri);
+  if (!previous.comments.length) return source;
+  const current = parseSettingsSyntax(source, fileUri);
+  const index = syntax => {
+    const nodes = new Map();
+    const visit = (node, path) => {
+      nodes.set(path, node);
+      const counts = new Map();
+      node.children.forEach(child => {
+        const data = child.properties;
+        const identity = ['aiGeneratedEventId', 'id', 'name', 'target']
+          .map(key =>
+            data[key] && data[key].value ? [key, data[key].value] : null
+          )
+          .find(Boolean);
+        const base = JSON.stringify([child.type, identity || null]);
+        const count = counts.get(base) || 0;
+        counts.set(base, count + 1);
+        visit(child, `${path}/${base}:${count}`);
+      });
+    };
+    visit(syntax.root, 'root');
+    return nodes;
+  };
+  const oldNodes = index(previous),
+    newNodes = index(current);
+  const pathsByNode = new Map(
+    Array.from(oldNodes, ([path, node]) => [node, path])
+  );
+  const ordered = Array.from(oldNodes, ([path, node]) => ({ path, node })).sort(
+    (a, b) =>
+      a.node.location.line - b.node.location.line ||
+      b.node.location.endLine - a.node.location.endLine
+  );
+  const stack = [],
+    anchors = new Map();
+  let cursor = 0;
+  const comments = previous.comments
+    .map(comment => {
+      while (
+        cursor < ordered.length &&
+        ordered[cursor].node.location.line <= comment.line
+      ) {
+        const entry = ordered[cursor++];
+        while (
+          stack.length &&
+          stack[stack.length - 1].node.location.endLine <=
+            entry.node.location.line
+        )
+          stack.pop();
+        stack.push(entry);
+      }
+      while (
+        stack.length &&
+        stack[stack.length - 1].node.location.endLine <= comment.line
+      )
+        stack.pop();
+      const ownerEntry = stack[stack.length - 1] || {
+        path: 'root',
+        node: previous.root,
+      };
+      const ownerPath = ownerEntry.path,
+        owner = ownerEntry.node;
+      let targetPath = ownerPath;
+      while (!newNodes.has(targetPath))
+        targetPath = targetPath.slice(0, targetPath.lastIndexOf('/')) || 'root';
+      const target = newNodes.get(targetPath);
+      let beforeLine = target.location.endLine - 1;
+      if (targetPath === ownerPath) {
+        let following = anchors.get(ownerPath);
+        if (!following) {
+          following = [];
+          Object.entries(owner.properties).forEach(([key, item]) => {
+            if (item.keyLocation && target.properties[key])
+              following.push({
+                line: item.keyLocation.line,
+                target: target.properties[key].keyLocation.line,
+              });
+          });
+          owner.children.forEach(node => {
+            const path = pathsByNode.get(node);
+            if (newNodes.has(path))
+              following.push({
+                line: node.location.line,
+                target: newNodes.get(path).location.line,
+              });
+          });
+          following.sort((a, b) => a.line - b.line);
+          anchors.set(ownerPath, following);
+        }
+        let low = 0,
+          high = following.length;
+        while (low < high) {
+          const mid = (low + high) >>> 1;
+          if (following[mid].line <= comment.line) low = mid + 1;
+          else high = mid;
+        }
+        if (low < following.length) beforeLine = following[low].target;
+      }
+      return { text: comment.text, line: beforeLine };
+    })
+    .sort((a, b) => a.line - b.line);
+  return printSettingsSyntax(current.root, comments);
 };

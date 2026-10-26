@@ -1,6 +1,6 @@
 // @flow
 import optionalRequire from '../../Utils/OptionalRequire';
-import { PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH } from '../../EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog';
+import { PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH } from '../SettingsDsl/InstructionCatalog';
 import { MULTI_FILE_ENTRY_NAME } from '../MultiFileProjectFormat';
 import { PROJECT_SETTINGS_CATALOG_RELATIVE_PATH } from '../ProjectSourceCatalog';
 
@@ -13,7 +13,7 @@ const multiFileProjectRootFiles = [
   'resources.settings',
   'tests.settings',
 ];
-const multiFileProjectExtensions = new Set(['.settings', '.events']);
+const multiFileProjectExtensions = new Set(['.settings']);
 const gameplayTestSourceExtensions = new Set(['.js']);
 
 const getFileModificationTime = async (filePath: string): Promise<?number> => {

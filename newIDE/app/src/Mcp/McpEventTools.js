@@ -58,7 +58,7 @@ type SceneEventsTarget = {|
   ownerName: string,
   externalEventsName: string | null,
   functionSettingsUri: ?string,
-  eventsUri: string,
+  settingsUri: string,
 |};
 
 type EventReference = {|
@@ -157,9 +157,11 @@ const resolveSceneEventsTarget = (
       ownerName: externalEventsName,
       externalEventsName,
       functionSettingsUri: null,
-      eventsUri: `game://scenes/${encodeManagedName(
+      settingsUri: `game://scenes/${encodeManagedName(
         associatedSceneName
-      )}/external-events/${encodeManagedName(`${externalEventsName}.events`)}`,
+      )}/external-events/${encodeManagedName(
+        `${externalEventsName}.settings`
+      )}`,
     };
   } else {
     if (!sceneName) throw new Error('Missing scene_name.');
@@ -184,7 +186,7 @@ const resolveSceneEventsTarget = (
     ownerName,
     externalEventsName: externalEventsName || null,
     functionSettingsUri: `${functionBaseUri}.settings`,
-    eventsUri: `${functionBaseUri}.events`,
+    settingsUri: `${functionBaseUri}.settings`,
   };
 };
 
@@ -202,7 +204,7 @@ const getSceneEventsTargetIdentity = (target: SceneEventsTarget): Object => ({
   ...(target.externalEventsName
     ? { externalEventsName: target.externalEventsName }
     : {}),
-  eventsUri: target.eventsUri,
+  settingsUri: target.settingsUri,
 });
 
 const formatEventPath = (path: Array<number>): string =>

@@ -1457,7 +1457,7 @@ export const getEventsJsonExamples = ({
     eventJsonShape:
       'Serialized scene events are a JSON array. A standard event uses type "BuiltinCommonInstructions::Standard", conditions: [{ type: { value: "<condition type>" }, parameters: [...] }], actions: [{ type: { value: "<action type>" }, parameters: [...] }], and optional nested events: [...].',
     projectFileEventsShape:
-      'Author scene events in the canonical project .events source files, following the generated instructions catalog and existing event serialization shape.',
+      'Author scene events in function .settings events blocks, following the Settings DSL schema and generated instruction catalog.',
     // Quoting and expression-syntax rules. These are the most common cause of
     // parameter validation failures.
     parameterSyntaxRules: {
@@ -2146,8 +2146,8 @@ export const buildCompleteProjectInstructionCatalog = ({
   const conditions = collectInstructions(true);
 
   return {
-    format: 'gdevelop-ifdo-instruction-catalog',
-    formatVersion: 2,
+    format: 'gdevelop-settings-instruction-catalog',
+    formatVersion: 3,
     project: {
       name: project.getName(),
       uuid: project.getProjectUuid(),

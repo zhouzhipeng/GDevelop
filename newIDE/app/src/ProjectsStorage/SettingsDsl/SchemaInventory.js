@@ -1,7 +1,7 @@
 // @noflow
 // Shared authoring field inventory. SettingsDsl converts these descriptors to
 // strict node schemas; catalogs publish the same schemas used by the parser.
-export const SETTINGS_FORMAT_VERSION = 9;
+export const SETTINGS_FORMAT_VERSION = 11;
 const MULTI_FILE_FORMAT_VERSION = SETTINGS_FORMAT_VERSION;
 const MULTI_FILE_ENTRY_URI = 'game://project.gdevelop';
 const SCENE_LIFECYCLE_SOURCES = [
@@ -46,7 +46,9 @@ const formatFields = ({
 
 const variableRecordFields = [
   settingsField('name', 'non-empty string', { required: true }),
-  settingsField('value', 'variable literal', { required: true }),
+  settingsField('value', 'variable literal', {
+    requiredUnless: 'explicit structure/array type with child declarations',
+  }),
   settingsField('type', 'enum', {
     values: ['string', 'number', 'boolean', 'structure', 'array', 'enum'],
   }),
@@ -61,7 +63,7 @@ const variableTable = (name: string): Object => ({
   repeated: true,
   fields: variableRecordFields,
   additionalFields:
-    'Direct variable nodes with literal values; no collection wrappers or recursive variable nodes.',
+    'Direct variable nodes with literal values or explicit structure/array type and nested variable declarations. Array children have no names; structure children require unique names. Never mix value with children; metadata nodes are forbidden.',
 });
 
 const objectGroupsTable = (prefix: string = ''): Object => ({
@@ -352,10 +354,6 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
       settingsField('formatVersion', 'integer', {
         required: true,
         value: MULTI_FILE_FORMAT_VERSION,
-      }),
-      settingsField('eventsDslVersion', 'string', {
-        required: true,
-        value: '2.0',
       }),
       settingsField('entry', MULTI_FILE_ENTRY_URI, {
         optional: true,

@@ -1,6 +1,6 @@
 // @flow
 
-import { parseCatalogInstructionArguments } from './index';
+import { parseCatalogInstructionArguments } from './InstructionOperands';
 import { buildCompleteProjectInstructionCatalog } from '../../Mcp/McpEventKnowledge';
 
 export const PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH =
@@ -10,11 +10,13 @@ export const PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH =
 
 export class ProjectInstructionCatalogError extends Error {
   code: string;
+  parameterName: ?string;
 
   constructor(code: string, message: string) {
     super(message);
     this.name = 'ProjectInstructionCatalogError';
     this.code = code;
+    this.parameterName = null;
   }
 }
 
@@ -92,7 +94,7 @@ const isExpressionOperand = (value: any): boolean =>
   !!(
     value &&
     typeof value === 'object' &&
-    value.__ifdoExpression === true &&
+    value.__settingsExpression === true &&
     typeof value.source === 'string'
   );
 
@@ -104,19 +106,22 @@ const assertSemanticValue = (
   const valueKind = parameter.valueKind;
   if (!valueKind) {
     return fail(
-      'IFDO_CATALOG_VALUE_KIND_MISSING',
+      'SETTINGS_CATALOG_VALUE_KIND_MISSING',
       `${label} has no semantic valueKind.`
     );
   }
   if (isExpressionOperand(value)) {
     if (valueKind !== 'text' && valueKind !== 'number') {
       fail(
-        'IFDO_EXPRESSION_NOT_ALLOWED',
+        'SETTINGS_EXPRESSION_NOT_ALLOWED',
         `${label} does not accept expr(...); expected ${valueKind}.`
       );
     }
     if (!value.source.trim()) {
-      fail('IFDO_EXPRESSION_INVALID', `${label} expression cannot be empty.`);
+      fail(
+        'SETTINGS_EXPRESSION_INVALID',
+        `${label} expression cannot be empty.`
+      );
     }
     return;
   }
@@ -128,7 +133,7 @@ const assertSemanticValue = (
       : typeof value === 'string';
   if (!valid) {
     fail(
-      'IFDO_OPERAND_TYPE_MISMATCH',
+      'SETTINGS_OPERAND_TYPE_MISMATCH',
       `${label} expects a semantic ${valueKind} value.`
     );
   }
@@ -139,7 +144,7 @@ const assertSemanticValue = (
     !parameter.acceptedValues.includes(value)
   ) {
     fail(
-      'IFDO_OPERAND_TYPE_MISMATCH',
+      'SETTINGS_OPERAND_TYPE_MISMATCH',
       `${label} must be one of ${parameter.acceptedValues.join(', ')}.`
     );
   }
@@ -155,8 +160,8 @@ const stringifyJsonValue = (value: any, label: string): string => {
   const source = JSON.stringify(value);
   if (typeof source !== 'string') {
     return fail(
-      'IFDO_PARAMETER_UNREPRESENTABLE',
-      `${label} cannot be represented as an IfDo value.`
+      'SETTINGS_PARAMETER_UNREPRESENTABLE',
+      `${label} cannot be represented as a Settings operand.`
     );
   }
   return source;
@@ -222,7 +227,7 @@ const formatSemanticValue = (
       const trimmed = source.trim();
       if (!trimmed) {
         return fail(
-          'IFDO_PARAMETER_UNREPRESENTABLE',
+          'SETTINGS_PARAMETER_UNREPRESENTABLE',
           `${label} contains an empty text expression.`
         );
       }
@@ -238,7 +243,7 @@ const formatSemanticValue = (
       }
       if (!trimmed) {
         fail(
-          'IFDO_PARAMETER_UNREPRESENTABLE',
+          'SETTINGS_PARAMETER_UNREPRESENTABLE',
           `${label} contains an empty numeric expression.`
         );
       }
@@ -248,7 +253,7 @@ const formatSemanticValue = (
       const value = parseBooleanParameter(source, parameter.type);
       if (value === null) {
         fail(
-          'IFDO_PARAMETER_UNREPRESENTABLE',
+          'SETTINGS_PARAMETER_UNREPRESENTABLE',
           `${label} contains an invalid boolean value ${JSON.stringify(
             source
           )}.`
@@ -264,7 +269,7 @@ const formatSemanticValue = (
       return JSON.stringify(source);
     default:
       return fail(
-        'IFDO_CATALOG_VALUE_KIND_INVALID',
+        'SETTINGS_CATALOG_VALUE_KIND_INVALID',
         `${label} has an unsupported semantic valueKind.`
       );
   }
@@ -308,7 +313,7 @@ const parseCatalogInstructionSource = (
     if (match) return { type: match[1], argumentsSource: match[2] || '' };
   }
   throw new ProjectInstructionCatalogError(
-    'IFDO_CATALOG_INSTRUCTION_REQUIRED',
+    'SETTINGS_CATALOG_INSTRUCTION_REQUIRED',
     `Line ${line}: expected InstructionType with named arguments, got ${JSON.stringify(
       source
     )}.`
@@ -330,12 +335,12 @@ const validateCatalogEntry = (
     typeof entry !== 'object' ||
     (entry.kind !== undefined && entry.kind !== kind)
   )
-    fail('IFDO_CATALOG_INVALID', `Invalid ${kind} catalog entry.`);
+    fail('SETTINGS_CATALOG_INVALID', `Invalid ${kind} catalog entry.`);
   if (typeof entry.type !== 'string' || !entry.type)
-    fail('IFDO_CATALOG_INVALID', `A ${kind} catalog entry has no type.`);
+    fail('SETTINGS_CATALOG_INVALID', `A ${kind} catalog entry has no type.`);
   if (!Array.isArray(entry.parameters))
     fail(
-      'IFDO_CATALOG_INVALID',
+      'SETTINGS_CATALOG_INVALID',
       `${kind} ${entry.type} has no parameter list.`
     );
   const names: Set<string> = new Set();
@@ -348,18 +353,18 @@ const validateCatalogEntry = (
       !DSL_IDENTIFIER.test(parameter.dslName)
     )
       fail(
-        'IFDO_CATALOG_INVALID',
+        'SETTINGS_CATALOG_INVALID',
         `${kind} ${entry.type} has an invalid parameter at index ${index}.`
       );
     if (names.has(parameter.dslName))
       fail(
-        'IFDO_CATALOG_INVALID',
+        'SETTINGS_CATALOG_INVALID',
         `${kind} ${entry.type} repeats dslName ${parameter.dslName}.`
       );
     if (parameter.isCodeOnly) {
       if (parameter.valueKind !== undefined) {
         fail(
-          'IFDO_CATALOG_VALUE_KIND_INVALID',
+          'SETTINGS_CATALOG_VALUE_KIND_INVALID',
           `${kind} ${entry.type}.${
             parameter.dslName
           } is code-only and must not declare valueKind.`
@@ -371,7 +376,7 @@ const validateCatalogEntry = (
         !CATALOG_VALUE_KINDS.has(parameter.valueKind)
       ) {
         fail(
-          'IFDO_CATALOG_VALUE_KIND_MISSING',
+          'SETTINGS_CATALOG_VALUE_KIND_MISSING',
           `${kind} ${entry.type}.${
             parameter.dslName
           } has no supported valueKind.`
@@ -393,22 +398,22 @@ export const validateProjectInstructionCatalog = (catalog: any): Catalog => {
   if (
     !catalog ||
     typeof catalog !== 'object' ||
-    catalog.format !== 'gdevelop-ifdo-instruction-catalog' ||
+    catalog.format !== 'gdevelop-settings-instruction-catalog' ||
     !Array.isArray(catalog.actions) ||
     !Array.isArray(catalog.conditions) ||
     !Array.isArray(catalog.expressions)
   )
-    fail('IFDO_CATALOG_INVALID', 'Unsupported instruction catalog format.');
-  if (catalog.formatVersion !== 2) {
+    fail('SETTINGS_CATALOG_INVALID', 'Unsupported instruction catalog format.');
+  if (catalog.formatVersion !== 3) {
     fail(
-      'IFDO_CATALOG_VERSION_UNSUPPORTED',
-      'Unsupported instruction catalog version; expected version 2.'
+      'SETTINGS_CATALOG_VERSION_UNSUPPORTED',
+      'Unsupported instruction catalog version; expected version 3.'
     );
   }
   if (catalog.authoring !== undefined) {
     fail(
-      'IFDO_CATALOG_INVALID',
-      'Instruction catalog version 2 must not contain authoring prose.'
+      'SETTINGS_CATALOG_INVALID',
+      'Instruction catalog version 3 must not contain authoring prose.'
     );
   }
   const kinds: Array<CatalogKind> = ['action', 'condition'];
@@ -418,7 +423,7 @@ export const validateProjectInstructionCatalog = (catalog: any): Catalog => {
       validateCatalogEntry(entry, kind);
       if (seen.has(entry.type))
         fail(
-          'IFDO_CATALOG_INVALID',
+          'SETTINGS_CATALOG_INVALID',
           `Duplicate ${kind} catalog type ${entry.type}.`
         );
       seen.add(entry.type);
@@ -430,7 +435,7 @@ export const validateProjectInstructionCatalog = (catalog: any): Catalog => {
     const key = `${entry.type}\u0000${String(entry.returnType)}`;
     if (expressionKeys.has(key)) {
       fail(
-        'IFDO_CATALOG_INVALID',
+        'SETTINGS_CATALOG_INVALID',
         `Duplicate expression catalog type ${entry.type}.`
       );
     }
@@ -474,7 +479,7 @@ export const createCatalogInstructionResolver = (
     const entry = lookup[kind].get(type);
     if (!entry)
       throw new ProjectInstructionCatalogError(
-        'IFDO_CATALOG_UNKNOWN_INSTRUCTION',
+        'SETTINGS_CATALOG_UNKNOWN_INSTRUCTION',
         `Line ${line}: ${kind} ${type} is not in the project instruction catalog.`
       );
     const argumentsByName = parseCatalogInstructionArguments(argumentsSource);
@@ -482,17 +487,22 @@ export const createCatalogInstructionResolver = (
       entry.parameters.map(parameter => parameter.dslName)
     );
     Object.keys(argumentsByName).forEach(name => {
+      const parameterError = (code, message) => {
+        const failure = new ProjectInstructionCatalogError(code, message);
+        failure.parameterName = name;
+        throw failure;
+      };
       if (!knownNames.has(name))
-        fail(
-          'IFDO_CATALOG_UNKNOWN_PARAMETER',
+        parameterError(
+          'SETTINGS_CATALOG_UNKNOWN_PARAMETER',
           `Line ${line}: ${kind} ${type} has no parameter ${name}.`
         );
       const parameter = entry.parameters.find(
         candidate => candidate.dslName === name
       );
       if (parameter && parameter.isCodeOnly) {
-        fail(
-          'IFDO_OPERAND_TYPE_MISMATCH',
+        parameterError(
+          'SETTINGS_OPERAND_TYPE_MISMATCH',
           `Line ${line}: ${kind} ${type}.${name} is code-only and must be omitted.`
         );
       }
@@ -500,20 +510,27 @@ export const createCatalogInstructionResolver = (
     const parameters: Array<string> = entry.parameters.map(parameter => {
       const argument = argumentsByName[parameter.dslName];
       if (argument !== undefined) {
-        return lowerSemanticValue(
-          argument,
-          parameter,
-          `Line ${line}: ${kind} ${type}.${parameter.dslName}`
-        );
+        try {
+          return lowerSemanticValue(
+            argument,
+            parameter,
+            `Line ${line}: ${kind} ${type}.${parameter.dslName}`
+          );
+        } catch (failure) {
+          failure.parameterName = parameter.dslName;
+          throw failure;
+        }
       }
       return '';
     });
-    return {
+    const result = {
       type: { value: type, inverted: false, await: false },
       disabled: false,
       parameters,
       subInstructions: [],
     };
+    Object.defineProperty(result, 'catalogCapabilities', { value: entry });
+    return result;
   };
 };
 
@@ -533,7 +550,7 @@ export const createCatalogInstructionFormatter = (
     const instructionParameters = instruction.parameters || [];
     if (!entry) {
       return fail(
-        'IFDO_CATALOG_UNKNOWN_INSTRUCTION',
+        'SETTINGS_CATALOG_UNKNOWN_INSTRUCTION',
         `${kind} ${
           instruction.type.value
         } is not in the project instruction catalog.`
@@ -541,7 +558,7 @@ export const createCatalogInstructionFormatter = (
     }
     if (instructionParameters.length > entry.parameters.length) {
       fail(
-        'IFDO_PARAMETER_UNREPRESENTABLE',
+        'SETTINGS_PARAMETER_UNREPRESENTABLE',
         `${kind} ${instruction.type.value} has ${
           instructionParameters.length
         } parameters but its catalog signature has ${entry.parameters.length}.`

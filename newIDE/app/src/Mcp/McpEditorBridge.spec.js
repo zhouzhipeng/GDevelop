@@ -1,4 +1,5 @@
 // @flow
+import { replaceEmbeddedEventBody } from '../ProjectsStorage/SettingsDsl/TestHelpers';
 import {
   buildTSLPreviewContactSheet,
   createMcpEditorBridge,
@@ -1052,8 +1053,12 @@ describe('McpEditorBridge', () => {
     const files = decomposeLegacyProjectToFiles(
       serializeProjectWithConstants(project)
     );
-    files['game://scenes/Scene/functions/sceneUpdate.events'] =
-      'if SceneJustBegins\n';
+    files[
+      'game://scenes/Scene/functions/sceneUpdate.settings'
+    ] = replaceEmbeddedEventBody(
+      files['game://scenes/Scene/functions/sceneUpdate.settings'],
+      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n    }\n  }\n}\n'
+    );
     files['game://extensions/Local/extension.settings'] = `extension {
   order = 0
   name = "Local"
@@ -1195,8 +1200,12 @@ describe('McpEditorBridge', () => {
     const files = decomposeLegacyProjectToFiles(
       serializeProjectWithConstants(project)
     );
-    files['game://scenes/Scene/functions/sceneUpdate.events'] =
-      'if SceneJustBegins\n';
+    files[
+      'game://scenes/Scene/functions/sceneUpdate.settings'
+    ] = replaceEmbeddedEventBody(
+      files['game://scenes/Scene/functions/sceneUpdate.settings'],
+      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n    }\n  }\n}\n'
+    );
     await writeMultiFileSourceTree({
       entryPath: projectFile,
       files,
@@ -1336,8 +1345,29 @@ describe('McpEditorBridge', () => {
       serializeProjectWithConstants(diskProject)
     );
     files[
-      'game://scenes/Scene/functions/sceneUpdate.events'
-    ] = `@event\nif SceneJustBegins\ndo ${actionType}\n`;
+      'game://scenes/Scene/functions/sceneUpdate.settings'
+    ] = replaceEmbeddedEventBody(
+      files['game://scenes/Scene/functions/sceneUpdate.settings'],
+      `function {
+
+  events {
+
+    event {
+
+      conditions {
+
+        SceneJustBegins
+      }
+
+      actions {
+
+        ${actionType}
+      }
+    }
+  }
+}
+`
+    );
     diskProject.delete();
     await writeMultiFileSourceTree({ entryPath: projectFile, files });
 
@@ -1390,10 +1420,12 @@ describe('McpEditorBridge', () => {
     const files = decomposeLegacyProjectToFiles(
       serializeProjectWithConstants(project)
     );
-    files['game://scenes/Scene/functions/sceneUpdate.events'] = `@js strict=true
-runtimeScene._instances.length;
-@end js
-`;
+    files[
+      'game://scenes/Scene/functions/sceneUpdate.settings'
+    ] = replaceEmbeddedEventBody(
+      files['game://scenes/Scene/functions/sceneUpdate.settings'],
+      'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nruntimeScene._instances.length;\n      }\n    }\n  }\n}\n'
+    );
     await writeMultiFileSourceTree({ entryPath: projectFile, files });
     const bridge = makeBridge({ getProject: () => project });
 
@@ -1410,15 +1442,18 @@ runtimeScene._instances.length;
         expect.objectContaining({
           severity: 'error',
           code: 'JS_API_PRIVATE_MEMBER',
-          fileUri: 'game://scenes/Scene/functions/sceneUpdate.events',
+          fileUri: 'game://scenes/Scene/functions/sceneUpdate.settings',
           filePath: path.join(
             temporaryDirectory,
             'scenes',
             'Scene',
             'functions',
-            'sceneUpdate.events'
+            'sceneUpdate.settings'
           ),
-          line: 2,
+          line:
+            files['game://scenes/Scene/functions/sceneUpdate.settings']
+              .split('\n')
+              .findIndex(line => line.includes('runtimeScene._instances')) + 1,
           sourceExcerpt: expect.arrayContaining([
             expect.objectContaining({
               isErrorLine: true,
@@ -1562,8 +1597,12 @@ runtimeScene._instances.length;
     const files = decomposeLegacyProjectToFiles(
       serializeProjectWithConstants(project)
     );
-    files['game://scenes/Scene/functions/sceneUpdate.events'] =
-      'if SceneJustBegins\n';
+    files[
+      'game://scenes/Scene/functions/sceneUpdate.settings'
+    ] = replaceEmbeddedEventBody(
+      files['game://scenes/Scene/functions/sceneUpdate.settings'],
+      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n    }\n  }\n}\n'
+    );
     await writeMultiFileSourceTree({ entryPath: projectFile, files });
 
     const dumpPayload = {
@@ -1973,7 +2012,6 @@ runtimeScene._instances.length;
     expect(result.generatedSources.StarRatingBar).toEqual(
       expect.arrayContaining([
         'game://extensions/StarRatingBar/functions/FormatRating.settings',
-        'game://extensions/StarRatingBar/functions/FormatRating.events',
       ])
     );
     project.delete();
@@ -2019,9 +2057,7 @@ runtimeScene._instances.length;
           'game://extensions/Billboard/extension.settings':
             'extension {\n order = 0\n name = "Billboard"\n}\n',
           'game://extensions/Billboard/functions/Initialize.settings':
-            'function {\n order = 0\n extension = "Billboard"\n name = "Initialize"\n functionType = "Action"\n}\n',
-          'game://extensions/Billboard/functions/Initialize.events':
-            '@event\nif BuiltinCommonInstructions::Once\n',
+            'function {\n order = 0\n extension = "Billboard"\n name = "Initialize"\n functionType = "Action"\n events {\n event {\n conditions {\n BuiltinCommonInstructions::Once\n }\n }\n }\n }\n',
         },
       });
       return { saved: true };
@@ -2052,7 +2088,6 @@ runtimeScene._instances.length;
       expect.arrayContaining([
         'game://extensions/Billboard/extension.settings',
         'game://extensions/Billboard/functions/Initialize.settings',
-        'game://extensions/Billboard/functions/Initialize.events',
       ])
     );
     project.delete();

@@ -1,5 +1,8 @@
 > Superseded authoring syntax. Current production source format is Settings DSL 8, defined in [settings-dsl-spec.md](settings-dsl-spec.md). TOML settings, embedded layout namespaces and earlier project versions are not supported. The material below is historical reference only.
 
+> 历史设计记录：事件作者格式和源码路径以 [统一 Settings DSL 格式 11](unified-settings-events-dsl-spec.md) 为准。函数/片段只使用一个 .settings 文件；旧 IfDo 与 .events 不再支持。项目模块地图为版本 2，只发布 settingsPath。
+
+
 # External Events settings and project module map
 
 **Status:** Approved for implementation on 2026-09-23. Version 6 compatibility is intentionally removed; JurassicWorld receives a one-time source conversion after engine verification.

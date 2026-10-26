@@ -51,7 +51,7 @@ import {
   normalizeLegacyProjectInstructionParameters,
   serializeProjectInstructionCatalog,
   validateProjectInstructionCatalog,
-} from '../../EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog';
+} from '../SettingsDsl/InstructionCatalog';
 import { getLocalProjectLastModifiedDate } from './LocalProjectFileModificationTime';
 import {
   PROJECT_SETTINGS_CATALOG_RELATIVE_PATH,
@@ -823,7 +823,7 @@ const writeProjectFiles = async ({
           instructionParameterIndicesToIgnoreByType: getCatalogCodeOnlyParameterIndicesByType(
             serializationCatalog
           ),
-          eventsDslOptions: {
+          eventOptions: {
             formatInstruction: createCatalogInstructionFormatter(
               serializationCatalog
             ),

@@ -1,4 +1,5 @@
 // @noflow
+import { EVENT_SCHEMAS, EVENTS_CONTAINER_SCHEMA } from './Events';
 import { decodeVariableNode, encodeVariableNode } from './Variables';
 
 import {
@@ -76,21 +77,13 @@ const record = (fields = {}, children = {}, dynamic) => ({
 });
 const scalar = type => ({ type });
 const leafName = path => path.split('.').pop();
-const metadataSchema = record({
-  path: scalar('string or non-negative integer array'),
-  type: scalar('variable type'),
-  values: scalar('unique string array'),
-  id: scalar('empty string or UUIDv4'),
-  folded: scalar('boolean'),
-  hasMixedValues: scalar('boolean'),
-});
 const variableSchema = record(
   {
     name: { type: 'non-empty string', required: true },
     value: {
       type: 'variable literal',
-      required: true,
       valueKinds: ['string', 'number', 'boolean', 'structure', 'array'],
+      requiredUnless: 'explicit structure/array type with child declarations',
     },
     type: {
       type: 'enum',
@@ -101,8 +94,22 @@ const variableSchema = record(
     folded: scalar('boolean'),
     hasMixedValues: scalar('boolean'),
   },
-  { metadata: { key: 'metadata', repeated: true, schema: metadataSchema } }
+  {}
 );
+// Recursive child declarations follow the same fields; array elements omit name.
+variableSchema.children.variable = {
+  key: 'children',
+  repeated: true,
+  recursive: true,
+  schemaRef: 'variableSchemas.variable',
+  rules: [
+    'Structure children require unique names; array children forbid name and use source order. Nested scope is forbidden. Value and child declarations are mutually exclusive.',
+  ],
+  schema: record({
+    ...variableSchema.fields,
+    name: { type: 'non-empty string', requiredFor: 'structure' },
+  }),
+};
 const variableEntry = keys => ({
   key: keys.length === 1 ? keys[0] : '$variables',
   repeated: true,
@@ -131,7 +138,6 @@ const inventorySchema = descriptor => {
         'kind',
         'settingsFormatVersion',
         'combinedSettingsFormatVersion',
-        'eventsDslVersion',
         'entry',
       ].includes(field.name)
     )
@@ -177,6 +183,20 @@ schemas.function = {
     },
   },
 };
+[
+  'function',
+  'prefabFunction',
+  'behaviorFunction',
+  'extensionFunction',
+  'sceneLifecycleFunction',
+  'externalEvents',
+].forEach(kind => {
+  schemas[kind].children.events = {
+    key: 'events',
+    maximum: 1,
+    schema: EVENTS_CONTAINER_SCHEMA,
+  };
+});
 const projectProperties = schemas.project.children.properties.schema;
 schemas.project.fields = {
   ...projectProperties.fields,
@@ -1096,9 +1116,15 @@ export const decodeSettingsDocument = (source, fileUri) => {
       )
     ),
     children: root.children.filter(
-      c => !isLayout(kind) || !layoutFields.includes(c.type)
+      c =>
+        (!(kind === 'function' || kind === 'externalEvents') ||
+          c.type !== 'events') &&
+        (!isLayout(kind) || !layoutFields.includes(c.type))
     ),
   };
+  const eventContainers = root.children.filter(c => c.type === 'events');
+  if (eventContainers.length > 1)
+    fail('Duplicate events container.', eventContainers[1], fileUri, root.type);
   let payload = decodeRecord(
     metadataNode,
     schema,
@@ -1324,6 +1350,8 @@ export const serializeSettingsDocument = (kind, payload, layout, fileUri) => {
       );
     });
   }
+  if (kind === 'function' || kind === 'externalEvents')
+    root.children.push(node('events'));
   const source = printSettingsSyntax(root);
   decodeSettingsDocument(source, fileUri);
   return source;
@@ -1339,6 +1367,7 @@ export const getSettingsSchemas = () => ({
   components: schemas,
   layout: layoutNodeSchema,
   variableSchemas: { variable: variableSchema },
+  eventSchemas: EVENT_SCHEMAS,
 });
 
 export const getComponentSettingsSchema = (kind, schemaKey) => {

@@ -250,12 +250,25 @@ parameters) also pass through the resolver, but use them only when the current
 editor/catalog accepts the value and preview/export verification proves the
 result. Numeric-expression operands are not textual placeholder surfaces.
 
-Use a direct IfDo text value for a constant string placeholder:
+Use a direct Settings text value for a constant string placeholder:
 
-```events
-@event aiGeneratedEventId="emit-configured-signal"
-if SceneJustBegins
-do EmitSceneSignal signal_name="{{signals.card.refresh}}" payload="startup"
+```text
+events {
+
+  event {
+    aiGeneratedEventId = "emit-configured-signal"
+
+    conditions {
+
+      SceneJustBegins
+    }
+
+    actions {
+
+      EmitSceneSignal signal_name="{{signals.card.refresh}}" payload="startup"
+    }
+  }
+}
 ```
 
 If `signals.card.refresh` is `Card.Refresh`, generated code receives the literal
@@ -263,17 +276,30 @@ signal name `Card.Refresh`.
 
 String interpolation in an action operand:
 
-```events
-@event aiGeneratedEventId="log-configured-price"
-if SceneJustBegins
-do DebuggerTools::ConsoleLog message_to_log="Sunflower costs {{cards.Sunflower.price}}"
+```text
+events {
+
+  event {
+    aiGeneratedEventId = "log-configured-price"
+
+    conditions {
+
+      SceneJustBegins
+    }
+
+    actions {
+
+      DebuggerTools::ConsoleLog message_to_log="Sunflower costs {{cards.Sunflower.price}}"
+    }
+  }
+}
 ```
 
 Safe event-use principles:
 
 - Prefer placeholders in catalog-declared string-expression parameters on
   ordinary actions or conditions.
-- Keep the braces inside the direct IfDo string value.
+- Keep the braces inside the direct Settings string value.
 - Keep numeric expressions literal/runtime-driven.
 - When preserving a legacy `SignalReceived` event, keep its signal-name filter
   literal. Never generate a new use; new handlers belong in `sceneSignal` and
@@ -350,10 +376,23 @@ At startup, `Translations` contains compact JSON text such as
 events need variable-style child access, convert that same variable once before
 its first consumer:
 
-```events
-@event aiGeneratedEventId="initialize-localization"
-if SceneJustBegins
-do JSONToVariableStructure2 json_string="GlobalVariableString(Translations)" variable_where_to_store_the_json_object="Translations"
+```text
+events {
+
+  event {
+    aiGeneratedEventId = "initialize-localization"
+
+    conditions {
+
+      SceneJustBegins
+    }
+
+    actions {
+
+      JSONToVariableStructure2 json_string="GlobalVariableString(Translations)" variable_where_to_store_the_json_object="Translations"
+    }
+  }
+}
 ```
 
 After conversion, the variable is a normal mutable structure. A quoted Static
@@ -533,9 +572,22 @@ result = "Inventory.Result"
 
 Guarded emit action:
 
-```events
-if SceneJustBegins
-do EmitSceneSignal signal_name="{{signals.inventory.request}}" payload="initial-load"
+```text
+events {
+
+  event {
+
+    conditions {
+
+      SceneJustBegins
+    }
+
+    actions {
+
+      EmitSceneSignal signal_name="{{signals.inventory.request}}" payload="initial-load"
+    }
+  }
+}
 ```
 
 Read [signal-system.md](signal-system.md) for target semantics, receiver rules,
@@ -609,7 +661,7 @@ error with a fabricated value unless that default is part of the user's design.
 - Putting `value = "{{...}}"` on a structure/array descriptor even though those
   descriptor types serialize `children`.
 - Assuming a resolved string variable remains linked to Constants at runtime.
-- Wrapping a direct IfDo text value in another quoted expression layer.
+- Wrapping a direct Settings text value in another quoted expression layer.
 - Using number/boolean interpolation instead of an exact whole placeholder.
 - Replacing a `JsonObject` descriptor's concrete JSON example with a placeholder.
 - Referencing a `JsonObject` child absent from its example schema.

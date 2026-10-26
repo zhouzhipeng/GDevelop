@@ -1,7 +1,7 @@
 # Settings DSL — current authoring syntax
 
-Only format 9 is accepted. `.settings` and `project.gdevelop` use the same
-parser. constants.toml remains TOML; .events remains IfDo.
+Only format 11 is accepted. `.settings` and `project.gdevelop` use the same
+parser. constants.toml remains TOML; event bodies are embedded in function/fragment settings. .events files are forbidden.
 
 ## Syntax
 
@@ -43,10 +43,10 @@ screen/row/column layout nodes are not implemented.
 ## Rules
 
 - Properties use `key = value`; child nodes use `type { ... }`. No named node
-  arguments, semicolons, inline objects, TOML headers or settings/layout wrapper.
+  arguments, semicolons, inline objects outside variable.value, TOML headers or settings/layout wrapper.
 - One declaration per line. Strings use JSON escapes. Arrays can span lines
   and have a trailing comma. `//` starts a comment outside a string.
-- Values are strings, finite numbers, booleans and arrays. Null, dates,
+- Values are strings, finite numbers, booleans and arrays; variable.value also accepts structure literals. Null, dates,
   expressions and includes are forbidden. Integers must be safe integers.
 - Unknown fields/nodes and duplicate properties/singleton nodes are errors.
 - Only project.gdevelop declares formatVersion. All other root fields come
@@ -97,8 +97,28 @@ Declare repeated variable nodes directly on the owner. Each has name and value.
 Types are inferred from scalar, array and structure literals; enum requires type
 and a nonempty values array. Nested data uses key = value inside {} and values
 inside []. Extension defaults require scope = "scene" or "global". Descendant
-UUID, enum and editor metadata use metadata nodes with a typed path array.
-Collection wrappers, recursive variable children and scalar shorthand are rejected.
+UUID, enum and editor fields belong directly to nested variable declarations.
+Containers with child declarations require type = "structure" or "array" and
+must omit value. Structure children require unique names; array children forbid
+name and use source order. Descendant scope is forbidden. Ordinary branches
+continue to use value literals. Collection wrappers, metadata/path annotations
+and scalar shorthand are rejected.
+
+```settings
+scene {
+  name = "Main"
+  variable {
+    name = "State"
+    type = "structure"
+    variable {
+      name = "Mode"
+      type = "enum"
+      value = "Idle"
+      values = ["Idle", "Run"]
+    }
+  }
+}
+```
 
 Object behavior attachments require name and registered type; their dynamic
 configuration goes inside properties. Instance behavior overrides use name and
@@ -108,8 +128,7 @@ properties without a type declaration; the object already owns that behavior.
 
 Each component has one settings document. Objects and functions remain separate
 components. Scene configuration, background, layers and instances are one scene
-root. Prefab/variant require bounds with min/max arrays. Events and JavaScript
-bodies remain separate. No .layout file or layout URI exists.
+root. Prefab/variant require bounds with min/max arrays. Function declarations and event bodies share one .settings file. JavaScript uses raw multiline code blocks inside event { type = "javascript" ... }. No .layout file or layout URI exists.
 
 Never edit generated catalogs or .gdevelop/game.json. Validate direct source
 edits, reload, and verify behavior using the project workflow in SKILL.md.

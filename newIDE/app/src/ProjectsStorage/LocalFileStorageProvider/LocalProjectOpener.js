@@ -15,7 +15,7 @@ import {
 import {
   PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH,
   PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH,
-} from '../../EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog';
+} from '../SettingsDsl/InstructionCatalog';
 import {
   generateEventsFunctionExtensionMetadata,
   type EventsFunctionCodeWriter,

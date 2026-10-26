@@ -1,6 +1,6 @@
 # Author JavaScript Events
 
-Use JavaScript only inside an IfDo `@js ... @end js` event. Prefer current
+Use JavaScript only inside a Settings event with type = "javascript" and a raw multiline code block. Prefer current
 instructions from `.gdevelop/instructions-catalog.json`; JavaScript is for
 logic that is materially clearer or not expressible with those instructions.
 It is not a replacement file format and it does not create standalone `.js`
@@ -41,35 +41,55 @@ behavior.
 
 New or changed AI-authored JavaScript must opt into strict checking:
 
-```events
-@js strict=true
+```text
+events {
+
+  event {
+    type = "javascript"
+    strict = true
+    objects = ""
+    expanded = false
+
+    code {
 const elapsedSeconds = runtimeScene.getElapsedTime() / 1000;
-@end js
+    }
+  }
+}
 ```
 
 Use `objects=<ObjectOrGroup>` only when the block operates on explicitly picked
 instances:
 
-```events
-@js objects=Enemy strict=true
+```text
+events {
+
+  event {
+    type = "javascript"
+    strict = true
+    objects = "Enemy"
+    expanded = false
+
+    code {
 for (const enemy of objects) {
   enemy.setOpacity(128);
 }
-@end js
+    }
+  }
+}
 ```
 
-The raw body has no `>` prefix. A JavaScript event is a leaf. Its closing line
-is always `@end js`. Preserve an existing `delimiter=` and matching terminator
-when source text itself contains a terminator-shaped line.
+The raw body uses a multiline `code { ... }` block. JavaScript strings,
+comments, regexes and template interpolation follow JS syntax. The matching
+code closing brace occupies its own line. No terminator tags, quoted strings,
+escapes or depth prefixes are used. JavaScript events are leaves. Preserve
+code content during Settings formatting, especially template-string whitespace.
 
-Blocks without `strict=true` are legacy compatibility blocks. The validator
-still rejects their syntax errors but reports semantic/private-API problems as
-warnings. Preserve that mode only while minimally editing existing legacy code;
-do not create new compatibility blocks.
+Set strict = true for new code. Existing strict=false is a runtime checking
+policy, not an older author grammar; syntax still must validate.
 
 ## Context globals
 
-External fragment blocks live in `scenes/<Scene>/external-events/<Fragment>.events`.
+External fragment blocks live in `scenes/<Scene>/external-events/<Fragment>.settings`.
 They inherit the caller's scene/function context, including `eventsFunctionContext`;
 this does not give the fragment a signature or parameter declarations. Use signal
 parameters only in fragments linked from a compatible signal caller.
@@ -200,45 +220,93 @@ compatibility profile in project source.
 
 Mutate an explicitly picked object:
 
-```events
-@event aiGeneratedEventId="fade-picked-enemy"
-if CollisionNP first_object="Player" second_object="Enemy"
+```text
+events {
 
-> @js objects=Enemy strict=true
+  event {
+    aiGeneratedEventId = "fade-picked-enemy"
+
+    conditions {
+
+      CollisionNP first_object="Player" second_object="Enemy"
+    }
+
+    event {
+      type = "javascript"
+      strict = true
+      objects = "Enemy"
+      expanded = false
+
+      code {
 for (const enemy of objects) {
   enemy.setOpacity(128);
 }
-> @end js
+      }
+    }
+  }
+}
 ```
 
 Create an object safely:
 
-```events
-@event aiGeneratedEventId="spawn-bullet"
-if KeyPressed key="Space"
+```text
+events {
 
-> @js strict=true
+  event {
+    aiGeneratedEventId = "spawn-bullet"
+
+    conditions {
+
+      KeyPressed key="Space"
+    }
+
+    event {
+      type = "javascript"
+      strict = true
+      objects = ""
+      expanded = false
+
+      code {
 const bullet = runtimeScene.createObject("Bullet");
 if (bullet) {
   bullet.setPosition(120, 64);
 }
-> @end js
+      }
+    }
+  }
+}
 ```
 
 Read and update a scene variable:
 
-```events
-@event aiGeneratedEventId="increase-score-on-trigger"
-if SceneJustBegins
+```text
+events {
 
-> @js strict=true
+  event {
+    aiGeneratedEventId = "increase-score-on-trigger"
+
+    conditions {
+
+      SceneJustBegins
+    }
+
+    event {
+      type = "javascript"
+      strict = true
+      objects = ""
+      expanded = false
+
+      code {
 const score = runtimeScene.getVariables().get("Score");
 score.add(10);
-> @end js
+      }
+    }
+  }
+}
 ```
 
 In real files, prefix the opening and closing directives with the event depth
-exactly as required by IfDo DSL. Never prefix the raw JavaScript body. The
+inside the raw code block. Never prefix the raw JavaScript body. The
 examples use `>` only on the directives because the JavaScript event is a child.
 
 ## Validation workflow
@@ -253,7 +321,7 @@ examples use `>` only on the directives because the JavaScript event is a child.
    `valid: true`, `structurallyValid: true`,
    `eventCodeGenerationValid: true`, `semanticLintPassed: true`, and no false
    generated-code or JavaScript-authoring phase. Fix diagnostics at their
-   reported `.events` URI, line, and column. A successful pre-runtime result
+   reported `.settings` URI, line, and column. A successful pre-runtime result
    still has `runtimeVerified: false` and `completionReady: false`; never report
    that the game works or that the task is complete from it alone.
 5. Commit all task-owned source changes with Git before `reload_project`.

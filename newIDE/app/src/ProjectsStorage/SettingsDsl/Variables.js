@@ -30,7 +30,7 @@ const inferredType = value =>
     ? 'structure'
     : typeof value;
 
-const applyMetadata = (variable, data, at, fileUri, path, instance) => {
+const applyVariableFields = (variable, data, at, fileUri, path, instance) => {
   if (data.type !== undefined) {
     if (
       !types.includes(data.type) ||
@@ -84,10 +84,26 @@ const applyMetadata = (variable, data, at, fileUri, path, instance) => {
     );
 };
 
-export const decodeVariableNode = (node, fileUri, path, instance = false) => {
+export const decodeVariableNode = (
+  node,
+  fileUri,
+  path,
+  instance = false,
+  parentType = null,
+  depth = 0
+) => {
+  if (depth > MAX_SETTINGS_DEPTH)
+    fail('Settings nesting budget exceeded.', node, fileUri, path);
   const data = fields(node);
   for (const key of Object.keys(data)) {
-    if (!['name', 'scope', 'value', ...metaKeys].includes(key))
+    if (
+      ![
+        'name',
+        'value',
+        ...metaKeys,
+        ...(parentType ? [] : ['scope']),
+      ].includes(key)
+    )
       fail(
         `Unknown variable field ${key}.`,
         node.properties[key],
@@ -95,16 +111,29 @@ export const decodeVariableNode = (node, fileUri, path, instance = false) => {
         path
       );
   }
-  if (typeof data.name !== 'string' || !data.name)
+  if (parentType === 'array' && own(data, 'name'))
+    fail(
+      'Array children cannot have names.',
+      node.properties.name,
+      fileUri,
+      path
+    );
+  if (parentType !== 'array' && (typeof data.name !== 'string' || !data.name))
     fail(
       'Variable name must be a nonempty string.',
       node.properties.name || node,
       fileUri,
       path
     );
-  if (!own(data, 'value'))
-    fail('Variable requires value.', node, fileUri, path);
+
   const decodeValue = (item, depth) => {
+    if (item.expression)
+      fail(
+        'Expressions are not allowed in variable values.',
+        item,
+        fileUri,
+        path
+      );
     if (depth > MAX_SETTINGS_DEPTH)
       fail('Settings nesting budget exceeded.', item, fileUri, path);
     const type = inferredType(item.value);
@@ -133,75 +162,67 @@ export const decodeVariableNode = (node, fileUri, path, instance = false) => {
       };
     return { type, value: item.value };
   };
-  const result = { name: data.name, ...decodeValue(node.properties.value, 0) };
-  applyMetadata(result, data, node, fileUri, path, instance);
-  const seen = new Set();
-  node.children.forEach(annotation => {
-    if (annotation.type !== 'metadata' || annotation.children.length)
+  let result;
+  if (own(data, 'value')) {
+    if (node.children.length)
       fail(
-        'Only metadata annotations may be nested in variable.',
-        annotation,
+        'Variable cannot combine value and child declarations.',
+        node.children[0],
         fileUri,
         path
       );
-    const metadata = fields(annotation);
-    for (const key of Object.keys(metadata))
-      if (!['path', ...metaKeys].includes(key))
-        fail(
-          `Unknown variable metadata field ${key}.`,
-          annotation.properties[key],
+    result = decodeValue(node.properties.value, depth);
+  } else {
+    if (!['structure', 'array'].includes(data.type))
+      fail(
+        'Variable requires value or an explicit container type.',
+        node,
+        fileUri,
+        path
+      );
+    const names = new Set();
+    result = {
+      type: data.type,
+      children: node.children.map(child => {
+        if (child.type !== 'variable')
+          fail(
+            'Only variable declarations may be nested in variable; metadata is not supported.',
+            child,
+            fileUri,
+            path
+          );
+        const decoded = decodeVariableNode(
+          child,
           fileUri,
-          path
+          path,
+          instance,
+          data.type,
+          depth + 1
         );
-    if (
-      !Array.isArray(metadata.path) ||
-      !metadata.path.length ||
-      metadata.path.length > MAX_SETTINGS_DEPTH
-    )
-      fail(
-        'metadata requires a nonempty path.',
-        annotation.properties.path || annotation,
-        fileUri,
-        path
-      );
-    const identity = JSON.stringify(metadata.path);
-    if (seen.has(identity))
-      fail(
-        'Duplicate variable metadata path.',
-        annotation.properties.path,
-        fileUri,
-        path
-      );
-    seen.add(identity);
-    let target = result;
-    metadata.path.forEach((part, index) => {
-      const location = annotation.properties.path.items[index];
-      if (target.type === 'structure' && typeof part === 'string')
-        target = target.children.find(child => child.name === part);
-      else if (
-        target.type === 'array' &&
-        Number.isSafeInteger(part) &&
-        part >= 0
-      )
-        target = target.children[part];
-      else target = null;
-      if (!target)
-        fail(
-          'Variable metadata path does not identify an existing value.',
-          location,
-          fileUri,
-          path
-        );
-    });
-    applyMetadata(target, metadata, annotation, fileUri, path, instance);
-  });
+        if (data.type === 'structure') {
+          if (names.has(decoded.name))
+            fail(
+              'Duplicate structure child name.',
+              child.properties.name,
+              fileUri,
+              path
+            );
+          names.add(decoded.name);
+        }
+        return decoded;
+      }),
+    };
+  }
+  if (parentType !== 'array') result = { name: data.name, ...result };
+  applyVariableFields(result, data, node, fileUri, path, instance);
   return result;
 };
 
 export const encodeVariableNode = (variable, scope, fileUri) => {
   if (typeof variable.name !== 'string' || !variable.name)
     fail('Variable name must be nonempty.', {}, fileUri, 'variable');
-  const annotations = [];
+
+  const encodedValues = new WeakMap();
   const encodeValue = (entry, path) => {
     if (path.length > MAX_SETTINGS_DEPTH)
       fail('Settings nesting budget exceeded.', {}, fileUri, variable.name);
@@ -254,17 +275,6 @@ export const encodeVariableNode = (variable, scope, fileUri) => {
       );
     if (own(entry, 'id') || own(entry, 'persistentUuid'))
       metadata.id = own(entry, 'id') ? entry.id : entry.persistentUuid;
-    if (path.length && Object.keys(metadata).length)
-      annotations.push({
-        type: 'metadata',
-        properties: Object.fromEntries(
-          Object.entries({ path, ...metadata }).map(([key, value]) => [
-            key,
-            { value },
-          ])
-        ),
-        children: [],
-      });
     let literal;
     if (entry.type === 'structure' || entry.type === 'array') {
       if (
@@ -318,21 +328,40 @@ export const encodeVariableNode = (variable, scope, fileUri) => {
         );
       literal = { value: entry.value };
     }
-    return { literal, metadata };
+    const expanded = (entry.children || []).some(
+      child => encodedValues.get(child).needsDeclaration
+    );
+    const encoded = {
+      literal,
+      metadata,
+      expanded,
+      needsDeclaration: Object.keys(metadata).length > 0 || expanded,
+    };
+    encodedValues.set(entry, encoded);
+    return encoded;
   };
-  const { literal, metadata } = encodeValue(variable, []);
-  return {
-    type: 'variable',
-    properties: {
-      ...(scope ? { scope: { value: scope } } : {}),
-      name: { value: variable.name },
-      ...Object.fromEntries(
-        Object.entries(metadata).map(([key, value]) => [key, { value }])
-      ),
-      value: literal,
-    },
-    children: annotations,
+  // Keep ordinary values compact. If a descendant needs its own declaration,
+  // expand this container so identity and constraints travel with each value.
+  encodeValue(variable, []);
+  const encodeNode = (entry, parentType) => {
+    const { literal, metadata, expanded } = encodedValues.get(entry);
+    return {
+      type: 'variable',
+      properties: {
+        ...(!parentType && scope ? { scope: { value: scope } } : {}),
+        ...(parentType !== 'array' ? { name: { value: entry.name } } : {}),
+        ...(expanded ? { type: { value: entry.type } } : {}),
+        ...Object.fromEntries(
+          Object.entries(metadata).map(([key, value]) => [key, { value }])
+        ),
+        ...(!expanded ? { value: literal } : {}),
+      },
+      children: expanded
+        ? entry.children.map(child => encodeNode(child, entry.type))
+        : [],
+    };
   };
+  return encodeNode(variable, null);
 };
 
 // Native structure variables use std::map, so a native round trip sorts their
@@ -371,10 +400,43 @@ export const preserveVariableStructureOrder = (
       node.properties.scope && node.properties.scope.value,
       node.properties[field] && node.properties[field].value,
     ]);
+  const literalChildren = literal => {
+    const entries = literal.entries || literal.items || [];
+    return entries.map(entry => ({
+      type: 'variable',
+      properties: {
+        ...(own(entry, 'key') ? { name: { value: entry.key } } : {}),
+        value: entry,
+        type: { value: inferredType(entry.value) },
+      },
+      children: [],
+    }));
+  };
   const alignNode = (current, old) => {
     if (!old) return;
+    if (
+      current.type === 'variable' &&
+      current.children.length &&
+      old.properties.value
+    )
+      old = { ...old, children: literalChildren(old.properties.value) };
     if (current.type === 'variable')
       alignValue(current.properties.value, old.properties.value);
+    if (
+      current.type === 'variable' &&
+      current.properties.type &&
+      current.properties.type.value === 'structure' &&
+      old.children.length
+    ) {
+      const positions = new Map(
+        old.children.map((child, index) => [identity(child, 'name'), index])
+      );
+      const rank = child =>
+        positions.has(identity(child, 'name'))
+          ? positions.get(identity(child, 'name'))
+          : positions.size;
+      current.children.sort((left, right) => rank(left) - rank(right));
+    }
     const byName = new Map(
       old.children.map(child => [identity(child, 'name'), child])
     );
@@ -383,11 +445,15 @@ export const preserveVariableStructureOrder = (
         .filter(child => child.properties.id && child.properties.id.value)
         .map(child => [identity(child, 'id'), child])
     );
-    current.children.forEach(child =>
+    current.children.forEach((child, index) =>
       alignNode(
         child,
         (child.properties.id && byId.get(identity(child, 'id'))) ||
-          byName.get(identity(child, 'name'))
+          (current.type === 'variable' &&
+          current.properties.type &&
+          current.properties.type.value === 'array'
+            ? old.children[index]
+            : byName.get(identity(child, 'name')))
       )
     );
   };

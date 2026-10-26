@@ -1,0 +1,262 @@
+// @noflow
+/* eslint-disable no-template-curly-in-string -- These strings are raw JavaScript fixtures. */
+import { parseSettingsSyntax, printSettingsSyntax } from './Syntax';
+import {
+  appendSettingsEvents,
+  compileSettingsEvents,
+  extractSettingsJavaScriptBlocks,
+  EVENT_TYPES,
+} from './Events';
+const wrap = body => `function {\n name = "Test"\n events {\n${body}\n}\n}\n`;
+const resolveInstruction = ({ kind, source }) => ({
+  type: { value: source.split(' ')[0] },
+  parameters: [],
+  subInstructions: [],
+  disabled: false,
+});
+const formatInstruction = ({ instruction }) => instruction.type.value;
+const options = { resolveInstruction, formatInstruction };
+test('keeps explicit sibling and child event boundaries; list context determines instruction kind', () => {
+  const source = wrap(
+    'event {\n actions {\n A\n }\n event {\n conditions {\n Or {\n C\n D\n }\n }\n actions {\n B\n }\n }\n}\nevent {\n actions {\n E\n }\n}'
+  );
+  const events = compileSettingsEvents(source, options);
+  expect(events).toHaveLength(2);
+  expect(events[0].events[0].conditions[0].subInstructions).toHaveLength(2);
+  expect(
+    compileSettingsEvents(
+      appendSettingsEvents('function {\n name = "Test"\n}\n', events, options),
+      options
+    )
+  ).toEqual(events);
+  expect(printSettingsSyntax(parseSettingsSyntax(source).root)).toContain(
+    'Or {'
+  );
+});
+test('parses raw JS with nested templates, regex, comments and braces without escapes', () => {
+  const code =
+    'const re = /[}]/;\nconst x = `outer ${`inner ${ { x: "}" }.x }`}`;\n// }\n/* } */\nif (re.test(x)) { console.log(x); }\n';
+  const source = wrap(
+    `event {\n type = "javascript"\n strict = true\n code {\n${code}}\n}`
+  );
+  expect(compileSettingsEvents(source, options)[0].inlineCode).toBe(code);
+  expect(extractSettingsJavaScriptBlocks(source)[0].code).toBe(code);
+  const formatted = printSettingsSyntax(parseSettingsSyntax(source).root);
+  expect(compileSettingsEvents(formatted, options)[0].inlineCode).toBe(code);
+  expect(printSettingsSyntax(parseSettingsSyntax(formatted).root)).toBe(
+    formatted
+  );
+});
+test.each([
+  'event {\n type = "group"\n}',
+  'event {\n type = "comment"\n}',
+  'event {\n type = "link"\n}',
+  'event {\n actions {}\n actions {}\n}',
+  'event {\n events {}\n}',
+  'event {\n do A\n}',
+  'event {\n type = "else"\n}',
+  'event {\n type = "javascript"\n code = "x"\n}',
+  'event {\n type = "javascript"\n code {}\n}',
+  'event {\n type = "javascript"\n code { foo(); }\n}',
+  'link {\n target = "A"\n event {}\n}',
+])('rejects retired and structurally invalid syntax: %s', body => {
+  expect(() => compileSettingsEvents(wrap(body), options)).toThrow();
+});
+test('round trips groups, comments and links as dedicated ordered nodes', () => {
+  const source = wrap(
+    'group {\n name = "Combat"\n comment {\n text = "Explain"\n }\n link {\n target = "SharedCombat"\n }\n}'
+  );
+  const events = compileSettingsEvents(source, options);
+  expect(events[0].events.map(e => e.type)).toEqual([
+    EVENT_TYPES.comment,
+    EVENT_TYPES.link,
+  ]);
+  expect(
+    compileSettingsEvents(
+      appendSettingsEvents('function {}\n', events, options),
+      options
+    )
+  ).toEqual(events);
+});
+test('expression operands and type-specific while lists stay separate', () => {
+  const source = wrap(
+    'event {\n type = "while"\n while_conditions {\n C value=expr(Func("(", (1 + 2)))\n }\n conditions {\n D\n }\n actions {\n A\n }\n}'
+  );
+  const events = compileSettingsEvents(source, options);
+  expect(events[0].whileConditions[0].type.value).toBe('C');
+  expect(events[0].conditions[0].type.value).toBe('D');
+});
+
+test('type discriminants reject empty, non-string and prototype names', () => {
+  for (const type of [
+    '""',
+    '0',
+    'false',
+    '["standard"]',
+    '"__proto__"',
+    '"constructor"',
+  ])
+    expect(() =>
+      compileSettingsEvents(wrap(`event {\n type = ${type}\n}`), options)
+    ).toThrow();
+});
+
+test('explicit containers determine semantics independently of category placement', () => {
+  const source = wrap('event {\n actions {\n A\n }\n conditions {\n C\n }\n}');
+  const parsed = compileSettingsEvents(source, options);
+  expect(parsed[0].conditions[0].type.value).toBe('C');
+  expect(parsed[0].actions[0].type.value).toBe('A');
+  const formatted = printSettingsSyntax(parseSettingsSyntax(source).root);
+  expect(formatted.indexOf('actions {')).toBeLessThan(
+    formatted.indexOf('conditions {')
+  );
+});
+
+test('all loop kinds retain fields, locals, flags and children through the unified grammar', () => {
+  const source = wrap(`event {
+  type = "repeat"
+  count = expr(Variable(Count) + 1)
+  index = "i"
+  variable {
+    name = "State"
+    type = "enum"
+    value = "Idle"
+    values = ["Idle", "Run"]
+  }
+  event {
+    type = "for_each"
+    object = "Enemy"
+    index = "j"
+    order_by = expr(Enemy.X())
+    order = "desc"
+    limit = 10
+  }
+  event {
+    type = "for_each_child"
+    iterable = "Inventory"
+    index = "childIndex"
+    value = "item"
+    key = "itemKey"
+  }
+  event {
+    type = "while"
+    infiniteLoopWarning = true
+    while_conditions {
+      C {
+        inverted = true
+      }
+    }
+    actions {
+      A {
+        disabled = true
+        awaited = true
+      }
+    }
+  }
+}`);
+  const events = compileSettingsEvents(source, options);
+  const again = compileSettingsEvents(
+    appendSettingsEvents('function {}\n', events, options),
+    options
+  );
+  expect(again).toEqual(events);
+});
+
+test('empty code, final newline normalization and syntax errors have explicit behavior', () => {
+  const empty = compileSettingsEvents(
+    wrap('event {\n type = "javascript"\n code {\n }\n}'),
+    options
+  );
+  expect(empty[0].inlineCode).toBe('');
+  const events = [
+    {
+      type: EVENT_TYPES.javascript,
+      inlineCode: 'const text = `line1\nline2`;',
+    },
+  ];
+  expect(
+    compileSettingsEvents(
+      appendSettingsEvents('function {}\n', events, options),
+      options
+    )[0].inlineCode
+  ).toBe('const text = `line1\nline2`;\n');
+  expect(() =>
+    compileSettingsEvents(
+      wrap('event {\n type = "javascript"\n code {\nconst broken = ;\n }\n}'),
+      options
+    )
+  ).toThrow('Invalid JavaScript');
+});
+
+test('rejects object literals masquerading as loop expressions and unsupported instruction flags', () => {
+  expect(() =>
+    compileSettingsEvents(
+      wrap('event {\n type = "repeat"\n count = { expression = "5" }\n}'),
+      options
+    )
+  ).toThrow('requires a number or expr');
+  expect(() =>
+    compileSettingsEvents(
+      wrap('event {\n actions {\n A {\n inverted = true\n }\n }\n}'),
+      options
+    )
+  ).toThrow();
+});
+
+test('duplicate nonempty identities are rejected across nested event lists', () => {
+  expect(() =>
+    compileSettingsEvents(
+      wrap(
+        'event {\n aiGeneratedEventId = "same"\n event {\n aiGeneratedEventId = "same"\n }\n}'
+      ),
+      options
+    )
+  ).toThrow('Duplicate aiGeneratedEventId');
+});
+
+test('handles thousands of explicit events and rejects excessive event/code budgets', () => {
+  const source = wrap(
+    Array.from({ length: 3000 }, () => 'event {\n actions {\n A\n }\n}').join(
+      '\n'
+    )
+  );
+  const parsed = compileSettingsEvents(source, options);
+  expect(parsed).toHaveLength(3000);
+  expect(
+    compileSettingsEvents(
+      appendSettingsEvents('function {}\n', parsed, options),
+      options
+    )
+  ).toEqual(parsed);
+  expect(() =>
+    compileSettingsEvents(
+      wrap('event {\n'.repeat(110) + '}\n'.repeat(110)),
+      options
+    )
+  ).toThrow('nesting budget');
+  expect(() =>
+    parseSettingsSyntax(
+      wrap(
+        'event {\n type = "javascript"\n code {\n//' +
+          'x'.repeat(2 * 1024 * 1024) +
+          '\n }\n}'
+      )
+    )
+  ).toThrow('code size budget');
+});
+
+test('instruction trailing comments are preserved once without truncating quoted URLs', () => {
+  const source = wrap(
+    'event {\n actions {\n A url="https://example.com" // explain action\n }\n}'
+  );
+  const syntax = parseSettingsSyntax(source);
+  const printed = printSettingsSyntax(syntax.root, syntax.comments);
+  expect(printed.match(/\/\/ explain action/g)).toHaveLength(1);
+  expect(printed).toContain('url="https://example.com"');
+  expect(
+    printSettingsSyntax(
+      parseSettingsSyntax(printed).root,
+      parseSettingsSyntax(printed).comments
+    )
+  ).toBe(printed);
+});

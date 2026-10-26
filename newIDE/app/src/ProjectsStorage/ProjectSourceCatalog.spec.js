@@ -26,7 +26,17 @@ describe('Settings DSL authoring catalogs', () => {
     });
   test('publishes the same strict node schemas used by the current parser', () => {
     const catalog = catalogFor(project);
-    expect(catalog.formatVersion).toBe(8);
+    expect(catalog.formatVersion).toBe(10);
+    const variableSchema = catalog.variableSchemas.variable;
+    expect(variableSchema.children.metadata).toBeUndefined();
+    expect(variableSchema.children.variable).toMatchObject({
+      repeated: true,
+      recursive: true,
+      schemaRef: 'variableSchemas.variable',
+    });
+    expect(JSON.parse(JSON.stringify(catalog)).variableSchemas).toEqual(
+      catalog.variableSchemas
+    );
     expect(catalog.fileKinds).toHaveLength(17);
     expect(
       catalog.fileKinds.every(
@@ -198,7 +208,7 @@ describe('Settings DSL authoring catalogs', () => {
       );
       behavior.updateProperty('UseLegacyTrajectory', legacy ? '1' : '0');
       const object = { ...serializeToJSObject(player), order: 0, folder: [] };
-      delete object.variables; // Empty collections have no declarations in format 9.
+      delete object.variables; // Empty collections have no declarations in the current format.
       const catalog = catalogFor(project);
       const type = catalog.behaviorTypes.find(
         t => t.type === 'PlatformBehavior::PlatformerObjectBehavior'

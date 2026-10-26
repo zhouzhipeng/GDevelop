@@ -4,6 +4,7 @@ import {
   serializeSettingsDocument,
   formatSettingsDsl,
   parseSettingsSyntax,
+  preserveVariableStructureOrder,
 } from '.';
 import { compileLayoutDocument } from '../LayoutDocument';
 const scene = body =>
@@ -81,11 +82,11 @@ describe('Direct variable declarations and literal values', () => {
     expect(decodeSettingsDocument(printed).payload).toEqual(parsed.payload);
     expect({}.polluted).toBeUndefined();
   });
-  test('round trips root and descendant identities, enum and false editor flags through path metadata', () => {
+  test('round trips root and descendant identities, enum and false editor flags through nested declarations', () => {
     const uuid = 'a9ab811d-91cf-4b76-95a3-81d9cd86156b';
     const source = scene(
       variable(
-        `name = "Data"\n id = ""\n folded = false\n hasMixedValues = false\n value = [{ State = "Idle", Joystick = {} }]\n metadata {\n path = [0, "State"]\n type = "enum"\n values = ["Idle", "Pressed"]\n id = "${uuid}"\n }\n metadata {\n path = [0, "Joystick"]\n folded = true\n id = ""\n }`
+        `name = "Data"\n id = ""\n folded = false\n hasMixedValues = false\n type = "array"\n variable {\n type = "structure"\n variable {\n name = "State"\n type = "enum"\n value = "Idle"\n values = ["Idle", "Pressed"]\n id = "${uuid}"\n }\n variable {\n name = "Joystick"\n value = {}\n folded = true\n id = ""\n }\n }`
       )
     );
     const parsed = decodeSettingsDocument(source);
@@ -107,7 +108,8 @@ describe('Direct variable declarations and literal values', () => {
       ),
       parsed.layout
     );
-    expect(printed).toContain('metadata {');
+    expect(printed).not.toContain('metadata {');
+    expect(printed).not.toContain('path =');
     expect(printed).not.toContain('persistentUuid =');
     expect(decodeSettingsDocument(printed).payload).toEqual(parsed.payload);
   });
@@ -139,7 +141,7 @@ describe('Direct variable declarations and literal values', () => {
     const source = scene(
       'layer {\n id = "base"\n name = ""\n}\n instance {\n id = "ef3ef49d-f20f-4450-b373-0ce43291a002"\n object = "Player"\n layer = "base"\n position = [0, 0]\n' +
         variable(
-          'name = "Tree"\n id = ""\n folded = false\n hasMixedValues = false\n value = { Z = [], A = {} }\n metadata {\n path = ["Z"]\n id = ""\n folded = true\n }'
+          'name = "Tree"\n id = ""\n folded = false\n hasMixedValues = false\n type = "structure"\n variable {\n name = "Z"\n value = []\n id = ""\n folded = true\n }\n variable {\n name = "A"\n value = {}\n }'
         ) +
         '\n}'
     );
@@ -213,6 +215,73 @@ describe('Direct variable declarations and literal values', () => {
   ])('rejects invalid or retired variable declarations: %s', body => {
     expect(() => decodeSettingsDocument(scene(body))).toThrow();
   });
+  test('preserves expanded structure source order without reordering array elements', () => {
+    const child = (name, value) =>
+      `variable {\n name = "${name}"\n value = ${value}\n folded = false\n}`;
+    const original = scene(
+      variable(
+        `name = "Data"\n type = "structure"\n${child('Z', 1)}\n${child('A', 2)}`
+      )
+    );
+    const sorted = scene(
+      variable(
+        `name = "Data"\n type = "structure"\n${child('A', 2)}\n${child(
+          'Z',
+          1
+        )}\n${child('New', 3)}`
+      )
+    );
+    const preserved = preserveVariableStructureOrder(sorted, original);
+    expect(
+      decodeSettingsDocument(preserved).payload.variables[0].children.map(
+        entry => entry.name
+      )
+    ).toEqual(['Z', 'A', 'New']);
+    const array = values =>
+      scene(
+        variable(
+          `name = "Items"\n type = "array"\n${values
+            .map(value => `variable {\n value = ${value}\n folded = false\n}`)
+            .join('\n')}`
+        )
+      );
+    expect(
+      decodeSettingsDocument(
+        preserveVariableStructureOrder(array([2, 1]), array([1, 2]))
+      ).payload.variables[0].children.map(entry => entry.value)
+    ).toEqual([2, 1]);
+  });
+  test('array insertion keeps enum constraints and identity attached to the element', () => {
+    const declaration =
+      'name = "Items"\n type = "array"\n variable {\n type = "enum"\n value = "Shield"\n values = ["Shield", "Sword"]\n id = "a9ab811d-91cf-4b76-95a3-81d9cd86156b"\n }';
+    const before = decodeSettingsDocument(scene(variable(declaration)));
+    const after = decodeSettingsDocument(
+      scene(
+        variable(
+          declaration.replace(
+            'type = "array"',
+            'type = "array"\n variable {\n value = "Potion"\n }'
+          )
+        )
+      )
+    );
+    expect(after.payload.variables[0].children[1]).toEqual(
+      before.payload.variables[0].children[0]
+    );
+    expect(after.payload.variables[0].children[0]).toEqual({
+      type: 'string',
+      value: 'Potion',
+    });
+  });
+  test.each([
+    'name = "A"\n type = "structure"\n variable {\n value = 1\n }',
+    'name = "A"\n type = "array"\n variable {\n name = "0"\n value = 1\n }',
+    'name = "A"\n type = "array"\n variable {\n scope = "global"\n value = 1\n }',
+    'name = "A"\n type = "number"',
+    'name = "A"\n type = "structure"\n metadata {}',
+  ])('rejects invalid nested declarations: %s', body => {
+    expect(() => decodeSettingsDocument(scene(variable(body)))).toThrow();
+  });
   test('applies the shared depth budget to literal nesting as well as node nesting', () => {
     const source = scene(
       variable(
@@ -221,7 +290,7 @@ describe('Direct variable declarations and literal values', () => {
     );
     expect(() => parseSettingsSyntax(source)).toThrow('nesting budget');
   });
-  test('reports duplicate structure keys and the exact invalid path component', () => {
+  test('reports duplicate structure keys and the exact invalid child name', () => {
     expect(() =>
       parseSettingsSyntax(
         scene(variable('name = "A"\n value = { K = 1, K = 2 }'))
@@ -229,7 +298,7 @@ describe('Direct variable declarations and literal values', () => {
     ).toThrow('Duplicate structure key');
     const source = scene(
       variable(
-        'name = "A"\n value = [{}]\n metadata {\n path = [0, "Missing"]\n folded = true\n }'
+        'name = "A"\n type = "structure"\n variable {\n name = "K"\n value = 1\n }\n variable {\n name = "K"\n value = 2\n }'
       )
     );
     try {
@@ -237,7 +306,25 @@ describe('Direct variable declarations and literal values', () => {
       throw new Error('Expected rejection');
     } catch (error) {
       expect(error.code).toBe('SETTINGS_INVALID_VARIABLE');
-      expect(source.slice(error.offset, error.endOffset)).toBe('"Missing"');
+      expect(source.slice(error.offset, error.endOffset)).toBe('"K"');
     }
   });
+});
+
+test('expression-named structure fields remain ordinary data during formatting', () => {
+  const source = scene(
+    variable(
+      'name = "Data"\n value = { expression = "literal", nested = { expression = "data" } }'
+    )
+  );
+  const formatted = formatSettingsDsl(source);
+  expect(formatted).not.toContain('expr(');
+  expect(decodeSettingsDocument(formatted).payload).toEqual(
+    decodeSettingsDocument(source).payload
+  );
+  expect(() =>
+    decodeSettingsDocument(
+      scene(variable('name = "Data"\n value = expr(1 + 2)'))
+    )
+  ).toThrow('Expressions');
 });

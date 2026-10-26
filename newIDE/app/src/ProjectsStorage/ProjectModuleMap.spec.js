@@ -6,7 +6,7 @@ import {
 } from './ProjectModuleMap';
 
 describe('project module map', () => {
-  test('reads links from current IfDo source when editor events are stale', () => {
+  test('reads links from current Settings source when editor events are stale', () => {
     const project = {
       properties: { name: 'Example' },
       layouts: [{ name: 'Game', events: [] }],
@@ -15,12 +15,11 @@ describe('project module map', () => {
     };
     const files = {
       'game://scenes/Game/functions/sceneUpdate.settings':
-        'function {\n name = "sceneUpdate"\n}\n',
-      'game://scenes/Game/functions/sceneUpdate.events': 'link "HUD"\n',
+        'function {\n name = "sceneUpdate"\n events {\n link {\n target = "HUD"\n }\n }\n }\n',
     };
     const result = buildProjectModuleMap(project, files, () => null);
     expect(result.scenes[0].events[0].linkPaths).toEqual([
-      'scenes/Game/external-events/HUD.events',
+      'scenes/Game/external-events/HUD.settings',
     ]);
   });
 
@@ -62,20 +61,20 @@ describe('project module map', () => {
     const result = buildProjectModuleMap(project, files);
     expect(result.scenes[0].events[0].links).toEqual(['HUD', 'Missing']);
     expect(result.scenes[0].events[0].linkPaths).toEqual([
-      'scenes/Game/external-events/HUD.events',
+      'scenes/Game/external-events/HUD.settings',
     ]);
     expect(result.externalEvents[0]).toMatchObject({
       purpose: 'Show player status',
       eventsLogic: 'Refresh labels',
-      linkedFrom: ['scenes/Game/functions/sceneUpdate.events'],
+      linkedFrom: ['scenes/Game/functions/sceneUpdate.settings'],
     });
-    expect(result.extensions[0].events[0].eventsPath).toBe(
-      'extensions/Local/functions/Update.events'
+    expect(result.extensions[0].events[0].settingsPath).toBe(
+      'extensions/Local/functions/Update.settings'
     );
     expect(result.diagnostics).toEqual([
       {
         code: 'UNRESOLVED_EXTERNAL_EVENTS_LINK',
-        eventsPath: 'scenes/Game/functions/sceneUpdate.events',
+        settingsPath: 'scenes/Game/functions/sceneUpdate.settings',
         target: 'Missing',
       },
     ]);

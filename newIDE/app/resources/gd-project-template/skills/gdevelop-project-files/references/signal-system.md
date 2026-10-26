@@ -22,7 +22,7 @@ conditions.
 
 ## Read the catalog
 
-Before editing an `.events` file, inspect the owner settings and search
+Before editing an `.settings` file, inspect the owner settings and search
 `.gdevelop/instructions-catalog.json` for exact instruction types, parameter
 `dslName` values, expressions, and scopes:
 
@@ -66,10 +66,23 @@ emit during frame N
 Every emit action needs an effective condition in its event or an ancestor so
 it does not run accidentally every frame.
 
-```events
-@event aiGeneratedEventId="announce-game-ready"
-if SceneJustBegins
-do EmitSceneSignal signal_name="Game.Ready" payload="level-1"
+```text
+events {
+
+  event {
+    aiGeneratedEventId = "announce-game-ready"
+
+    conditions {
+
+      SceneJustBegins
+    }
+
+    actions {
+
+      EmitSceneSignal signal_name="Game.Ready" payload="level-1"
+    }
+  }
+}
 ```
 
 Scene events can observe this without registering anything. A prefab or
@@ -82,10 +95,23 @@ Put the handler in the fixed `sceneSignal` lifecycle function of the Scene or
 External Events owner. It runs once per delivered scene broadcast and exposes
 the fixed, read-only `SignalName` and `Payload` string parameters:
 
-```events
-@event aiGeneratedEventId="handle-game-ready"
-if BuiltinCommonInstructions::CompareStrings first_string_expression=expr(SignalName) comparison_sign="=" second_string_expression="Game.Ready"
-do DebuggerTools::ConsoleLog message_to_log=expr(Payload)
+```text
+events {
+
+  event {
+    aiGeneratedEventId = "handle-game-ready"
+
+    conditions {
+
+      BuiltinCommonInstructions::CompareStrings first_string_expression=expr(SignalName) comparison_sign="=" second_string_expression="Game.Ready"
+    }
+
+    actions {
+
+      DebuggerTools::ConsoleLog message_to_log=expr(Payload)
+    }
+  }
+}
 ```
 
 The lifecycle function is invoked in FIFO order. Read the visible parameters
@@ -102,9 +128,18 @@ object or behavior picker.
 
 Usually subscribe from `onCreated`:
 
-```events
-@event aiGeneratedEventId="subscribe-locale-change"
-do SubscribeSceneSignal signal_name="Locale.Changed"
+```text
+events {
+
+  event {
+    aiGeneratedEventId = "subscribe-locale-change"
+
+    actions {
+
+      SubscribeSceneSignal signal_name="Locale.Changed"
+    }
+  }
+}
 ```
 
 Repeating the same subscription has no additional effect. It remains for the
@@ -166,10 +201,23 @@ function {
 The same prefab handler receives both subscribed scene signals and direct
 instance signals. Branch on the fixed parameters, not the scene expressions:
 
-```events
-@event aiGeneratedEventId="handle-card-refresh"
-if BuiltinCommonInstructions::CompareStrings first_string_expression=expr(SignalName) comparison_sign="=" second_string_expression="Card.Refresh"
-do SetBooleanObjectVariable object="Object" variable="RefreshPending" modification_sign="True"
+```text
+events {
+
+  event {
+    aiGeneratedEventId = "handle-card-refresh"
+
+    conditions {
+
+      BuiltinCommonInstructions::CompareStrings first_string_expression=expr(SignalName) comparison_sign="=" second_string_expression="Card.Refresh"
+    }
+
+    actions {
+
+      SetBooleanObjectVariable object="Object" variable="RefreshPending" modification_sign="True"
+    }
+  }
+}
 ```
 
 ## Define behavior onSignal
@@ -189,10 +237,23 @@ behavior instance subscribed to. A direct instance signal never invokes it.
 
 Use a positive live `InstanceId()` value:
 
-```events
-@event aiGeneratedEventId="refresh-one-card"
-if BooleanObjectVariable object="CardSlot" variable="NeedsRefresh" check_if_the_value_is="True"
-do EmitSignalToObjectInstance instance_id=expr(CardSlot.InstanceId()) signal_name="Card.Refresh" payload="inventory-changed"
+```text
+events {
+
+  event {
+    aiGeneratedEventId = "refresh-one-card"
+
+    conditions {
+
+      BooleanObjectVariable object="CardSlot" variable="NeedsRefresh" check_if_the_value_is="True"
+    }
+
+    actions {
+
+      EmitSignalToObjectInstance instance_id=expr(CardSlot.InstanceId()) signal_name="Card.Refresh" payload="inventory-changed"
+    }
+  }
+}
 ```
 
 Only that prefab's `onSignal` can receive it. No subscription is needed. If

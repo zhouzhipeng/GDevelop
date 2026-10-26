@@ -96,20 +96,16 @@ Refactor as follows:
 extensions/Combat/
   extension.settings
   functions/CalculateDamage.settings
-  functions/CalculateDamage.events
   prefabs/Enemy/
     prefab.settings
     objects/
       Sprite.settings
       HealthBar.settings
     functions/Initialize.settings
-    functions/Initialize.events
   behaviors/Health/
     behavior.settings
     functions/TakeDamage.settings
-    functions/TakeDamage.events
     functions/IsDead.settings
-    functions/IsDead.events
 ```
 
 1. Put the sprite/health-bar child object definitions and their attached
@@ -120,9 +116,9 @@ extensions/Combat/
 2. Put health properties/variables in `Health/behavior.settings`. Put each
    `TakeDamage`/`IsDead` signature in its flat same-stem
    `functions/<Function>.settings` (including `folder`) and only its DSL body in the
-   sibling `<Function>.events`.
+   sibling `<Function>.settings`.
 3. Put the stateless damage formula in `CalculateDamage.settings` and
-   its DSL body in `CalculateDamage.events`.
+   its DSL body in `CalculateDamage.settings`.
 4. Attach `Combat::Health` to the prefab configuration and expose only the
    minimum prefab methods needed by scene callers.
 5. Reload and confirm the generated catalog contains the new prefab, behavior,
