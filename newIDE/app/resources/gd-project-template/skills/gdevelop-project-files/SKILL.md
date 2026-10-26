@@ -388,11 +388,20 @@ The DSL has no hardcoded instruction aliases:
 ```events
 if Extension::Condition target="Player" threshold=expr(Variable(Limit))
 do Extension::Action target="Player" text="Ready"
-if SceneJustBegins
 ```
 
 Rules:
 
+- Never author the **At the beginning of the scene** condition
+  (`SceneJustBegins`), even if it appears in a catalog or existing example.
+  Scene initialization must use the **On scene load** lifecycle (`sceneLoad`),
+  which runs once after the scene loads and before its first update. Put the
+  initialization events in `scenes/<Scene>/functions/sceneLoad.events` with
+  its matching `sceneLoad.settings` declaration, following the settings catalog.
+  When modifying existing initialization guarded by `SceneJustBegins`, move
+  its actions and child events to `sceneLoad`, preserve any other conditions
+  and their picking semantics, and remove the scene-begin condition. Do not
+  emulate scene load in `sceneUpdate` with a timer, flag, or once-only trigger.
 - Write catalog instruction types directly; never prefix them with `@`.
 - Do not replace catalog types with prose aliases such as `scene begins`.
 - Use only catalog entries valid for the target event scope.
@@ -407,10 +416,13 @@ Rules:
 - If a persisted type is absent, first regenerate the catalog by saving with
   the editor. Do not reuse it for new events if it stays absent; the catalog
   intentionally excludes editor-hidden and deprecated APIs.
-- Guard every action with at least one effective condition in its event or an
-  ancestor event. Never place an action on an unconditional path that executes
-  every frame. Use an explicit trigger, state/input check, timer, comparison,
-  or other condition that expresses when the action is allowed to run.
+- Guard every action that executes in `sceneUpdate` with at least one effective
+  condition in its event or an ancestor event (including Link callers). Never
+  place an action on an unconditional path that executes every frame. Use an
+  explicit trigger, state/input check, timer, comparison, or other condition
+  that expresses when the action is allowed to run. In `sceneLoad`, action-only
+  `@event` blocks are valid: the lifecycle itself supplies the once-per-load
+  execution boundary; do not add a `SceneJustBegins` condition.
 - Treat an object-targeting action as applying to every currently picked
   instance of that object. When conditions leave multiple instances picked, or
   do not narrow the object selection, the action executes on all of them. This
@@ -429,17 +441,16 @@ Rules:
   use underscore/private members, generated `.func` symbols, browser/Node
   globals, filesystem, shell, DOM, storage, or direct networking APIs.
 
-Common structure:
+Scene initialization (`scenes/<Scene>/functions/sceneLoad.events`):
 
 ```events
 @event aiGeneratedEventId="descriptive-id"
-if SceneJustBegins
 do DebuggerTools::ConsoleLog message_to_log="started"
+```
 
-> @event aiGeneratedEventId="child-id"
-> if CollisionNP first_object="Player" second_object="Enemy"
-> do Delete object="Enemy"
+Per-frame gameplay (`scenes/<Scene>/functions/sceneUpdate.events`):
 
+```events
 @group "Combat" source="" creationTime=0 color=[74,176,228] parameters=[]
 @event aiGeneratedEventId="damage-enemy"
 if CollisionNP first_object="Bullet" second_object="Enemy"
@@ -800,8 +811,13 @@ Before finishing:
 - For signal changes, confirm target kind, receiver kind, fixed `onSignal`
   signature, guarded emission, next-dispatch timing, and preview signal-monitor
   evidence against the signal-system reference.
-- Confirm every action has an effective condition in its event or ancestor
-  chain and no unconditional action can execute every frame.
+- Confirm scene initialization uses `sceneLoad` (On scene load), with no
+  authored `SceneJustBegins` condition or simulated scene-load trigger in
+  `sceneUpdate`.
+- Confirm every action executed in `sceneUpdate` has an effective condition
+  in its event or ancestor chain, including Link callers, and no unconditional
+  action can execute every frame. Action-only initialization in `sceneLoad`
+  does not require an additional condition.
 - Confirm object-targeting actions use the intended current picking set. Accept
   actions that apply to multiple picked instances as normal GDevelop behavior;
   narrow the selection or use `for each` only when the logic requires one
