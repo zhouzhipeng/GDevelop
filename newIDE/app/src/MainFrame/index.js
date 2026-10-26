@@ -161,6 +161,8 @@ import {
 } from '../InGameEditorExtensionErrors';
 import { createGameCrashReport } from '../Utils/GDevelopServices/Analytics';
 import InGameEditorExtensionErrorsIndicator from '../InGameEditorExtensionErrors/InGameEditorExtensionErrorsIndicator';
+import SlowGraphicsRenderingIndicator from '../SlowGraphicsRendering/SlowGraphicsRenderingIndicator';
+import { LineStackLayout } from '../UI/Layout';
 import { renderResourcesEditorContainer } from './EditorContainers/ResourcesEditorContainer';
 import { renderConstantsEditorContainer } from './EditorContainers/ConstantsEditorContainer';
 import { renderGlobalEventsSearchEditorContainer } from './EditorContainers/GlobalEventsSearchEditorContainer';
@@ -9485,21 +9487,24 @@ const MainFrame = (props: Props): React.MixedElement => {
         previewDebuggerServer={previewDebuggerServer || null}
         onLaunchPreviewForInGameEdition={onLaunchPreviewForInGameEdition}
       >
-        <InGameEditorExtensionErrorsIndicator
-          errors={inGameEditorExtensionErrors}
-          isFromStore={error =>
-            isInGameEditorExtensionErrorFromStore(currentProject, error)
-          }
-          onAskAiToFix={() =>
-            openAskAi({
-              prefilledUserRequest: getAskAiToFixInGameEditorExtensionErrorsText(
-                inGameEditorExtensionErrors
-              ),
-              prefillInCurrentChat: true,
-            })
-          }
-          onDismiss={clearInGameEditorExtensionErrors}
-        />
+        <LineStackLayout noMargin>
+          <SlowGraphicsRenderingIndicator />
+          <InGameEditorExtensionErrorsIndicator
+            errors={inGameEditorExtensionErrors}
+            isFromStore={error =>
+              isInGameEditorExtensionErrorFromStore(currentProject, error)
+            }
+            onAskAiToFix={() =>
+              openAskAi({
+                prefilledUserRequest: getAskAiToFixInGameEditorExtensionErrorsText(
+                  inGameEditorExtensionErrors
+                ),
+                prefillInCurrentChat: true,
+              })
+            }
+            onDismiss={clearInGameEditorExtensionErrors}
+          />
+        </LineStackLayout>
       </EmbeddedGameFrame>
       <GameplayTestFrame
         previewDebuggerServer={previewDebuggerServer || null}

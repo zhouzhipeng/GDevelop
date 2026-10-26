@@ -145,6 +145,8 @@ namespace gdjs {
             // Pixi uses the shared context's stencil buffer for masks.
             stencil: true,
             preserveDrawingBuffer: true, // Keep to true to allow screenshots.
+            // Ask for the discrete graphics card, if any.
+            powerPreference: 'high-performance',
           });
         } catch (error) {
           // The context creation can still fail, for example with software
@@ -210,6 +212,8 @@ namespace gdjs {
           preserveDrawingBuffer: true,
           antialias: false,
           resolution: canvasResolution,
+          // Ask for the discrete graphics card, if any.
+          powerPreference: 'high-performance',
         }) as PIXI.Renderer;
       }
 

@@ -563,8 +563,12 @@ namespace gdjs {
             this._layer.getCameraType() ===
             gdjs.RuntimeLayerCameraType.ORTHOGRAPHIC
           ) {
-            const width = this._layer.getWidth();
-            const height = this._layer.getHeight();
+            const inverseWorldScale = this._layer
+              .getRuntimeScene()
+              .getScene()
+              .getRenderer3DInverseWorldScale();
+            const width = this._layer.getWidth() * inverseWorldScale;
+            const height = this._layer.getHeight() * inverseWorldScale;
             this._threeCamera = new THREE.OrthographicCamera(
               -width / 2,
               width / 2,
