@@ -138,7 +138,7 @@ events {
 
     actions {
 
-      variablesSetBooleanVariable variable="ResetRequested" modification_sign="False"
+      setBooleanVariable variable="ResetRequested" modification_sign="False"
     }
   }
 }

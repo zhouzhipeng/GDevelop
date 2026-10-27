@@ -51,7 +51,7 @@ function {
 
         deleteObject { object = "Coin" }
 
-        setNumber { variable = "Score" modification_sign = "+" value = 1 }
+        setNumberVariable { variable = "Score" modification_sign = "+" value = 1 }
       }
     }
   }
@@ -95,7 +95,7 @@ function {
 
           deleteObject { object = "Coin" }
 
-          setNumber { variable = "Score" modification_sign = "+" value = 1 }
+          setNumberVariable { variable = "Score" modification_sign = "+" value = 1 }
         }
       }
     }

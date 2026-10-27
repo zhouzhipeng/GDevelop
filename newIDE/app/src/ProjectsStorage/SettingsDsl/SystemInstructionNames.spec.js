@@ -63,7 +63,45 @@ test('every registered system instruction has a fixed, unambiguous author name a
   }
   expect(
     catalog.actions.find(e => e.type === 'SetNumberVariable').dslName
-  ).toBe('setNumber');
+  ).toBe('setNumberVariable');
+  expect(
+    catalog.actions.find(e => e.type === 'SetBooleanVariable').dslName
+  ).toBe('setBooleanVariable');
+  expect(
+    catalog.actions.find(e => e.type === 'SetStringVariable').dslName
+  ).toBe('setStringVariable');
+  for (const [type, dslName] of [
+    ['SetX', 'setX'],
+    ['SetXY', 'setXY'],
+    ['SetY', 'setY'],
+    ['AnimatableCapability::AnimatableBehavior::SetIndex', 'setAnimationIndex'],
+    ['AnimatableCapability::AnimatableBehavior::SetName', 'setAnimationName'],
+  ]) {
+    expect(catalog.actions.find(e => e.type === type).dslName).toBe(dslName);
+  }
+  for (const [kind, type, dslName] of [
+    [
+      'action',
+      'AnimatableCapability::AnimatableBehavior::SetElapsedTime',
+      'setAnimationElapsedTime',
+    ],
+    [
+      'condition',
+      'AnimatableCapability::AnimatableBehavior::Name',
+      'animationName',
+    ],
+    [
+      'condition',
+      'AnimatableCapability::AnimatableBehavior::Index',
+      'animationIndex',
+    ],
+    ['action', 'Video::SetTime', 'setVideoTime'],
+    ['condition', 'Video::Play', 'isVideoPlaying'],
+    ['condition', 'SvgUI::SvgUIObject::Loaded', 'svgLoaded'],
+  ]) {
+    const entries = kind === 'action' ? catalog.actions : catalog.conditions;
+    expect(entries.find(e => e.type === type).dslName).toBe(dslName);
+  }
   expect(catalog.conditions.find(e => e.type === 'CollisionNP').dslName).toBe(
     'collision'
   );
@@ -120,7 +158,7 @@ test('unknown and differently owned instructions retain full type; project exten
     ).toBe('DebuggerTools::ConsoleLog');
     expect(
       changed.actions.find(e => e.type === 'SetNumberVariable').dslName
-    ).toBe('setNumber');
+    ).toBe('setNumberVariable');
   } finally {
     project.removeEventsFunctionsExtension('DebuggerTools');
   }

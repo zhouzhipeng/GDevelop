@@ -38,11 +38,11 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|AdvancedTween||AdvancedTween::AdvancedTween|AdvancedTween::Play':
     'advancedTweenPlay',
   'action|AdvancedTween||AdvancedTween::AdvancedTween|AdvancedTween::Resume':
-    'resume',
+    'resumeAdvancedTween',
   'action|AdvancedTween||AdvancedTween::AdvancedTween|AdvancedTween::SetCurrentTime':
-    'setCurrentTime',
+    'setAdvancedTweenTime',
   'action|AdvancedTween||AdvancedTween::AdvancedTween|AdvancedTween::SetJson':
-    'setJson',
+    'setAdvancedTweenJson',
   'action|AdvancedTween||AdvancedTween::AdvancedTween|AdvancedTween::doStepPostEvents':
     'doStepPostEvents',
   'action|AdvancedTween||AdvancedTween::AdvancedTween|AdvancedTween::doStepPreEvents':
@@ -77,17 +77,17 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|BuiltinObject|||AjoutHasard': 'ajoutHasard',
   'action|BuiltinObject|||AjoutObjConcern': 'ajoutObjConcern',
   'action|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::PauseAnimation':
-    'animatableCapabilityPauseAnimation',
+    'pauseAnimation',
   'action|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::PlayAnimation':
-    'animatableCapabilityPlayAnimation',
+    'playAnimation',
   'action|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::SetElapsedTime':
-    'setElapsedTime',
+    'setAnimationElapsedTime',
   'action|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::SetIndex':
-    'setIndex',
+    'setAnimationIndex',
   'action|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::SetName':
-    'setName',
+    'setAnimationName',
   'action|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::SetSpeedScale':
-    'setSpeedScale',
+    'setAnimationSpeedScale',
   'action|BuiltinObject|||Arreter': 'arreter',
   'action|BBText|BBText::BBText||BBText::SetAlignment': 'bbTextSetAlignment',
   'action|BBText|BBText::BBText||BBText::SetBBText': 'setBBText',
@@ -200,7 +200,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|DeviceVibration|||DeviceVibration::StartVibrationPattern':
     'startVibrationPattern',
   'action|DeviceVibration|||DeviceVibration::StopVibration': 'stopVibration',
-  'action|DialogueTree|||DialogueTree::ClearState': 'clearState',
+  'action|DialogueTree|||DialogueTree::ClearState': 'clearDialogueState',
   'action|DialogueTree|||DialogueTree::CompleteClippedTextScrolling':
     'completeClippedTextScrolling',
   'action|DialogueTree|||DialogueTree::ConfirmSelectOption':
@@ -210,8 +210,8 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
     'loadDialogueFromJsonFile',
   'action|DialogueTree|||DialogueTree::LoadDialogueFromSceneVariable':
     'loadDialogueFromSceneVariable',
-  'action|DialogueTree|||DialogueTree::LoadState': 'loadState',
-  'action|DialogueTree|||DialogueTree::SaveState': 'saveState',
+  'action|DialogueTree|||DialogueTree::LoadState': 'loadDialogueState',
+  'action|DialogueTree|||DialogueTree::SaveState': 'saveDialogueState',
   'action|DialogueTree|||DialogueTree::ScrollClippedText': 'scrollClippedText',
   'action|DialogueTree|||DialogueTree::SelectNextOption': 'selectNextOption',
   'action|DialogueTree|||DialogueTree::SelectOption': 'selectOption',
@@ -219,7 +219,8 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
     'selectPreviousOption',
   'action|DialogueTree|||DialogueTree::SetBooleanVariable':
     'dialogueTreeSetBooleanVariable',
-  'action|DialogueTree|||DialogueTree::SetNumberVariable': 'setNumberVariable',
+  'action|DialogueTree|||DialogueTree::SetNumberVariable':
+    'dialogueTreeSetNumberVariable',
   'action|DialogueTree|||DialogueTree::SetStringVariable':
     'dialogueTreeSetStringVariable',
   'action|DialogueTree|||DialogueTree::StartDialogueFromBranch':
@@ -230,13 +231,13 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|BuiltinFile|||EcrireFichierExp': 'ecrireFichierExp',
   'action|BuiltinFile|||EcrireFichierTxt': 'ecrireFichierTxt',
   'action|EffectCapability||EffectCapability::EffectBehavior|EffectCapability::EffectBehavior::EnableEffect':
-    'effectCapabilityEnableEffect',
+    'enableEffect',
   'action|EffectCapability||EffectCapability::EffectBehavior|EffectCapability::EffectBehavior::SetEffectBooleanParameter':
-    'effectCapabilitySetEffectBooleanParameter',
+    'setEffectBooleanParameter',
   'action|EffectCapability||EffectCapability::EffectBehavior|EffectCapability::EffectBehavior::SetEffectDoubleParameter':
-    'effectCapabilitySetEffectDoubleParameter',
+    'setEffectDoubleParameter',
   'action|EffectCapability||EffectCapability::EffectBehavior|EffectCapability::EffectBehavior::SetEffectStringParameter':
-    'effectCapabilitySetEffectStringParameter',
+    'setEffectStringParameter',
   'action|BuiltinScene|||EmitSceneSignal': 'emitSceneSignal',
   'action|BuiltinScene|||EmitSignalToObjectInstance':
     'emitSignalToObjectInstance',
@@ -485,19 +486,19 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|NavMeshPathfinding|||NavMeshPathfinding::EnableDebugDraw':
     'navMeshPathfindingEnableDebugDraw',
   'action|NavMeshPathfinding||NavMeshPathfinding::NavMeshCharacterBehavior|NavMeshPathfinding::MoveTo':
-    'moveTo',
+    'moveAlongNavMesh',
   'action|NavMeshPathfinding||NavMeshPathfinding::NavMeshCharacterBehavior|NavMeshPathfinding::NavMeshCharacterBehavior::RotateObject':
     'navMeshPathfindingRotateObject',
   'action|NavMeshPathfinding||NavMeshPathfinding::NavMeshCharacterBehavior|NavMeshPathfinding::NavMeshCharacterBehavior::SetAcceleration':
-    'setAcceleration',
+    'setNavMeshAcceleration',
   'action|NavMeshPathfinding||NavMeshPathfinding::NavMeshCharacterBehavior|NavMeshPathfinding::NavMeshCharacterBehavior::SetAngleOffset':
-    'setAngleOffset',
+    'setNavMeshAngleOffset',
   'action|NavMeshPathfinding||NavMeshPathfinding::NavMeshCharacterBehavior|NavMeshPathfinding::NavMeshCharacterBehavior::SetAngularMaxSpeed':
-    'setAngularMaxSpeed',
+    'setNavMeshAngularMaxSpeed',
   'action|NavMeshPathfinding||NavMeshPathfinding::NavMeshCharacterBehavior|NavMeshPathfinding::NavMeshCharacterBehavior::SetMaxSpeed':
-    'setMaxSpeed',
+    'setNavMeshMaxSpeed',
   'action|NavMeshPathfinding||NavMeshPathfinding::NavMeshCharacterBehavior|NavMeshPathfinding::NavMeshCharacterBehavior::SetSpeed':
-    'setSpeed',
+    'setNavMeshSpeed',
   'action|BuiltinObject|||ObjectVariableClearChildren':
     'objectVariableClearChildren',
   'action|BuiltinObject|||ObjectVariablePush': 'objectVariablePush',
@@ -511,17 +512,17 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|Sprite|Sprite||Opacity': 'spriteOpacity',
   'action|OpacityCapability||OpacityCapability::OpacityBehavior|OpacityCapability::OpacityBehavior::SetValue':
     'opacityCapabilitySetValue',
-  'action|P2P|||P2P::Connect': 'connect',
+  'action|P2P|||P2P::Connect': 'connectToPeer',
   'action|P2P|||P2P::DisconnectFromAll': 'disconnectFromAll',
   'action|P2P|||P2P::DisconnectFromAllPeers': 'disconnectFromAllPeers',
   'action|P2P|||P2P::DisconnectFromBroker': 'disconnectFromBroker',
   'action|P2P|||P2P::DisconnectFromPeer': 'disconnectFromPeer',
   'action|P2P|||P2P::ForceRelayServer': 'forceRelayServer',
   'action|P2P|||P2P::GetEventVariable': 'getEventVariable',
-  'action|P2P|||P2P::OverrideID': 'overrideID',
-  'action|P2P|||P2P::SendToAll': 'sendToAll',
+  'action|P2P|||P2P::OverrideID': 'setPeerId',
+  'action|P2P|||P2P::SendToAll': 'sendToAllPeers',
   'action|P2P|||P2P::SendToAllVariable': 'sendToAllVariable',
-  'action|P2P|||P2P::SendToOne': 'sendToOne',
+  'action|P2P|||P2P::SendToOne': 'sendToPeer',
   'action|P2P|||P2P::SendToOneVariable': 'sendToOneVariable',
   'action|P2P|||P2P::UseDefaultBroker': 'useDefaultBroker',
   'action|P2P|||P2P::UseOwnBroker': 'useOwnBroker',
@@ -1289,7 +1290,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|BuiltinObject|||SetAngle': 'setAngle',
   'action|Sprite|Sprite||SetAnimationName': 'spriteSetAnimationName',
   'action|BuiltinObject|||SetBooleanObjectVariable': 'setBooleanObjectVariable',
-  'action|BuiltinVariables|||SetBooleanVariable': 'variablesSetBooleanVariable',
+  'action|BuiltinVariables|||SetBooleanVariable': 'setBooleanVariable',
   'action|BuiltinCamera|||SetCameraAngle': 'setCameraAngle',
   'action|BuiltinCamera|||SetCameraCenterX': 'setCameraCenterX',
   'action|BuiltinCamera|||SetCameraCenterY': 'setCameraCenterY',
@@ -1326,7 +1327,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
     'setMusicChannelPlayingOffset',
   'action|BuiltinAudio|||SetMusicChannelVolume': 'setMusicChannelVolume',
   'action|BuiltinObject|||SetNumberObjectVariable': 'setNumberObjectVariable',
-  'action|BuiltinVariables|||SetNumberVariable': 'setNumber',
+  'action|BuiltinVariables|||SetNumberVariable': 'setNumberVariable',
   'action|BuiltinObject|||SetObjectVariableAsBoolean':
     'setObjectVariableAsBoolean',
   'action|BuiltinAdvanced|||SetReturnBoolean': 'setReturnBoolean',
@@ -1340,13 +1341,13 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
     'setSoundChannelPlayingOffset',
   'action|BuiltinAudio|||SetSoundChannelVolume': 'setSoundChannelVolume',
   'action|BuiltinObject|||SetStringObjectVariable': 'setStringObjectVariable',
-  'action|BuiltinVariables|||SetStringVariable': 'variablesSetStringVariable',
+  'action|BuiltinVariables|||SetStringVariable': 'setStringVariable',
   'action|BuiltinWindow|||SetWindowMargins': 'setWindowMargins',
   'action|BuiltinWindow|||SetWindowSize': 'setWindowSize',
   'action|BuiltinWindow|||SetWindowTitle': 'setWindowTitle',
-  'action|BuiltinObject|||SetX': 'builtinObjectSetX',
-  'action|BuiltinObject|||SetXY': 'builtinObjectSetXY',
-  'action|BuiltinObject|||SetY': 'builtinObjectSetY',
+  'action|BuiltinObject|||SetX': 'setX',
+  'action|BuiltinObject|||SetXY': 'setXY',
+  'action|BuiltinObject|||SetY': 'setY',
   'action|BuiltinObject|||SetZOrder': 'setZOrder',
   'action|Shopify|||Shopify::BuildClient': 'buildClient',
   'action|Shopify|||Shopify::GetCheckoutUrlForProduct':
@@ -1358,7 +1359,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
     'setListenerPosition',
   'action|SpatialSound|||SpatialSound::SetSoundPosition': 'setSoundPosition',
   'action|SpineObject|SpineObject::SpineObject||SpineObject::SetSkin':
-    'setSkin',
+    'setSpineSkin',
   'action|SpineObject|SpineObject::SpineObject||SpineObject::SpineObject::SetAnimation':
     'spineObjectSetAnimation',
   'action|SpringBoneDynamics||SpringBoneDynamics::SpringBone3DBehavior|SpringBoneDynamics::NotifyTeleported':
@@ -1417,7 +1418,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|SvgUI|SvgUI::SvgUIObject||SvgUI::SvgUIObject::SetNodeWidth':
     'setNodeWidth',
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::ApplyMaterial':
-    'applyMaterial',
+    'applyTSLMaterial',
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::EnableBinding':
     'enableBinding',
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::RemoveAllBindings':
@@ -1425,21 +1426,21 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::RemoveBinding':
     'removeBinding',
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::ResetParameter':
-    'resetParameter',
+    'resetMaterialParameter',
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::SetBooleanParameter':
-    'setBooleanParameter',
+    'setMaterialBooleanParameter',
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::SetColorParameter':
-    'setColorParameter',
+    'setMaterialColorParameter',
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::SetNumberParameter':
-    'setNumberParameter',
+    'setMaterialNumberParameter',
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::SetTextureParameter':
-    'setTextureParameter',
+    'setMaterialTextureParameter',
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::SetVector2Parameter':
-    'setVector2Parameter',
+    'setMaterialVector2Parameter',
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::SetVector3Parameter':
-    'setVector3Parameter',
+    'setMaterialVector3Parameter',
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::SetVector4Parameter':
-    'setVector4Parameter',
+    'setMaterialVector4Parameter',
   'action|TextContainerCapability||TextContainerCapability::TextContainerBehavior|TextContainerCapability::TextContainerBehavior::SetValue':
     'textContainerCapabilitySetValue',
   'action|TextInput|TextInput::TextInputObject||TextInput::TextInputObject::Focus':
@@ -1764,15 +1765,15 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|BuiltinAudio|||UnloadSound': 'unloadSound',
   'action|BuiltinVariables|||VariableClearChildren': 'variableClearChildren',
   'action|BuiltinVariables|||VariableRemoveChild': 'variableRemoveChild',
-  'action|Video|Video::VideoObject||Video::Loop': 'loop',
-  'action|Video|Video::VideoObject||Video::Mute': 'mute',
+  'action|Video|Video::VideoObject||Video::Loop': 'setVideoLoop',
+  'action|Video|Video::VideoObject||Video::Mute': 'setVideoMuted',
   'action|Video|Video::VideoObject||Video::Pause': 'videoPause',
   'action|Video|Video::VideoObject||Video::Play': 'videoPlay',
   'action|Video|Video::VideoObject||Video::SetOpacity': 'videoSetOpacity',
   'action|Video|Video::VideoObject||Video::SetPlaybackSpeed':
-    'setPlaybackSpeed',
-  'action|Video|Video::VideoObject||Video::SetTime': 'setTime',
-  'action|Video|Video::VideoObject||Video::SetVolume': 'setVolume',
+    'setVideoPlaybackSpeed',
+  'action|Video|Video::VideoObject||Video::SetTime': 'setVideoTime',
+  'action|Video|Video::VideoObject||Video::SetVolume': 'setVideoVolume',
   'action|BuiltinTime|||Wait': 'wait',
   'action|BuiltinCamera|||ZoomCamera': 'zoomCamera',
   'condition|AdMob|||AdMob::AdmobInitialized': 'admobInitialized',
@@ -1839,17 +1840,17 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'condition|BuiltinObject|||AngleOfDisplacement': 'angleOfDisplacement',
   'condition|Sprite|Sprite||AnimStopped': 'animStopped',
   'condition|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::ElapsedTime':
-    'elapsedTime',
+    'animationElapsedTime',
   'condition|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::HasAnimationEnded':
-    'animatableCapabilityHasAnimationEnded',
+    'hasAnimationEnded',
   'condition|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::Index':
-    'index',
+    'animationIndex',
   'condition|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::IsAnimationPaused':
-    'animatableCapabilityIsAnimationPaused',
+    'isAnimationPaused',
   'condition|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::Name':
-    'name',
+    'animationName',
   'condition|AnimatableCapability||AnimatableCapability::AnimatableBehavior|AnimatableCapability::AnimatableBehavior::SpeedScale':
-    'speedScale',
+    'animationSpeedScale',
   'condition|Sprite|Sprite||Animation': 'spriteAnimation',
   'condition|Sprite|Sprite||AnimationEnded': 'animationEnded',
   'condition|Sprite|Sprite||AnimationEnded2': 'animationEnded2',
@@ -1993,7 +1994,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'condition|DraggableBehavior||DraggableBehavior::Draggable|DraggableBehavior::Dropped':
     'dropped',
   'condition|EffectCapability||EffectCapability::EffectBehavior|EffectCapability::EffectBehavior::IsEffectEnabled':
-    'effectCapabilityIsEffectEnabled',
+    'isEffectEnabled',
   'condition|BuiltinCommonInstructions|||Egal': 'egal',
   'condition|BuiltinObject|||EstTourne': 'estTourne',
   'condition|FacebookInstantGames|||FacebookInstantGames::AreAdsSupported':
@@ -2052,9 +2053,9 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'condition|BuiltinCamera|||LayerTimeScale': 'layerTimeScale',
   'condition|BuiltinCamera|||LayerVisible': 'layerVisible',
   'condition|Leaderboards|||Leaderboards::HasLastSaveErrored':
-    'hasLastSaveErrored',
+    'leaderboardSaveErrored',
   'condition|Leaderboards|||Leaderboards::HasLastSaveSucceeded':
-    'hasLastSaveSucceeded',
+    'leaderboardSaveSucceeded',
   'condition|Leaderboards|||Leaderboards::HasPlayerJustClosedLeaderboardView':
     'hasPlayerJustClosedLeaderboardView',
   'condition|Leaderboards|||Leaderboards::IsLeaderboardViewErrored':
@@ -2063,7 +2064,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
     'isLeaderboardViewLoaded',
   'condition|Leaderboards|||Leaderboards::IsLeaderboardViewLoading':
     'isLeaderboardViewLoading',
-  'condition|Leaderboards|||Leaderboards::IsSaving': 'isSaving',
+  'condition|Leaderboards|||Leaderboards::IsSaving': 'isSavingLeaderboardScore',
   'condition|LinkedObjects|||LinkedObjects::PickObjectsLinkedTo':
     'pickObjectsLinkedTo',
   'condition|Model3DBoneAttachment||Model3DBoneAttachment::Model3DBoneAttachmentBehavior|Model3DBoneAttachment::Model3DBoneAttachmentBehavior::IsAttachedToModelBone':
@@ -2154,11 +2155,11 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'condition|Sprite|Sprite||Opacity': 'spriteOpacity',
   'condition|OpacityCapability||OpacityCapability::OpacityBehavior|OpacityCapability::OpacityBehavior::Value':
     'opacityCapabilityValue',
-  'condition|P2P|||P2P::IsReady': 'isReady',
-  'condition|P2P|||P2P::OnConnection': 'onConnection',
-  'condition|P2P|||P2P::OnDisconnection': 'onDisconnection',
-  'condition|P2P|||P2P::OnError': 'onError',
-  'condition|P2P|||P2P::OnEvent': 'onEvent',
+  'condition|P2P|||P2P::IsReady': 'isPeerReady',
+  'condition|P2P|||P2P::OnConnection': 'onPeerConnection',
+  'condition|P2P|||P2P::OnDisconnection': 'onPeerDisconnection',
+  'condition|P2P|||P2P::OnError': 'onPeerError',
+  'condition|P2P|||P2P::OnEvent': 'onPeerEvent',
   'condition|PanelSpriteObject|PanelSpriteObject::PanelSprite||PanelSpriteObject::Angle':
     'panelSpriteObjectAngle',
   'condition|PanelSpriteObject|PanelSpriteObject::PanelSprite||PanelSpriteObject::Height':
@@ -2678,7 +2679,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'condition|SpineObject|SpineObject::SpineObject||SpineObject::SpineObject::PointAttachmentY':
     'pointAttachmentY',
   'condition|SpineObject|SpineObject::SpineObject||SpineObject::SpineObject::getSkin':
-    'getSkin',
+    'spineSkin',
   'condition|SpringBoneDynamics||SpringBoneDynamics::SpringBone3DBehavior|SpringBoneDynamics::HasChain':
     'hasChain',
   'condition|SpringBoneDynamics||SpringBoneDynamics::SpringBone3DBehavior|SpringBoneDynamics::HasValidConfiguration':
@@ -2719,25 +2720,26 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'condition|BuiltinObject|||StringObjectVariable': 'stringObjectVariable',
   'condition|BuiltinVariables|||StringVariable': 'stringVariable',
   'condition|SvgUI|SvgUI::SvgUIObject||SvgUI::SvgUIObject::LoadError':
-    'loadError',
-  'condition|SvgUI|SvgUI::SvgUIObject||SvgUI::SvgUIObject::Loaded': 'loaded',
+    'svgLoadError',
+  'condition|SvgUI|SvgUI::SvgUIObject||SvgUI::SvgUIObject::Loaded': 'svgLoaded',
   'condition|SvgUI|SvgUI::SvgUIObject||SvgUI::SvgUIObject::NodeClicked':
-    'nodeClicked',
+    'svgNodeClicked',
   'condition|SystemInfo|||SystemInfo::HasTouchScreen': 'hasTouchScreen',
   'condition|SystemInfo|||SystemInfo::IsMobile': 'isMobile',
   'condition|SystemInfo|||SystemInfo::IsNativeDesktopApp': 'isNativeDesktopApp',
   'condition|SystemInfo|||SystemInfo::IsNativeMobileApp': 'isNativeMobileApp',
   'condition|SystemInfo|||SystemInfo::IsPreview': 'isPreview',
   'condition|SystemInfo|||SystemInfo::IsWebGLSupported': 'isWebGLSupported',
-  'condition|TSLMaterial|||TSLMaterial::BackendAvailable': 'backendAvailable',
+  'condition|TSLMaterial|||TSLMaterial::BackendAvailable':
+    'materialBackendAvailable',
   'condition|TSLMaterial||TSLMaterial::Material|TSLMaterial::BindingHasError':
-    'bindingHasError',
+    'materialBindingHasError',
   'condition|TSLMaterial||TSLMaterial::Material|TSLMaterial::BindingMatchedSlot':
-    'bindingMatchedSlot',
+    'materialBindingMatchedSlot',
   'condition|TSLMaterial||TSLMaterial::Material|TSLMaterial::HasBinding':
-    'hasBinding',
+    'hasMaterialBinding',
   'condition|TSLMaterial||TSLMaterial::Material|TSLMaterial::IsBindingReady':
-    'isBindingReady',
+    'isMaterialBindingReady',
   'condition|TextContainerCapability||TextContainerCapability::TextContainerBehavior|TextContainerCapability::TextContainerBehavior::Value':
     'textContainerCapabilityValue',
   'condition|TextInput|TextInput::TextInputObject||TextInput::TextInputObject::BorderOpacity':
@@ -2906,9 +2908,10 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'condition|BuiltinMouse|||TouchX': 'touchX',
   'condition|BuiltinMouse|||TouchY': 'touchY',
   'condition|BuiltinCommonInstructions|||Toujours': 'toujours',
-  'condition|Tween||Tween::TweenBehavior|Tween::Exists': 'exists',
-  'condition|Tween||Tween::TweenBehavior|Tween::HasFinished': 'hasFinished',
-  'condition|Tween||Tween::TweenBehavior|Tween::IsPlaying': 'isPlaying',
+  'condition|Tween||Tween::TweenBehavior|Tween::Exists': 'tweenExists',
+  'condition|Tween||Tween::TweenBehavior|Tween::HasFinished':
+    'tweenHasFinished',
+  'condition|Tween||Tween::TweenBehavior|Tween::IsPlaying': 'tweenIsPlaying',
   'condition|Tween|||Tween::Progress': 'tweenProgress',
   'condition|Tween|||Tween::SceneTweenExists': 'sceneTweenExists',
   'condition|Tween|||Tween::SceneTweenHasFinished': 'sceneTweenHasFinished',
@@ -2929,15 +2932,15 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'condition|BuiltinVariables|||VariableChildExists2': 'variableChildExists2',
   'condition|Video|Video::VideoObject||Video::CurrentTime': 'videoCurrentTime',
   'condition|Video|Video::VideoObject||Video::Duration': 'videoDuration',
-  'condition|Video|Video::VideoObject||Video::Ended': 'ended',
-  'condition|Video|Video::VideoObject||Video::GetOpacity': 'getOpacity',
+  'condition|Video|Video::VideoObject||Video::Ended': 'videoEnded',
+  'condition|Video|Video::VideoObject||Video::GetOpacity': 'videoOpacity',
   'condition|Video|Video::VideoObject||Video::GetPlaybackSpeed':
-    'getPlaybackSpeed',
-  'condition|Video|Video::VideoObject||Video::Loop': 'loop',
-  'condition|Video|Video::VideoObject||Video::Mute': 'mute',
-  'condition|Video|Video::VideoObject||Video::Pause': 'pause',
-  'condition|Video|Video::VideoObject||Video::Play': 'play',
-  'condition|Video|Video::VideoObject||Video::Volume': 'volume',
+    'videoPlaybackSpeed',
+  'condition|Video|Video::VideoObject||Video::Loop': 'isVideoLooped',
+  'condition|Video|Video::VideoObject||Video::Mute': 'isVideoMuted',
+  'condition|Video|Video::VideoObject||Video::Pause': 'isVideoPaused',
+  'condition|Video|Video::VideoObject||Video::Play': 'isVideoPlaying',
+  'condition|Video|Video::VideoObject||Video::Volume': 'videoVolume',
   'condition|BuiltinObject|||Visible': 'visible',
   'condition|BuiltinObject|||Vitesse': 'vitesse',
   'condition|Sprite|Sprite||Width': 'spriteWidth',

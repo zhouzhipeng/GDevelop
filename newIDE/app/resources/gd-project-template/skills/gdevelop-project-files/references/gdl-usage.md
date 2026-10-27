@@ -181,7 +181,7 @@ function {
 
           deleteObject { object = "Coin" }
 
-          setNumber { variable = "Score" modification_sign = "+" value = 1 }
+          setNumberVariable { variable = "Score" modification_sign = "+" value = 1 }
         }
 
         event {
@@ -288,7 +288,7 @@ event {
     numberVariable { variable="QueueSize" comparison_sign=">" value=0 }
   }
   actions {
-    setNumber { variable="QueueSize" modification_sign="-" value=1 }
+    setNumberVariable { variable="QueueSize" modification_sign="-" value=1 }
   }
 }
 

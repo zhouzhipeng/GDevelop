@@ -30,7 +30,7 @@
 
 | 原生 type | 作者名称 |
 | --- | --- |
-| SetNumberVariable（action） | setNumber |
+| SetNumberVariable（action） | setNumberVariable |
 | CollisionNP（condition） | collision |
 | DebuggerTools::ConsoleLog（action） | log |
 | AddForceXY（action） | addForceXY |
@@ -59,7 +59,7 @@ actions 和 conditions 中每条记录新增必需字段 dslName：系统指令�
 ```text
 actions {
   log message_to_log="Start"
-  setNumber variable="Score" modification_sign="+" value=1
+  setNumberVariable variable="Score" modification_sign="+" value=1
   SvgUI::SvgUIObject::SetNodeText svg_ui="Panel" element_id="title" text="Ready"
 }
 ```
@@ -142,7 +142,7 @@ catalog 仍是生成文件，不要求 AI 手工维护或直接修改。工具�
 ## 10. 实施与验证记录
 
 固定映射已覆盖当前注册清单的 1,817 条系统指令（1,090 actions、727 conditions，
-包括隐藏/废弃条目）。代表名称为 setNumber、collision、log、addForceXY。
+包括隐藏/废弃条目）。代表名称为 setNumberVariable、collision、log、addForceXY。
 解析支持 dslName 和精确原生 type，规范输出、补全和 AI 作者示例优先使用 dslName；
 语义分析保持原生 instructionType 并增加 dslName，精确语义查询支持两种名称。
 第三方/用户指令、参数和表达式名称不变。共享入口常量位于 ProjectEntry.js。
