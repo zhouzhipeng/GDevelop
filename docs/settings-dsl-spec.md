@@ -24,7 +24,7 @@
 
 版本权威来源分别是 SettingsDsl/SchemaInventory.js、ProjectSourceCatalog.js 和 SettingsDsl/InstructionCatalog.js。项目作者格式、GDL catalog、instruction catalog、项目模块地图是不同版本域，不要求数值相同。模块地图当前为版本 2，仅发布 settingsPath。
 
-普通配置、指令具名参数、GDevelop 的 expr(...)、JavaScript code 块使用不同上下文规则。expr 内不是 JavaScript；code 内才使用 JavaScript。不存在独立事件源文件，constants.toml 与 tests/*.js 是明确的独立格式。所有字段和精确指令签名以当前项目生成的 catalog 为准。
+普通配置、指令具名参数、GDevelop 的 {{...}}、JavaScript code 块使用不同上下文规则。{{...}} 内不是 JavaScript；code 内才使用 JavaScript。不存在独立事件源文件，constants.toml 与 tests/*.js 是明确的独立格式。所有字段和精确指令签名以当前项目生成的 catalog 为准。
 
 ## 1. 设计结论
 
@@ -162,7 +162,7 @@ value      := STRING | NUMBER | BOOLEAN | array
 array      := "[" (value ("," value)* ","?)? "]"
 ```
 
-空白和注释由词法层处理。数组内部允许换行。上述仅描述普通配置；variable.value 的递归结构字面量见变量契约。事件指令、expr(...) 与原始 code 块见事件契约。核心解析器遇到语法错误即返回诊断；编辑器另有不完整文档补全，不代表完整的容错 AST。
+空白和注释由词法层处理。数组内部允许换行。上述仅描述普通配置；variable.value 的递归结构字面量见变量契约。事件指令、{{...}} 与原始 code 块见事件契约。核心解析器遇到语法错误即返回诊断；编辑器另有不完整文档补全，不代表完整的容错 AST。
 
 ## 5. 根节点与上下文
 

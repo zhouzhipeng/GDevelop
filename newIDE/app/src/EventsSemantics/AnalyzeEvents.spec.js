@@ -239,7 +239,7 @@ test('strict author Else adjacency stays authoritative', () => {
 });
 test('maps full multiline operands and distinguishes both While condition lists', () => {
   const source = wrap(
-    'event {\n type = "while"\n while_conditions {\n NumberVariable { variable="Score" comparison_sign=">" value=0 }\n }\n conditions {\n NumberVariable { variable="Score" comparison_sign="<" value=10 }\n }\n actions {\n SetNumberVariable { variable="Score" modification_sign="+" value=expr(\n1 + 2\n) }\n }\n}'
+    'event {\n type = "while"\n while_conditions {\n NumberVariable { variable="Score" comparison_sign=">" value=0 }\n }\n conditions {\n NumberVariable { variable="Score" comparison_sign="<" value=10 }\n }\n actions {\n SetNumberVariable { variable="Score" modification_sign="+" value={{\n1 + 2\n}} }\n }\n}'
   );
   const result = analyze('', { source, detail: 'steps' });
   expect(result.success).toBe(true);
@@ -253,7 +253,7 @@ test('maps full multiline operands and distinguishes both While condition lists'
       e.list === 'actions' && e.instructionPath && !e.parameter && !e.property
   );
   expect(source.slice(action.source.offset, action.source.endOffset)).toContain(
-    '1 + 2\n)'
+    '1 + 2\n}}'
   );
 });
 test('snapshot identity, stale paths and budgets are explicit', () => {

@@ -135,7 +135,7 @@ const assertSemanticValue = (
     if (valueKind !== 'text' && valueKind !== 'number') {
       fail(
         'SETTINGS_EXPRESSION_NOT_ALLOWED',
-        `${label} does not accept expr(...); expected ${valueKind}.`
+        `${label} does not accept {{...}}; expected ${valueKind}.`
       );
     }
     if (!value.source.trim()) {
@@ -252,7 +252,7 @@ const formatSemanticValue = (
           `${label} contains an empty text expression.`
         );
       }
-      return `expr(${trimmed})`;
+      return `{{${trimmed}}}`;
     }
     case 'number': {
       const trimmed = source.trim();
@@ -268,7 +268,7 @@ const formatSemanticValue = (
           `${label} contains an empty numeric expression.`
         );
       }
-      return `expr(${trimmed})`;
+      return `{{${trimmed}}}`;
     }
     case 'boolean': {
       const value = parseBooleanParameter(source, parameter.type);

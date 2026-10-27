@@ -18,6 +18,16 @@ import {
 
 const gd: libGDevelop = global.gd;
 
+// Physics2 still reads these legacy shared fields when worldScale is absent.
+// They are retained in existing projects even though the editor no longer
+// exposes them as properties or includes them in initialized defaults.
+const LEGACY_SHARED_SERIALIZED_PROPERTIES = {
+  'Physics2::Physics2Behavior': [
+    { serializedKey: 'scaleX', type: 'number' },
+    { serializedKey: 'scaleY', type: 'number' },
+  ],
+};
+
 const SCENE_LIFECYCLE_SOURCES = Object.freeze([
   { name: 'sceneLoad', legacyField: 'sceneLoadEvents', order: 0 },
   { name: 'sceneSignal', legacyField: 'sceneSignalEvents', order: 1 },
@@ -921,6 +931,8 @@ const collectRegisteredTypes = (
       entry.sharedSerializedDefaults = readInitializedSerializedDefaults(
         metadata.getSharedDataInstance()
       );
+      entry.sharedSerializedProperties =
+        LEGACY_SHARED_SERIALIZED_PROPERTIES[behaviorType] || [];
       if (!localBehaviorDefinition) {
         const byKey: Map<string, Object> = new Map();
         Object.entries(entry.serializedDefaults).forEach(

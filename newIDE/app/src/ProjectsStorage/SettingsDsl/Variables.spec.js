@@ -318,13 +318,11 @@ test('expression-named structure fields remain ordinary data during formatting',
     )
   );
   const formatted = formatSettingsDsl(source);
-  expect(formatted).not.toContain('expr(');
+  expect(formatted).not.toContain('{{');
   expect(decodeSettingsDocument(formatted).payload).toEqual(
     decodeSettingsDocument(source).payload
   );
   expect(() =>
-    decodeSettingsDocument(
-      scene(variable('name = "Data"\n value = expr(1 + 2)'))
-    )
+    decodeSettingsDocument(scene(variable('name = "Data"\n value = {{1 + 2}}')))
   ).toThrow('Expressions');
 });

@@ -103,12 +103,12 @@ events {
 
     conditions {
 
-      compareStrings first_string_expression=expr(SignalName) comparison_sign="=" second_string_expression="Game.Ready"
+      compareStrings first_string_expression={{SignalName}} comparison_sign="=" second_string_expression="Game.Ready"
     }
 
     actions {
 
-      log message_to_log=expr(Payload)
+      log message_to_log={{Payload}}
     }
   }
 }
@@ -209,7 +209,7 @@ events {
 
     conditions {
 
-      compareStrings first_string_expression=expr(SignalName) comparison_sign="=" second_string_expression="Card.Refresh"
+      compareStrings first_string_expression={{SignalName}} comparison_sign="=" second_string_expression="Card.Refresh"
     }
 
     actions {
@@ -250,7 +250,7 @@ events {
 
     actions {
 
-      emitSignalToObjectInstance instance_id=expr(CardSlot.InstanceId()) signal_name="Card.Refresh" payload="inventory-changed"
+      emitSignalToObjectInstance instance_id={{CardSlot.InstanceId()}} signal_name="Card.Refresh" payload="inventory-changed"
     }
   }
 }

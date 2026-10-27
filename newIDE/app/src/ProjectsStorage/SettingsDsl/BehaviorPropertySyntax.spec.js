@@ -60,8 +60,8 @@ const options = {
 const compile = (body, file = uri) =>
   compileSettingsEvents(
     `function { events { ${body}\n}\n}`
-      .replace(/\{\s*/g, '{\n')
-      .replace(/\s*\}/g, '\n}'),
+      .replace(/(?<!\{)\{(?!\{)\s*/g, '{\n')
+      .replace(/\s*(?<!\})\}(?!\})/g, '\n}'),
     options,
     file
   );
@@ -88,12 +88,12 @@ test('behavior context supports canonical, encoded, and absolute paths', () => {
 test.each([
   ['name="Height" value=12', ['Object', 'Behavior', '=', '12']],
   [
-    'name="Height" modification_sign="+" value=expr(2 + getProperty(name="Height"))',
+    'name="Height" modification_sign="+" value={{2 + getProperty(name="Height")}}',
     ['Object', 'Behavior', '+', '2 + Object.Behavior::PropertyHeight()'],
   ],
   ['name="Title" value="Hello"', ['Object', 'Behavior', '=', '"Hello"']],
   [
-    'name="Title" value=expr(getProperty(name="Title") + "!")',
+    'name="Title" value={{getProperty(name="Title") + "!"}}',
     ['Object', 'Behavior', '=', 'Object.Behavior::PropertyTitle() + "!"'],
   ],
   ['name="Fresh" value=false', ['Object', 'Behavior', 'no']],
@@ -109,7 +109,7 @@ test.each([
 test('conditions, flags, nested events and loop expressions round trip', () => {
   const events = compile(`event {
     type = "repeat"
-    count = expr(max(1, getProperty(name="Height")))
+    count = {{max(1, getProperty(name="Height"))}}
     conditions {
       getProperty { name="Fresh"
  flags {
@@ -121,7 +121,7 @@ inverted = true
  flags {
 disabled = true
 } } }
-    event { actions { setProperty { name="Height" value=expr(getProperty(name="Height") + 1) } } }
+    event { actions { setProperty { name="Height" value={{getProperty(name="Height") + 1}} } } }
   }`);
   expect(events[0].repeatExpression).toBe(
     'max(1, Object.Behavior::PropertyHeight())'
@@ -146,7 +146,7 @@ disabled = true
 
 test.each([
   ['setProperty { name="Missing" value=1 }', 'Unknown action property'],
-  ['setProperty { name=expr("Height") value=1 }', 'literal identifier'],
+  ['setProperty { name={{"Height"}} value=1 }', 'literal identifier'],
   ['setProperty { name="Height" value="12" }', 'semantic number'],
   ['setProperty { name="Fresh" value="false" }', 'semantic boolean'],
   ['setProperty { name="Fresh" }', 'requires value'],
@@ -156,15 +156,15 @@ test.each([
     'has no parameter',
   ],
   [
-    'setProperty { name="Height" value=expr(getProperty(name="Fresh")) }',
+    'setProperty { name="Height" value={{getProperty(name="Fresh")}} }',
     'Boolean properties',
   ],
   [
-    'setProperty { name="Height" value=expr(getProperty(name="Missing")) }',
+    'setProperty { name="Height" value={{getProperty(name="Missing")}} }',
     'Unknown action property',
   ],
   [
-    'setProperty { name="Height" value=expr(getProperty(name="Height" extra=1)) }',
+    'setProperty { name="Height" value={{getProperty(name="Height" extra=1)}} }',
     'accepts only name',
   ],
 ])('rejects invalid property access %s', (source, message) => {
@@ -190,8 +190,7 @@ test('does not rewrite quoted text or similarly named member calls', () => {
   const expression =
     '"getProperty(name=\\"Missing\\")" + getProperty(name="Title")';
   expect(
-    action(`setProperty { name="Title" value=expr(${expression}) }`)
-      .parameters[3]
+    action(`setProperty { name="Title" value={{${expression}}} }`).parameters[3]
   ).toBe(
     '"getProperty(name=\\"Missing\\")" + Object.Behavior::PropertyTitle()'
   );

@@ -12,7 +12,7 @@ Author actions and conditions using each catalog entry's **`dslName`**. Its
 prefer it when a shorter `dslName` is published. System names are fixed by the
 engine. Third-party and user instruction `dslName` remains its complete `type`.
 Use parameter `dslName` unchanged. Never invent abbreviations or edit generated
-catalogs. Expressions inside `expr(...)` retain their existing names. The
+catalogs. Expressions inside `{{...}}` retain their existing names. The
 formatter always writes the catalog instruction `dslName`.
 
 ## Source of truth

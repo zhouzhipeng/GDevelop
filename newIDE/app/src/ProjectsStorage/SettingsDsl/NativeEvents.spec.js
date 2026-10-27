@@ -388,7 +388,7 @@ test('behavior property aliases use native metadata and generate identical execu
     const uri =
       'game://extensions/PropertyAliasTest/behaviors/Follow/functions/doStepPreEvents.gdl';
     const source =
-      'function {\n      events {\n        event {\n          conditions {\n            getProperty { name="Fresh" }\n          }\n          actions {\n            setProperty { name="Fresh" value=false }\n            setProperty { name="Height" value=expr(getProperty(name="Height") + 2) }\n            setProperty { name="Title" value=expr(getProperty(name="Title") + "!") }\n          }\n        }\n      }\n    }';
+      'function {\n      events {\n        event {\n          conditions {\n            getProperty { name="Fresh" }\n          }\n          actions {\n            setProperty { name="Fresh" value=false }\n            setProperty { name="Height" value={{getProperty(name="Height") + 2}} }\n            setProperty { name="Title" value={{getProperty(name="Title") + "!"}} }\n          }\n        }\n      }\n    }';
     const events = compileSettingsEvents(source, options, uri);
     expect(events[0].actions[0].parameters).toEqual([
       'Object',

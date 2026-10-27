@@ -48,7 +48,7 @@ screen/row/column layout nodes are not implemented.
   and have a trailing comma. `//` starts a comment outside a string.
 - Values are strings, finite numbers, booleans and arrays; variable.value also accepts structure literals. Null, dates and includes are forbidden. Ordinary configuration fields do not
   accept expressions; event instruction operands and supported loop fields use
-  expr(...) as described in [Events](#events). Integers must be safe integers.
+  {{...}} as described in [Events](#events). Integers must be safe integers.
 - Unknown fields/nodes and duplicate properties/singleton nodes are errors.
 - Only project.gdl declares formatVersion. All other root fields come
   directly from the matching component schema.
@@ -148,7 +148,7 @@ Author actions and conditions using each catalog entry's **`dslName`**. Its
 prefer it when a shorter `dslName` is published. System names are fixed by the
 engine. Third-party and user instruction `dslName` remains its complete `type`.
 Use parameter `dslName` unchanged. Never invent abbreviations or edit generated
-catalogs. Expressions inside `expr(...)` retain their existing names. The
+catalogs. Expressions inside `{{...}}` retain their existing names. The
 formatter writes the catalog instruction `dslName`, except for the behavior
 property syntax aliases described below (`setProperty` / `getProperty`).
 
@@ -219,8 +219,13 @@ that a scene-variable action adds once per coin. Use for_each when required.
   instruction `dslName` followed by semantic named arguments. No positional args,
   user-defined aliases, @ annotations, > depth prefixes, ? prefixes or raw JSON.
 - Ordinary text/object/behavior/variable/resource/name operands are quoted;
-  numbers and booleans are literals. Use expr(...) for calculated expressions.
-  Balanced expr bodies may span lines; preserve their exact expression source.
+  numbers and booleans are literals. Use {{...}} for calculated expressions.
+  Expression bodies inside `{{...}}` may span lines; preserve their expression source.
+- `{{ ... }}` contains a GDevelop expression, not JavaScript or a GDL block.
+  For example, `angle_in_degrees = {{ MousePointerLock::MovementX() * HorizontalSpeed / SceneWindowWidth() }}`.
+  A plain string such as `message = "Hello"` is a literal, while
+  `message = {{ "Score: " + ToString(Score) }}` is an expression. The old
+  `expr(...)` wrapper is not supported.
 - Every instruction uses `Instruction { parameter = value }`, including empty
   calls (`Instruction {}`). Parameters belong inside the braces. Execution
   flags belong in a nested `flags {}` block: disabled/inverted for conditions,
@@ -264,7 +269,7 @@ event {
 event {
   type = "for_each"
   object = "Enemy"
-  order_by = expr(Enemy.Variable(HP))
+  order_by = {{Enemy.Variable(HP)}}
   order = "desc"
   limit = 10
 }
@@ -387,7 +392,7 @@ function {
       }
       actions {
         setProperty { name = "HasJustBeenCreated" value = false }
-        setProperty { name = "CameraZ" value = expr(getProperty(name="CameraZ") + 10) }
+        setProperty { name = "CameraZ" value = {{getProperty(name="CameraZ") + 10}} }
       }
     }
   }
@@ -397,7 +402,7 @@ function {
 The owning behavior comes from the file path. `object="Object"` and
 `behavior="Behavior"` default automatically on instructions. `name` must be a
 literal existing property name. Keep values typed: numbers as numbers, text as
-strings, booleans as `true`/`false`, calculations inside `expr(...)`.
+strings, booleans as `true`/`false`, calculations inside `{{...}}`.
 `modification_sign` on numeric/text setters defaults to `"="`; boolean setters
 require an explicit value. Numeric/text conditions accept `value` and
 `comparison_sign` (default `"="`). A boolean condition tests true; use

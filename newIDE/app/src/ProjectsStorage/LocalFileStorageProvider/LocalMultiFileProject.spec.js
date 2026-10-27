@@ -2307,6 +2307,17 @@ column2 = "333"
     legacyProject.properties.name = 'Physics template regression';
     legacyProject.properties.platforms = [{ name: 'GDevelop JS platform' }];
     legacyProject.properties.currentPlatform = 'GDevelop JS platform';
+    legacyProject.layouts[0].behaviorsSharedData = [
+      {
+        name: 'Physics2',
+        type: 'Physics2::Physics2Behavior',
+        gravityX: 0,
+        gravityY: 9.8,
+        worldScale: 100,
+        scaleX: 120,
+        scaleY: 80,
+      },
+    ];
     legacyProject.layouts[0].objects = [
       {
         name: 'Body',
@@ -2373,7 +2384,22 @@ column2 = "333"
       );
       expect(objectSource).toContain('layers = 3');
       expect(objectSource).toContain('masks = 5');
+      const sceneSource = fs.readFileSync(
+        path.join(temporaryDirectory, 'scenes/Main/scene.gdl'),
+        'utf8'
+      );
+      expect(sceneSource).toContain('scaleX = 120');
+      expect(sceneSource).toContain('scaleY = 80');
       const reopened = await openMultiFileProject(entryPath);
+      expect(reopened.layouts[0].behaviorsSharedData).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'Physics2::Physics2Behavior',
+            scaleX: 120,
+            scaleY: 80,
+          }),
+        ])
+      );
       expect(reopened.layouts[0].events[0].actions[0]).toMatchObject({
         type: { value: 'Physics2::Remove joint' },
         parameters: ['Object', 'PhysicsBehavior', 'MouseJointID'],

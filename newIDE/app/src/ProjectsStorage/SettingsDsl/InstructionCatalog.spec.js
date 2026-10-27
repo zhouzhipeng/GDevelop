@@ -169,7 +169,7 @@ describe('project Settings instruction catalog', () => {
 
   test('compiles named catalog instructions with semantic operands', () => {
     const source =
-      'function {\n events {\n event {\n conditions {\n Network::Succeeded { request_id="RequestId" }\n }\n actions {\n Network::Send { url="https://example.com" body=expr(VariableString(Payload)) }\n }\n }\n }\n }\n';
+      'function {\n events {\n event {\n conditions {\n Network::Succeeded { request_id="RequestId" }\n }\n actions {\n Network::Send { url="https://example.com" body={{VariableString(Payload)}} }\n }\n }\n }\n }\n';
     const output = compileSettingsEvents(source, {
       resolveInstruction: createCatalogInstructionResolver(catalogFixture),
     });
@@ -325,7 +325,7 @@ describe('project Settings instruction catalog', () => {
     });
 
     expect(dsl).toMatch(/parameter_0\s+=\s+"Object"/);
-    expect(dsl).toMatch(/parameter_1\s+=\s+expr\(Object\.PointX\("Center"\)\)/);
+    expect(dsl).toMatch(/parameter_1\s+=\s+\{\{Object\.PointX\("Center"\)\}\}/);
     expect(dsl).toMatch(/parameter_2\s+=\s+"Checkpoint"/);
     expect(dsl).not.toContain('\\"');
     expect(
@@ -364,9 +364,9 @@ describe('project Settings instruction catalog', () => {
     ).toThrow('expects a semantic number');
     expect(() =>
       compile(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action { count=1 object=expr("Enemy") }\n      }\n    }\n  }\n}\n'
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action { count=1 object={{"Enemy"}} }\n      }\n    }\n  }\n}\n'
       )
-    ).toThrow('does not accept expr(...)');
+    ).toThrow('does not accept {{...}}');
     expect(() =>
       compile(
         'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action { count=1 object="Enemy" runtime="scene" }\n      }\n    }\n  }\n}\n'
@@ -377,7 +377,7 @@ describe('project Settings instruction catalog', () => {
   test('scans nested calculated expressions without exposing raw operands', () => {
     const output = JSON.parse(
       compileSettingsJson(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body=expr(ToString(Max(Variable(A), Variable(B)))) }\n      }\n    }\n  }\n}\n',
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body={{ToString(Max(Variable(A), Variable(B)))}} }\n      }\n    }\n  }\n}\n',
         { resolveInstruction: createCatalogInstructionResolver(catalogFixture) }
       )
     );
@@ -386,14 +386,14 @@ describe('project Settings instruction catalog', () => {
     );
     expect(() =>
       compileSettingsJson(
-        'function {\n events {\n event {\n actions {\n Network::Send { url="https://example.com" body=expr() }\n}\n}\n}\n}\n',
+        'function {\n events {\n event {\n actions {\n Network::Send { url="https://example.com" body={{}} }\n}\n}\n}\n}\n',
         { resolveInstruction: createCatalogInstructionResolver(catalogFixture) }
       )
     ).toThrow('cannot be empty');
     expect(
       JSON.parse(
         compileSettingsJson(
-          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body=expr(ToString(\nMax(Variable(A), Variable(B))\n)) }\n      }\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body={{ToString(\nMax(Variable(A), Variable(B))\n)}} }\n      }\n    }\n  }\n}\n',
           {
             resolveInstruction: createCatalogInstructionResolver(
               catalogFixture
@@ -405,7 +405,7 @@ describe('project Settings instruction catalog', () => {
     expect(
       JSON.parse(
         compileSettingsJson(
-          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body=expr("first line\nsecond line") }\n      }\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body={{"first line\nsecond line"}} }\n      }\n    }\n  }\n}\n',
           {
             resolveInstruction: createCatalogInstructionResolver(
               catalogFixture
@@ -454,7 +454,7 @@ describe('project Settings instruction catalog', () => {
 
     expect(dsl).toMatch(/Text::Set\s+\{\s+text\s+=\s+""/);
     expect(dsl).toMatch(
-      /Text::Set\s+\{\s+text\s+=\s+expr\("Score:\s+"\s+\+\s+ToString\(Variable\(Score\)\)\)/
+      /Text::Set\s+\{\s+text\s+=\s+\{\{"Score:\s+"\s+\+\s+ToString\(Variable\(Score\)\)\}\}/
     );
     expect(dsl).not.toContain('\\"');
     expect(areLegacyEventsEquivalent(input, output)).toBe(true);

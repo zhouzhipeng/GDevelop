@@ -16,6 +16,25 @@ const resolveInstruction = ({ kind, source }) => ({
 });
 const formatInstruction = ({ instruction }) => `${instruction.type.value} {}`;
 const options = { resolveInstruction, formatInstruction };
+test('double-brace expressions retain quoted delimiters and nested braces', () => {
+  const source = wrap(
+    'event {\n actions {\n A { value={{Func("}}", { nested: 1 })}} other=2 }\n }\n}'
+  );
+  const syntax = parseSettingsSyntax(source);
+  const printed = printSettingsSyntax(syntax.root, syntax.comments);
+  expect(printed).toContain('{{Func("}}", { nested: 1 })}}');
+  expect(printSettingsSyntax(parseSettingsSyntax(printed).root)).toBe(printed);
+});
+
+test('rejects empty, unterminated, and old-style expression operands', () => {
+  for (const operand of ['{{ }}', '{{1 + 2', 'expr(1 + 2)']) {
+    expect(() =>
+      parseSettingsSyntax(
+        wrap(`event {\n actions {\n A { value=${operand} }\n }\n}`)
+      )
+    ).toThrow();
+  }
+});
 test('keeps explicit sibling and child event boundaries; list context determines instruction kind', () => {
   const source = wrap(
     'event {\n actions {\n A {}\n }\n event {\n conditions {\n Or {\n C {}\n D {}\n }\n }\n actions {\n B {}\n }\n }\n}\nevent {\n actions {\n E {}\n }\n}'
@@ -80,7 +99,7 @@ test('round trips groups, comments and links as dedicated ordered nodes', () => 
 });
 test('expression operands and type-specific while lists stay separate', () => {
   const source = wrap(
-    'event {\n type = "while"\n while_conditions {\n C { value=expr(Func("(", (1 + 2))) }\n }\n conditions {\n D {}\n }\n actions {\n A {}\n }\n}'
+    'event {\n type = "while"\n while_conditions {\n C { value={{Func("(", (1 + 2))}} }\n }\n conditions {\n D {}\n }\n actions {\n A {}\n }\n}'
   );
   const events = compileSettingsEvents(source, options);
   expect(events[0].whileConditions[0].type.value).toBe('C');
@@ -117,7 +136,7 @@ test('explicit containers determine semantics independently of category placemen
 test('all loop kinds retain fields, locals, flags and children through the unified grammar', () => {
   const source = wrap(`event {
   type = "repeat"
-  count = expr(Variable(Count) + 1)
+  count = {{Variable(Count) + 1}}
   index = "i"
   variable {
     name = "State"
@@ -129,7 +148,7 @@ test('all loop kinds retain fields, locals, flags and children through the unifi
     type = "for_each"
     object = "Enemy"
     index = "j"
-    order_by = expr(Enemy.X())
+    order_by = {{Enemy.X()}}
     order = "desc"
     limit = 10
   }
@@ -200,7 +219,7 @@ test('rejects object literals masquerading as loop expressions and unsupported i
       wrap('event {\n type = "repeat"\n count = { expression = "5" }\n}'),
       options
     )
-  ).toThrow('requires a number or expr');
+  ).toThrow('requires a number or {{');
   expect(() =>
     compileSettingsEvents(
       wrap(
@@ -287,8 +306,8 @@ test('argument blocks preserve operand locations, comments, and flags with colli
     A {
       // catalog parameter, separate from the execution flag
       disabled = "parameter"
-      value = expr(Max(1,
-        2))
+      value = {{Max(1,
+        2)}}
       flags { disabled = true awaited = true }
       B {}
     }
@@ -302,7 +321,7 @@ test('argument blocks preserve operand locations, comments, and flags with colli
   expect(instruction.properties.awaited.value).toBe(true);
   const location = instruction.arguments.value.location;
   expect(source.slice(location.offset, location.endOffset)).toBe(
-    'expr(Max(1,\n        2))'
+    '{{Max(1,\n        2)}}'
   );
   expect(instruction.children[0].type).toBe('B');
   const printed = printSettingsSyntax(syntax.root, syntax.comments);

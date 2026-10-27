@@ -11,7 +11,7 @@
 - 精确类型和实际 catalog 参数决定规则，不根据指令名正则或参数字符串猜测对象角色。
 - 项目打开入口检查主/废弃指令 catalog 的版本和语义契约；遇到旧生成 catalog 时自动重建，保留当前 GDL 源文件不变。
 - 对已登记的正向 CollisionNP、Delete、变量写入、PickAll/PickRandom 等提供基本解释；处理 ForEach 的目标基数、父动作后的子事件入口、兄弟选择隔离和世界副作用。
-- 新增 `compileSettingsEventsWithSyntax` 伴随 API，原 `compileSettingsEvents` 返回类型保持不变。修正无子块指令的源码范围，使其包含完整参数和多行 expr。
+- 新增 `compileSettingsEventsWithSyntax` 伴随 API，原 `compileSettingsEvents` 返回类型保持不变。修正无子块指令的源码范围，使其包含完整参数和多行表达式。
 - 源码映射区分两个 While 条件列表，覆盖递归子指令、参数、flags、局部变量和 JS 原始区域。事件路径包含 group/comment/link。
 - 低优先级提示覆盖多对象删除与单次变量副作用、筛选后创建、选择替换，以及 ForEach 中对其他多选对象的操作。提示不会阻止保存，也不自动插入循环。
 - 新增公开只读 `analyze_gdl_events` 和 `get_gdl_instruction_semantics`，注册 schema、bridge、示例和权限清单。精确查询返回规则实现及测试证据路径。

@@ -367,6 +367,9 @@ export const registerSettingsTypes = (
     (type.sharedProperties || []).forEach(p => {
       shared[p.serializedKey || p.name] = scalar(p.type);
     });
+    (type.sharedSerializedProperties || []).forEach(p => {
+      shared[p.serializedKey] = scalar(p.type);
+    });
     Object.entries(type.sharedSerializedDefaults || {}).forEach(
       ([key, value]) => {
         if (!shared[key])

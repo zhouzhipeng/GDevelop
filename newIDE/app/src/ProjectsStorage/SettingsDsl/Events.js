@@ -274,7 +274,7 @@ export const decodeEventList = (
       const value = data[key];
       if (expressionFields.includes(key)) {
         if (typeof value !== 'number' && !n.properties[key].expression)
-          error(`${key} requires a number or expr(...).`, n, uri);
+          error(`${key} requires a number or {{...}}.`, n, uri);
         result[nativeKey] =
           typeof value === 'number'
             ? String(value)

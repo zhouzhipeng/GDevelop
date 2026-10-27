@@ -612,9 +612,10 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
         ],
         childNodes: [quickCustomizationNode('behaviorsSharedData')],
         dynamicFields: {
-          source: 'behaviorTypes[type].sharedProperties',
-          key: 'sharedProperties[].serializedKey',
-          value: 'sharedProperties[].type',
+          source:
+            'behaviorTypes[type].sharedProperties and sharedSerializedProperties',
+          key: 'serializedKey',
+          value: 'type',
         },
         additionalFields:
           'reject unlisted existing shared-data serializer fields',

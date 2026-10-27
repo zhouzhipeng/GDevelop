@@ -6,6 +6,16 @@ const directory = path.resolve(
   __dirname,
   '../../../resources/gd-project-template/skills/gdevelop-project-files/references'
 );
+test('bundled authoring guidance documents the double-brace expression syntax', () => {
+  const skill = fs.readFileSync(path.join(directory, '..', 'SKILL.md'), 'utf8');
+  const usage = fs.readFileSync(path.join(directory, 'gdl-usage.md'), 'utf8');
+  expect(skill).toContain('Expressions inside `{{...}}`');
+  expect(usage).toContain(
+    'angle_in_degrees = {{ MousePointerLock::MovementX()'
+  );
+  expect(usage).toContain('`expr(...)` wrapper is not supported');
+  expect(usage).not.toMatch(/=\s*expr\(/);
+});
 for (const file of [
   'gdl-usage.md',
   'create-extensions.md',

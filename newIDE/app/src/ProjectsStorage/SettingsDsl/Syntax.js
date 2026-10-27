@@ -85,6 +85,32 @@ export const parseSettingsSyntax = (source, fileUri) => {
       advance();
       return { type: 'newline', location };
     }
+    if (source.startsWith('{{', offset)) {
+      advance();
+      advance();
+      const start = offset;
+      let depth = 0,
+        quote = null,
+        escaped = false;
+      while (offset < source.length) {
+        if (!quote && depth === 0 && source.startsWith('}}', offset)) {
+          const expression = source.slice(start, offset).trim();
+          advance();
+          advance();
+          if (!expression) error('{{...}} cannot be empty.', location);
+          return { type: 'expression', value: { expression }, location };
+        }
+        const c = advance();
+        if (quote) {
+          if (escaped) escaped = false;
+          else if (c === '\\') escaped = true;
+          else if (c === quote) quote = null;
+        } else if (c === '"') quote = c;
+        else if (c === '{') depth++;
+        else if (c === '}' && depth > 0) depth--;
+      }
+      error('Unterminated {{...}}.', location);
+    }
     if ('{}[]=,'.includes(character)) {
       advance();
       return { type: character, location };
@@ -118,28 +144,6 @@ export const parseSettingsSyntax = (source, fileUri) => {
       } catch (_) {
         error('Invalid JSON string escape or control character.', location);
       }
-    }
-    if (source.startsWith('expr(', offset)) {
-      const start = offset;
-      let depth = 0,
-        quote = null,
-        escaped = false;
-      while (offset < source.length) {
-        const c = advance();
-
-        if (quote) {
-          if (escaped) escaped = false;
-          else if (c === '\\') escaped = true;
-          else if (c === quote) quote = null;
-        } else if (c === '"') quote = c;
-        else if (c === '(') depth++;
-        else if (c === ')' && --depth === 0) {
-          const expression = source.slice(start + 5, offset - 1).trim();
-          if (!expression) error('expr(...) cannot be empty.', location);
-          return { type: 'expression', value: { expression }, location };
-        }
-      }
-      error('Unterminated expr(...).', location);
     }
     const rest = source.slice(offset);
     const match =
@@ -499,7 +503,7 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
   const emitLiteral = (prefix, item, depth, suffix = '') => {
     const indent = '  '.repeat(depth);
     if (item.expression === true) {
-      lines.push(`${prefix}expr(${item.value.expression})${suffix}`);
+      lines.push(`${prefix}{{${item.value.expression}}}${suffix}`);
     } else if (
       item.value &&
       typeof item.value === 'object' &&
@@ -588,7 +592,7 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
           ([key, item]) =>
             `${keyText(key)} = ${
               item.expression
-                ? `expr(${item.value.expression})`
+                ? `{{${item.value.expression}}}`
                 : JSON.stringify(item.value)
             }`
         )

@@ -39,7 +39,7 @@ action 和 condition 各自拥有名称空间，因为源码已经由 actions/co
 
 ## 3. catalog、解析与规范输出
 
-actions 和 conditions 中每条记录新增必需字段 dslName：系统指令使用固定短名，其他指令使用原生 type，后者允许现有的 :: 分隔格式。已有 name 继续表示显示名称，不能改变其含义；参数 dslName 完全不变；expressions 结构及 expr(...) 不变。
+actions 和 conditions 中每条记录新增必需字段 dslName：系统指令使用固定短名，其他指令使用原生 type，后者允许现有的 :: 分隔格式。已有 name 继续表示显示名称，不能改变其含义；参数 dslName 完全不变；expressions 结构及 {{...}} 不变。
 
 示例：
 

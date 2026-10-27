@@ -299,7 +299,7 @@ instruction catalog 当前为 6，发布结构化 `semantics`；GDL 作者格式
 | --- | --- | --- |
 | CollisionNP | 双侧筛选、反选特例、列表结果不保留配对 | 多对多、自碰撞、相同组或重叠组 |
 | 基础对象条件 | 明确登记的单对象筛选 | 不把所有对象参数条件视为 filter |
-| NumberVariable 等已登记全局条件 | 布尔门控、选择保持 | expr 读取对象不等于筛选对象 |
+| NumberVariable 等已登记全局条件 | 布尔门控、选择保持 | 表达式读取对象不等于筛选对象 |
 | Delete | 对选中目标逐实例副作用 | 删除后的列表与后续动作依引擎测试确定 |
 | SetNumberVariable | 每次动作到达时修改解析后的变量 | 场景/全局/局部解析，不能只看裸变量名 |
 | Create / CreateByName | 创建调用次数及新实例对后续选择的影响 | 列表已物化/未物化、动态名失败、目标组 |
@@ -696,7 +696,7 @@ Coin 夹具至少包括两枚碰撞金币和一枚远处金币，分别验证原
 
 - 新 MCP 名称出现在公开 catalog，有 schema、bridge 分派、错误和预算测试。
 - 磁盘与 buffer 快照不混用，stale 请求明确失败。
-- 精确定位多字节字符、UTF-16 surrogate pair、多行 expr、嵌入 JS、递归子指令。
+- 精确定位多字节字符、UTF-16 surrogate pair、多行表达式、嵌入 JS、递归子指令。
 - while_conditions 与 conditions 相同索引不会混淆。
 - 分析不修改 `.gdl`、不输出 `.events`、不增加原生模型字段。
 - Catalog 新版本的构建/校验/deprecated merge/保存重开一致。
