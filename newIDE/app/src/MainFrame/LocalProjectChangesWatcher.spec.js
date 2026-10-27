@@ -84,6 +84,34 @@ describe('useLocalProjectChangesWatcher', () => {
     act(() => renderer.unmount());
   });
 
+  it('does not warn when newer timestamps have matching contents', async () => {
+    const onProjectFilesChanged: any = (jest.fn(): any);
+    const areProjectFilesSameAsMemory: any = (jest.fn(): any).mockResolvedValue(
+      true
+    );
+    mockFn(getLocalProjectLastModifiedDate).mockResolvedValue(2000);
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Watcher
+          enabled
+          areProjectFilesSameAsMemory={areProjectFilesSameAsMemory}
+          onProjectFilesChanged={onProjectFilesChanged}
+        />
+      );
+    });
+    for (let index = 0; index < 2; index++) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        jest.advanceTimersByTime(LOCAL_PROJECT_CHANGES_POLL_INTERVAL);
+        await flushPromises();
+      });
+    }
+    expect(onProjectFilesChanged).not.toHaveBeenCalled();
+    expect(areProjectFilesSameAsMemory).toHaveBeenCalledTimes(1);
+    act(() => renderer.unmount());
+  });
+
   it('does not poll while disabled', () => {
     const onProjectFilesChanged: any = (jest.fn(): any);
     let renderer;
@@ -164,7 +192,7 @@ describe('useLocalProjectChangesWatcher', () => {
     expect(getLocalProjectLastModifiedDate).toHaveBeenCalledTimes(2);
     expect(onProjectFilesChanged).toHaveBeenCalledTimes(1);
     expect(replacementOnProjectFilesChanged).not.toHaveBeenCalled();
-    expect(areProjectFilesSameAsMemory).toHaveBeenCalledTimes(1);
+    expect(areProjectFilesSameAsMemory).toHaveBeenCalledTimes(2);
     expect(activeDialogDismissSignal.aborted).toBe(false);
 
     await act(async () => {
@@ -173,7 +201,7 @@ describe('useLocalProjectChangesWatcher', () => {
     });
     expect(getLocalProjectLastModifiedDate).toHaveBeenCalledTimes(3);
     expect(onProjectFilesChanged).toHaveBeenCalledTimes(1);
-    expect(areProjectFilesSameAsMemory).toHaveBeenCalledTimes(2);
+    expect(areProjectFilesSameAsMemory).toHaveBeenCalledTimes(3);
     expect(activeDialogDismissSignal.aborted).toBe(false);
 
     act(() => renderer.unmount());
@@ -192,9 +220,9 @@ describe('useLocalProjectChangesWatcher', () => {
       }
     ): any);
     mockFn(getLocalProjectLastModifiedDate).mockResolvedValue(2000);
-    const areProjectFilesSameAsMemory: any = (jest.fn(): any).mockResolvedValue(
-      true
-    );
+    const areProjectFilesSameAsMemory: any = (jest.fn(): any)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true);
     let renderer;
     act(() => {
       renderer = TestRenderer.create(
@@ -219,7 +247,7 @@ describe('useLocalProjectChangesWatcher', () => {
       await flushPromises();
     });
 
-    expect(areProjectFilesSameAsMemory).toHaveBeenCalledTimes(1);
+    expect(areProjectFilesSameAsMemory).toHaveBeenCalledTimes(2);
     expect(dismissSignal.aborted).toBe(true);
     act(() => renderer.unmount());
   });

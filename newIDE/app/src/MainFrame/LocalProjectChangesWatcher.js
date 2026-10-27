@@ -164,6 +164,15 @@ const useLocalProjectChangesWatcher = ({
 
           if (latestModificationTime <= currentBaselineModificationTime) return;
 
+          // Generated catalogs and identical rewrites can change timestamps
+          // without changing the project. Confirm contents before warning.
+          const projectFilesSameAsMemory = await areProjectFilesSameAsMemoryRef.current();
+          if (isDisposed) return;
+          if (projectFilesSameAsMemory) {
+            baselineModificationTimeRef.current = latestModificationTime;
+            return;
+          }
+
           latestPendingModificationTime = latestModificationTime;
 
           const dialogAbortController = new AbortController();

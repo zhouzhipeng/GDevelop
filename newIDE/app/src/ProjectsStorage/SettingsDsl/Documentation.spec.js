@@ -7,10 +7,9 @@ const directory = path.resolve(
   '../../../resources/gd-project-template/skills/gdevelop-project-files/references'
 );
 for (const file of [
-  'settings-dsl.md',
+  'gdl-usage.md',
   'create-extensions.md',
   'gameplay-test-harness.md',
-  'events-dsl.md',
   'signal-system.md',
   'springbone-behavior.md',
   'tsl-materials.md',

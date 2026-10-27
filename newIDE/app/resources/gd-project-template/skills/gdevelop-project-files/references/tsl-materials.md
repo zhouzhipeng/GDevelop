@@ -524,7 +524,7 @@ active slots, the last error code/message, and the active backend.
 
 When authoring events:
 
-1. Read `references/events-dsl.md` and the current `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`.
+1. Read `references/gdl-usage.md` and the current `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`.
 2. Use the instruction `dslName`, scope, and parameter `dslName`; never
    invent a prose alias from the UI label.
 3. Pass the bare resource name (for example `Hologram`), not a file path or

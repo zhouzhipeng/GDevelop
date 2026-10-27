@@ -194,21 +194,22 @@ export const onOpen = (
   const filePath = fileMetadata.fileIdentifier;
   const fileName = path.basename(filePath);
   if (fileName === MULTI_FILE_ENTRY_NAME) {
-    return getLocalProjectLastModifiedDate(filePath).then(
-      async lastModifiedDate => {
-        await bootstrapProjectSourceCatalogs(filePath);
-        const openedProject = separateConstantsFromProject(
-          await openMultiFileProject(filePath)
-        );
-        return {
-          ...openedProject,
-          fileMetadata: {
-            ...fileMetadata,
-            ...(lastModifiedDate !== null ? { lastModifiedDate } : {}),
-          },
-        };
-      }
-    );
+    return (async () => {
+      await bootstrapProjectSourceCatalogs(filePath);
+      // Include generated catalog writes in the baseline, before reading
+      // sources so subsequent external edits are still detected.
+      const lastModifiedDate = await getLocalProjectLastModifiedDate(filePath);
+      const openedProject = separateConstantsFromProject(
+        await openMultiFileProject(filePath)
+      );
+      return {
+        ...openedProject,
+        fileMetadata: {
+          ...fileMetadata,
+          ...(lastModifiedDate !== null ? { lastModifiedDate } : {}),
+        },
+      };
+    })();
   }
   if (['.gdl', '.gdevelop'].includes(path.extname(filePath).toLowerCase())) {
     return Promise.reject(

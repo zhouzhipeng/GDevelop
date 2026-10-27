@@ -337,7 +337,7 @@ discontinuous animation switch.
 
 ## Control and diagnose at runtime
 
-Before authoring events, read [events-dsl.md](events-dsl.md) and search the
+Before authoring events, read [gdl-usage.md](gdl-usage.md) and search the
 current `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`. Use only instruction and parameter
 `dslName` values present in that generated catalog.
 

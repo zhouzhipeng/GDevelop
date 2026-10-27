@@ -29,6 +29,7 @@ import {
   PROJECT_INSTRUCTION_CATALOG_PATHS,
 } from '../SettingsDsl/InstructionCatalog';
 import { onOpen } from './LocalProjectOpener';
+import { getLocalProjectLastModifiedDate } from './LocalProjectFileModificationTime';
 import {
   GENERATED_LEGACY_PROJECT_RELATIVE_PATH,
   getProjectLocation,
@@ -805,6 +806,9 @@ describe('Local multi-file project storage', () => {
 
     const result = await onOpen({ fileIdentifier: entryPath });
 
+    expect(result.fileMetadata.lastModifiedDate).toBe(
+      await getLocalProjectLastModifiedDate(entryPath)
+    );
     expect(result.content.constants).toBeUndefined();
     expect(result.constants).toEqual({});
     expect(result.content.layouts[0].events[0]).toMatchObject({

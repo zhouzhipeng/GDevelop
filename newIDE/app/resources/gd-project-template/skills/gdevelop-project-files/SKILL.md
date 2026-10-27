@@ -179,7 +179,7 @@ generated compatibility/runtime output, not multi-file source.
 ## File contract
 
 All `.gdl` and `project.gdl` use **GDevelop Language (GDL)**, not TOML. Read
-[GDevelop Language (GDL)](references/settings-dsl.md) before editing declarations.
+[GDevelop Language (GDL)](references/gdl-usage.md) before editing declarations.
 
 - Use `key = value` for properties and `node { ... }` for structure. Names,
   IDs and all properties belong inside the node. Two-space indentation is
@@ -331,10 +331,10 @@ Load only the references required by the task:
 - Read [references/create-extensions.md](references/create-extensions.md) in
   full before creating an extension or adding/removing extension-level
   functions, prefabs, behaviors, or their functions.
-- Read [references/settings-dsl.md](references/settings-dsl.md) in full before
+- Read [references/gdl-usage.md](references/gdl-usage.md) in full before
   creating or changing layout nodes. Preserve existing UUIDs and use its
   exact scene, prefab/variant, or external-layout context rules.
-- Read [references/events-dsl.md](references/events-dsl.md) in full before
+- Read [references/gdl-usage.md](references/gdl-usage.md) in full before
   creating or changing embedded events in a `.gdl` file. Use only its canonical Settings event
   structures and the instruction `dslName` and parameter `dslName` found in the
   generated project instruction catalog.
@@ -393,7 +393,7 @@ implementation is materially simpler. Record that decision in the task result.
 
 ## Event authoring
 
-Read [the unified event syntax](references/events-dsl.md) before editing function
+Read [the unified event syntax](references/gdl-usage.md) before editing function
 or fragment bodies. Only GDevelop Language (GDL) format 13 is supported. Function signatures
 and events share one .gdl file; .events files are rejected. Use explicit
 conditions/actions blocks containing bare catalog instructions, typed event
@@ -410,7 +410,7 @@ reload the editor. On `catalog-stale`, run `generate-catalogs` and retry.
 Read `unknownReasons`, coverage and truncation before relying on a summary.
 `complete` means covered static rules, not verified gameplay. Current complex
 logical merges, inversion, arbitrary expressions/JS, loops and cross-file calls
-may remain partial. See [event analysis](references/events-dsl.md#execution-and-picking-analysis).
+may remain partial. See [event analysis](references/gdl-usage.md#execution-and-picking-analysis).
 
 ## Direct-edit workflow
 
