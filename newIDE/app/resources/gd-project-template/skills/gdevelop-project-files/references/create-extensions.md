@@ -43,7 +43,7 @@ composition, and executable logic in `.gdl`.
    are blocks to insert inside that same function root.
 7. Write variables blocks with scalar shorthand or typed variable children, following gdl-usage.md.
 8. Use catalog instruction `dslName` and parameter `dslName` from
-   `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` in every event body.
+   `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` in event bodies; behavior property aliases below are the supported exception.
 9. Call `generate-catalogs` after the declaration/files exist. If the extension
    adds instruction types, re-read the regenerated catalog before writing or
    changing callers.
@@ -381,3 +381,13 @@ selection through child events and nested private behavior-function calls.
    from a guarded test event.
 8. Launch a fresh paused preview and inspect runtime errors, picking, and state,
    preferably through typed `verify_project_change` assertions.
+
+### Accessing a behavior's properties
+
+In a behavior's `functions/*.gdl`, use `setProperty { name = "Speed" value = 100 }` and
+`expr(getProperty(name="Speed"))`. The owner is inferred from the file path and
+instruction targets default to `Object` / `Behavior`. Boolean properties use
+`setProperty { name = "Initialized" value = true }` and the condition
+`getProperty { name = "Initialized" }`. See `gdl-usage.md` for operators, comparisons,
+boolean inversion and compatibility rules. These aliases use the existing
+private property metadata; do not create same-named function files for them.

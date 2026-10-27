@@ -333,57 +333,82 @@ export const parseSettingsSyntax = (source, fileUri) => {
     }
   };
   const instruction = (head, depth) => {
-    const start = head.location.offset;
-    const args = Object.create(null);
-    while (token.type === 'ident') {
-      const key = consume('ident');
-      consume('=');
-      if (own(args, key.value))
-        error(`Duplicate argument ${key.value}.`, key.location);
-      if (!['string', 'number', 'boolean', 'expression'].includes(token.type))
-        error('Expected a semantic instruction operand.', token.location);
-      args[key.value] = { ...value(depth + 1), keyLocation: key.location };
+    if (depth > MAX_SETTINGS_DEPTH)
+      error('Settings nesting budget exceeded.', head.location);
+    consume('{');
+    const result = {
+      type: head.value,
+      instruction: true,
+      arguments: Object.create(null),
+      properties: Object.create(null),
+      children: [],
+      location: head.location,
+    };
+    const operands = [];
+    newlines();
+    let hasFlags = false;
+    while (token.type !== '}') {
+      if (!['ident', 'string'].includes(token.type))
+        error(
+          'Expected an instruction argument or child instruction.',
+          token.location
+        );
+      const key = token;
+      token = next();
+      if (token.type === '=') {
+        consume('=');
+        if (own(result.arguments, key.value))
+          error(`Duplicate argument ${key.value}.`, key.location);
+        if (!['string', 'number', 'boolean', 'expression'].includes(token.type))
+          error('Expected a semantic instruction operand.', token.location);
+        const item = value(depth + 1);
+        result.arguments[key.value] = { ...item, keyLocation: key.location };
+        operands.push(
+          `${key.value}=${source.slice(
+            item.location.offset,
+            item.location.endOffset
+          )}`
+        );
+      } else if (key.value === 'flags') {
+        if (hasFlags) error('Duplicate instruction flags.', key.location);
+        hasFlags = true;
+        consume('{');
+        newlines();
+        while (token.type !== '}') {
+          const flag = consume('ident');
+          consume('=');
+          if (own(result.properties, flag.value))
+            error(`Duplicate instruction flag ${flag.value}.`, flag.location);
+          result.properties[flag.value] = {
+            ...value(depth + 1),
+            keyLocation: flag.location,
+          };
+          newlines();
+        }
+        consume('}');
+      } else {
+        result.children.push(instruction(key, depth + 1));
+      }
+      newlines();
     }
-    const headerEnd = token.location.offset;
-    const hasBlock = token.type === '{';
-    const result = hasBlock
-      ? node(head, depth, true)
-      : {
-          type: head.value,
-          properties: {},
-          children: [],
-          location: head.location,
-        };
-    result.instruction = true;
-    result.arguments = args;
-    const trailingComment = comments[comments.length - 1];
-    const sourceEnd =
-      trailingComment &&
-      trailingComment.offset >= start &&
-      trailingComment.offset < headerEnd
-        ? trailingComment.offset
-        : headerEnd;
-    result.source = source.slice(start, sourceEnd).trim();
-    if (!hasBlock) {
-      // Include all operands (including multiline expr) in instruction ranges.
-      const endOffset = start + source.slice(start, sourceEnd).trimEnd().length;
-      const lastArgument = Object.values(args).slice(-1)[0];
-      const end = lastArgument ? lastArgument.location : head.location;
-      result.location = {
-        ...head.location,
-        endOffset,
-        endLine: end.endLine,
-        endColumn: end.endColumn,
-      };
-    }
-    if (!hasBlock) boundary();
+    const end = consume('}').location;
+    result.location = {
+      ...head.location,
+      endLine: end.endLine,
+      endColumn: end.endColumn,
+      endOffset: end.endOffset,
+    };
+    // The resolver receives only catalog operands, excluding execution flags
+    // and child instructions, which are decoded separately.
+    const type =
+      head.type === 'string' ? JSON.stringify(head.value) : head.value;
+    result.source = `${type} { ${operands.join(' ')} }`;
     return result;
   };
-  const node = (nameToken, depth, instructionBody = false) => {
+  const node = (nameToken, depth) => {
     if (depth > MAX_SETTINGS_DEPTH)
       error('Settings nesting budget exceeded.', nameToken.location);
-    if (nameToken.value === 'code' && !instructionBody)
-      return readCode(nameToken);
+    if (nameToken.value === 'code') return readCode(nameToken);
     consume('{');
     const result = {
       type: nameToken.value,
@@ -402,15 +427,13 @@ export const parseSettingsSyntax = (source, fileUri) => {
         const key = token;
         token = next();
         if (
-          (instructionBody ||
-            ['conditions', 'actions', 'while_conditions'].includes(
-              result.type
-            )) &&
+          ['conditions', 'actions', 'while_conditions'].includes(result.type) &&
           token.type !== '='
         ) {
           const child = instruction(key, depth + 1);
           result.children.push(child);
           result.members.push({ child });
+          if (token.type !== '}') boundary();
         } else if (token.type === '{') {
           if (key.type !== 'ident')
             error('Node types must be identifiers.', key.location);
@@ -452,7 +475,7 @@ export const parseSettingsSyntax = (source, fileUri) => {
   return { root, comments, source, fileUri };
 };
 
-export const printSettingsSyntax = (root, comments = []) => {
+export const printSettingsSyntax = (root, comments = [], options = {}) => {
   const lines = [];
   let commentIndex = 0;
   const emitComments = (beforeLine, indent) => {
@@ -536,15 +559,79 @@ export const printSettingsSyntax = (root, comments = []) => {
       lines.push(`${indent}}`);
       return;
     }
-    let header = node.type;
     if (node.instruction) {
-      header = node.source;
-      if (!Object.keys(node.properties).length && !node.children.length) {
-        lines.push(`${indent}${header}`);
+      const type = /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$/.test(
+        node.type
+      )
+        ? node.type
+        : JSON.stringify(node.type);
+      const args = Object.entries(node.arguments);
+      const flags = Object.entries(node.properties);
+      const nextComment = comments[commentIndex];
+      const hasComments = !!(
+        nextComment &&
+        node.location &&
+        nextComment.line < node.location.endLine
+      );
+      if (
+        !args.length &&
+        !flags.length &&
+        !node.children.length &&
+        !options.expandInstructions &&
+        !hasComments
+      ) {
+        lines.push(`${indent}${type} {}`);
         return;
       }
+      const compact = `${indent}${type} { ${args
+        .map(
+          ([key, item]) =>
+            `${keyText(key)} = ${
+              item.expression
+                ? `expr(${item.value.expression})`
+                : JSON.stringify(item.value)
+            }`
+        )
+        .join(' ')} }`;
+      if (
+        !flags.length &&
+        !node.children.length &&
+        !options.expandInstructions &&
+        !hasComments &&
+        compact.length <= 80 &&
+        !compact.includes('\n')
+      ) {
+        lines.push(compact);
+        return;
+      }
+      lines.push(`${indent}${type} {`);
+      args.forEach(([key, item]) => {
+        emitComments(
+          item.keyLocation ? item.keyLocation.line : 0,
+          `${indent}  `
+        );
+        emitLiteral(`${indent}  ${keyText(key)} = `, item, depth + 1);
+      });
+      if (flags.length) {
+        lines.push(`${indent}  flags {`);
+        flags.forEach(([key, item]) => {
+          emitComments(
+            item.keyLocation ? item.keyLocation.line : 0,
+            `${indent}    `
+          );
+          emitLiteral(`${indent}    ${key} = `, item, depth + 2);
+        });
+        lines.push(`${indent}  }`);
+      }
+      node.children.forEach(child => emit(child, depth + 1));
+      emitComments(
+        node.location ? node.location.endLine - 0.5 : 0,
+        `${indent}  `
+      );
+      lines.push(`${indent}}`);
+      return;
     }
-    lines.push(`${indent}${header} {`);
+    lines.push(`${indent}${node.type} {`);
     const emitProperty = key => {
       const property = node.properties[key];
       emitComments(
@@ -582,7 +669,10 @@ export const printSettingsSyntax = (root, comments = []) => {
         emit(child, depth + 1);
       });
     }
-    emitComments(node.location ? node.location.endLine - 1 : 0, `${indent}  `);
+    emitComments(
+      node.location ? node.location.endLine - 0.5 : 0,
+      `${indent}  `
+    );
     lines.push(`${indent}}`);
   };
   emit(root, 0);
@@ -599,7 +689,15 @@ export const preserveSettingsSourceComments = (
 ) => {
   const previous = parseSettingsSyntax(previousSource, fileUri);
   if (!previous.comments.length) return source;
-  const current = parseSettingsSyntax(source, fileUri);
+  // Give each operand its own anchor even when the model writer used a
+  // compact call. Restored comments then keep the call expanded.
+  const incoming = parseSettingsSyntax(source, fileUri);
+  const current = parseSettingsSyntax(
+    printSettingsSyntax(incoming.root, incoming.comments, {
+      expandInstructions: true,
+    }),
+    fileUri
+  );
   const index = syntax => {
     const nodes = new Map();
     const visit = (node, path) => {
@@ -664,18 +762,25 @@ export const preserveSettingsSourceComments = (
       while (!newNodes.has(targetPath))
         targetPath = targetPath.slice(0, targetPath.lastIndexOf('/')) || 'root';
       const target = newNodes.get(targetPath);
-      let beforeLine = target.location.endLine - 1;
+      // A virtual position just before the closing brace also works for
+      // empty two-line blocks, whose opening and last content line coincide.
+      let beforeLine = target.location.endLine - 0.5;
       if (targetPath === ownerPath) {
         let following = anchors.get(ownerPath);
         if (!following) {
           following = [];
-          Object.entries(owner.properties).forEach(([key, item]) => {
-            if (item.keyLocation && target.properties[key])
-              following.push({
-                line: item.keyLocation.line,
-                target: target.properties[key].keyLocation.line,
-              });
-          });
+          Object.entries({ ...owner.arguments, ...owner.properties }).forEach(
+            ([key, item]) => {
+              const targetItem =
+                (target.arguments && target.arguments[key]) ||
+                target.properties[key];
+              if (item.keyLocation && targetItem)
+                following.push({
+                  line: item.keyLocation.line,
+                  target: targetItem.keyLocation.line,
+                });
+            }
+          );
           owner.children.forEach(node => {
             const path = pathsByNode.get(node);
             if (newNodes.has(path))

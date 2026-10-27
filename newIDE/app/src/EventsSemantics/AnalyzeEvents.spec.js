@@ -24,9 +24,9 @@ const owner = {
   functionName: 'sceneUpdate',
   variables: { Score: 'scene' },
 };
-const collision = 'CollisionNP first_object="Player" second_object="Coin"';
+const collision = 'CollisionNP { first_object="Player" second_object="Coin" }';
 const score =
-  'SetNumberVariable variable="Score" modification_sign="+" value=1';
+  'SetNumberVariable { variable="Score" modification_sign="+" value=1 }';
 let project, catalog;
 beforeAll(() => {
   project = global.gd.ProjectHelper.createNewGDJSProject();
@@ -85,7 +85,7 @@ test('exact reviewed signatures and mandatory validated semantics', () => {
 });
 test('multi-coin deletion differs from one write per event body, without frame claims', () => {
   const result = analyze(
-    `event {\n conditions {\n ${collision}\n }\n actions {\n Delete object="Coin"\n ${score}\n }\n}`
+    `event {\n conditions {\n ${collision}\n }\n actions {\n Delete { object="Coin" }\n ${score}\n }\n}`
   );
   expect(result.status).toBe('complete');
   expect(codes(result)).toContain('GDL_MULTI_SELECTION_SINGLE_EFFECT');
@@ -103,7 +103,7 @@ test('multi-coin deletion differs from one write per event body, without frame c
 });
 test('post-filter ForEach narrows Coin only and avoids false single-effect advice', () => {
   const result = analyze(
-    `event {\n conditions {\n ${collision}\n }\n event {\n type = "for_each"\n object = "Coin"\n actions {\n Delete object="Coin"\n ${score}\n }\n }\n}`
+    `event {\n conditions {\n ${collision}\n }\n event {\n type = "for_each"\n object = "Coin"\n actions {\n Delete { object="Coin" }\n ${score}\n }\n }\n}`
   );
   expect(result.success).toBe(true);
   expect(codes(result)).not.toContain('GDL_MULTI_SELECTION_SINGLE_EFFECT');
@@ -118,7 +118,7 @@ test('ForEach does not make another action target a singleton', () => {
   expect(
     codes(
       analyze(
-        'event {\n type = "for_each"\n object = "Coin"\n actions {\n Delete object="Player"\n }\n}'
+        'event {\n type = "for_each"\n object = "Coin"\n actions {\n Delete { object="Player" }\n }\n}'
       )
     )
   ).toContain('GDL_FOREACH_OTHER_OBJECTS_MULTIPLE');
@@ -128,7 +128,7 @@ test('PickAll invalidates singleton facts before later actions and child entry',
     .find(entry => entry.type === 'PickAllInstances')
     .parameters.find(p => p.valueKind === 'object').dslName;
   const result = analyze(
-    `event {\n type = "for_each"\n object = "Coin"\n actions {\n PickAllInstances ${parameter}="Coin"\n Delete object="Coin"\n ${score}\n }\n event {}\n}`
+    `event {\n type = "for_each"\n object = "Coin"\n actions {\n PickAllInstances { ${parameter}="Coin" }\n Delete { object="Coin" }\n ${score}\n }\n event {}\n}`
   );
   expect(result.status).toBe('complete');
   expect(codes(result)).toEqual(
@@ -143,7 +143,7 @@ test('PickAll invalidates singleton facts before later actions and child entry',
 });
 test('siblings do not inherit temporary filtering', () => {
   const result = analyze(
-    `event {\n conditions {\n ${collision}\n }\n}\nevent {\n actions {\n Delete object="Coin"\n }\n}`
+    `event {\n conditions {\n ${collision}\n }\n}\nevent {\n actions {\n Delete { object="Coin" }\n }\n}`
   );
   expect(result.events[1].actions[0].targets[0].selections[0].origin).toBe(
     'container'
@@ -151,7 +151,10 @@ test('siblings do not inherit temporary filtering', () => {
 });
 test('unknown inversion taints objects first referenced afterward', () => {
   const result = analyze(
-    `event {\n conditions {\n ${collision} {\n inverted = true\n }\n }\n actions {\n Delete object="Enemy"\n }\n}`
+    `event {\n conditions {\n ${collision.slice(
+      0,
+      -1
+    )}\n flags {\ninverted = true\n}\n }\n }\n actions {\n Delete { object="Enemy" }\n }\n}`
   );
   expect(result.status).toBe('partial');
   expect(result.events[0].actions[0].targets[0].selections[0].precision).toBe(
@@ -166,14 +169,14 @@ test('logical merge remains partial and does not produce a confident cardinality
     /^(BuiltinCommonInstructions::)?Or$/.test(entry.type)
   ).type;
   const result = analyze(
-    `event {\n conditions {\n ${or} {\n ${collision}\n }\n }\n actions {\n Delete object="Coin"\n ${score}\n }\n}`
+    `event {\n conditions {\n ${or} {\n ${collision}\n }\n }\n actions {\n Delete { object="Coin" }\n ${score}\n }\n}`
   );
   expect(result.status).toBe('partial');
   expect(codes(result)).not.toContain('GDL_MULTI_SELECTION_SINGLE_EFFECT');
 });
 test('disabled events and instructions do not execute or taint a sibling', () => {
   const result = analyze(
-    'event {\n disabled = true\n event {\n type = "javascript"\n code {\nthrow new Error("must not execute");\n }\n }\n}\nevent {\n actions {\n Delete object="Coin" {\n disabled = true\n }\n }\n}'
+    'event {\n disabled = true\n event {\n type = "javascript"\n code {\nthrow new Error("must not execute");\n }\n }\n}\nevent {\n actions {\n Delete { object="Coin"\n\n flags {\ndisabled = true\n}\n }\n }\n}'
   );
   expect(result.status).toBe('complete');
   expect(result.events).toHaveLength(3);
@@ -214,7 +217,7 @@ test('SignalReceived dispatch dimension matches native sceneUpdate special case'
     .filter(p => !p.isCodeOnly)
     .map(p => `${p.dslName}="Attack"`)
     .join(' ');
-  const body = `event {\n conditions {\n SignalReceived ${args}\n }\n actions {\n ${score}\n }\n}`;
+  const body = `event {\n conditions {\n SignalReceived { ${args} }\n }\n actions {\n ${score}\n }\n}`;
   expect(
     analyze(body, {
       catalog: signalCatalog,
@@ -236,7 +239,7 @@ test('strict author Else adjacency stays authoritative', () => {
 });
 test('maps full multiline operands and distinguishes both While condition lists', () => {
   const source = wrap(
-    'event {\n type = "while"\n while_conditions {\n NumberVariable variable="Score" comparison_sign=">" value=0\n }\n conditions {\n NumberVariable variable="Score" comparison_sign="<" value=10\n }\n actions {\n SetNumberVariable variable="Score" modification_sign="+" value=expr(\n1 + 2\n)\n }\n}'
+    'event {\n type = "while"\n while_conditions {\n NumberVariable { variable="Score" comparison_sign=">" value=0 }\n }\n conditions {\n NumberVariable { variable="Score" comparison_sign="<" value=10 }\n }\n actions {\n SetNumberVariable { variable="Score" modification_sign="+" value=expr(\n1 + 2\n) }\n }\n}'
   );
   const result = analyze('', { source, detail: 'steps' });
   expect(result.success).toBe(true);
@@ -304,7 +307,7 @@ test('project declaration fingerprints ignore event edits and detect changed own
 });
 
 test('subtree reads include parent action selection and map UTF-16 operands exactly', () => {
-  const body = `group {\n name = "战斗😀"\n comment {\n text = "index zero"\n }\n event {\n conditions {\n ${collision}\n }\n event {\n actions {\n Delete object="Coin"\n }\n }\n }\n}`;
+  const body = `group {\n name = "战斗😀"\n comment {\n text = "index zero"\n }\n event {\n conditions {\n ${collision}\n }\n event {\n actions {\n Delete { object="Coin" }\n }\n }\n }\n}`;
   const result = analyze(body, { eventPath: [0, 1, 0], detail: 'steps' });
   expect(result.events).toHaveLength(1);
   expect(result.events[0].actions[0].targets[0].selections[0].origin).toBe(
@@ -374,7 +377,7 @@ test('step maps retain recursive local variables and exact raw JS content slices
 
 test('short instruction names retain reviewed picking semantics and native diagnostic identity', () => {
   const result = analyze(
-    'event {\n conditions {\n collision first_object="Player" second_object="Coin"\n }\n actions {\n deleteObject object="Coin"\n setNumber variable="Score" modification_sign="+" value=1\n }\n}'
+    'event {\n conditions {\n collision { first_object="Player" second_object="Coin" }\n }\n actions {\n deleteObject { object="Coin" }\n setNumber { variable="Score" modification_sign="+" value=1 }\n }\n}'
   );
   expect(result.success).toBe(true);
   expect(codes(result)).toContain('GDL_MULTI_SELECTION_SINGLE_EFFECT');

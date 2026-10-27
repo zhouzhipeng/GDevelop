@@ -7,6 +7,7 @@ import {
 } from '../../EventsSemantics/InstructionSemanticsRegistry';
 
 import { parseCatalogInstructionArguments } from './InstructionOperands';
+import { createBehaviorPropertySyntax } from './BehaviorPropertySyntax';
 import { buildCompleteProjectInstructionCatalog } from '../../Mcp/McpEventKnowledge';
 
 export const PROJECT_INSTRUCTION_CATALOG_PATHS: { [string]: string } = {
@@ -55,11 +56,19 @@ type ResolveInstruction = (input: {
   kind: CatalogKind,
   source: string,
   line: number,
+  fileUri?: string,
 }) => LegacyInstruction;
 type FormatInstruction = (input: {
   kind: CatalogKind,
   instruction: LegacyInstruction,
+  fileUri?: string,
 }) => string;
+type PropertyInstructionResolver = ResolveInstruction & {
+  resolvePropertyExpression: (source: string, fileUri?: string) => string,
+};
+type PropertyInstructionFormatter = FormatInstruction & {
+  formatPropertyExpression: (source: string, fileUri?: string) => string,
+};
 type CatalogParameter = {
   index?: number,
   dslName: string,
@@ -291,45 +300,27 @@ const parseCatalogInstructionSource = (
   source: string,
   line: number
 ): {| type: string, argumentsSource: string |} => {
-  if (source.startsWith('"')) {
-    let escaped = false;
-    let closingQuoteIndex = -1;
-    for (let index = 1; index < source.length; index++) {
-      const character = source[index];
-      if (escaped) {
-        escaped = false;
-      } else if (character === '\\') {
-        escaped = true;
-      } else if (character === '"') {
-        closingQuoteIndex = index;
-        break;
-      }
+  source = source.trim();
+  const block = /^("(?:\\.|[^"\\])*"|[^\s{]+)\s*\{([\s\S]*)\}$/.exec(source);
+  if (!block)
+    throw new ProjectInstructionCatalogError(
+      'GDL_CATALOG_INSTRUCTION_REQUIRED',
+      `Line ${line}: expected InstructionType { named arguments }.`
+    );
+  let type = block[1];
+  if (type.startsWith('"')) {
+    try {
+      type = JSON.parse(type);
+    } catch (_) {
+      type = '';
     }
-    if (closingQuoteIndex !== -1) {
-      const typeSource = source.slice(0, closingQuoteIndex + 1);
-      const remainder = source.slice(closingQuoteIndex + 1);
-      if (!remainder || /^\s/.test(remainder)) {
-        let type;
-        try {
-          type = JSON.parse(typeSource);
-        } catch (error) {
-          type = null;
-        }
-        if (typeof type === 'string' && type) {
-          return { type, argumentsSource: remainder.trim() };
-        }
-      }
-    }
-  } else {
-    const match = /^([^@\s][^\s]*)(?:\s+([\s\S]*))?$/.exec(source);
-    if (match) return { type: match[1], argumentsSource: match[2] || '' };
   }
-  throw new ProjectInstructionCatalogError(
-    'GDL_CATALOG_INSTRUCTION_REQUIRED',
-    `Line ${line}: expected InstructionType with named arguments, got ${JSON.stringify(
-      source
-    )}.`
-  );
+  if (!type || block[1].startsWith('@'))
+    throw new ProjectInstructionCatalogError(
+      'GDL_CATALOG_INSTRUCTION_REQUIRED',
+      `Line ${line}: expected a catalog instruction type.`
+    );
+  return { type, argumentsSource: block[2].trim() };
 };
 
 const entriesForKind = (
@@ -515,29 +506,46 @@ const createLookup = (catalog: Catalog): CatalogLookup => {
 
 export const createCatalogInstructionResolver = (
   catalogInput: any
-): ResolveInstruction => {
+): PropertyInstructionResolver => {
   const catalog = validateProjectInstructionCatalog(catalogInput);
   const lookup = createLookup(catalog);
-  return ({
+  const propertySyntax = createBehaviorPropertySyntax(
+    catalog,
+    (code, message, name) => {
+      const failure = new ProjectInstructionCatalogError(code, message);
+      failure.parameterName = name;
+      throw failure;
+    }
+  );
+  const resolve = ({
     kind,
     source,
     line,
+    fileUri,
   }: {
     kind: CatalogKind,
     source: string,
     line: number,
+    fileUri?: string,
   }): LegacyInstruction => {
     const { type, argumentsSource } = parseCatalogInstructionSource(
       source,
       line
     );
-    const entry = lookup[kind].get(type);
+    let argumentsByName = parseCatalogInstructionArguments(argumentsSource);
+    const property = propertySyntax.lowerInstruction(
+      kind,
+      type,
+      argumentsByName,
+      fileUri
+    );
+    const entry = property ? property.entry : lookup[kind].get(type);
+    if (property) argumentsByName = property.args;
     if (!entry)
       throw new ProjectInstructionCatalogError(
         'GDL_CATALOG_UNKNOWN_INSTRUCTION',
         `Line ${line}: ${kind} ${type} is not in the project instruction catalog.`
       );
-    const argumentsByName = parseCatalogInstructionArguments(argumentsSource);
     const knownNames = new Set(
       entry.parameters.map(parameter => parameter.dslName)
     );
@@ -567,7 +575,15 @@ export const createCatalogInstructionResolver = (
       if (argument !== undefined) {
         try {
           return lowerSemanticValue(
-            argument,
+            isExpressionOperand(argument)
+              ? {
+                  ...argument,
+                  source: propertySyntax.lowerExpression(
+                    argument.source,
+                    fileUri
+                  ),
+                }
+              : argument,
             parameter,
             `Line ${line}: ${kind} ${type}.${parameter.dslName}`
           );
@@ -587,19 +603,24 @@ export const createCatalogInstructionResolver = (
     Object.defineProperty(result, 'catalogCapabilities', { value: entry });
     return result;
   };
+  resolve.resolvePropertyExpression = propertySyntax.lowerExpression;
+  return resolve;
 };
 
 export const createCatalogInstructionFormatter = (
   catalogInput: any
-): FormatInstruction => {
+): PropertyInstructionFormatter => {
   const catalog = validateProjectInstructionCatalog(catalogInput);
   const lookup = createLookup(catalog);
-  return ({
+  const propertySyntax = createBehaviorPropertySyntax(catalog, fail);
+  const format = ({
     kind,
     instruction,
+    fileUri,
   }: {
     kind: CatalogKind,
     instruction: LegacyInstruction,
+    fileUri?: string,
   }): string => {
     const entry = lookup[kind].get(instruction.type.value);
     const instructionParameters = instruction.parameters || [];
@@ -636,17 +657,30 @@ export const createCatalogInstructionFormatter = (
       })
       .map(({ parameter, value }) => {
         const semanticValue = formatSemanticValue(
-          value,
+          parameter.valueKind === 'number' || parameter.valueKind === 'text'
+            ? propertySyntax.formatExpression(value, fileUri)
+            : value,
           parameter,
           `${kind} ${entry.type}.${parameter.dslName}`
         );
         return `${parameter.dslName}=${semanticValue}`;
       });
+    const propertySource = propertySyntax.formatInstruction(
+      kind,
+      entry,
+      operands,
+      fileUri
+    );
+    if (propertySource) return propertySource;
     const formattedType = UNQUOTED_INSTRUCTION_TYPE.test(entry.dslName)
       ? entry.dslName
       : stringifyJsonValue(entry.dslName, `${kind} instruction type`);
-    return `${formattedType}${operands.length ? ` ${operands.join(' ')}` : ''}`;
+    return `${formattedType} {${
+      operands.length ? ` ${operands.join(' ')} ` : ''
+    }}`;
   };
+  format.formatPropertyExpression = propertySyntax.formatExpression;
+  return format;
 };
 
 export const getCatalogCodeOnlyParameterIndicesByType = (

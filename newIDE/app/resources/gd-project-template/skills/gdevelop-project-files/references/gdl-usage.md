@@ -149,7 +149,8 @@ prefer it when a shorter `dslName` is published. System names are fixed by the
 engine. Third-party and user instruction `dslName` remains its complete `type`.
 Use parameter `dslName` unchanged. Never invent abbreviations or edit generated
 catalogs. Expressions inside `expr(...)` retain their existing names. The
-formatter always writes the catalog instruction `dslName`.
+formatter writes the catalog instruction `dslName`, except for the behavior
+property syntax aliases described below (`setProperty` / `getProperty`).
 
 ### Complete function
 
@@ -161,6 +162,7 @@ function {
   folder = []
 
   events {
+
     group {
       name = "Coins"
 
@@ -169,17 +171,23 @@ function {
       }
 
       event {
+
         conditions {
-          collision first_object="Player" second_object="Coin"
+
+          collision { first_object = "Player" second_object = "Coin" }
         }
+
         actions {
-          deleteObject object="Coin"
-          setNumber variable="Score" modification_sign="+" value=1
+
+          deleteObject { object = "Coin" }
+
+          setNumber { variable = "Score" modification_sign = "+" value = 1 }
         }
 
         event {
           type = "javascript"
           strict = true
+
           code {
             const score = runtimeScene.getVariables().get("Score").getAsNumber();
             console.log("Current score:", score);
@@ -213,8 +221,11 @@ that a scene-variable action adds once per coin. Use for_each when required.
 - Ordinary text/object/behavior/variable/resource/name operands are quoted;
   numbers and booleans are literals. Use expr(...) for calculated expressions.
   Balanced expr bodies may span lines; preserve their exact expression source.
-- An instruction's block contains disabled/inverted (condition) or
-  disabled/awaited (action) flags and catalog-supported child instructions.
+- Every instruction uses `Instruction { parameter = value }`, including empty
+  calls (`Instruction {}`). Parameters belong inside the braces. Execution
+  flags belong in a nested `flags {}` block: disabled/inverted for conditions,
+  disabled/awaited for actions. Catalog-supported child instructions stay
+  directly inside the parent instruction block.
   Child instruction kind is inherited; do not add conditions/actions wrappers.
 - Event members have explicit ownership; source placement of entire categories
   does not change runtime order: conditions, actions, then children. Within
@@ -223,10 +234,14 @@ that a scene-variable action adds once per coin. Use for_each when required.
 
 ```text
 conditions {
+
   or {
-    SomeCondition target="Enemy"
-    AnotherCondition target="Enemy" {
-      inverted = true
+    SomeCondition { target = "Enemy" }
+    AnotherCondition {
+      target = "Enemy"
+      flags {
+        inverted = true
+      }
     }
   }
 }
@@ -242,7 +257,7 @@ event {
   count = 5
   index = "i"
   actions {
-    SomeAction amount=1
+    SomeAction { amount=1 }
   }
 }
 
@@ -265,10 +280,10 @@ event {
   type = "while"
   infiniteLoopWarning = true
   while_conditions {
-    numberVariable variable="QueueSize" comparison_sign=">" value=0
+    numberVariable { variable="QueueSize" comparison_sign=">" value=0 }
   }
   actions {
-    setNumber variable="QueueSize" modification_sign="-" value=1
+    setNumber { variable="QueueSize" modification_sign="-" value=1 }
   }
 }
 
@@ -356,3 +371,43 @@ Read `.gdevelop/conditions-catalog.json` for condition metadata,
 its corresponding `kind`, `entries`, and `count`. Use entries whose
 `authoringAvailable` is `true` for new GDL. All three files must be regenerated
 together; do not use the retired combined or deprecated catalog files.
+
+### Behavior properties
+
+Within `extensions/<Extension>/behaviors/<Behavior>/functions/*.gdl`, use generic
+property aliases instead of constructing `SetPropertyX` / `PropertyX` names:
+
+```settings
+function {
+  name = "Initialize"
+  events {
+    event {
+      conditions {
+        getProperty { name = "HasJustBeenCreated" }
+      }
+      actions {
+        setProperty { name = "HasJustBeenCreated" value = false }
+        setProperty { name = "CameraZ" value = expr(getProperty(name="CameraZ") + 10) }
+      }
+    }
+  }
+}
+```
+
+The owning behavior comes from the file path. `object="Object"` and
+`behavior="Behavior"` default automatically on instructions. `name` must be a
+literal existing property name. Keep values typed: numbers as numbers, text as
+strings, booleans as `true`/`false`, calculations inside `expr(...)`.
+`modification_sign` on numeric/text setters defaults to `"="`; boolean setters
+require an explicit value. Numeric/text conditions accept `value` and
+`comparison_sign` (default `"="`). A boolean condition tests true; use
+`flags { inverted = true }` to test false. Expression `getProperty(name="CameraZ")`
+reads a numeric/text property of the current `Object.Behavior`, including in loop
+expressions. Boolean properties use conditions, not expressions.
+
+These are syntax mappings to existing private behavior instructions. Hidden
+properties work through the complete generated catalogs. The aliases are scoped
+to behavior function files; they do not grant scene events direct access. Old
+fully qualified instruction names and bare property expressions remain accepted.
+Saving canonicalizes supported accesses to the aliases while preserving legacy
+empty parameter slots. Embedded JavaScript continues to use its own API.

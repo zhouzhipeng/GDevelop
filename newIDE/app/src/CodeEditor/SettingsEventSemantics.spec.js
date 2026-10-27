@@ -10,7 +10,7 @@ test('hover describes the targeted action and invalidates cached buffer snapshot
   try {
     const catalog = buildProjectInstructionCatalog(project);
     let source =
-      'function {\n name = "Test"\n events {\n event {\n actions {\n Delete object="Coin"\n }\n }\n }\n}\n';
+      'function {\n name = "Test"\n events {\n event {\n actions {\n Delete { object="Coin" }\n }\n }\n }\n}\n';
     const model = {
       getValue: () => source,
       uri: { toString: () => 'game://Test.gdl' },

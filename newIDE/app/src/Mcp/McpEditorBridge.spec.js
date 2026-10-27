@@ -1057,7 +1057,7 @@ describe('McpEditorBridge', () => {
       'game://scenes/Scene/functions/sceneUpdate.gdl'
     ] = replaceEmbeddedEventBody(
       files['game://scenes/Scene/functions/sceneUpdate.gdl'],
-      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n    }\n  }\n}\n'
+      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins {}\n      }\n    }\n  }\n}\n'
     );
     files['game://extensions/Local/extension.gdl'] = `extension {
   order = 0
@@ -1196,7 +1196,7 @@ describe('McpEditorBridge', () => {
       'game://scenes/Scene/functions/sceneUpdate.gdl'
     ] = replaceEmbeddedEventBody(
       files['game://scenes/Scene/functions/sceneUpdate.gdl'],
-      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n    }\n  }\n}\n'
+      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins {}\n      }\n    }\n  }\n}\n'
     );
     await writeMultiFileSourceTree({
       entryPath: projectFile,
@@ -1419,12 +1419,12 @@ describe('McpEditorBridge', () => {
 
       conditions {
 
-        SceneJustBegins
+        SceneJustBegins {}
       }
 
       actions {
 
-        ${actionType}
+        ${actionType} {}
       }
     }
   }
@@ -1664,7 +1664,7 @@ describe('McpEditorBridge', () => {
       'game://scenes/Scene/functions/sceneUpdate.gdl'
     ] = replaceEmbeddedEventBody(
       files['game://scenes/Scene/functions/sceneUpdate.gdl'],
-      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n    }\n  }\n}\n'
+      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins {}\n      }\n    }\n  }\n}\n'
     );
     await writeMultiFileSourceTree({ entryPath: projectFile, files });
 
@@ -2120,7 +2120,7 @@ describe('McpEditorBridge', () => {
           'game://extensions/Billboard/extension.gdl':
             'extension {\n order = 0\n name = "Billboard"\n}\n',
           'game://extensions/Billboard/functions/Initialize.gdl':
-            'function {\n order = 0\n extension = "Billboard"\n name = "Initialize"\n functionType = "Action"\n events {\n event {\n conditions {\n BuiltinCommonInstructions::Once\n }\n }\n }\n }\n',
+            'function {\n order = 0\n extension = "Billboard"\n name = "Initialize"\n functionType = "Action"\n events {\n event {\n conditions {\n BuiltinCommonInstructions::Once {}\n }\n }\n }\n }\n',
         },
       });
       return { saved: true };

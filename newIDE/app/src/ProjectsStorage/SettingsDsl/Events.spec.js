@@ -14,11 +14,11 @@ const resolveInstruction = ({ kind, source }) => ({
   subInstructions: [],
   disabled: false,
 });
-const formatInstruction = ({ instruction }) => instruction.type.value;
+const formatInstruction = ({ instruction }) => `${instruction.type.value} {}`;
 const options = { resolveInstruction, formatInstruction };
 test('keeps explicit sibling and child event boundaries; list context determines instruction kind', () => {
   const source = wrap(
-    'event {\n actions {\n A\n }\n event {\n conditions {\n Or {\n C\n D\n }\n }\n actions {\n B\n }\n }\n}\nevent {\n actions {\n E\n }\n}'
+    'event {\n actions {\n A {}\n }\n event {\n conditions {\n Or {\n C {}\n D {}\n }\n }\n actions {\n B {}\n }\n }\n}\nevent {\n actions {\n E {}\n }\n}'
   );
   const events = compileSettingsEvents(source, options);
   expect(events).toHaveLength(2);
@@ -80,7 +80,7 @@ test('round trips groups, comments and links as dedicated ordered nodes', () => 
 });
 test('expression operands and type-specific while lists stay separate', () => {
   const source = wrap(
-    'event {\n type = "while"\n while_conditions {\n C value=expr(Func("(", (1 + 2)))\n }\n conditions {\n D\n }\n actions {\n A\n }\n}'
+    'event {\n type = "while"\n while_conditions {\n C { value=expr(Func("(", (1 + 2))) }\n }\n conditions {\n D {}\n }\n actions {\n A {}\n }\n}'
   );
   const events = compileSettingsEvents(source, options);
   expect(events[0].whileConditions[0].type.value).toBe('C');
@@ -102,7 +102,9 @@ test('type discriminants reject empty, non-string and prototype names', () => {
 });
 
 test('explicit containers determine semantics independently of category placement', () => {
-  const source = wrap('event {\n actions {\n A\n }\n conditions {\n C\n }\n}');
+  const source = wrap(
+    'event {\n actions {\n A {}\n }\n conditions {\n C {}\n }\n}'
+  );
   const parsed = compileSettingsEvents(source, options);
   expect(parsed[0].conditions[0].type.value).toBe('C');
   expect(parsed[0].actions[0].type.value).toBe('A');
@@ -143,13 +145,17 @@ test('all loop kinds retain fields, locals, flags and children through the unifi
     infiniteLoopWarning = true
     while_conditions {
       C {
-        inverted = true
+        flags {
+inverted = true
+}
       }
     }
     actions {
       A {
-        disabled = true
+        flags {
+disabled = true
         awaited = true
+}
       }
     }
   }
@@ -197,7 +203,9 @@ test('rejects object literals masquerading as loop expressions and unsupported i
   ).toThrow('requires a number or expr');
   expect(() =>
     compileSettingsEvents(
-      wrap('event {\n actions {\n A {\n inverted = true\n }\n }\n}'),
+      wrap(
+        'event {\n actions {\n A {\n flags {\ninverted = true\n}\n }\n }\n}'
+      ),
       options
     )
   ).toThrow();
@@ -216,9 +224,10 @@ test('duplicate nonempty identities are rejected across nested event lists', () 
 
 test('handles thousands of explicit events and rejects excessive event/code budgets', () => {
   const source = wrap(
-    Array.from({ length: 3000 }, () => 'event {\n actions {\n A\n }\n}').join(
-      '\n'
-    )
+    Array.from(
+      { length: 3000 },
+      () => 'event {\n actions {\n A {}\n }\n}'
+    ).join('\n')
   );
   const parsed = compileSettingsEvents(source, options);
   expect(parsed).toHaveLength(3000);
@@ -247,16 +256,91 @@ test('handles thousands of explicit events and rejects excessive event/code budg
 
 test('instruction trailing comments are preserved once without truncating quoted URLs', () => {
   const source = wrap(
-    'event {\n actions {\n A url="https://example.com" // explain action\n }\n}'
+    'event {\n actions {\n A { url="https://example.com" } // explain action\n }\n}'
   );
   const syntax = parseSettingsSyntax(source);
   const printed = printSettingsSyntax(syntax.root, syntax.comments);
   expect(printed.match(/\/\/ explain action/g)).toHaveLength(1);
-  expect(printed).toContain('url="https://example.com"');
+  expect(printed).toContain('url = "https://example.com"');
   expect(
     printSettingsSyntax(
       parseSettingsSyntax(printed).root,
       parseSettingsSyntax(printed).comments
     )
   ).toBe(printed);
+});
+
+test.each(['A', 'A value=1', 'A value=1 {\n disabled = true\n}'])(
+  'rejects calls without the mandatory argument block: %s',
+  call => {
+    for (const list of ['actions', 'conditions', 'while_conditions']) {
+      expect(() =>
+        parseSettingsSyntax(wrap(`event {\n ${list} {\n ${call}\n }\n}`))
+      ).toThrow('Expected {');
+    }
+  }
+);
+
+test('argument blocks preserve operand locations, comments, and flags with colliding names', () => {
+  const source = wrap(`event {
+  actions {
+    A {
+      // catalog parameter, separate from the execution flag
+      disabled = "parameter"
+      value = expr(Max(1,
+        2))
+      flags { disabled = true awaited = true }
+      B {}
+    }
+  }
+}`);
+  const syntax = parseSettingsSyntax(source);
+  const instruction =
+    syntax.root.children[0].children[0].children[0].children[0];
+  expect(instruction.arguments.disabled.value).toBe('parameter');
+  expect(instruction.properties.disabled.value).toBe(true);
+  expect(instruction.properties.awaited.value).toBe(true);
+  const location = instruction.arguments.value.location;
+  expect(source.slice(location.offset, location.endOffset)).toBe(
+    'expr(Max(1,\n        2))'
+  );
+  expect(instruction.children[0].type).toBe('B');
+  const printed = printSettingsSyntax(syntax.root, syntax.comments);
+  expect(printed.match(/catalog parameter/g)).toHaveLength(1);
+  const reparsed = parseSettingsSyntax(printed);
+  expect(printSettingsSyntax(reparsed.root, reparsed.comments)).toBe(printed);
+});
+
+test.each([
+  'A { value=1 value=2 }',
+  'A { flags {} flags {} }',
+  'A { flags { disabled=true disabled=false } }',
+  'A { value={} }',
+  'A { value=[] }',
+  'A { B }',
+  'A { value=1',
+])('rejects malformed instruction blocks: %s', call => {
+  expect(() =>
+    parseSettingsSyntax(wrap(`event {\n actions {\n ${call}\n }\n}`))
+  ).toThrow();
+});
+
+test('formats short calls on one line and expands long or annotated calls', () => {
+  const source = wrap(`event {
+  actions {
+    A { value=1 }
+    B {}
+    C { value="${'x'.repeat(90)}" }
+    D {
+      // keep this comment inside the argument block
+      value=2
+    }
+  }
+}`);
+  const syntax = parseSettingsSyntax(source);
+  const printed = printSettingsSyntax(syntax.root, syntax.comments);
+  expect(printed).toContain('A { value = 1 }');
+  expect(printed).toContain('B {}');
+  expect(printed).toMatch(/C \{\n\s+value =/);
+  expect(printed).toMatch(/D \{\n\s+\/\/ keep this comment/);
 });

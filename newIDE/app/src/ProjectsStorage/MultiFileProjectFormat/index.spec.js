@@ -256,13 +256,13 @@ describe('GDevelop Language (GDL) multi-file project format', () => {
           name: 'Smoke',
           type: 'gameplay',
           description: '',
-          source: 'first',
+          source: 'first {}',
         },
         {
           name: 'smoke',
           type: 'gameplay',
           description: '',
-          source: 'second',
+          source: 'second {}',
         },
       ],
     };

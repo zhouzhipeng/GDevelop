@@ -39,13 +39,19 @@ function {
   functionType = "Action"
 
   events {
+
     event {
+
       conditions {
-        collision first_object="Player" second_object="Coin"
+
+        collision { first_object = "Player" second_object = "Coin" }
       }
+
       actions {
-        deleteObject object="Coin"
-        setNumber variable="Score" modification_sign="+" value=1
+
+        deleteObject { object = "Coin" }
+
+        setNumber { variable = "Score" modification_sign = "+" value = 1 }
       }
     }
   }
@@ -73,17 +79,23 @@ function {
   functionType = "Action"
 
   events {
+
     event {
+
       conditions {
-        collision first_object="Player" second_object="Coin"
+
+        collision { first_object = "Player" second_object = "Coin" }
       }
 
       event {
         type = "for_each"
         object = "Coin"
+
         actions {
-          deleteObject object="Coin"
-          setNumber variable="Score" modification_sign="+" value=1
+
+          deleteObject { object = "Coin" }
+
+          setNumber { variable = "Score" modification_sign = "+" value = 1 }
         }
       }
     }

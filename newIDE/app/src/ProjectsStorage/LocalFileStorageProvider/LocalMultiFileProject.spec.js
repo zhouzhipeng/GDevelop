@@ -725,7 +725,7 @@ describe('Local multi-file project storage', () => {
       'game://scenes/Main/functions/sceneUpdate.gdl'
     ] = replaceEmbeddedEventBody(
       files['game://scenes/Main/functions/sceneUpdate.gdl'],
-      'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send url="https://example.com"\n      }\n    }\n  }\n}\n'
+      'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" }\n      }\n    }\n  }\n}\n'
     );
     await writeMultiFileSourceTree({ entryPath, files });
     const catalog = withTestInstructionSemantics({
@@ -793,7 +793,7 @@ describe('Local multi-file project storage', () => {
       `game://scenes/${sceneName}/functions/sceneUpdate.gdl`
     ] = replaceEmbeddedEventBody(
       files[`game://scenes/${sceneName}/functions/sceneUpdate.gdl`],
-      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins\n      }\n\n      actions {\n\n        FirstOpenCatalogTest::Ping\n      }\n    }\n  }\n}\n'
+      'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins {}\n      }\n\n      actions {\n\n        FirstOpenCatalogTest::Ping {}\n      }\n    }\n  }\n}\n'
     );
     project.delete();
     await writeMultiFileSourceTree({ entryPath, files });
@@ -2275,8 +2275,8 @@ column2 = "333"
         path.join(temporaryDirectory, 'scenes/Main/functions/sceneUpdate.gdl'),
         'utf8'
       );
-      expect(eventsSource).toContain(
-        'collision first_object="Player" second_object="Platform"'
+      expect(eventsSource).toMatch(
+        /collision\s+\{\s+first_object\s+=\s+"Player"\s+second_object\s+=\s+"Platform"/
       );
       expect(eventsSource).not.toContain(
         'ignore_objects_that_are_touching_each_other'

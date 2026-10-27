@@ -148,6 +148,7 @@ const decodeInstruction = (n, kind, options, uri, depth) => {
     result = options.resolveInstruction({
       kind,
       source: n.source,
+      fileUri: uri,
       line: n.location ? n.location.line : 1,
     });
   } catch (cause) {
@@ -166,6 +167,11 @@ const decodeInstruction = (n, kind, options, uri, depth) => {
         : 'SETTINGS_INSTRUCTION_ARGUMENT'
     );
   }
+  // Keep the author spelling and locations, while analysis can follow aliases
+  // to the exact catalog instruction that was validated.
+  Object.defineProperty(n, 'resolvedInstructionType', {
+    value: result.type.value,
+  });
   const capabilities = result.catalogCapabilities;
   if (capabilities && n.children.length && !capabilities.canHaveSubInstructions)
     error(
@@ -270,7 +276,26 @@ export const decodeEventList = (
         if (typeof value !== 'number' && !n.properties[key].expression)
           error(`${key} requires a number or expr(...).`, n, uri);
         result[nativeKey] =
-          typeof value === 'number' ? String(value) : value.expression;
+          typeof value === 'number'
+            ? String(value)
+            : options.resolveInstruction &&
+              options.resolveInstruction.resolvePropertyExpression
+            ? (() => {
+                try {
+                  return options.resolveInstruction.resolvePropertyExpression(
+                    value.expression,
+                    uri
+                  );
+                } catch (cause) {
+                  error(
+                    cause.message,
+                    n.properties[key],
+                    uri,
+                    'SETTINGS_INSTRUCTION_ARGUMENT'
+                  );
+                }
+              })()
+            : value.expression;
       } else if (booleans.includes(key)) result[nativeKey] = value;
       else if (key === 'creationTime') {
         if (!Number.isFinite(value))
@@ -478,7 +503,7 @@ export const encodeEventList = (events, options = {}, uri, depth = 0) => {
         uri,
         'SETTINGS_INSTRUCTION_FLAGS'
       );
-    const text = options.formatInstruction({ kind, instruction });
+    const text = options.formatInstruction({ kind, instruction, fileUri: uri });
     const parsed = parseSettingsSyntax(
       `function {\n events {\n event {\n ${
         kind === 'action' ? 'actions' : 'conditions'
@@ -540,7 +565,16 @@ export const encodeEventList = (events, options = {}, uri, depth = 0) => {
                 String(value)
               ) && Number.isFinite(Number(value))
                 ? Number(value)
-                : { expression: String(value) };
+                : {
+                    expression:
+                      options.formatInstruction &&
+                      options.formatInstruction.formatPropertyExpression
+                        ? options.formatInstruction.formatPropertyExpression(
+                            String(value),
+                            uri
+                          )
+                        : String(value),
+                  };
         } else data[key] = value;
       });
       if (kind === 'group')

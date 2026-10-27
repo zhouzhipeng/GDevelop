@@ -50,15 +50,15 @@ test('every registered system instruction has a fixed, unambiguous author name a
       ].join('|');
       expect(SYSTEM_INSTRUCTION_NAMES).toHaveProperty([key]);
       expect(entry.dslName).toMatch(/^[a-z][A-Za-z0-9_]*$/);
-      const short = resolve({ kind, source: entry.dslName, line: 1 });
+      const short = resolve({ kind, source: `${entry.dslName} {}`, line: 1 });
       const native = resolve({
         kind,
-        source: JSON.stringify(entry.type),
+        source: `${JSON.stringify(entry.type)} {}`,
         line: 1,
       });
       expect(short).toEqual(native);
       expect(short.type.value).toBe(entry.type);
-      expect(format({ kind, instruction: native })).toBe(entry.dslName);
+      expect(format({ kind, instruction: native })).toBe(`${entry.dslName} {}`);
     }
   }
   expect(

@@ -434,7 +434,9 @@ export const analyzeGdlEvents = ({
           world.unknown = true;
           return null;
         }
-        const metadata = lookups[listKind].get(instruction.type);
+        const metadata = lookups[listKind].get(
+          instruction.resolvedInstructionType || instruction.type
+        );
         const semantics = metadata.semantics;
         const step = {
           instructionType: metadata.type,
@@ -611,7 +613,9 @@ export const analyzeGdlEvents = ({
       // The generator special case is restricted to enabled, non-inverted top-level conditions.
       const signal = listInstructions(node, 'conditions').find(
         instruction =>
-          lookups.conditions.get(instruction.type).type === 'SignalReceived' &&
+          lookups.conditions.get(
+            instruction.resolvedInstructionType || instruction.type
+          ).type === 'SignalReceived' &&
           !nodeValue(instruction, 'disabled', false) &&
           !nodeValue(instruction, 'inverted', false)
       );

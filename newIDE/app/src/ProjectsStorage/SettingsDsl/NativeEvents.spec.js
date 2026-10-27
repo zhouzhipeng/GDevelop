@@ -1,4 +1,5 @@
 // @noflow
+import { parse as parseJavaScript } from 'acorn';
 import { appendSettingsEvents, compileSettingsEvents } from './Events';
 import { parseLegacyEventsJson } from './EventModel';
 import {
@@ -47,12 +48,12 @@ test('real engine generates identical picking, OR, child-JS and loop code after 
       event {
         conditions {
           ${orType} {
-            CollisionNP first_object="Player" second_object="Enemy"
-            CollisionNP first_object="Player" second_object="Coin"
+            CollisionNP { first_object="Player" second_object="Enemy" }
+            CollisionNP { first_object="Player" second_object="Coin" }
           }
         }
         actions {
-          Delete object="Coin"
+          Delete { object="Coin" }
         }
         event {
           type = "javascript"
@@ -69,39 +70,39 @@ if (pickedCount > 0) { objects[0].setX(42); }
         count = 2
         index = "i"
         actions {
-          SetNumberVariable variable="Score" modification_sign="+" value=1
+          SetNumberVariable { variable="Score" modification_sign="+" value=1 }
         }
       }
       event {
         conditions {
-          NumberVariable variable="Score" comparison_sign=">=" value=100
+          NumberVariable { variable="Score" comparison_sign=">=" value=100 }
         }
         actions {
-          SetNumberVariable variable="Score" modification_sign="+" value=100
+          SetNumberVariable { variable="Score" modification_sign="+" value=100 }
         }
       }
       event {
         type = "else"
         actions {
-          SetNumberVariable variable="Score" modification_sign="+" value=3
+          SetNumberVariable { variable="Score" modification_sign="+" value=3 }
         }
       }
       event {
         type = "while"
         infiniteLoopWarning = true
         while_conditions {
-          NumberVariable variable="QueueSize" comparison_sign=">" value=0
+          NumberVariable { variable="QueueSize" comparison_sign=">" value=0 }
         }
         actions {
-          SetNumberVariable variable="QueueSize" modification_sign="-" value=1
-          SetNumberVariable variable="Score" modification_sign="+" value=1
+          SetNumberVariable { variable="QueueSize" modification_sign="-" value=1 }
+          SetNumberVariable { variable="Score" modification_sign="+" value=1 }
         }
       }
       event {
         type = "for_each"
         object = "Enemy"
         actions {
-          SetNumberVariable variable="Score" modification_sign="+" value=1
+          SetNumberVariable { variable="Score" modification_sign="+" value=1 }
         }
       }
       event {
@@ -111,7 +112,7 @@ if (pickedCount > 0) { objects[0].setX(42); }
         value = "item"
         key = "itemKey"
         actions {
-          SetNumberVariable variable="Score" modification_sign="+" value=1
+          SetNumberVariable { variable="Score" modification_sign="+" value=1 }
         }
       }
     }
@@ -211,46 +212,56 @@ test('generates native cardinality fixtures and checks their static contracts', 
       catalog.actions
         .find(entry => entry.type === type)
         .parameters.find(parameter => parameter.valueKind === 'object').dslName;
-    const collision = 'CollisionNP first_object="Player" second_object="Coin"';
+    const collision =
+      'CollisionNP { first_object="Player" second_object="Coin" }';
     const score =
-      'SetNumberVariable variable="Score" modification_sign="+" value=1';
+      'SetNumberVariable { variable="Score" modification_sign="+" value=1 }';
     const picked = 'conditions {\n' + collision + '\n}\n';
     const cases = [
       {
         name: 'multi-delete-single-score',
-        body: `event {\n${picked}actions {\nDelete object="Coin"\n${score}\n}\n}`,
+        body: `event {\n${picked}actions {\nDelete { object="Coin" }\n${score}\n}\n}`,
         coins: 1,
         score: 1,
         advisory: true,
       },
       {
         name: 'post-filter-for-each',
-        body: `event {\n${picked}event {\ntype = "for_each"\nobject = "Coin"\nactions {\nDelete object="Coin"\n${score}\n}\n}\n}`,
+        body: `event {
+${picked}event {
+type = "for_each"
+object = "Coin"
+actions {
+Delete { object="Coin" }
+${score}
+}
+}
+}`,
         coins: 1,
         score: 2,
         advisory: false,
       },
       {
         name: 'repick-all-after-filter',
-        body: `event {\n${picked}actions {\nPickAllInstances ${objectArgument(
+        body: `event {\n${picked}actions {\nPickAllInstances { ${objectArgument(
           'PickAllInstances'
-        )}="Coin"\nDelete object="Coin"\n${score}\n}\n}`,
+        )}="Coin" }\nDelete { object="Coin" }\n${score}\n}\n}`,
         coins: 0,
         score: 1,
         advisory: true,
       },
       {
         name: 'random-current-selection',
-        body: `event {\n${picked}actions {\nPickRandomInstance ${objectArgument(
+        body: `event {\n${picked}actions {\nPickRandomInstance { ${objectArgument(
           'PickRandomInstance'
-        )}="Coin"\nDelete object="Coin"\n${score}\n}\n}`,
+        )}="Coin" }\nDelete { object="Coin" }\n${score}\n}\n}`,
         coins: 2,
         score: 1,
         advisory: false,
       },
       {
         name: 'sibling-selection-reset',
-        body: `event {\n${picked}}\nevent {\nactions {\nDelete object="Coin"\n}\n}`,
+        body: `event {\n${picked}}\nevent {\nactions {\nDelete { object="Coin" }\n}\n}`,
         coins: 0,
         score: 0,
         advisory: false,
@@ -306,6 +317,135 @@ test('generates native cardinality fixtures and checks their static contracts', 
         `window.__gdlSemanticsFixtures = ${JSON.stringify(fixtures)};\n`
       );
   } finally {
+    project.delete();
+  }
+});
+
+test('behavior property aliases use native metadata and generate identical executable behavior code', () => {
+  const gd = global.gd;
+  const project = gd.ProjectHelper.createNewGDJSProject();
+  let extension;
+  let names;
+  try {
+    const model = serializeToJSObject(project);
+    model.eventsFunctionsExtensions = [
+      {
+        name: 'PropertyAliasTest',
+        eventsBasedBehaviors: [
+          {
+            name: 'Follow',
+            propertyDescriptors: [
+              { name: 'Height', type: 'Number', value: '0', hidden: true },
+              { name: 'Fresh', type: 'Boolean', value: 'true', hidden: true },
+              { name: 'Title', type: 'String', value: '', hidden: true },
+            ],
+            eventsFunctions: [
+              {
+                name: 'doStepPreEvents',
+                functionType: 'Action',
+                events: [],
+                parameters: [
+                  { name: 'Object', type: 'object' },
+                  {
+                    name: 'Behavior',
+                    type: 'behavior',
+                    supplementaryInformation: 'PropertyAliasTest::Follow',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    unserializeFromJSObject(project, model);
+    const eventsExtension = project.getEventsFunctionsExtensionAt(0);
+    const behavior = eventsExtension.getEventsBasedBehaviors().get('Follow');
+    extension = new gd.PlatformExtension();
+    names = new gd.MapStringString();
+    gd.MetadataDeclarationHelper.declareExtension(extension, eventsExtension);
+    gd.MetadataDeclarationHelper.generateBehaviorMetadata(
+      project,
+      extension,
+      eventsExtension,
+      behavior,
+      names
+    );
+    gd.JsPlatform.get().addNewExtension(extension);
+    const {
+      buildProjectDeprecatedInstructionCatalog,
+      mergeProjectInstructionCatalogs,
+    } = require('./InstructionCatalog');
+    const authoring = buildProjectInstructionCatalog(project);
+    const catalog = mergeProjectInstructionCatalogs(
+      authoring,
+      buildProjectDeprecatedInstructionCatalog(project, undefined, authoring)
+    );
+    const options = {
+      resolveInstruction: createCatalogInstructionResolver(catalog),
+      formatInstruction: createCatalogInstructionFormatter(catalog),
+    };
+    const uri =
+      'game://extensions/PropertyAliasTest/behaviors/Follow/functions/doStepPreEvents.gdl';
+    const source =
+      'function {\n      events {\n        event {\n          conditions {\n            getProperty { name="Fresh" }\n          }\n          actions {\n            setProperty { name="Fresh" value=false }\n            setProperty { name="Height" value=expr(getProperty(name="Height") + 2) }\n            setProperty { name="Title" value=expr(getProperty(name="Title") + "!") }\n          }\n        }\n      }\n    }';
+    const events = compileSettingsEvents(source, options, uri);
+    expect(events[0].actions[0].parameters).toEqual([
+      'Object',
+      'Behavior',
+      'no',
+    ]);
+    const legacy = source
+      .replace(
+        'getProperty { name="Fresh" }',
+        'PropertyAliasTest::Follow::PropertyFresh { object="Object" behavior="Behavior" }'
+      )
+      .replace(
+        'setProperty { name="Fresh" value=false }',
+        'PropertyAliasTest::Follow::SetPropertyFresh { object="Object" behavior="Behavior" new_value_to_set=false }'
+      )
+      .replace(
+        'setProperty { name="Height" }',
+        'PropertyAliasTest::Follow::SetPropertyHeight { object="Object" behavior="Behavior" modification_sign="=" }'
+      )
+      .replace(
+        'setProperty { name="Title" }',
+        'PropertyAliasTest::Follow::SetPropertyTitle { object="Object" behavior="Behavior" modification_sign="=" }'
+      )
+      .replace(
+        'getProperty(name="Height")',
+        'Object.Behavior::PropertyHeight()'
+      )
+      .replace('getProperty(name="Title")', 'Object.Behavior::PropertyTitle()');
+    expect(events).toEqual(compileSettingsEvents(legacy, options, uri));
+    const fn = behavior
+      .getEventsFunctions()
+      .getEventsFunction('doStepPreEvents');
+    unserializeFromJSObject(fn.getEvents(), events);
+    const before = generateEventsCodeForScope(project, {
+      eventsFunctionsExtension: eventsExtension,
+      eventsBasedBehavior: behavior,
+    });
+    expect(before.error).toBeNull();
+    expect(before.code).toContain('_getHeight()');
+    expect(before.code).toContain('_setHeight(');
+    expect(before.code).not.toContain('getProperty(name=');
+    expect(() =>
+      parseJavaScript(before.code, { ecmaVersion: 2020 })
+    ).not.toThrow();
+    const saved = appendSettingsEvents('function {}', events, options, uri);
+    const restored = compileSettingsEvents(saved, options, uri);
+    expect(restored).toEqual(events);
+    unserializeFromJSObject(fn.getEvents(), restored);
+    const after = generateEventsCodeForScope(project, {
+      eventsFunctionsExtension: eventsExtension,
+      eventsBasedBehavior: behavior,
+    });
+    expect(after.code).toBe(before.code);
+  } finally {
+    gd.JsPlatform.get().removeExtension('PropertyAliasTest');
+    if (names) names.delete();
+    if (extension) extension.delete();
     project.delete();
   }
 });

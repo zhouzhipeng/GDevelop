@@ -45,9 +45,11 @@ const eventEntry = (
   eventsLogic: settings.eventsLogic || '',
   links: linksIn(
     resolver && files[`game://${settingsPath}`] !== undefined
-      ? compileSettingsEvents(files[`game://${settingsPath}`], {
-          resolveInstruction: resolver,
-        })
+      ? compileSettingsEvents(
+          files[`game://${settingsPath}`],
+          { resolveInstruction: resolver },
+          `game://${settingsPath}`
+        )
       : events
   ),
 });

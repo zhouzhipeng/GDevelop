@@ -154,7 +154,7 @@ describe('project Settings instruction catalog', () => {
       ),
     });
 
-    expect(dsl).toContain('parameter_3d_capability="Object3D"');
+    expect(dsl).toMatch(/parameter_3d_capability\s+=\s+"Object3D"/);
     expect(
       areLegacyEventsEquivalent(
         input,
@@ -169,7 +169,7 @@ describe('project Settings instruction catalog', () => {
 
   test('compiles named catalog instructions with semantic operands', () => {
     const source =
-      'function {\n events {\n event {\n conditions {\n Network::Succeeded request_id="RequestId"\n }\n actions {\n Network::Send url="https://example.com" body=expr(VariableString(Payload))\n }\n }\n }\n }\n';
+      'function {\n events {\n event {\n conditions {\n Network::Succeeded { request_id="RequestId" }\n }\n actions {\n Network::Send { url="https://example.com" body=expr(VariableString(Payload)) }\n }\n }\n }\n }\n';
     const output = compileSettingsEvents(source, {
       resolveInstruction: createCatalogInstructionResolver(catalogFixture),
     });
@@ -198,8 +198,8 @@ describe('project Settings instruction catalog', () => {
       formatInstruction: createCatalogInstructionFormatter(catalogFixture),
     });
 
-    expect(dsl).toContain('Network::Send body="payload"');
-    expect(dsl).not.toContain('url=');
+    expect(dsl).toMatch(/Network::Send\s+\{\s+body\s+=\s+"payload"/);
+    expect(dsl).not.toMatch(/url\s+=\s+/);
     expect(dsl).not.toContain('legacy runtime data');
     expect(
       JSON.parse(
@@ -324,9 +324,9 @@ describe('project Settings instruction catalog', () => {
       formatInstruction: createCatalogInstructionFormatter(catalog),
     });
 
-    expect(dsl).toContain('parameter_0="Object"');
-    expect(dsl).toContain('parameter_1=expr(Object.PointX("Center"))');
-    expect(dsl).toContain('parameter_2="Checkpoint"');
+    expect(dsl).toMatch(/parameter_0\s+=\s+"Object"/);
+    expect(dsl).toMatch(/parameter_1\s+=\s+expr\(Object\.PointX\("Center"\)\)/);
+    expect(dsl).toMatch(/parameter_2\s+=\s+"Checkpoint"/);
     expect(dsl).not.toContain('\\"');
     expect(
       areLegacyEventsEquivalent(
@@ -359,17 +359,17 @@ describe('project Settings instruction catalog', () => {
 
     expect(() =>
       compile(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action count="1" object="Enemy"\n      }\n    }\n  }\n}\n'
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action { count="1" object="Enemy" }\n      }\n    }\n  }\n}\n'
       )
     ).toThrow('expects a semantic number');
     expect(() =>
       compile(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action count=1 object=expr("Enemy")\n      }\n    }\n  }\n}\n'
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action { count=1 object=expr("Enemy") }\n      }\n    }\n  }\n}\n'
       )
     ).toThrow('does not accept expr(...)');
     expect(() =>
       compile(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action count=1 object="Enemy" runtime="scene"\n      }\n    }\n  }\n}\n'
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action { count=1 object="Enemy" runtime="scene" }\n      }\n    }\n  }\n}\n'
       )
     ).toThrow('code-only and must be omitted');
   });
@@ -377,7 +377,7 @@ describe('project Settings instruction catalog', () => {
   test('scans nested calculated expressions without exposing raw operands', () => {
     const output = JSON.parse(
       compileSettingsJson(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send url="https://example.com" body=expr(ToString(Max(Variable(A), Variable(B))))\n      }\n    }\n  }\n}\n',
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body=expr(ToString(Max(Variable(A), Variable(B)))) }\n      }\n    }\n  }\n}\n',
         { resolveInstruction: createCatalogInstructionResolver(catalogFixture) }
       )
     );
@@ -386,14 +386,14 @@ describe('project Settings instruction catalog', () => {
     );
     expect(() =>
       compileSettingsJson(
-        'function {\n events {\n event {\n actions {\n Network::Send url="https://example.com" body=expr()\n}\n}\n}\n}\n',
+        'function {\n events {\n event {\n actions {\n Network::Send { url="https://example.com" body=expr() }\n}\n}\n}\n}\n',
         { resolveInstruction: createCatalogInstructionResolver(catalogFixture) }
       )
     ).toThrow('cannot be empty');
     expect(
       JSON.parse(
         compileSettingsJson(
-          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send url="https://example.com" body=expr(ToString(\nMax(Variable(A), Variable(B))\n))\n      }\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body=expr(ToString(\nMax(Variable(A), Variable(B))\n)) }\n      }\n    }\n  }\n}\n',
           {
             resolveInstruction: createCatalogInstructionResolver(
               catalogFixture
@@ -405,7 +405,7 @@ describe('project Settings instruction catalog', () => {
     expect(
       JSON.parse(
         compileSettingsJson(
-          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send url="https://example.com" body=expr("first line\nsecond line")\n      }\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body=expr("first line\nsecond line") }\n      }\n    }\n  }\n}\n',
           {
             resolveInstruction: createCatalogInstructionResolver(
               catalogFixture
@@ -452,9 +452,9 @@ describe('project Settings instruction catalog', () => {
       resolveInstruction: createCatalogInstructionResolver(textCatalog),
     });
 
-    expect(dsl).toContain('Text::Set text=""');
-    expect(dsl).toContain(
-      'Text::Set text=expr("Score: " + ToString(Variable(Score)))'
+    expect(dsl).toMatch(/Text::Set\s+\{\s+text\s+=\s+""/);
+    expect(dsl).toMatch(
+      /Text::Set\s+\{\s+text\s+=\s+expr\("Score:\s+"\s+\+\s+ToString\(Variable\(Score\)\)\)/
     );
     expect(dsl).not.toContain('\\"');
     expect(areLegacyEventsEquivalent(input, output)).toBe(true);
@@ -485,9 +485,11 @@ describe('project Settings instruction catalog', () => {
       resolveInstruction: createCatalogInstructionResolver(catalogFixture),
     });
 
-    expect(dsl).toContain('Network::Succeeded request_id="RequestId"');
+    expect(dsl).toMatch(
+      /Network::Succeeded\s+\{\s+request_id\s+=\s+"RequestId"/
+    );
     expect(dsl).toContain('Network::Send');
-    expect(dsl).not.toContain('runtime=');
+    expect(dsl).not.toMatch(/runtime\s+=\s+/);
     expect(dsl).not.toContain('@exact');
     expect(areLegacyEventsEquivalent(input, output)).toBe(true);
   });
@@ -751,7 +753,7 @@ describe('project Settings instruction catalog', () => {
     });
     expect(sceneDsl).toContain('sceneBegins');
     expect(sceneDsl).not.toContain('scene begins');
-    expect(sceneDsl).not.toContain('parameter_0=');
+    expect(sceneDsl).not.toMatch(/parameter_0\s+=\s+/);
     expect(
       areLegacyEventsEquivalent(
         sceneInput,
@@ -789,7 +791,7 @@ describe('project Settings instruction catalog', () => {
     const emptyTextDsl = serializeEventDocument(emptyTextInput, {
       formatInstruction: createCatalogInstructionFormatter(catalog),
     });
-    expect(emptyTextDsl).toContain('text=""');
+    expect(emptyTextDsl).toMatch(/text\s+=\s+""/);
     expect(emptyTextDsl).not.toContain('\\"');
     expect(
       areLegacyEventsEquivalent(
@@ -829,8 +831,8 @@ describe('project Settings instruction catalog', () => {
         formatInstruction: createCatalogInstructionFormatter(catalog),
       }
     );
-    expect(omittedCollisionDefaultDsl).toContain(
-      'collision first_object="Player" second_object="Platform"'
+    expect(omittedCollisionDefaultDsl).toMatch(
+      /collision\s+\{\s+first_object\s+=\s+"Player"\s+second_object\s+=\s+"Platform"/
     );
     expect(omittedCollisionDefaultDsl).not.toContain(
       `${optionalCollisionParameter.dslName}=`
@@ -853,9 +855,9 @@ describe('project Settings instruction catalog', () => {
 
       conditions {
 
-        CollisionNP first_object="Player" second_object="Platform" ${
+        CollisionNP { first_object="Player" second_object="Platform" ${
           optionalCollisionParameter.dslName
-        }=false
+        }=false }
       }
     }
   }
@@ -933,7 +935,7 @@ describe('project Settings instruction catalog', () => {
 
 test('unified operand diagnostics identify the exact argument value in the owning settings source', () => {
   const source =
-    'function {\n events {\n event {\n actions {\n Network::Send url=42 body="payload"\n }\n }\n }\n}\n';
+    'function {\n events {\n event {\n actions {\n Network::Send { url=42 body="payload" }\n }\n }\n }\n}\n';
   try {
     compileSettingsEvents(
       source,

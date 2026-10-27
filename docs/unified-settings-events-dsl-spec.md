@@ -11,7 +11,8 @@
 系统 action/condition 由引擎固定映射发布作者短名。instruction catalog 6 的
 每条 action/condition 必须有 `dslName`：系统为固定短名，第三方和用户指令
 保持完整 `type`。GDL 和 AI 优先使用 `dslName`，解析器也接受精确原生 `type`，
-格式化统一输出 `dslName`。参数名称及 `expr(...)` 中的表达式名称不变。
+格式化统一输出 `dslName`。参数名称及 `expr(...)` 中的表达式名称通常不变；
+行为内部的 `setProperty` / `getProperty` 是本文末尾定义的语法映射例外。
 同一 kind 内短名与原生名称不得交叉冲突；错误必须明确拒绝。
 详见 [系统指令与入口契约](gdl-system-instruction-names-and-project-entry-spec.md)。
 
@@ -23,14 +24,14 @@ GDevelop Language (GDL) 成为唯一的项目配置及事件作者语言。函�
 
 1. `key = value` 声明属性。
 2. `node { ... }` 表达明确的结构、归属和边界。
-3. `conditions {}` 和 `actions {}` 明确区分指令种类；内部直接写 `Type name=value`，不使用 if/do。
+3. `conditions {}` 和 `actions {}` 明确区分指令种类；内部直接写 `Type { name = value }`，不使用 if/do。
 4. 执行事件统一使用 `event {}`，type 缺省为 standard；分组使用独立的 `group {}`，持久化注释使用独立的 `comment {}`，外部片段引用使用独立的 `link {}`。
 5. JavaScript 使用 `event { type = "javascript" ... }` 中唯一的原始多行 `code { ... }` 写法。
 6. 同一 lexer、parser、AST、source range、formatter 和诊断系统处理全部作者源码。不得将 events 内容截成字符串交给旧 IfDo parser。
 7. 缩进帮助阅读，花括号决定结构；空行没有事件边界含义。
 8. 不再存在 `.events` 作者文件、IfDo 语言模式或独立 IfDo 版本。
 
-这里的“唯一语言”不表示所有领域都必须改成属性块。指令行是统一语法中受上下文限制的语句类型，和 variable.value 的结构字面量一样由同一个解析器处理。code 块是受 JavaScript 语法控制的嵌入区域，不按普通 Settings 节点递归解析，也不经过字符串转义。
+指令调用统一使用花括号块，是统一语法中受上下文限制的节点类型，和 variable.value 的结构字面量一样由同一个解析器处理。code 块是受 JavaScript 语法控制的嵌入区域，不按普通 Settings 节点递归解析，也不经过字符串转义。
 
 ## 2. 目标与非目标
 
@@ -109,18 +110,23 @@ function {
   }
 
   events {
+
     group {
       name = "Coin pickup"
       folded = false
 
       event {
+
         conditions {
-          collision first_object="Player" second_object="Coin"
+
+          collision { first_object = "Player" second_object = "Coin" }
         }
 
         actions {
-          deleteObject object="Coin"
-          setNumber variable="Score" modification_sign="+" value=1
+
+          deleteObject { object = "Coin" }
+
+          setNumber { variable = "Score" modification_sign = "+" value = 1 }
         }
 
         event {
@@ -161,20 +167,20 @@ function {
 document         := node EOF
 member           := assignment | node
 instructionList  := ('conditions' | 'actions' | 'while_conditions') '{' NEWLINE instruction* '}'
-instruction      := instructionType namedArgument* instructionBlock? NEWLINE
+instruction      := instructionType '{' (namedArgument | flagsBlock | instruction)* '}' NEWLINE
 instructionType  := IDENT_OR_NAMESPACED_TYPE | STRING
 namedArgument    := IDENT '=' operand
 operand          := STRING | NUMBER | BOOLEAN | expression
 expression       := 'expr' '(' expressionSource ')'
-instructionBlock := '{' NEWLINE (assignment | instruction)* '}'
+flagsBlock       := 'flags' '{' NEWLINE assignment* '}'
 codeBlock        := 'code' '{' NEWLINE javascriptBody closingCodeBrace
 ```
 
 以上为说明性语法；instructionList/codeBlock 是普通节点语法的上下文特化，必须由同一个 Settings parser 管理范围、预算和诊断。条件列表只查条件 catalog，动作列表只查动作 catalog；子指令继承父指令种类。同名条件/动作无歧义。指令不能直接出现在 event、group 或其他配置节点中。
 
-指令优先使用 catalog 精确 dslName；也接受精确原生 type，包含空格时使用 JSON 字符串。列表内部 `Name = value` 是非法赋值，不可当作指令；指令头使用 `Type arg=value`。指令块内赋值只表示已注册标记，不表示新的参数。
+指令优先使用 catalog 精确 dslName；也接受精确原生 type，包含空格时使用 JSON 字符串。列表内部 `Name = value` 是非法赋值，不可当作指令；指令调用使用 `Type { arg = value }`，花括号不可省略，包括无参数调用。指令块内赋值表示具名参数；执行标记放在嵌套 `flags {}` 中，避免与参数重名。
 
-`expr(...)` 专用于 catalog 允许表达式的参数与循环字段，不能出现在普通 settings 属性中。扫描理解嵌套括号、引号和转义，不用正则截取第一个右括号。参数不得重复、不得使用位置参数。指令头不任意跨行；唯一例外是平衡括号包围的 expr(...) 内容可跨行，保留原生表达式的精确源码。官方模板包含此类表达式，不能折叠空白或截断。编辑器可用软换行展示其他长指令。
+`expr(...)` 专用于 catalog 允许表达式的参数与循环字段，不能出现在普通 settings 属性中。扫描理解嵌套括号、引号和转义，不用正则截取第一个右括号。参数不得重复、不得使用位置参数。指令参数可以逐行书写，也可以在同一行书写。平衡括号包围的 expr(...) 内容可跨行，保留原生表达式的精确源码。官方模板包含此类表达式，不能折叠空白或截断。格式化器将不超过 80 列、无标记、无子指令和内部注释的简单调用输出为单行，其余展开。
 
 不保留 if/do 前缀和第二种条件/动作表达。JavaScript code 内的 if、do 等 JS 关键字正常有效。
 
@@ -186,6 +192,7 @@ function {
   functionType = "Action"
 
   events {
+
     event {
       disabled = false
       folded = false
@@ -197,11 +204,13 @@ function {
       }
 
       conditions {
-        collision first_object="Player" second_object="Enemy"
+
+        collision { first_object = "Player" second_object = "Enemy" }
       }
 
       actions {
-        deleteObject object="Enemy"
+
+        deleteObject { object = "Enemy" }
       }
 
       event {
@@ -240,30 +249,35 @@ conditions、actions、while_conditions 各最多一个，缺失与空块等价�
 
 ```text
 conditions {
-  SomeCondition target="Player" {
-    inverted = true
-    disabled = false
+  SomeCondition {
+    target = "Player"
+    flags {
+      inverted = true
+      disabled = false
+    }
   }
-
   or {
-    SomeCondition target="Enemy"
-    AnotherCondition target="Enemy"
+    SomeCondition { target = "Enemy" }
+    AnotherCondition { target = "Enemy" }
   }
 }
 
 actions {
-  SomeAction target="Player" {
-    awaited = true
+  SomeAction {
+    target = "Player"
+    flags {
+      awaited = true
+    }
   }
 }
 ```
 
-SomeCondition/SomeAction 为示意 catalog 类型，不是新增别名。简单指令保持一行；标记放在自身块内，不和具名参数共享命名空间，避免 disabled 等参数重名冲突。
+SomeCondition/SomeAction 为示意 catalog 类型，不是新增别名。简单指令可保持一行；标记放在嵌套 flags 块内，不和具名参数共享命名空间，避免 disabled 等参数重名冲突。
 
 - 条件允许 disabled、inverted；动作允许 disabled、awaited。
 - 无异步能力的动作写 awaited=true 报错。
 - 指令子块直接列子指令，不再增加 conditions/actions 包装；种类从父指令继承。
-- 只有 catalog 标明支持子指令的类型才能包含子指令。标记赋值和子指令由语法区分，不依赖先后阶段；规范输出先标记后子指令。
+- 只有 catalog 标明支持子指令的类型才能包含子指令。标记赋值和子指令由语法区分，不依赖先后阶段；规范输出先参数、再标记、后子指令。
 - `or` 是 catalog 中原生 `Or` 条件的固定作者名称，保留原生 picking 和子指令结构；不展开成多个事件，也不提供 if/do 语法。
 - 子指令顺序及标记无损投影原生 subInstructions。
 
@@ -276,27 +290,27 @@ Else 也使用 event，通过 type 区分：
 ```text
 event {
   conditions {
-    SomeCondition target="Player"
+    SomeCondition { target="Player" }
   }
   actions {
-    SomeAction target="Player"
+    SomeAction { target="Player" }
   }
 }
 
 event {
   type = "else"
   conditions {
-    AnotherCondition target="Player"
+    AnotherCondition { target="Player" }
   }
   actions {
-    AnotherAction target="Player"
+    AnotherAction { target="Player" }
   }
 }
 
 event {
   type = "else"
   actions {
-    FallbackAction target="Player"
+    FallbackAction { target="Player" }
   }
 }
 ```
@@ -320,8 +334,10 @@ event {
   type = "repeat"
   count = 5
   index = "i"
+
   actions {
-    SomeAction amount=1
+
+    SomeAction { amount = 1 }
   }
 }
 ```
@@ -340,10 +356,13 @@ event {
   limit = 10
 
   conditions {
-    SomeCondition target="Enemy"
+
+    SomeCondition { target = "Enemy" }
   }
+
   actions {
-    SomeAction target="Enemy"
+
+    SomeAction { target = "Enemy" }
   }
 }
 ```
@@ -358,8 +377,10 @@ event {
   iterable = "Inventory"
   value = "item"
   key = "itemKey"
+
   actions {
-    SomeAction text="Inspect item"
+
+    SomeAction { text = "Inspect item" }
   }
 }
 ```
@@ -375,14 +396,18 @@ event {
   index = "i"
 
   while_conditions {
-    numberVariable variable="QueueSize" comparison_sign=">" value=0
+
+    numberVariable { variable = "QueueSize" comparison_sign = ">" value = 0 }
   }
 
   conditions {
-    SomeCondition target="Player"
+
+    SomeCondition { target = "Player" }
   }
+
   actions {
-    setNumber variable="QueueSize" modification_sign="-" value=1
+
+    setNumber { variable = "QueueSize" modification_sign = "-" value = 1 }
   }
 }
 ```
@@ -397,6 +422,7 @@ while_conditions 是唯一可选条件列表，保存原生 whileConditions。co
 
 ```text
 event {
+
   variable {
     name = "Mode"
     type = "enum"
@@ -410,7 +436,8 @@ event {
   }
 
   actions {
-    SomeAction text="Use local variables"
+
+    SomeAction { text = "Use local variables" }
   }
 }
 ```
@@ -455,9 +482,12 @@ external_events {
   eventsLogic = "在调用者选择范围内处理战斗"
 
   events {
+
     event {
+
       actions {
-        log message_to_log="Shared combat"
+
+        log { message_to_log = "Shared combat" }
       }
     }
   }
@@ -571,8 +601,8 @@ CodeBlock AST 保存开启/关闭符号、整个区域和内容切片的范围�
 | comment | Comment |
 | link | Link，includeConfig 固定全片段 |
 | event.type = javascript / code | JsCode / inlineCode |
-| conditions / actions 内的裸指令 | conditions / actions |
-| 指令块内的裸指令 | subInstructions，继承父指令种类 |
+| conditions / actions 内的指令调用块 | conditions / actions |
+| 指令块内的子指令调用块 | subInstructions，继承父指令种类 |
 | event.variable | variables |
 | 直接嵌套的 event / group / comment / link | events，按混排源顺序 |
 
@@ -673,4 +703,68 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 picking 可视化、行为相关 diff 和按 AST 的安全块移动是推荐编辑器能力，可独立迭代；不能将它们未完成视为可改变基础语法的理由。实现基础格式时至少保留精确 AST 和语义位置，使后续工具无需重新解析另一套正文语言。
 
-本文只采用显式 conditions/actions 块中的裸指令、带 type 的 event、独立 group/comment/link 和原始多行 code 块。禁止并行支持 if/do、其他独立执行事件节点、嵌套 events 包装及字符串代码等备用写法，也不增加所有者名称简写。若未来改变，应重新评审整个作者契约，而不是逐步累积别名。
+本文只采用显式 conditions/actions 块中的指令调用块、带 type 的 event、独立 group/comment/link 和原始多行 code 块。禁止并行支持 if/do、其他独立执行事件节点、嵌套 events 包装及字符串代码等备用写法，也不增加所有者名称简写。若未来改变，应重新评审整个作者契约，而不是逐步累积别名。
+
+## Behavior property syntax aliases
+
+Inside `extensions/<Extension>/behaviors/<Behavior>/functions/*.gdl`, property
+access can use a uniform spelling. The file URI supplies the owning behavior;
+`name` is a literal property identifier, never a runtime expression. These aliases
+are lowered through the existing instruction catalog, including private/hidden
+property entries, and do not introduce runtime actions or change access control.
+
+```settings
+function {
+  name = "InitializeCamera"
+
+  events {
+
+    event {
+
+      conditions {
+
+        getProperty { name = "HasJustBeenCreated" }
+      }
+
+      actions {
+
+        setProperty { name = "HasJustBeenCreated" value = false }
+
+        setProperty { name = "CameraZ" value = 100 }
+
+        setProperty {
+          name = "CameraZ"
+          modification_sign = "+"
+          value = expr(getProperty(name="CameraZ") * 0.1)
+        }
+      }
+    }
+  }
+}
+```
+
+- Action: `setProperty { name = "Name" value = ... }`. `object="Object"` and
+  `behavior="Behavior"` are implicit; either may be supplied explicitly.
+  Numeric/text values use their actual semantic type, with `expr(...)` for
+  calculations. `modification_sign` defaults to `"="` for numeric/text setters;
+  supported operators come from the underlying property catalog. Boolean setters
+  require `value=true` or `value=false` and do not accept modification operators.
+- Condition: `getProperty { name = "Flag" }` checks a boolean property for true;
+  `flags { inverted = true }` checks for false. Numeric/text comparisons use
+  `getProperty { name = "Name" value = ... comparison_sign = ">" }` (default `"="`).
+- Expression: `getProperty(name="Name")` inside any event expression reads a
+  numeric/text property of `Object.Behavior`. It lowers to
+  `Object.Behavior::PropertyName()`. Boolean reads use conditions because the
+  native expression system does not expose boolean property getters. This form
+  accepts only `name`, and works in instruction expressions and repeat/for-each
+  expression fields. Quoted text and member functions named `getProperty` are
+  untouched. Existing bare property expressions remain valid.
+- Unknown properties, dynamic property names, wrong value types, unsupported
+  parameters and use outside a behavior function are rejected. The complete
+  generated catalogs must be available; aliases do not bypass catalog validation.
+- Saving uses the uniform instruction aliases for the current behavior and the
+  expression alias for explicit `Object.Behavior::PropertyName()` reads. Original
+  fully qualified instruction names remain accepted. Legacy instructions with
+  empty target/value/operator slots retain their original spelling for lossless
+  round trips. Other behavior targets and shared properties retain their existing
+  expression syntax. Settings properties and embedded JavaScript are unaffected.
