@@ -503,7 +503,7 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
   const emitLiteral = (prefix, item, depth, suffix = '') => {
     const indent = '  '.repeat(depth);
     if (item.expression === true) {
-      lines.push(`${prefix}{{${item.value.expression}}}${suffix}`);
+      lines.push(`${prefix}{{ ${item.value.expression} }}${suffix}`);
     } else if (
       item.value &&
       typeof item.value === 'object' &&
@@ -592,7 +592,7 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
           ([key, item]) =>
             `${keyText(key)} = ${
               item.expression
-                ? `{{${item.value.expression}}}`
+                ? `{{ ${item.value.expression} }}`
                 : JSON.stringify(item.value)
             }`
         )

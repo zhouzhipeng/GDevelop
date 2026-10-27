@@ -252,7 +252,7 @@ const formatSemanticValue = (
           `${label} contains an empty text expression.`
         );
       }
-      return `{{${trimmed}}}`;
+      return `{{ ${trimmed} }}`;
     }
     case 'number': {
       const trimmed = source.trim();
@@ -268,7 +268,7 @@ const formatSemanticValue = (
           `${label} contains an empty numeric expression.`
         );
       }
-      return `{{${trimmed}}}`;
+      return `{{ ${trimmed} }}`;
     }
     case 'boolean': {
       const value = parseBooleanParameter(source, parameter.type);

@@ -22,8 +22,20 @@ test('double-brace expressions retain quoted delimiters and nested braces', () =
   );
   const syntax = parseSettingsSyntax(source);
   const printed = printSettingsSyntax(syntax.root, syntax.comments);
-  expect(printed).toContain('{{Func("}}", { nested: 1 })}}');
+  expect(printed).toContain('{{ Func("}}", { nested: 1 }) }}');
   expect(printSettingsSyntax(parseSettingsSyntax(printed).root)).toBe(printed);
+});
+
+test('formats inline and block expressions with one space inside delimiters', () => {
+  const source = wrap(
+    'event {\n type = "repeat"\n count = {{  MouseButton  }}\n actions {\n A { value={{MouseButton}} }\n }\n}'
+  );
+  const formatted = printSettingsSyntax(parseSettingsSyntax(source).root);
+  expect(formatted).toContain('count = {{ MouseButton }}');
+  expect(formatted).toContain('value = {{ MouseButton }}');
+  expect(printSettingsSyntax(parseSettingsSyntax(formatted).root)).toBe(
+    formatted
+  );
 });
 
 test('rejects empty, unterminated, and old-style expression operands', () => {

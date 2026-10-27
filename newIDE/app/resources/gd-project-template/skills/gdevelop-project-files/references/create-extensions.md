@@ -327,7 +327,7 @@ events {
 
     actions {
 
-      setNumberObjectVariable object="Object" variable="HP" modification_sign="-" value={{Amount}}
+      setNumberObjectVariable object="Object" variable="HP" modification_sign="-" value={{ Amount }}
     }
   }
 }
@@ -385,7 +385,7 @@ selection through child events and nested private behavior-function calls.
 ### Accessing a behavior's properties
 
 In a behavior's `functions/*.gdl`, use `setProperty { name = "Speed" value = 100 }` and
-`{{getProperty(name="Speed")}}`. The owner is inferred from the file path and
+`{{ getProperty(name="Speed") }}`. The owner is inferred from the file path and
 instruction targets default to `Object` / `Behavior`. Boolean properties use
 `setProperty { name = "Initialized" value = true }` and the condition
 `getProperty { name = "Initialized" }`. See `gdl-usage.md` for operators, comparisons,

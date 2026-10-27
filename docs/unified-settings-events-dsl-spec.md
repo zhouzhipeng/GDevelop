@@ -182,7 +182,7 @@ codeBlock        := 'code' '{' NEWLINE javascriptBody closingCodeBrace
 
 `{{...}}` 专用于 catalog 允许表达式的参数与循环字段，不能出现在普通 settings 属性中。扫描识别表达式中的嵌套花括号、字符串和转义；只有字符串外且嵌套深度为零的 `}}` 才结束表达式。参数不得重复、不得使用位置参数。指令参数可以逐行书写，也可以在同一行书写。{{...}} 内容可跨行，保留原生表达式的精确源码。官方模板包含此类表达式，不能折叠空白或截断。格式化器将不超过 80 列、无标记、无子指令和内部注释的简单调用输出为单行，其余展开。
 
-例如，`angle_in_degrees = {{ MousePointerLock::MovementX() * HorizontalSpeed / SceneWindowWidth() }}`。双花括号内使用 GDevelop 表达式语言，不是 JavaScript 或 GDL 结构块。`message = "Hello"` 是文本字面量，`message = {{ "Score: " + ToString(Score) }}` 是表达式。旧的 `expr(...)` 写法不受支持。
+例如，`angle_in_degrees = {{ MousePointerLock::MovementX() * HorizontalSpeed / SceneWindowWidth() }}`。规范输出在双花括号内两侧各使用一个空格。双花括号内使用 GDevelop 表达式语言，不是 JavaScript 或 GDL 结构块。`message = "Hello"` 是文本字面量，`message = {{ "Score: " + ToString(Score) }}` 是表达式。旧的 `expr(...)` 写法不受支持。
 
 不保留 if/do 前缀和第二种条件/动作表达。JavaScript code 内的 if、do 等 JS 关键字正常有效。
 
@@ -353,7 +353,7 @@ event {
   type = "for_each"
   object = "Enemy"
   index = "i"
-  order_by = {{Enemy.Variable(HP)}}
+  order_by = {{ Enemy.Variable(HP) }}
   order = "desc"
   limit = 10
 
@@ -737,7 +737,7 @@ function {
         setProperty {
           name = "CameraZ"
           modification_sign = "+"
-          value = {{getProperty(name="CameraZ") * 0.1}}
+          value = {{ getProperty(name="CameraZ") * 0.1 }}
         }
       }
     }

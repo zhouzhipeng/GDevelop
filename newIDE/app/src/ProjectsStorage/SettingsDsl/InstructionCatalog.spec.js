@@ -325,7 +325,9 @@ describe('project Settings instruction catalog', () => {
     });
 
     expect(dsl).toMatch(/parameter_0\s+=\s+"Object"/);
-    expect(dsl).toMatch(/parameter_1\s+=\s+\{\{Object\.PointX\("Center"\)\}\}/);
+    expect(dsl).toMatch(
+      /parameter_1\s+=\s+\{\{ Object\.PointX\("Center"\) \}\}/
+    );
     expect(dsl).toMatch(/parameter_2\s+=\s+"Checkpoint"/);
     expect(dsl).not.toContain('\\"');
     expect(
@@ -454,7 +456,7 @@ describe('project Settings instruction catalog', () => {
 
     expect(dsl).toMatch(/Text::Set\s+\{\s+text\s+=\s+""/);
     expect(dsl).toMatch(
-      /Text::Set\s+\{\s+text\s+=\s+\{\{"Score:\s+"\s+\+\s+ToString\(Variable\(Score\)\)\}\}/
+      /Text::Set\s+\{\s+text\s+=\s+\{\{ "Score:\s+"\s+\+\s+ToString\(Variable\(Score\)\) \}\}/
     );
     expect(dsl).not.toContain('\\"');
     expect(areLegacyEventsEquivalent(input, output)).toBe(true);

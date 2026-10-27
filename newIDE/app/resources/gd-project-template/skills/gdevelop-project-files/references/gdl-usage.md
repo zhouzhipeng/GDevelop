@@ -220,7 +220,8 @@ that a scene-variable action adds once per coin. Use for_each when required.
   user-defined aliases, @ annotations, > depth prefixes, ? prefixes or raw JSON.
 - Ordinary text/object/behavior/variable/resource/name operands are quoted;
   numbers and booleans are literals. Use {{...}} for calculated expressions.
-  Expression bodies inside `{{...}}` may span lines; preserve their expression source.
+  Canonical output puts one space inside each delimiter: `{{ MouseButton }}`.
+  Expression bodies may span lines; preserve their expression source.
 - `{{ ... }}` contains a GDevelop expression, not JavaScript or a GDL block.
   For example, `angle_in_degrees = {{ MousePointerLock::MovementX() * HorizontalSpeed / SceneWindowWidth() }}`.
   A plain string such as `message = "Hello"` is a literal, while
@@ -269,7 +270,7 @@ event {
 event {
   type = "for_each"
   object = "Enemy"
-  order_by = {{Enemy.Variable(HP)}}
+  order_by = {{ Enemy.Variable(HP) }}
   order = "desc"
   limit = 10
 }
@@ -392,7 +393,7 @@ function {
       }
       actions {
         setProperty { name = "HasJustBeenCreated" value = false }
-        setProperty { name = "CameraZ" value = {{getProperty(name="CameraZ") + 10}} }
+        setProperty { name = "CameraZ" value = {{ getProperty(name="CameraZ") + 10 }} }
       }
     }
   }
