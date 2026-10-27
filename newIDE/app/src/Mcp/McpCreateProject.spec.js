@@ -35,13 +35,13 @@ describe('createLocalProject', () => {
     const loaded = await openMultiFileProject(result.projectFile);
     expect(loaded).toBeTruthy();
     for (const file of [
-      'project.gdevelop',
+      'project.gdl',
       'resources.gdl',
       'constants.toml',
       'AGENTS.md',
       'skills/gdevelop-project-files/SKILL.md',
-      '.gdevelop/settings-catalog.json',
-      '.gdevelop/instructions-catalog.json',
+      '.gdevelop/gdl-catalog.json',
+      '.gdevelop/actions-catalog.json',
       '.gdevelop/project-api.d.ts',
     ]) {
       expect(fs.existsSync(path.join(root, 'game', file))).toBe(true);

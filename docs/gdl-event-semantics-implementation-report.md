@@ -6,7 +6,7 @@
 
 ## 已实施
 
-- 保持 GDL 作者格式 12、Settings catalog 10；instruction catalog 升为 4，增加语义版本、规则修订和每条指令的 known/partial/unknown 契约。
+- 保持 GDL 作者格式 13、GDL catalog 11；instruction catalog 升为 4，增加语义版本、规则修订和每条指令的 known/partial/unknown 契约。
 - 独立 `EventsSemantics` 模块提供规则注册、源码映射、选择状态、执行维度、项目上下文及聚合分析；不将分析字段写入原生事件模型。
 - 精确类型和实际 catalog 参数决定规则，不根据指令名正则或参数字符串猜测对象角色。
 - 项目打开入口检查主/废弃指令 catalog 的版本和语义契约；遇到旧生成 catalog 时自动重建，保留当前 GDL 源文件不变。
@@ -101,3 +101,5 @@ Else 仍遵守当前 GDL 较严格的邻接规则。未因原生生成器跳过 
 ## 后续实施顺序
 
 优先扩充已有真实引擎夹具来精化逻辑合并、反选、创建和循环规则，然后增加跨文件摘要与行为 Diff。运行时轨迹仍按 spec 独立评审，不作为基础分析链路的默认副作用。
+
+当前 instruction catalog 文件契约见 [按种类拆分规范](instruction-catalog-split-spec.md)（逻辑版本 6）。

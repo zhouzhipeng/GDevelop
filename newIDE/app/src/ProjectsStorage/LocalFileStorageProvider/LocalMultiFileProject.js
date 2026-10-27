@@ -1,4 +1,5 @@
 // @flow
+import { RETIRED_MULTI_FILE_ENTRY_NAME } from '../ProjectEntry';
 import { preserveSettingsSourceComments } from '../SettingsDsl/Syntax';
 
 import optionalRequire from '../../Utils/OptionalRequire';
@@ -9,7 +10,7 @@ import {
   resetSettingsTypes,
   preserveVariableStructureOrder,
 } from '../SettingsDsl';
-import { PROJECT_SETTINGS_CATALOG_FORMAT_VERSION } from '../ProjectSourceCatalog';
+import { PROJECT_GDL_CATALOG_FORMAT_VERSION } from '../ProjectSourceCatalog';
 import {
   MULTI_FILE_ENTRY_NAME,
   MULTI_FILE_CONSTANTS_URI,
@@ -27,11 +28,9 @@ import {
   validateGameUri,
 } from '../MultiFileProjectFormat';
 import {
-  PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH,
-  PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH,
+  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  assembleInstructionCatalogFiles,
   createCatalogInstructionResolver,
-  mergeProjectInstructionCatalogs,
-  validateProjectInstructionCatalog,
 } from '../SettingsDsl/InstructionCatalog';
 
 const fs = optionalRequire('fs-extra');
@@ -913,17 +912,29 @@ const discoverOwnedSettingsUris = async (
   return discovered.sort((left, right) => left.localeCompare(right));
 };
 
+const assertCurrentProjectEntry = (entryPath: string) => {
+  if (path.basename(entryPath) !== MULTI_FILE_ENTRY_NAME)
+    throw new MultiFileProjectError(
+      'MULTIFILE_INVALID_ENTRY',
+      `The multi-file entry must be named ${MULTI_FILE_ENTRY_NAME}.`
+    );
+  if (
+    fs.existsSync(
+      path.join(path.dirname(entryPath), RETIRED_MULTI_FILE_ENTRY_NAME)
+    )
+  )
+    throw new MultiFileProjectError(
+      'MULTIFILE_RETIRED_ENTRY',
+      'Retired project.gdevelop entry found. Only project.gdl is supported; remove the conflicting old entry explicitly.'
+    );
+};
+
 export const readMultiFileSourceTree = async (
   entryPath: string,
   options?: {| readOnly?: boolean |}
 ): Promise<{| projectRoot: string, files: { [string]: string } |}> => {
   requireFileSystem();
-  if (path.basename(entryPath) !== MULTI_FILE_ENTRY_NAME) {
-    throw new MultiFileProjectError(
-      'MULTIFILE_INVALID_ENTRY',
-      `The multi-file entry must be named ${MULTI_FILE_ENTRY_NAME}.`
-    );
-  }
+  assertCurrentProjectEntry(entryPath);
   const projectRoot = path.resolve(path.dirname(entryPath));
   const assertNoPendingTransaction = () => {
     const transactionsRoot = path.join(
@@ -997,7 +1008,7 @@ export const readMultiFileSourceTree = async (
       ) {
         throw new MultiFileProjectError(
           'MULTIFILE_UNSUPPORTED_VERSION',
-          'Unsupported project.gdevelop format marker.',
+          'Unsupported project.gdl format marker.',
           uri
         );
       }
@@ -1017,26 +1028,19 @@ export const openMultiFileProjectWithSources = async (
   const ignoreInstructionCatalog =
     effectiveOptions.ignoreInstructionCatalog === true;
   delete effectiveOptions.ignoreInstructionCatalog;
-  const authoringCatalogPath = path.join(
-    projectRoot,
-    ...PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH.split('/')
-  );
-  const deprecatedCatalogPath = path.join(
-    projectRoot,
-    ...PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH.split('/')
-  );
-  if (!ignoreInstructionCatalog && fs.existsSync(authoringCatalogPath)) {
+  if (!ignoreInstructionCatalog) {
     let catalog;
     try {
-      catalog = validateProjectInstructionCatalog(
-        JSON.parse(await readBoundedUtf8(authoringCatalogPath))
-      );
-      if (fs.existsSync(deprecatedCatalogPath)) {
-        const deprecatedCatalog = validateProjectInstructionCatalog(
-          JSON.parse(await readBoundedUtf8(deprecatedCatalogPath))
-        );
-        catalog = mergeProjectInstructionCatalogs(catalog, deprecatedCatalog);
+      const parts: Object = {};
+      for (const file of Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS)) {
+        const catalogPath = path.join(projectRoot, ...file.split('/'));
+        try {
+          parts[file] = JSON.parse(await readBoundedUtf8(catalogPath));
+        } catch (error) {
+          throw new Error(`${file}: ${error.message}`);
+        }
       }
+      catalog = assembleInstructionCatalogFiles(parts);
     } catch (error) {
       throw new MultiFileProjectError(
         'MULTIFILE_INVALID_INSTRUCTION_CATALOG',
@@ -1048,17 +1052,17 @@ export const openMultiFileProjectWithSources = async (
       ...((options && options.compileOptions) || {}),
     };
   }
-  const settingsCatalogPath = path.join(
+  const gdlCatalogPath = path.join(
     projectRoot,
     '.gdevelop',
-    'settings-catalog.json'
+    'gdl-catalog.json'
   );
-  if (fs.existsSync(settingsCatalogPath)) {
+  if (fs.existsSync(gdlCatalogPath)) {
     try {
-      const catalog = JSON.parse(await readBoundedUtf8(settingsCatalogPath));
+      const catalog = JSON.parse(await readBoundedUtf8(gdlCatalogPath));
       if (
-        catalog.format === 'gdevelop-settings-catalog' &&
-        catalog.formatVersion === PROJECT_SETTINGS_CATALOG_FORMAT_VERSION
+        catalog.format === 'gdevelop-gdl-catalog' &&
+        catalog.formatVersion === PROJECT_GDL_CATALOG_FORMAT_VERSION
       )
         registerSettingsTypes(catalog);
     } catch (_) {
@@ -1223,6 +1227,7 @@ const writeMultiFileSourceTreeTransaction = async ({
   obsoleteUris = [],
 }: WriteMultiFileSourceTreeOptions): Promise<Array<string>> => {
   requireFileSystem();
+  assertCurrentProjectEntry(entryPath);
   const projectRoot = path.resolve(path.dirname(entryPath));
   await fs.ensureDir(projectRoot);
   await recoverMultiFileTransactions(projectRoot);

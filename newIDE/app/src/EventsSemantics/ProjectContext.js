@@ -9,7 +9,7 @@ export const createCatalogSourceFingerprint = files => {
   Object.keys(files)
     .sort()
     .forEach(file => {
-      if (!file.endsWith('.gdl') && file !== 'game://project.gdevelop') return;
+      if (!file.endsWith('.gdl') && file !== 'game://project.gdl') return;
       const root = parseSettingsSyntax(files[file], file).root;
       const declaration = node => ({
         type: node.type,
@@ -30,7 +30,7 @@ export const createCatalogSourceFingerprint = files => {
 export const buildProjectContexts = files => {
   const roots = new Map();
   Object.entries(files).forEach(([file, source]) => {
-    if (file.endsWith('.gdl') || file === 'game://project.gdevelop')
+    if (file.endsWith('.gdl') || file === 'game://project.gdl')
       roots.set(file, parseSettingsSyntax(source, file).root);
   });
   return file => {
@@ -71,7 +71,7 @@ export const buildProjectContexts = files => {
     };
     addObjects('game://objects/');
     addObjects(`game://${container}/objects/`);
-    const globalRoot = roots.get('game://project.gdevelop');
+    const globalRoot = roots.get('game://project.gdl');
     const ownerRoot = roots.get(
       `game://${container}/${
         scene ? 'scene' : segments.includes('behaviors') ? 'behavior' : 'prefab'

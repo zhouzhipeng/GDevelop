@@ -43,7 +43,7 @@ describe('MCP single-file TSL material validator', () => {
     );
     writeCatalogs(root);
     project = global.gd.ProjectHelper.createNewGDJSProject();
-    project.setProjectFile(path.join(root, 'project.gdevelop'));
+    project.setProjectFile(path.join(root, 'project.gdl'));
   });
 
   afterEach(() => {

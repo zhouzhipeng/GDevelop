@@ -162,7 +162,7 @@ The JavaScript authoring API must:
 
 Version 1 does not:
 
-- Replace the instruction or settings catalog.
+- Replace the instruction or GDL catalog.
 - Replace the Events DSL with JavaScript.
 - expose every runtime class, method, global, or renderer implementation.
 - Make underscore-prefixed fields public merely because JavaScript can access
@@ -187,10 +187,10 @@ The project has two normal AI authoring catalogs:
 
 | Artifact                              | Authoritative responsibility                                      |
 | ------------------------------------- | ----------------------------------------------------------------- |
-| `.gdevelop/instructions-catalog.json` | Events DSL instructions and expressions                           |
-| `.gdevelop/settings-catalog.json`     | Settings-owned definitions, embedded layouts, and writable fields |
+| `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` | Events DSL instructions and expressions                           |
+| `.gdevelop/gdl-catalog.json`     | Settings-owned definitions, embedded layouts, and writable fields |
 
-`.gdevelop/deprecated-instructions-catalog.json` remains a compatibility-only
+`the corresponding kind catalog (entries with authoringAvailable=false)` remains a compatibility-only
 event catalog and must not be used to construct new logic.
 
 The JavaScript declaration files complement these catalogs; they do not copy
@@ -205,7 +205,7 @@ Examples of deliberate non-duplication:
 
 - Instruction sentences and named Events DSL parameters stay only in the
   instruction catalog.
-- Object serializer fields stay only in the settings catalog and object
+- Object serializer fields stay only in the GDL catalog and object
   `.gdl` sources.
 - Instance coordinates stay in the owning scene, prefab, variant or external-layout GDL document.
 - `project-api.d.ts` may declare that `Player` is a Sprite runtime object, but
@@ -225,7 +225,7 @@ Both declaration files are generated editor state below `.gdevelop/`:
 - They are ignored by Git with the rest of `.gdevelop/`.
 - They must never be edited by an AI model or user.
 - Direct edits are overwritten on the next generation.
-- Project source remains the `.gdl` and `project.gdevelop` files.
+- Project source remains the `.gdl` and `project.gdl` files.
 
 ### 6.2 Determinism
 
@@ -879,7 +879,7 @@ not guess.
 
 A project rename remains one coherent source transaction:
 
-1. Update authoritative `.gdl` and `project.gdevelop` sources.
+1. Update authoritative `.gdl` and `project.gdl` sources.
 2. Update affected JavaScript literals explicitly (or, in a future version,
    through proven AST-aware edits).
 3. Regenerate all catalogs and declaration files.
@@ -898,7 +898,7 @@ fully available:
 2. Parse GDL component roots, embedded events and their layout data.
 3. Compose and validate the in-memory project model.
 4. Register built-in and project extensions.
-5. Generate instruction catalogs and the settings catalog, including embedded
+5. Generate instruction catalogs and the GDL catalog, including embedded
    layout schemas and contexts.
 6. Load the curated core JavaScript API.
 7. Generate `runtime-api.d.ts`.
@@ -923,7 +923,7 @@ operation reports success.
 ```text
 event {
   conditions {
-    CollisionNP first_object="Player" second_object="Enemy"
+    collision first_object="Player" second_object="Enemy"
   }
   event {
     type = "javascript"

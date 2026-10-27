@@ -14,7 +14,7 @@ const config = {
   asarUnpack: ['external/**/*'],
   fileAssociations: [
     {
-      ext: 'gdevelop',
+      ext: 'gdl',
       name: 'GDevelop project',
       description: 'GDevelop project',
       mimeType: 'application/x-gdevelop-project',

@@ -144,9 +144,13 @@ const inventorySchema = descriptor => {
       fields[field.name] = field;
   });
   const children = Object.create(null);
-  (descriptor.childTables || []).forEach(child => {
-    if (child.table === 'rawJson' || child.table === 'migration') return;
-    const key = leafName(child.table);
+  (descriptor.childNodes || []).forEach(child => {
+    if (
+      child.serializedKey === 'rawJson' ||
+      child.serializedKey === 'migration'
+    )
+      return;
+    const key = leafName(child.serializedKey);
     if (['variables', 'globalVariables', 'sceneVariables'].includes(key)) {
       const keys = children.variable ? children.variable.variableKeys : [];
       children.variable = variableEntry([...keys, key]);

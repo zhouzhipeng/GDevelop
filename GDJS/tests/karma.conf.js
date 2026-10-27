@@ -251,6 +251,8 @@ module.exports = function (config) {
       `${gdjsRuntimePath}/Extensions/NavMeshPathfinding/NavMeshCharacterRuntimeBehavior.js`,
       `${gdjsRuntimePath}/Extensions/PrimitiveDrawing/shapepainterruntimeobject.js`,
       `${gdjsRuntimePath}/Extensions/PrimitiveDrawing/shapepainterruntimeobject-pixi-renderer.js`,
+      `${gdjsRuntimePath}/Extensions/SvgUI/svguiruntimeobject.js`,
+      `${gdjsRuntimePath}/Extensions/SvgUI/svguiruntimeobject-renderer.js`,
       `${gdjsRuntimePath}/Extensions/TextInput/textinputruntimeobject.js`,
       `${gdjsRuntimePath}/Extensions/TextInput/textinputruntimeobject-pixi-renderer.js`,
       `${gdjsRuntimePath}/Extensions/TextObject/textruntimeobject.js`,

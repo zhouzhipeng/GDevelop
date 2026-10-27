@@ -1,4 +1,5 @@
 // @noflow
+import { MULTI_FILE_ENTRY_NAME } from '../ProjectsStorage/ProjectEntry';
 import { SEMANTICS_RULE_EVIDENCE } from '../EventsSemantics/RuleEvidence';
 import optionalRequire from '../Utils/OptionalRequire';
 import {
@@ -6,8 +7,8 @@ import {
   resolveGameUriToPath,
 } from '../ProjectsStorage/LocalFileStorageProvider/LocalMultiFileProject';
 import {
-  validateProjectInstructionCatalog,
-  mergeProjectInstructionCatalogs,
+  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  assembleInstructionCatalogFiles,
 } from '../ProjectsStorage/SettingsDsl/InstructionCatalog';
 import { analyzeProjectGdl } from '../EventsSemantics/ProjectAnalysis';
 import { createCatalogSourceFingerprint } from '../EventsSemantics/ProjectContext';
@@ -16,23 +17,18 @@ import { createSourceSnapshot } from '../EventsSemantics/AnalyzeEvents';
 const fs = optionalRequire('fs');
 const path = optionalRequire('path');
 export const readGdlSemanticsCatalog = projectRoot => {
-  const read = name => {
-    const file = path.join(projectRoot, '.gdevelop', name);
-    if (fs.statSync(file).size > 32 * 1024 * 1024)
-      throw new Error('Instruction catalog exceeds analysis size budget.');
-    return validateProjectInstructionCatalog(
-      JSON.parse(fs.readFileSync(file, 'utf8'))
-    );
-  };
-  const catalog = read('instructions-catalog.json');
-  return fs.existsSync(
-    path.join(projectRoot, '.gdevelop/deprecated-instructions-catalog.json')
-  )
-    ? mergeProjectInstructionCatalogs(
-        catalog,
-        read('deprecated-instructions-catalog.json')
-      )
-    : catalog;
+  return assembleInstructionCatalogFiles(
+    Object.fromEntries(
+      Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).map(file => {
+        const fullPath = path.join(projectRoot, file);
+        if (fs.statSync(fullPath).size > 32 * 1024 * 1024)
+          throw new Error(
+            `Instruction catalog exceeds analysis size budget: ${file}`
+          );
+        return [file, JSON.parse(fs.readFileSync(fullPath, 'utf8'))];
+      })
+    )
+  );
 };
 
 export const callGdlSemanticsTool = async (projectFile, toolName, args) => {
@@ -40,13 +36,13 @@ export const callGdlSemanticsTool = async (projectFile, toolName, args) => {
     !fs ||
     !path ||
     !projectFile ||
-    path.basename(projectFile) !== 'project.gdevelop'
+    path.basename(projectFile) !== MULTI_FILE_ENTRY_NAME
   )
     return {
       success: false,
       status: 'blocked',
       runtimeVerified: false,
-      reason: 'A saved local project.gdevelop is required.',
+      reason: 'A saved local project.gdl is required.',
     };
   let catalog;
   try {
@@ -83,7 +79,7 @@ export const callGdlSemanticsTool = async (projectFile, toolName, args) => {
     const instruction = (kind === 'action'
       ? catalog.actions
       : catalog.conditions
-    ).find(entry => entry.type === type);
+    ).find(entry => entry.dslName === type || entry.type === type);
     return instruction
       ? {
           success: true,

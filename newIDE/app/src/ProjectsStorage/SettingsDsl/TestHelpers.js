@@ -19,10 +19,12 @@ export const withTestInstructionSemantics = catalog => ({
   semanticsVersion: 1,
   semanticsRulesRevision: 'gdjs-picking-1',
   actions: (catalog.actions || []).map(entry => ({
+    dslName: entry.type,
     semantics: { status: 'unknown', reason: 'test-fixture' },
     ...entry,
   })),
   conditions: (catalog.conditions || []).map(entry => ({
+    dslName: entry.type,
     semantics: { status: 'unknown', reason: 'test-fixture' },
     ...entry,
   })),

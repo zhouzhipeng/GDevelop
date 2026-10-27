@@ -114,10 +114,10 @@ const run = async () => {
     'catalog-deprecated-instructions-built',
     'catalog-deprecated-instructions-writing',
     'catalog-deprecated-instructions-written',
-    'catalog-settings-building',
-    'catalog-settings-built',
-    'catalog-settings-writing',
-    'catalog-settings-written',
+    'catalog-gdl-building',
+    'catalog-gdl-built',
+    'catalog-gdl-writing',
+    'catalog-gdl-written',
     'catalog-layout-building',
     'catalog-layout-built',
     'catalog-layout-writing',
@@ -389,7 +389,7 @@ const run = async () => {
     method: 'tools/call',
     params: {
       name: 'open_project',
-      arguments: { project_path: 'C:\\Games\\Test\\project.gdevelop' },
+      arguments: { project_path: 'C:\\Games\\Test\\project.gdl' },
     },
   };
   const openProjectPromise = projectFilesBroker.send(openProjectRequest);
@@ -470,18 +470,18 @@ const run = async () => {
   broker.handleProgress(webContents, {
     id: rendererErrorRequest.id,
     operationId: rendererErrorRequest.operationId,
-    progress: { phase: 'catalog-settings-writing' },
+    progress: { phase: 'catalog-gdl-writing' },
   });
   broker.handleResponse(webContents, {
     id: rendererErrorRequest.id,
     result: {
       isError: true,
-      content: [{ type: 'text', text: 'settings write failed' }],
+      content: [{ type: 'text', text: 'gdl write failed' }],
       structuredContent: {
         success: false,
-        error: 'settings write failed',
+        error: 'gdl write failed',
         code: 'MCP_RELOAD_CATALOG_SUBPHASE_FAILED',
-        catalogArtifact: 'settings',
+        catalogArtifact: 'gdl',
       },
     },
   });
@@ -493,7 +493,7 @@ const run = async () => {
   );
   assert.strictEqual(
     rendererErrorResult.structuredContent.reloadOperation.catalogGeneration
-      .artifacts.settings.status,
+      .artifacts.gdl.status,
     'failed'
   );
 

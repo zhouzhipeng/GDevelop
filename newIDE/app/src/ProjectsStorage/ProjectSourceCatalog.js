@@ -1,5 +1,6 @@
 // @flow
 
+import { MULTI_FILE_ENTRY_NAME } from './ProjectEntry';
 import { shouldHideExtension } from '../Version';
 import {
   serializeToJSObject,
@@ -24,9 +25,8 @@ const SCENE_LIFECYCLE_SOURCES = Object.freeze([
   { name: 'sceneUnload', legacyField: 'sceneUnloadEvents', order: 3 },
 ]);
 
-export const PROJECT_SETTINGS_CATALOG_RELATIVE_PATH =
-  '.gdevelop/settings-catalog.json';
-export const PROJECT_SETTINGS_CATALOG_FORMAT_VERSION = 10;
+export const PROJECT_GDL_CATALOG_RELATIVE_PATH = '.gdevelop/gdl-catalog.json';
+export const PROJECT_GDL_CATALOG_FORMAT_VERSION = 12;
 
 export class ProjectSourceCatalogError extends Error {
   code: string;
@@ -528,7 +528,7 @@ const shapeType = (
         ? `${itemType} inline array`
         : `${itemType} array`;
     }
-    if (kind === 'object') return 'inline table';
+    if (kind === 'object') return 'inline object';
     if (kind === 'null')
       return 'unsupported null (not part of GDevelop Language (GDL))';
     return kind;
@@ -548,7 +548,7 @@ const shapeField = (name: string, shape: SerializedValueShape): Object => {
   return field;
 };
 
-const buildSerializedObjectChildTable = (
+const buildSerializedObjectChildNode = (
   name: string,
   shape: SerializedValueShape,
   parentPath: string
@@ -557,7 +557,7 @@ const buildSerializedObjectChildTable = (
   const repeated = shape.kinds.includes('array');
   const recordShape = repeated ? shape.item : shape;
   const fields = [];
-  const childTables = [];
+  const childNodes = [];
   if (recordShape && recordShape.fields) {
     Object.keys(recordShape.fields)
       .sort((left, right) => left.localeCompare(right))
@@ -569,27 +569,21 @@ const buildSerializedObjectChildTable = (
           fieldShape.item &&
           fieldShape.item.kinds.includes('object');
         if (isObject || isObjectArray) {
-          childTables.push(
-            buildSerializedObjectChildTable(fieldName, fieldShape, path)
+          childNodes.push(
+            buildSerializedObjectChildNode(fieldName, fieldShape, path)
           );
         } else {
           fields.push(shapeField(fieldName, fieldShape));
         }
       });
   }
-  const table: Object = {
-    table: path,
-    header: repeated ? `[[${path}]]` : `[${path}]`,
+  const descriptor: Object = {
+    serializedKey: path,
     ...(repeated ? { repeated: true } : {}),
     fields,
   };
-  if (repeated) {
-    table.emptyForm = `${name} = [ ]${
-      parentPath ? ` inside [${parentPath}]` : ' at the object root'
-    }`;
-  }
-  if (childTables.length) table.childTables = childTables;
-  return table;
+  if (childNodes.length) descriptor.childNodes = childNodes;
+  return descriptor;
 };
 
 const buildSerializedObjectConfigurationSchema = (
@@ -600,7 +594,7 @@ const buildSerializedObjectConfigurationSchema = (
     rootShape = mergeSerializedValueShape(rootShape, value, isDefault);
   });
   const rootFields = [];
-  const childTables = [];
+  const childNodes = [];
   const fields: { [string]: SerializedValueShape } = rootShape
     ? rootShape.fields
     : {};
@@ -614,12 +608,12 @@ const buildSerializedObjectConfigurationSchema = (
         shape.item &&
         shape.item.kinds.includes('object');
       if (isObject || isObjectArray) {
-        childTables.push(buildSerializedObjectChildTable(name, shape, ''));
+        childNodes.push(buildSerializedObjectChildNode(name, shape, ''));
       } else {
         rootFields.push(shapeField(name, shape));
       }
     });
-  return { rootFields, childTables };
+  return { rootFields, childNodes };
 };
 
 const collectSerializedPathsNamed = (
@@ -1061,7 +1055,7 @@ const settingsField = (
 const SETTINGS_FILE_KINDS = [
   {
     kind: 'project',
-    path: 'project.gdevelop',
+    path: MULTI_FILE_ENTRY_NAME,
     componentKind: 'project',
     schemaKey: 'project',
     layout: false,
@@ -1309,7 +1303,7 @@ const projectIdentity = (project: gdProject): Object => ({
   uuid: project.getProjectUuid(),
 });
 
-export const buildProjectSettingsCatalog = ({
+export const buildProjectGdlCatalog = ({
   project,
   serializedProject,
   additionalExtensions = [],
@@ -1332,9 +1326,9 @@ export const buildProjectSettingsCatalog = ({
   registeredTypes.objectTypes.forEach(type => {
     type.schema = getObjectSettingsSchema(type.type);
   });
-  return validateProjectSettingsCatalog({
-    format: 'gdevelop-settings-catalog',
-    formatVersion: PROJECT_SETTINGS_CATALOG_FORMAT_VERSION,
+  return validateProjectGdlCatalog({
+    format: 'gdevelop-gdl-catalog',
+    formatVersion: PROJECT_GDL_CATALOG_FORMAT_VERSION,
     project: projectIdentity(project),
     authoring: {
       sourceExtension: '.gdl',
@@ -1346,7 +1340,7 @@ export const buildProjectSettingsCatalog = ({
         'Declare repeated variable nodes directly on the owner. Infer types from value literals; extension defaults require scope. Descendant identity, enum and editor fields belong on nested variable declarations. Expanded containers require explicit structure/array type, omit value, and use named structure children or unnamed ordered array children. metadata/path annotations are forbidden. Never write variables, sceneVariables or globalVariables wrappers.',
         'Instances are root children in global serialized order. Each instance owns variables and behavior overrides. Layers own camera and effect nodes.',
         'Object definitions and functions remain independent .gdl components; event bodies are embedded in the same function.gdl document.',
-        'Only project.gdevelop declares formatVersion. Paths determine ownership. constants.toml is separate and generated JSON is not author input.',
+        'Only project.gdl declares formatVersion. Paths determine ownership. constants.toml is separate and generated JSON is not author input.',
       ],
     },
     eventFileKinds: [
@@ -1391,7 +1385,7 @@ export const buildProjectSettingsCatalog = ({
     behaviorTypes: registeredTypes.behaviorTypes,
     effectTypes: registeredTypes.effectTypes,
     layoutAuthoring: embeddedLayoutCatalog.authoring,
-    layoutTables: embeddedLayoutCatalog.tables,
+    layoutNodes: embeddedLayoutCatalog.nodes,
     layoutContexts: embeddedLayoutCatalog.contexts,
     behaviorOverrideSchemas: embeddedLayoutCatalog.behaviorOverrideSchemas,
     counts: {
@@ -1400,7 +1394,7 @@ export const buildProjectSettingsCatalog = ({
       objectTypes: registeredTypes.objectTypes.length,
       behaviorTypes: registeredTypes.behaviorTypes.length,
       effectTypes: registeredTypes.effectTypes.length,
-      layoutTables: embeddedLayoutCatalog.tables.length,
+      layoutNodes: embeddedLayoutCatalog.nodes.length,
       layoutContexts: embeddedLayoutCatalog.contexts.length,
       behaviorOverrideSchemas:
         embeddedLayoutCatalog.behaviorOverrideSchemas.length,
@@ -1601,8 +1595,11 @@ const buildEmbeddedLayoutCatalog = ({
         'Place layer and instance directly below scene/prefab/variant/external. Nest camera/effect below layer, variable/behavior below instance. Preserve instance order and UUIDs.',
       ],
     },
-    tables: Object.entries(getSettingsSchemas().layout).map(
-      ([table, schema]) => ({ table, node: table, ...schema })
+    nodes: Object.entries(getSettingsSchemas().layout).map(
+      ([node, schema]) => ({
+        node,
+        ...schema,
+      })
     ),
     contexts,
     behaviorOverrideSchemas,
@@ -1641,7 +1638,7 @@ const validateBaseCatalog = (
     !catalog ||
     typeof catalog !== 'object' ||
     catalog.format !== format ||
-    catalog.formatVersion !== PROJECT_SETTINGS_CATALOG_FORMAT_VERSION ||
+    catalog.formatVersion !== PROJECT_GDL_CATALOG_FORMAT_VERSION ||
     !catalog.project ||
     typeof catalog.project !== 'object' ||
     !catalog.authoring ||
@@ -1668,15 +1665,15 @@ const validateUniqueEntries = (
   });
 };
 
-export const validateProjectSettingsCatalog = (catalog: any): Object => {
-  const validated = validateBaseCatalog(catalog, 'gdevelop-settings-catalog', [
+export const validateProjectGdlCatalog = (catalog: any): Object => {
+  const validated = validateBaseCatalog(catalog, 'gdevelop-gdl-catalog', [
     'fileKinds',
     'eventFileKinds',
     'settingsOwners',
     'objectTypes',
     'behaviorTypes',
     'effectTypes',
-    'layoutTables',
+    'layoutNodes',
     'layoutContexts',
     'behaviorOverrideSchemas',
   ]);
@@ -1808,12 +1805,16 @@ export const validateProjectSettingsCatalog = (catalog: any): Object => {
     validated.layoutAuthoring.storage !== 'component-root' ||
     validated.layoutAuthoring.syntax !== 'GDevelop Language (GDL)'
   ) {
-    fail('Settings catalog must declare embedded layout authoring metadata.');
+    fail('GDL catalog must declare embedded layout authoring metadata.');
   }
   validateUniqueEntries(
-    validated.layoutTables,
-    entry => `${entry.table}\u0000${entry.variant || ''}`,
-    'layout table'
+    validated.layoutNodes,
+    entry => {
+      if (typeof entry.node !== 'string' || !entry.node.trim())
+        fail('Layout node entry has no identity.');
+      return `${entry.node}\u0000${entry.variant || ''}`;
+    },
+    'layout node'
   );
   validated.layoutContexts.forEach(context => {
     if (
@@ -1892,15 +1893,15 @@ const serializeCatalog = (
   return lines.join('\n');
 };
 
-export const serializeProjectSettingsCatalog = (catalog: Object): string =>
-  serializeCatalog(validateProjectSettingsCatalog(catalog), [
+export const serializeProjectGdlCatalog = (catalog: Object): string =>
+  serializeCatalog(validateProjectGdlCatalog(catalog), [
     'fileKinds',
     'eventFileKinds',
     'settingsOwners',
     'objectTypes',
     'behaviorTypes',
     'effectTypes',
-    'layoutTables',
+    'layoutNodes',
     'layoutContexts',
     'behaviorOverrideSchemas',
   ]);

@@ -27,7 +27,7 @@ This guide describes a reusable workflow for creating 3D assets in Blender and u
 ## Pipeline overview
 
 ```text
-Plan asset
+plan asset
   → Model and organize in Blender
   → Set origin, orientation, and scale
   → Apply compatible materials and animations

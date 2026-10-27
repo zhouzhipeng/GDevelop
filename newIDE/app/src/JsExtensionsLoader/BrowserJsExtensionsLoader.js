@@ -208,6 +208,12 @@ const jsExtensions = [
     objectsRenderingServiceModules: {},
   },
   {
+    name: 'SvgUI',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/SvgUI/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
     name: 'TextInput',
     // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/TextInput/JsExtension.js'),

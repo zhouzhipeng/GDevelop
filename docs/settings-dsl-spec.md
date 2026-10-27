@@ -1,10 +1,10 @@
 # GDevelop Language (GDL) 当前规范与文档入口
 
-- 状态：已实施；当前作者格式 12，Settings catalog 10，instruction catalog 4。
-- 统一事件契约：[统一 GDevelop Language (GDL)：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。作者格式 12 将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
+- 状态：已实施；当前作者格式 13，GDL catalog 12，instruction catalog 6。
+- 统一事件契约：[统一 GDevelop Language (GDL)：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。作者格式 13 将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
 - 变量契约：[直接 variable 声明与值字面量](settings-dsl-variable-values-spec.md)。第 8.2 节仅作摘要，完整规则由该文档维护。
 - 更新日期：2026-10-27
-- 范围：全部现有 `.gdl` 作者文件；项目入口 `project.gdevelop` 同时使用本语法
+- 范围：全部现有 `.gdl` 作者文件；项目入口 `project.gdl` 同时使用本语法
 - 工作名称：GDevelop Language (GDL)
 - 文件扩展名：统一使用 `.gdl`；不新增 `.layout` 文件或单独的 Layout DSL
 - 决策：完整替代 TOML；只支持本规范最新语法，不提供旧语法兼容、回退、双读双写或迁移器
@@ -22,7 +22,7 @@
 - [JavaScript API](gdevelop-javascript-authoring-api-spec.md)：生成声明与实际脚本上下文。
 - [事件语义分析](gdl-event-semantics-analysis-spec.md)及[实现覆盖](gdl-event-semantics-implementation-report.md)：区分已实现分析、未知范围与后续设计。
 
-版本权威来源分别是 SettingsDsl/SchemaInventory.js、ProjectSourceCatalog.js 和 SettingsDsl/InstructionCatalog.js。项目作者格式、Settings catalog、instruction catalog、项目模块地图是不同版本域，不要求数值相同。模块地图当前为版本 2，仅发布 settingsPath。
+版本权威来源分别是 SettingsDsl/SchemaInventory.js、ProjectSourceCatalog.js 和 SettingsDsl/InstructionCatalog.js。项目作者格式、GDL catalog、instruction catalog、项目模块地图是不同版本域，不要求数值相同。模块地图当前为版本 2，仅发布 settingsPath。
 
 普通配置、指令具名参数、GDevelop 的 expr(...)、JavaScript code 块使用不同上下文规则。expr 内不是 JavaScript；code 内才使用 JavaScript。不存在独立事件源文件，constants.toml 与 tests/*.js 是明确的独立格式。所有字段和精确指令签名以当前项目生成的 catalog 为准。
 
@@ -56,7 +56,7 @@ GDL 将实例变量和行为覆盖放在所属实例内，减少局部修改时�
 6. 保留 UUID、图层顺序、全局实例顺序和现有序列化数据。
 7. 对格式未知字段报错，不悄悄忽略。
 
-对象定义、行为定义、函数签名、资源清单和测试配置都在本规范范围内。事件作者语法统一由上方格式 12 契约定义。非目标：重写 JavaScript 测试正文、图片模型音频资源或生成的运行时 JSON；支持配置中的任意表达式或完整 CSS。
+对象定义、行为定义、函数签名、资源清单和测试配置都在本规范范围内。事件作者语法统一由上方格式 13 契约定义。非目标：重写 JavaScript 测试正文、图片模型音频资源或生成的运行时 JSON；支持配置中的任意表达式或完整 CSS。
 
 ## 3. 文件归属
 
@@ -89,10 +89,10 @@ extensions/Combat/prefabs/Knight/
 - 子块只用于具有结构、集合或作用域的数据，例如 variable、对象组、行为共享数据、editor、layer、instance。
 - 对象定义保持独立组件；每个函数的签名和事件正文合并在一个 .gdl 文件中，统一使用 GDevelop Language (GDL)。
 - 所属关系由路径确定。根 `name` 表示组件名称，必须与解码后的所属目录名（External 为文件 stem）一致；命名空间包装不再重复名称。
-- 根不写 `kind`、`settingsFormatVersion` 或每文件 `version`。根节点类型提供组件种类，整个项目只支持当前 schema；`project.gdevelop` 的 `formatVersion` 是精确匹配的格式标记，不是版本协商入口。
+- 根不写 `kind`、`settingsFormatVersion` 或每文件 `version`。根节点类型提供组件种类，整个项目只支持当前 schema；`project.gdl` 的 `formatVersion` 是精确匹配的格式标记，不是版本协商入口。
 - 所有 `.gdl` 只由新解析器读取，不探测 TOML。禁止根级 `layout` 包装和独立 `.layout` 布局源；同一组件数据只允许一个所有者。
 - 编辑器状态暂保留在 `editor`，个人视图状态是否迁出另行评估。
-- `project.gdevelop` 使用相同 DSL，根为 `project`，保留引导入口文件名。formatVersion 使用当前常量 12。任何不匹配直接拒绝，不尝试旧读取器。
+- `project.gdl` 使用相同 DSL，根为 `project`，统一入口后缀为 .gdl。formatVersion 使用当前常量 13。任何不匹配直接拒绝，不尝试旧读取器。
 - 事件正文合入所属 .gdl；测试 `.js` 正文不变。`constants.toml` 是显式例外，仍为独立的编辑器常量文档；它不是 settings，也不属于本轮替换。生成的 catalog JSON 与运行时 JSON 不改语法。
 - 单文件内配置与布局一起验证、保存；重命名或跨文件引用更新仍须事务保存。
 
@@ -183,7 +183,7 @@ array      := "[" (value ("," value)* ","?)? "]"
 
 | 文件/组件 | 根节点 | 主要内容 |
 | --- | --- | --- |
-| project.gdevelop | project | 入口、精确格式标记、项目配置 |
+| project.gdl | project | 入口、精确格式标记、项目配置 |
 | resources.gdl | resources | 资源清单 |
 | tests.gdl | tests | 测试元数据与脚本引用 |
 | scene.gdl | scene | 场景自有配置与布局 |
@@ -198,13 +198,13 @@ array      := "[" (value ("," value)* ","?)? "]"
 
 路径中具名所有者的具体分配保持当前目录契约；表格中的 behavior 路径只表示所属作用域，不要求重构已有目录。全局、场景、Prefab 和 Variant 对象共用 object 根，所属目录决定解析作用域。生命周期函数及扩展/行为/Prefab 函数共用 function 根。
 
-project formatVersion 固定为 12；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
+project formatVersion 固定为 13；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
 
 ### 5.2 Project 与资源清单示例
 
 ```text
 project {
-  formatVersion = 12
+  formatVersion = 13
   name = "Adventure"
 }
 ```
@@ -831,7 +831,7 @@ Did you mean "Player"?
 - 现有模板、示例项目、测试夹具、内置项目 authoring skill、catalog 生成器与工具输出一并改用最新语法。更新这些仓库资产属于实现工作，不是提供历史项目迁移能力。
 - 重新保存新 DSL 项目必须保持当前有效模型完整；不需要保持历史格式的文本或特殊兼容状态。
 
-加载流程：读取 project.gdevelop → 检查精确 formatVersion → 根据固定目录发现 settings → 全部用新解析器解析 → 项目级引用验证 → 构建模型。
+加载流程：读取 project.gdl → 检查精确 formatVersion → 根据固定目录发现 settings → 全部用新解析器解析 → 项目级引用验证 → 构建模型。
 
 保存流程：当前模型 → 对应根的最新 schema → 规范 DSL → 校验 → 内容比较 → 原子写入。配置与布局在同一组件中一起保存；跨文件重命名/删除事务仍须保证失败不破坏当前有效项目，这属于新格式的可靠性而非兼容性。
 
@@ -839,7 +839,7 @@ Dirty 保存只更新发生变化的组件文件。改变场景布局不重写�
 
 ## 17. 验证与验收
 
-1. 所有 settings 类别以及 project.gdevelop 仅接受本 DSL，不存在 TOML parser 或旧读取器 fallback。
+1. 所有 settings 类别以及 project.gdl 仅接受本 DSL，不存在 TOML parser 或旧读取器 fallback。
 2. Scene、Prefab、Variant、External 的配置与布局在同一 settings 中；不存在独立 .layout 源或 layout/settings 包装块。
 3. Object、Behavior、Function、Extension、External Events、Resources、Tests、Project 都完成最新 schema 与真实可加载夹具。
 4. 当前有效模型的读写往返保留字段、数组顺序、UUID、变量元数据及非活动值；不以旧文本兼容为验收目标。

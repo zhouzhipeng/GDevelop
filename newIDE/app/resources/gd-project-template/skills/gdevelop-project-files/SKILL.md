@@ -1,9 +1,19 @@
 ---
 name: gdevelop-project-files
-description: Create, inspect, modify, refactor, and verify GDevelop games through the version 12 multi-file project sources (`project.gdevelop`, `constants.toml`, `.gdl`, `tests.gdl`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
+description: Create, inspect, modify, refactor, and verify GDevelop games through the version 13 multi-file project sources (`project.gdl`, `constants.toml`, `.gdl`, `tests.gdl`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
 ---
 
 # GDevelop Project Files
+
+## Catalog instruction names
+
+Author actions and conditions using each catalog entry's **`dslName`**. Its
+`type` is the native engine identifier for exact lookup and diagnostics; do not
+prefer it when a shorter `dslName` is published. System names are fixed by the
+engine. Third-party and user instruction `dslName` remains its complete `type`.
+Use parameter `dslName` unchanged. Never invent abbreviations or edit generated
+catalogs. Expressions inside `expr(...)` retain their existing names. The
+formatter always writes the catalog instruction `dslName`.
 
 ## Source of truth
 
@@ -57,19 +67,23 @@ engine issue remains unresolved.
 
 Read, in order:
 
-1. `project.gdevelop` for project metadata and non-constants project data.
+1. `project.gdl` for project metadata and non-constants project data.
 2. `resources.gdl` for the complete project resource registry.
 3. `constants.toml` for the complete editor-only Constants object.
 4. `tests.gdl`, then the selected flat `tests/*.js` source when gameplay
    tests are in scope.
-5. `.gdevelop/settings-catalog.json`, then relevant child `.gdl` files
+5. `.gdevelop/gdl-catalog.json`, then relevant child `.gdl` files
    for semantic configuration, object definitions, and root layer and instance nodes, including instances, layers, spatial bounds, background, and
    editor-canvas state.
 6. `.gdevelop/project-module-map.json` to locate scene, external-fragment, and
    extension event sources and their static Link relationships; then read the
    referenced `.gdl` documents for current logic.
-7. `.gdevelop/instructions-catalog.json` before adding or changing
-   instructions.
+7. Read `.gdevelop/conditions-catalog.json` for conditions,
+   `.gdevelop/actions-catalog.json` for actions, and
+   `.gdevelop/expressions-catalog.json` for expressions. Each file has `kind`,
+   `entries`, and `count`; search its `entries` for exact metadata. Use only
+   entries with `authoringAvailable=true` when writing new events. Entries
+   with `authoringAvailable=false` support existing native data serialization.
 8. `.gdevelop/runtime-api.d.ts` and `.gdevelop/project-api.d.ts` before adding
    or changing any JavaScript event, and `.gdevelop/harness-api.d.ts` plus its
    runtime/project declaration dependencies before adding or changing a
@@ -85,7 +99,10 @@ with `rg`: use file kind, object,
 behavior, effect, owner, or layout context in the source catalogs, and use
 instruction type, displayed name, group, description, parameter `dslName`, or
 expression name in the instruction catalog. Generated JSON keeps one catalog
-entry per line so a matching search returns only relevant metadata.
+entry per line so a matching search returns only relevant metadata. The three
+instruction files share an instruction catalog version and source fingerprint;
+regenerate all three together if any is absent or stale. Old combined and
+deprecated catalog files are removed during generation and are never read.
 
 After a large structural source change, call the no-input GDevelop MCP
 `generate-catalogs` tool and wait for `catalogsRegenerated: true` before making
@@ -104,7 +121,7 @@ This refresh is not validation and does not replace the final
 
 Use the catalogs as authoring contracts:
 
-- In `settings-catalog.json`, read `fileKinds` for the target document's path,
+- In `gdl-catalog.json`, read `fileKinds` for the target document's path,
   typed DSL root, required fields, and ownership boundary.
   Treat the matching `schema.rootFields` and recursively nested
   `schema.childNodes` as the complete structural contract, including exact
@@ -117,14 +134,14 @@ Use the catalogs as authoring contracts:
   `behaviorTypes` entry. Editor-hidden, deprecated, extension-owned, and legacy
   serializer properties are deliberately absent from the authoring surface;
   never invent them, but retain only registered serializer fields; unknown fields are rejected.
-- In `settings-catalog.json`, read `layoutTables` for exact context-specific
+- In `gdl-catalog.json`, read `layoutNodes` for exact context-specific
   nodes, fields, value types, defaults, and constraints. Select the one
   `layoutContexts` entry whose `owner` matches the scene, prefab, variant, or
   external layout, then use only its listed layers, objects, and attached
   behaviors. Search `effectTypes` for exact effect parameters and types.
 - If the relevant registered type, file kind, layout table, or effect is absent,
   stop instead of guessing. If a direct edit introduces a new object or
-  attached behavior name, validate its registered type in the settings catalog,
+  attached behavior name, validate its registered type in the GDL catalog,
   define it first in the owning `.gdl` file, and then reference that exact
   new name in the same coherent owner-settings patch; the saved layout context will
   list it after GDevelop regenerates the catalogs.
@@ -150,10 +167,10 @@ Treat additive semantic and capability metadata as enforceable contracts:
 Search narrowly, for example:
 
 ```sh
-rg '"type":"Sprite"' .gdevelop/settings-catalog.json
-rg '"type":"Tween::TweenBehavior"' .gdevelop/settings-catalog.json
-rg '"table":"instance"' .gdevelop/settings-catalog.json
-rg '"owner":{"scene":"Main"}' .gdevelop/settings-catalog.json
+rg '"type":"Sprite"' .gdevelop/gdl-catalog.json
+rg '"type":"Tween::TweenBehavior"' .gdevelop/gdl-catalog.json
+rg '"table":"instance"' .gdevelop/gdl-catalog.json
+rg '"owner":{"scene":"Main"}' .gdevelop/gdl-catalog.json
 ```
 
 Do not edit legacy project JSON, including `.gdevelop/game.json`. It is
@@ -161,7 +178,7 @@ generated compatibility/runtime output, not multi-file source.
 
 ## File contract
 
-All `.gdl` and `project.gdevelop` use **GDevelop Language (GDL)**, not TOML. Read
+All `.gdl` and `project.gdl` use **GDevelop Language (GDL)**, not TOML. Read
 [GDevelop Language (GDL)](references/settings-dsl.md) before editing declarations.
 
 - Use `key = value` for properties and `node { ... }` for structure. Names,
@@ -170,7 +187,7 @@ All `.gdl` and `project.gdevelop` use **GDevelop Language (GDL)**, not TOML. Rea
 - Every document has exactly one typed root: project, resources, tests,
   scene, prefab, variant, external, external_events, object, function,
   extension or behavior. The physical path supplies the owning scope.
-- Only project.gdevelop has `formatVersion = 12`. Do not write kind,
+- Only project.gdl has `formatVersion = 13`. Do not write kind,
   settingsFormatVersion, TOML headers, per-document format versions, or
   settings/layout wrapper nodes. Extension metadata can still have a semantic
   version string when its schema defines one.
@@ -213,7 +230,7 @@ The following paths are the engine's canonical component contract. Auxiliary
 production and documentation directories are described separately below.
 
 ```text
-project.gdevelop
+project.gdl
 resources.gdl
 constants.toml
 tests.gdl
@@ -234,9 +251,10 @@ extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/variant.gdl
 extensions/<Extension>/prefabs/<Prefab>/variants/<Variant>/objects/<Object>.gdl
 extensions/<Extension>/behaviors/<Behavior>/behavior.gdl
 extensions/<Extension>/behaviors/<Behavior>/functions/<Function>.gdl
-.gdevelop/instructions-catalog.json
-.gdevelop/deprecated-instructions-catalog.json # legacy read/edit only; never for new events
-.gdevelop/settings-catalog.json
+.gdevelop/conditions-catalog.json
+.gdevelop/actions-catalog.json
+.gdevelop/expressions-catalog.json
+.gdevelop/gdl-catalog.json
 .gdevelop/project-module-map.json
 .gdevelop/runtime-api.d.ts
 .gdevelop/project-api.d.ts
@@ -249,7 +267,7 @@ Do not create optional component-grouping folders. Canonical component directori
 fixed; object/function grouping belongs in each settings file's `folder`
 array. Settings files never reference other settings files.
 
-In format version 12, each `.gdl` document under
+In format version 13, each `.gdl` document under
 `external-events/` declares a fragment. Its decoded filename and settings
 `name` supply its project-unique NFC identity; the physical scene supplies its
 authoring context. Names must also be unique ignoring case. There is no
@@ -301,7 +319,7 @@ runtime assets change. A documentation-only change does not require starting
 or reloading the game.
 
 New verification reports identify their source commit, scope, actual results
-and unverified areas. Store report file paths relative to `project.gdevelop`;
+and unverified areas. Store report file paths relative to `project.gdl`;
 Markdown links remain document-relative. Historical evidence applies only to
 its recorded revision; moving it does not rerun tests. Keep temporary runs
 ignored and commit selected evidence rather than all generated output.
@@ -318,7 +336,7 @@ Load only the references required by the task:
   exact scene, prefab/variant, or external-layout context rules.
 - Read [references/events-dsl.md](references/events-dsl.md) in full before
   creating or changing embedded events in a `.gdl` file. Use only its canonical Settings event
-  structures and the exact types and `dslName` parameters found in the
+  structures and the instruction `dslName` and parameter `dslName` found in the
   generated project instruction catalog.
 - Also read [references/javascript-api.md](references/javascript-api.md) in
   full before creating or changing any event with type = "javascript". Use only the generated
@@ -327,7 +345,7 @@ Load only the references required by the task:
 - Read
   [references/gameplay-test-harness.md](references/gameplay-test-harness.md)
   in full before creating or materially modifying `tests.gdl` or any
-  `tests/*.js` script. Use the exact flat version 12 file identity, read the
+  `tests/*.js` script. Use the exact flat version 13 file identity, read the
   generated `.gdevelop/harness-api.d.ts` contract, and complete its
   validation, reload, run, and result-polling workflow.
 - Read [references/tsl-materials.md](references/tsl-materials.md) in full
@@ -376,7 +394,7 @@ implementation is materially simpler. Record that decision in the task result.
 ## Event authoring
 
 Read [the unified event syntax](references/events-dsl.md) before editing function
-or fragment bodies. Only GDevelop Language (GDL) format 12 is supported. Function signatures
+or fragment bodies. Only GDevelop Language (GDL) format 13 is supported. Function signatures
 and events share one .gdl file; .events files are rejected. Use explicit
 conditions/actions blocks containing bare catalog instructions, typed event
 nodes, independent group/comment/link nodes, and raw multiline code blocks.
@@ -397,13 +415,13 @@ may remain partial. See [event analysis](references/events-dsl.md#execution-and-
 ## Direct-edit workflow
 
 1. Inspect manifests and only the owned files relevant to the request. Search
-   `.gdevelop/settings-catalog.json` before adding or changing settings-owned
+   `.gdevelop/gdl-catalog.json` before adding or changing settings-owned
    object, behavior, effect, component, or embedded layout definitions. Search
-   its `layoutTables` and `layoutContexts` for the exact layout schema and
+   its `layoutNodes` and `layoutContexts` for the exact layout schema and
    matching project context before adding or changing layout content. For
    gameplay tests, inspect `tests.gdl` and the exact selected flat source
    before editing either one.
-2. Search `.gdevelop/instructions-catalog.json` for required instructions and
+2. Search `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` for required instructions and
    expressions. The generated catalog excludes editor-hidden and deprecated
    APIs; never invent or reuse an instruction identifier that is absent from it
    when authoring new events.
@@ -508,7 +526,7 @@ inspect_glb_model { file_path: "assets/models/hero.glb" }
 ```
 
 `file_path` may be absolute or relative to the directory containing
-`project.gdevelop`. Each returned `animationNames` entry is an exact animation
+`project.gdl`. Each returned `animationNames` entry is an exact animation
 clip source name: use it as the Model3D animation `source`. A configured local
 animation `name` (the alias selected by events) may differ from that source.
 Use returned source and `boneNames` values exactly, including case; never guess
@@ -638,8 +656,8 @@ interpretation.
 
 `generate-catalogs` is a mandatory mid-task refresh after every large
 structural source change. Require `catalogsRegenerated: true`, then read the
-latest relevant `.gdevelop/settings-catalog.json` and
-`.gdevelop/instructions-catalog.json` and,
+latest relevant `.gdevelop/gdl-catalog.json` and
+`.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` and,
 for JavaScript work, the applicable generated `.d.ts` files, or for TSL work
 `.gdevelop/tsl-api.d.ts` and `.gdevelop/tsl-catalog.json`, before making
 dependent edits. The tool writes and verifies all generated authoring files,
@@ -649,7 +667,7 @@ reload editor memory.
 `validate_project_files` is a mandatory reload gate. In every direct-edit task,
 call it successfully with no inputs at least once after the most recent
 source-file edit and before `reload_project`. It regenerates the instruction
-catalogs, the settings catalog (including embedded layout authoring data), and
+catalogs, the GDL catalog (including embedded layout authoring data), and
 the JavaScript/TSL declarations first, then
 reconstructs the generated `game.json` representation from the multi-file
 settings, layouts, and events and type-checks JavaScript event blocks against
@@ -704,10 +722,10 @@ Before finishing:
   owner settings contain no embedded function entries.
 - Confirm settings references use `game://` and resolve to existing files.
 - Confirm settings file kinds and every object/behavior/effect type against
-  `settings-catalog.json`.
+  `gdl-catalog.json`.
 - Confirm layout tables, fields, layers, objects, attached behaviors,
   and effect parameters against the matching `layoutContexts` entry and
-  `layoutTables` definitions in `settings-catalog.json`.
+  `layoutNodes` definitions in `gdl-catalog.json`.
 - Confirm no `3d` or `2d+3d` layer is marked `lighting = true`; inspect
   renderer diagnostics for a Three scene/group/camera, visible meshes, zero
   rejected objects, and zero failed textures when 3D rendering changed.

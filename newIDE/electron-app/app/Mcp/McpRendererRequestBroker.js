@@ -14,7 +14,7 @@ const CATALOG_ARTIFACT_NAMES = [
   'instruction-signature',
   'instructions',
   'deprecated-instructions',
-  'settings',
+  'gdl',
   'layout',
   'javascript-api',
   'runtime-api',
@@ -46,7 +46,7 @@ const getCatalogPhaseDetails = phase => {
       completed: exactPhases[phase][1] === 'completed',
     };
   }
-  const match = /^catalog-(instruction-signature|instructions|deprecated-instructions|settings|layout|javascript-api|runtime-api|project-api|harness-api|tsl-api|tsl-catalog)-(cache-hit|building|built|writing|written|verifying|verified)$/.exec(
+  const match = /^catalog-(instruction-signature|instructions|deprecated-instructions|gdl|layout|javascript-api|runtime-api|project-api|harness-api|tsl-api|tsl-catalog)-(cache-hit|building|built|writing|written|verifying|verified)$/.exec(
     phase
   );
   if (!match) return null;

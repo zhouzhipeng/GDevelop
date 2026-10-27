@@ -1,8 +1,8 @@
 // @flow
 import optionalRequire from '../../Utils/OptionalRequire';
-import { PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH } from '../SettingsDsl/InstructionCatalog';
+import { PROJECT_INSTRUCTION_CATALOG_PATHS } from '../SettingsDsl/InstructionCatalog';
 import { MULTI_FILE_ENTRY_NAME } from '../MultiFileProjectFormat';
-import { PROJECT_SETTINGS_CATALOG_RELATIVE_PATH } from '../ProjectSourceCatalog';
+import { PROJECT_GDL_CATALOG_RELATIVE_PATH } from '../ProjectSourceCatalog';
 
 const fs = optionalRequire('fs-extra');
 const path = optionalRequire('path');
@@ -138,11 +138,10 @@ const getMultiFileProjectPathsToInspect = (projectRoot: string) => [
   ...multiFileProjectRootFiles.map(fileName =>
     path.join(projectRoot, fileName)
   ),
-  path.join(
-    projectRoot,
-    ...PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH.split('/')
+  ...Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).map(file =>
+    path.join(projectRoot, ...file.split('/'))
   ),
-  path.join(projectRoot, ...PROJECT_SETTINGS_CATALOG_RELATIVE_PATH.split('/')),
+  path.join(projectRoot, ...PROJECT_GDL_CATALOG_RELATIVE_PATH.split('/')),
 ];
 
 const getLatestModificationTime = (

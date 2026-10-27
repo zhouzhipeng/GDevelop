@@ -17,18 +17,18 @@ import {
   MultiFileProjectError,
 } from '../MultiFileProjectFormat';
 import {
-  PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH,
-  PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH,
-  validateProjectInstructionCatalog,
+  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  RETIRED_INSTRUCTION_CATALOG_PATHS,
+  assembleInstructionCatalogFiles,
 } from '../SettingsDsl/InstructionCatalog';
 import {
   generateEventsFunctionExtensionMetadata,
   type EventsFunctionCodeWriter,
 } from '../../EventsFunctionsExtensionsLoader';
 import {
-  buildProjectSettingsCatalog,
-  PROJECT_SETTINGS_CATALOG_FORMAT_VERSION,
-  PROJECT_SETTINGS_CATALOG_RELATIVE_PATH,
+  buildProjectGdlCatalog,
+  PROJECT_GDL_CATALOG_FORMAT_VERSION,
+  PROJECT_GDL_CATALOG_RELATIVE_PATH,
 } from '../ProjectSourceCatalog';
 import {
   PROJECT_API_RELATIVE_PATH,
@@ -74,9 +74,9 @@ const bootstrapProjectSourceCatalogs = async (
   projectFile: string
 ): Promise<void> => {
   const projectRoot = path.dirname(projectFile);
-  const settingsCatalogPath = path.join(
+  const gdlCatalogPath = path.join(
     projectRoot,
-    ...PROJECT_SETTINGS_CATALOG_RELATIVE_PATH.split('/')
+    ...PROJECT_GDL_CATALOG_RELATIVE_PATH.split('/')
   );
   const retiredLayoutCatalogPath = path.join(
     projectRoot,
@@ -84,46 +84,41 @@ const bootstrapProjectSourceCatalogs = async (
     'layout-catalog.json'
   );
   const generatedArtifactRelativePaths = [
-    PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH,
-    PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH,
-    PROJECT_SETTINGS_CATALOG_RELATIVE_PATH,
+    ...Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS),
+    PROJECT_GDL_CATALOG_RELATIVE_PATH,
     PROJECT_RUNTIME_API_RELATIVE_PATH,
     PROJECT_API_RELATIVE_PATH,
   ];
-  let hasCurrentSettingsCatalog = false;
+  let hasCurrentGdlCatalog = false;
   try {
-    const settingsCatalog = JSON.parse(
-      fs.readFileSync(settingsCatalogPath, 'utf8')
-    );
-    hasCurrentSettingsCatalog =
-      settingsCatalog.format === 'gdevelop-settings-catalog' &&
-      settingsCatalog.formatVersion === PROJECT_SETTINGS_CATALOG_FORMAT_VERSION;
+    const gdlCatalog = JSON.parse(fs.readFileSync(gdlCatalogPath, 'utf8'));
+    hasCurrentGdlCatalog =
+      gdlCatalog.format === 'gdevelop-gdl-catalog' &&
+      gdlCatalog.formatVersion === PROJECT_GDL_CATALOG_FORMAT_VERSION;
   } catch (error) {
     // Missing, invalid, or retired catalogs are regenerated below.
   }
   let hasCurrentInstructionCatalogs = false;
   try {
-    [
-      PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH,
-      PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH,
-    ].forEach(relativePath => {
-      validateProjectInstructionCatalog(
-        JSON.parse(
-          fs.readFileSync(
-            path.join(projectRoot, ...relativePath.split('/')),
-            'utf8'
-          )
-        )
-      );
-    });
+    assembleInstructionCatalogFiles(
+      Object.fromEntries(
+        Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).map(file => [
+          file,
+          fs.readJsonSync(path.join(projectRoot, file)),
+        ])
+      )
+    );
     hasCurrentInstructionCatalogs = true;
   } catch (_) {
     // Generated signatures are disposable; a retired catalog is not a retired GDL project.
   }
   if (
-    hasCurrentSettingsCatalog &&
+    hasCurrentGdlCatalog &&
     hasCurrentInstructionCatalogs &&
     !fs.existsSync(retiredLayoutCatalogPath) &&
+    !RETIRED_INSTRUCTION_CATALOG_PATHS.some(file =>
+      fs.existsSync(path.join(projectRoot, file))
+    ) &&
     generatedArtifactRelativePaths.every(relativePath =>
       fs.existsSync(path.join(projectRoot, ...relativePath.split('/')))
     )
@@ -133,7 +128,7 @@ const bootstrapProjectSourceCatalogs = async (
 
   const schemaProject = gd.ProjectHelper.createNewGDJSProject();
   try {
-    buildProjectSettingsCatalog({
+    buildProjectGdlCatalog({
       project: schemaProject,
       serializedProject: serializeToJSObject(schemaProject),
     });
@@ -183,9 +178,8 @@ export const onOpenWithPicker = (): Promise<?FileMetadata> => {
   return openFilePicker({
     title: 'Open a project',
     properties: ['openFile'],
-    message:
-      'If you want to open your GDevelop 4 project, be sure to save it as a .json file',
-    filters: [{ name: 'GDevelop project', extensions: ['gdevelop', 'json'] }],
+    message: 'Select the project.gdl entry file of a current GDL project',
+    filters: [{ name: 'GDevelop project', extensions: ['gdl'] }],
     // $FlowFixMe[incompatible-type]
   }).then(filePath => (filePath ? { fileIdentifier: filePath } : null));
 };
@@ -199,7 +193,7 @@ export const onOpen = (
 |}> => {
   const filePath = fileMetadata.fileIdentifier;
   const fileName = path.basename(filePath);
-  if (fileName.toLowerCase() === MULTI_FILE_ENTRY_NAME) {
+  if (fileName === MULTI_FILE_ENTRY_NAME) {
     return getLocalProjectLastModifiedDate(filePath).then(
       async lastModifiedDate => {
         await bootstrapProjectSourceCatalogs(filePath);
@@ -216,7 +210,7 @@ export const onOpen = (
       }
     );
   }
-  if (path.extname(filePath).toLowerCase() === '.gdevelop') {
+  if (['.gdl', '.gdevelop'].includes(path.extname(filePath).toLowerCase())) {
     return Promise.reject(
       new MultiFileProjectError(
         'MULTIFILE_INVALID_ENTRY',
@@ -227,7 +221,7 @@ export const onOpen = (
   return Promise.reject(
     new MultiFileProjectError(
       'MULTIFILE_UNSUPPORTED_VERSION',
-      'Only the current GDevelop Language (GDL) project.gdevelop format is supported.'
+      'Only the current GDevelop Language (GDL) project.gdl format is supported.'
     )
   );
 };

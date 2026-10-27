@@ -4,7 +4,7 @@ import { autoSaveProjectForPreviewIfNeeded } from './PreviewProjectAutoSave';
 
 describe('autoSaveProjectForPreviewIfNeeded', () => {
   const project = ({}: any);
-  const fileMetadata = ({ fileIdentifier: 'project.gdevelop' }: any);
+  const fileMetadata = ({ fileIdentifier: 'project.gdl' }: any);
 
   it('does not reload a clean project from disk before previewing', async () => {
     const saveProject = jest.fn();

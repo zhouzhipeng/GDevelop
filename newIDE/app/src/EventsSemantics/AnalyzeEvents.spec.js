@@ -56,7 +56,7 @@ const analyze = (body, options = {}) =>
 const codes = result => result.diagnostics.map(item => item.code);
 
 test('exact reviewed signatures and mandatory validated semantics', () => {
-  expect(catalog.formatVersion).toBe(4);
+  expect(catalog.formatVersion).toBe(6);
   expect(
     catalog.conditions
       .find(entry => entry.type === 'CollisionNP')
@@ -200,6 +200,7 @@ test('SignalReceived dispatch dimension matches native sceneUpdate special case'
     entry => entry.type === 'SignalReceived'
   ) || {
     type: 'SignalReceived',
+    dslName: 'SignalReceived',
     parameters: [{ dslName: 'signal_name', valueKind: 'text' }],
   };
   const signalCatalog = {
@@ -270,7 +271,7 @@ test('snapshot identity, stale paths and budgets are explicit', () => {
 test('project declaration fingerprints ignore event edits and detect changed owners', () => {
   const file = 'game://scenes/Main/functions/sceneUpdate.gdl';
   const files = {
-    'game://project.gdevelop': 'project {\n name = "Test"\n}\n',
+    'game://project.gdl': 'project {\n name = "Test"\n}\n',
     'game://scenes/Main/scene.gdl':
       'scene {\n name = "Main"\n variable {\n name = "Score"\n value = 0\n }\n}\n',
     'game://scenes/Main/objects/Coin.gdl':
@@ -369,4 +370,20 @@ test('step maps retain recursive local variables and exact raw JS content slices
   expect(source.slice(code.source.offset, code.source.endOffset)).toBe(
     'const label = `原始😀`;\n'
   );
+});
+
+test('short instruction names retain reviewed picking semantics and native diagnostic identity', () => {
+  const result = analyze(
+    'event {\n conditions {\n collision first_object="Player" second_object="Coin"\n }\n actions {\n deleteObject object="Coin"\n setNumber variable="Score" modification_sign="+" value=1\n }\n}'
+  );
+  expect(result.success).toBe(true);
+  expect(codes(result)).toContain('GDL_MULTI_SELECTION_SINGLE_EFFECT');
+  expect(result.events[0].actions[0]).toMatchObject({
+    instructionType: 'Delete',
+    dslName: 'deleteObject',
+  });
+  expect(result.events[0].conditions[0]).toMatchObject({
+    instructionType: 'CollisionNP',
+    dslName: 'collision',
+  });
 });

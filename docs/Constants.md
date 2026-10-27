@@ -52,7 +52,7 @@ An eligible object editor property can reference:
 | Project storage          | `gd::Project` stores a JSON string with `GetConstantsJson` and `SetConstantsJson`. Missing or empty values become `{}`.                                                                           | `Core/GDCore/Project/Project.h`, `Core/GDCore/Project/Project.cpp`                                                                                                                                                                                                                 |
 | Serialization            | Main project JSON never contains Constants. `Project::SerializeTo` omits the map; storage providers load parsed `constants.toml` alongside project content and initialize the project separately. | `Core/GDCore/Project/Project.cpp`, `newIDE/app/src/ProjectsStorage/*`                                                                                                                                                                                                              |
 | JS bindings              | The project exposes `getConstantsJson` and `setConstantsJson`.                                                                                                                                    | `GDevelop.js/Bindings/Bindings.idl`, `GDevelop.js/types.d.ts`, `GDevelop.js/types/gdproject.js`                                                                                                                                                                                    |
-| Persistent storage       | Every project type stores Constants in direct-root `constants.toml`, with no wrapper or format metadata. Local editor changes auto-save this source without rewriting `project.gdevelop`.          | `newIDE/app/src/ProjectsStorage/MultiFileProjectFormat/index.js`, local/cloud/URL/download storage providers                                                                                                                                                                     |
+| Persistent storage       | Every project type stores Constants in direct-root `constants.toml`, with no wrapper or format metadata. Local editor changes auto-save this source without rewriting `project.gdl`.          | `newIDE/app/src/ProjectsStorage/MultiFileProjectFormat/index.js`, local/cloud/URL/download storage providers                                                                                                                                                                     |
 | Codegen replacement      | `gd::Project` resolves `{{path.to.value}}` placeholders from the saved constants. Action string parameters are replaced with literals while generating event code. Missing paths add diagnostics. | `Core/GDCore/Project/Project.cpp`, `Core/GDCore/Events/CodeGeneration/EventsCodeGenerator.cpp`, `Core/GDCore/Events/CodeGeneration/ExpressionCodeGenerator.cpp`                                                                                                                    |
 | Editor UI                | `Constants` is a `constants` editor kind. It opens floated by default like Resources and can be popped back into the main editor tabs.                                                          | `newIDE/app/src/MainFrame/index.js`, `newIDE/app/src/MainFrame/EditorTabs/EditorTabsHandler.js`, `newIDE/app/src/MainFrame/EditorContainers/ConstantsEditorContainer.js`, `newIDE/app/src/ProjectManager/index.js`                                                                |
 | Grid editor              | The editor has sheet tabs, row/column editing, Raw TOML and Raw JSON panels, JSON import/export, and copy placeholder.                                                                              | `newIDE/app/src/Constants/ConstantsDialog.js`                                                                                                                                                                                                                                    |
@@ -77,7 +77,7 @@ type Constants = { [key: string]: ConstantValue };
 Project source example:
 
 ```text
-project.gdevelop
+project.gdl
 constants.toml
 resources.gdl
 scenes/
@@ -117,7 +117,7 @@ losslessly, including JSON `null` and mixed-type arrays, are rejected.
 Notes:
 
 - Empty constants is represented internally as `{}`.
-- Editing Constants in a local `project.gdevelop` project immediately queues
+- Editing Constants in a local `project.gdl` project immediately queues
   a write to `constants.toml`. A normal project save also writes it.
 - Main project JSON and generated `.gdevelop/game.json` never contain a
   Constants root key.

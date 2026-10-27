@@ -1,6 +1,6 @@
 # GDevelop Language (GDL) — current authoring syntax
 
-Only format 12 is accepted. `.gdl` and `project.gdevelop` use the same
+Only format 13 is accepted. `.gdl` and `project.gdl` use the same
 parser. constants.toml remains TOML; event bodies are embedded in function/fragment settings. .events files are forbidden.
 
 ## Syntax
@@ -50,10 +50,10 @@ screen/row/column layout nodes are not implemented.
   accept expressions; event instruction operands and supported loop fields use
   expr(...) as described in events-dsl.md. Integers must be safe integers.
 - Unknown fields/nodes and duplicate properties/singleton nodes are errors.
-- Only project.gdevelop declares formatVersion. All other root fields come
+- Only project.gdl declares formatVersion. All other root fields come
   directly from the matching component schema.
 - Read fileKinds[].root and schema.rootFields/childNodes in the generated
-  settings catalog. Node schemas map author node names to model keys and state
+  GDL catalog. Node schemas map author node names to model keys and state
   whether a child is repeated. Object type schemas use fields and children.
 - Empty repeated collections can use the registered model key with `[]`;
   nonempty record arrays use repeated child nodes. Never mix both forms.

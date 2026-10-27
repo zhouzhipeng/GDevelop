@@ -1,9 +1,19 @@
 # Events in GDevelop Language (GDL)
 
-Events are part of GDevelop Language (GDL) format 12, not a separate language. Each
+Events are part of GDevelop Language (GDL) format 13, not a separate language. Each
 function's signature and body live in one functions/<Name>.gdl file.
 External fragments use external-events/<Name>.gdl. Never create .events
 files or write IfDo syntax. Read the current settings and instruction catalogs.
+
+## Catalog instruction names
+
+Author actions and conditions using each catalog entry's **`dslName`**. Its
+`type` is the native engine identifier for exact lookup and diagnostics; do not
+prefer it when a shorter `dslName` is published. System names are fixed by the
+engine. Third-party and user instruction `dslName` remains its complete `type`.
+Use parameter `dslName` unchanged. Never invent abbreviations or edit generated
+catalogs. Expressions inside `expr(...)` retain their existing names. The
+formatter always writes the catalog instruction `dslName`.
 
 ## Complete function
 
@@ -24,11 +34,11 @@ function {
 
       event {
         conditions {
-          CollisionNP first_object="Player" second_object="Coin"
+          collision first_object="Player" second_object="Coin"
         }
         actions {
-          Delete object="Coin"
-          SetNumberVariable variable="Score" modification_sign="+" value=1
+          deleteObject object="Coin"
+          setNumber variable="Score" modification_sign="+" value=1
         }
 
         event {
@@ -61,9 +71,9 @@ that a scene-variable action adds once per coin. Use for_each when required.
   Do not add a nested events wrapper. Mixed child source order is significant.
 - Standard and loop events have at most one conditions and one actions block.
   Missing or empty blocks represent empty lists. No if/do keywords.
-- Conditions and actions determine catalog instruction kind. Write exact
-  instruction types followed by semantic named arguments. No positional args,
-  aliases, @ annotations, > depth prefixes, ? prefixes or raw JSON.
+- Conditions and actions determine catalog instruction kind. Write catalog
+  instruction `dslName` followed by semantic named arguments. No positional args,
+  user-defined aliases, @ annotations, > depth prefixes, ? prefixes or raw JSON.
 - Ordinary text/object/behavior/variable/resource/name operands are quoted;
   numbers and booleans are literals. Use expr(...) for calculated expressions.
   Balanced expr bodies may span lines; preserve their exact expression source.
@@ -77,7 +87,7 @@ that a scene-variable action adds once per coin. Use for_each when required.
 
 ```text
 conditions {
-  Or {
+  or {
     SomeCondition target="Enemy"
     AnotherCondition target="Enemy" {
       inverted = true
@@ -119,10 +129,10 @@ event {
   type = "while"
   infiniteLoopWarning = true
   while_conditions {
-    NumberVariable variable="QueueSize" comparison_sign=">" value=0
+    numberVariable variable="QueueSize" comparison_sign=">" value=0
   }
   actions {
-    SetNumberVariable variable="QueueSize" modification_sign="-" value=1
+    setNumber variable="QueueSize" modification_sign="-" value=1
   }
 }
 
@@ -161,14 +171,14 @@ project workflow; successful parsing alone is not runtime verification.
 
 ## Execution and picking analysis
 
-Instruction catalog version 4 adds structured `semantics`. Each action and
+Instruction catalog version 6 publishes instruction `dslName` and structured `semantics`. Each action and
 condition is explicitly known, partial or unknown. Exact parameter names still
 come from the catalog; no picking attributes are authored in GDL.
 
 Before changing object-sensitive logic, inspect:
 
 ```json
-{"kind":"condition","type":"CollisionNP"}
+{"kind":"condition","type":"collision"}
 ```
 
 with `get_gdl_instruction_semantics`, then call `analyze_gdl_events`:
@@ -201,3 +211,12 @@ expressions/JavaScript, loop invariants and cross-file calls can remain unknown.
 No unknown coverage is a save error by itself. `validate_project_files` reports
 `pickingAnalysis` separately from structural validity and keeps runtime behavior
 unverified. Use real preview/gameplay evidence for behavior-sensitive edits.
+
+## Instruction metadata files
+
+Read `.gdevelop/conditions-catalog.json` for condition metadata,
+`.gdevelop/actions-catalog.json` for action metadata, and
+`.gdevelop/expressions-catalog.json` for expression metadata. Each file exposes
+its corresponding `kind`, `entries`, and `count`. Use entries whose
+`authoringAvailable` is `true` for new GDL. All three files must be regenerated
+together; do not use the retired combined or deprecated catalog files.

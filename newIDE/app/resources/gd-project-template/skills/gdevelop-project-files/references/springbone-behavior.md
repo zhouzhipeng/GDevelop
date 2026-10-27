@@ -36,7 +36,7 @@ hair, chest, tail, and accessory chain for that model in the one referenced
 JSON file. A second behavior on the same model reports
 `duplicate-behavior` and does not control bones.
 
-Before adding the behavior, search `.gdevelop/settings-catalog.json` for the
+Before adding the behavior, search `.gdevelop/gdl-catalog.json` for the
 registered behavior type and its current author-writable properties. Stop if
 the type is absent. Preserve existing unlisted behavior fields when editing an
 object settings file.
@@ -88,7 +88,7 @@ The behavior property uses the resource `name`, not the file path.
 ## Attach the behavior
 
 Add one behavior record to the model object's `.gdl` file. Initialize all
-properties listed by the current settings catalog. A typical record is:
+properties listed by the current GDL catalog. A typical record is:
 
 ```settings
 behavior {
@@ -338,8 +338,8 @@ discontinuous animation switch.
 ## Control and diagnose at runtime
 
 Before authoring events, read [events-dsl.md](events-dsl.md) and search the
-current `.gdevelop/instructions-catalog.json`. Use only instruction types and
-`dslName` parameters present in that generated catalog.
+current `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`. Use only instruction and parameter
+`dslName` values present in that generated catalog.
 
 The extension declares these behavior-scoped actions:
 

@@ -14,7 +14,7 @@ describe('FileToCloudProjectResourceUploader', () => {
       `"font/ttf,font/otf,.ttf,.otf"`
     );
     expect(getInputAcceptedMimesAndExtensions('image')).toMatchInlineSnapshot(
-      `"image/jpeg,image/png,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif"`
+      `"image/jpeg,image/png,image/webp,image/gif,image/svg+xml,.png,.jpg,.jpeg,.webp,.gif,.svg"`
     );
     expect(getInputAcceptedMimesAndExtensions('json')).toMatchInlineSnapshot(
       `"application/json,.json"`

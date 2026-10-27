@@ -39,8 +39,10 @@ import {
   serializeConstantsToToml,
 } from '../MultiFileProjectFormat';
 import {
-  PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH,
-  PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH,
+  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  RETIRED_INSTRUCTION_CATALOG_PATHS,
+  serializeInstructionCatalogFiles,
+  assembleInstructionCatalogFiles,
   buildLegacyInstructionCatalogDelta,
   buildProjectDeprecatedInstructionCatalog,
   buildProjectInstructionCatalog,
@@ -49,15 +51,13 @@ import {
   getCatalogCodeOnlyParameterIndicesByType,
   mergeProjectInstructionCatalogs,
   normalizeLegacyProjectInstructionParameters,
-  serializeProjectInstructionCatalog,
-  validateProjectInstructionCatalog,
 } from '../SettingsDsl/InstructionCatalog';
 import { getLocalProjectLastModifiedDate } from './LocalProjectFileModificationTime';
 import {
-  PROJECT_SETTINGS_CATALOG_RELATIVE_PATH,
+  PROJECT_GDL_CATALOG_RELATIVE_PATH,
   buildBehaviorPropertySchemasByType,
-  buildProjectSettingsCatalog,
-  serializeProjectSettingsCatalog,
+  buildProjectGdlCatalog,
+  serializeProjectGdlCatalog,
 } from '../ProjectSourceCatalog';
 import {
   PROJECT_MODULE_MAP_RELATIVE_PATH,
@@ -417,24 +417,35 @@ export const writeProjectInstructionCatalog = async (
     );
     reportCatalogProgress(options, 'catalog-instructions-built');
   }
-  const catalogPath = path.join(
-    projectPath,
-    ...PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH.split('/')
-  );
   catalog = {
     ...catalog,
     sourceFingerprint: (options && options.sourceFingerprint) || null,
   };
+  const deprecated =
+    (options && options.deprecatedInstructionCatalog) ||
+    buildProjectDeprecatedInstructionCatalog(
+      project,
+      undefined,
+      catalog,
+      options && options.additionalExtensions
+    );
   reportCatalogProgress(options, 'catalog-instructions-writing');
-  writeAndCheckGeneratedFileSync(
-    serializeProjectInstructionCatalog(catalog),
-    catalogPath
+  Object.entries(serializeInstructionCatalogFiles(catalog, deprecated)).forEach(
+    ([relativePath, contents]) => {
+      writeAndCheckGeneratedFileSync(
+        contents,
+        path.join(projectPath, ...relativePath.split('/'))
+      );
+    }
+  );
+  RETIRED_INSTRUCTION_CATALOG_PATHS.forEach(file =>
+    fs.removeSync(path.join(projectPath, file))
   );
   reportCatalogProgress(options, 'catalog-instructions-written');
   return catalog;
 };
 
-const writeProjectDeprecatedInstructionCatalog = async (
+const buildDeprecatedInstructionCatalog = async (
   project: gdProject,
   projectPath: string,
   options?: ProjectSourceCatalogWriteOptions
@@ -453,38 +464,28 @@ const writeProjectDeprecatedInstructionCatalog = async (
     );
     reportCatalogProgress(options, 'catalog-deprecated-instructions-built');
   }
-  const catalogPath = path.join(
-    projectPath,
-    ...PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH.split('/')
-  );
-  reportCatalogProgress(options, 'catalog-deprecated-instructions-writing');
-  writeAndCheckGeneratedFileSync(
-    serializeProjectInstructionCatalog(catalog),
-    catalogPath
-  );
-  reportCatalogProgress(options, 'catalog-deprecated-instructions-written');
   return catalog;
 };
 
-export const writeProjectSettingsCatalog = async (
+export const writeProjectGdlCatalog = async (
   project: gdProject,
   projectPath: string,
   serializedProjectObject?: Object,
   options?: ProjectSourceCatalogWriteOptions
 ): Promise<Object> => {
-  reportCatalogProgress(options, 'catalog-settings-building');
+  reportCatalogProgress(options, 'catalog-gdl-building');
   const serializedProject =
     serializedProjectObject || serializeToJSObject(project, 'serializeTo');
-  const catalog = buildProjectSettingsCatalog({
+  const catalog = buildProjectGdlCatalog({
     project,
     serializedProject,
     additionalExtensions: options && options.additionalExtensions,
   });
-  reportCatalogProgress(options, 'catalog-settings-built');
-  reportCatalogProgress(options, 'catalog-settings-writing');
+  reportCatalogProgress(options, 'catalog-gdl-built');
+  reportCatalogProgress(options, 'catalog-gdl-writing');
   writeAndCheckGeneratedFileSync(
-    serializeProjectSettingsCatalog(catalog),
-    path.join(projectPath, ...PROJECT_SETTINGS_CATALOG_RELATIVE_PATH.split('/'))
+    serializeProjectGdlCatalog(catalog),
+    path.join(projectPath, ...PROJECT_GDL_CATALOG_RELATIVE_PATH.split('/'))
   );
   fs.removeSync(
     path.join(
@@ -495,28 +496,15 @@ export const writeProjectSettingsCatalog = async (
   const entryPath = path.join(projectPath, MULTI_FILE_ENTRY_NAME);
   if (fs.existsSync(entryPath)) {
     const { files } = await readMultiFileSourceTree(entryPath);
-    const readInstructionCatalog = (relativePath: string) => {
-      const catalogPath = path.join(projectPath, ...relativePath.split('/'));
-      return fs.existsSync(catalogPath)
-        ? validateProjectInstructionCatalog(fs.readJsonSync(catalogPath))
-        : null;
-    };
-    const instructionCatalog = readInstructionCatalog(
-      PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH
+    const instructionCatalog = assembleInstructionCatalogFiles(
+      Object.fromEntries(
+        Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).map(file => [
+          file,
+          fs.readJsonSync(path.join(projectPath, file)),
+        ])
+      )
     );
-    const deprecatedCatalog = readInstructionCatalog(
-      PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH
-    );
-    const resolver = instructionCatalog
-      ? createCatalogInstructionResolver(
-          deprecatedCatalog
-            ? mergeProjectInstructionCatalogs(
-                instructionCatalog,
-                deprecatedCatalog
-              )
-            : instructionCatalog
-        )
-      : undefined;
+    const resolver = createCatalogInstructionResolver(instructionCatalog);
     writeAndCheckGeneratedFileSync(
       serializeProjectModuleMap(
         buildProjectModuleMap(serializedProject, files, resolver)
@@ -524,7 +512,7 @@ export const writeProjectSettingsCatalog = async (
       path.join(projectPath, ...PROJECT_MODULE_MAP_RELATIVE_PATH.split('/'))
     );
   }
-  reportCatalogProgress(options, 'catalog-settings-written');
+  reportCatalogProgress(options, 'catalog-gdl-written');
   return catalog;
 };
 
@@ -673,27 +661,36 @@ export const writeProjectSourceCatalogs = async (
       cachedInstructionCatalogs.key === instructionCatalogCacheKey
         ? cachedInstructionCatalogs
         : null;
+    let authoringCatalog =
+      (options && options.instructionCatalog) ||
+      (cachedCatalogs && cachedCatalogs.instructionCatalog);
+    if (!authoringCatalog) {
+      reportCatalogProgress(trackedOptions, 'catalog-instructions-building');
+      authoringCatalog = buildProjectInstructionCatalog(
+        project,
+        undefined,
+        options && options.additionalExtensions
+      );
+      reportCatalogProgress(trackedOptions, 'catalog-instructions-built');
+    }
+    const deprecatedInstructionCatalog = await buildDeprecatedInstructionCatalog(
+      project,
+      projectPath,
+      {
+        ...trackedOptions,
+        instructionCatalog: authoringCatalog,
+        deprecatedInstructionCatalog:
+          (options && options.deprecatedInstructionCatalog) ||
+          (cachedCatalogs && cachedCatalogs.deprecatedInstructionCatalog),
+      }
+    );
     const instructionCatalog = await writeProjectInstructionCatalog(
       project,
       projectPath,
       {
         ...trackedOptions,
-        instructionCatalog:
-          (options && options.instructionCatalog) ||
-          (cachedCatalogs ? cachedCatalogs.instructionCatalog : undefined),
-      }
-    );
-    const deprecatedInstructionCatalog = await writeProjectDeprecatedInstructionCatalog(
-      project,
-      projectPath,
-      {
-        ...trackedOptions,
-        instructionCatalog,
-        deprecatedInstructionCatalog:
-          (options && options.deprecatedInstructionCatalog) ||
-          (cachedCatalogs
-            ? cachedCatalogs.deprecatedInstructionCatalog
-            : undefined),
+        instructionCatalog: authoringCatalog,
+        deprecatedInstructionCatalog,
       }
     );
     cachedInstructionCatalogs = {
@@ -701,7 +698,7 @@ export const writeProjectSourceCatalogs = async (
       instructionCatalog,
       deprecatedInstructionCatalog,
     };
-    const settingsCatalog = await writeProjectSettingsCatalog(
+    const gdlCatalog = await writeProjectGdlCatalog(
       project,
       projectPath,
       serializedProject,
@@ -721,7 +718,7 @@ export const writeProjectSourceCatalogs = async (
 
     return {
       instructions: instructionCatalog.counts,
-      settings: settingsCatalog.counts,
+      gdl: gdlCatalog.counts,
       javascript: javascriptApi,
       tslMaterial,
     };
@@ -795,12 +792,12 @@ const writeProjectFiles = async ({
       serializedProjectWithConstants,
       serializationCatalog
     );
-    const settingsCatalog = buildProjectSettingsCatalog({
+    const gdlCatalog = buildProjectGdlCatalog({
       project,
       serializedProject: authoringSerializedProjectObject,
     });
     const behaviorPropertySchemasByType = buildBehaviorPropertySchemasByType(
-      settingsCatalog
+      gdlCatalog
     );
     // Hidden behavior properties are omitted from the authoring catalog, but
     // they can still contain data configured by a specialized editor that the
@@ -844,26 +841,20 @@ const writeProjectFiles = async ({
         },
       }
     );
-    await writeAndCheckFile(
-      serializeProjectInstructionCatalog(authoringCatalog),
-      path.join(
-        projectPath,
-        ...PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH.split('/')
-      )
+    for (const [relativePath, contents] of Object.entries(
+      serializeInstructionCatalogFiles(authoringCatalog, deprecatedCatalog)
+    )) {
+      await writeAndCheckFile(
+        contents,
+        path.join(projectPath, ...relativePath.split('/'))
+      );
+    }
+    RETIRED_INSTRUCTION_CATALOG_PATHS.forEach(file =>
+      fs.removeSync(path.join(projectPath, file))
     );
     await writeAndCheckFile(
-      serializeProjectInstructionCatalog(deprecatedCatalog),
-      path.join(
-        projectPath,
-        ...PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH.split('/')
-      )
-    );
-    await writeAndCheckFile(
-      serializeProjectSettingsCatalog(settingsCatalog),
-      path.join(
-        projectPath,
-        ...PROJECT_SETTINGS_CATALOG_RELATIVE_PATH.split('/')
-      )
+      serializeProjectGdlCatalog(gdlCatalog),
+      path.join(projectPath, ...PROJECT_GDL_CATALOG_RELATIVE_PATH.split('/'))
     );
     const { files: moduleMapFiles } = await readMultiFileSourceTree(filePath);
     await writeAndCheckFile(
@@ -1104,7 +1095,7 @@ export const generateOnChooseSaveProjectAsLocation = ({
   const browserWindow = remote.getCurrentWindow();
   const saveDialogOptions = {
     defaultPath,
-    filters: [{ name: 'GDevelop project', extensions: ['gdevelop'] }],
+    filters: [{ name: 'GDevelop project', extensions: ['gdl'] }],
   };
 
   if (!dialog) {

@@ -162,8 +162,8 @@ describe('McpToolCatalog', () => {
       'Tool discovery',
     ]);
     expect(capabilities.note).toContain('project files');
-    expect(capabilities.note).toContain('instructions-catalog.json');
-    expect(capabilities.note).toContain('settings-catalog.json');
+    expect(capabilities.note).toContain('actions-catalog.json');
+    expect(capabilities.note).toContain('gdl-catalog.json');
     expect(capabilities.note).toContain('embedded-layout authoring data');
     expect(capabilities.note).not.toContain('layout-catalog.json');
     expect(
@@ -342,7 +342,7 @@ describe('McpToolCatalog', () => {
         }),
       })
     );
-    expect(tool.description).toContain('all eight generated authoring files');
+    expect(tool.description).toContain('all nine generated authoring files');
     expect(tool.description).toContain('runtime-api.d.ts');
     expect(tool.description).toContain('project-api.d.ts');
     expect(tool.description).toContain('harness-api.d.ts');

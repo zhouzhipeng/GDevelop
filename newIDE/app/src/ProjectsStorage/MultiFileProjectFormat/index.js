@@ -1,4 +1,5 @@
 // @noflow
+import { MULTI_FILE_ENTRY_NAME, MULTI_FILE_ENTRY_URI } from '../ProjectEntry';
 import {
   appendSettingsEvents,
   compileSettingsEvents,
@@ -23,8 +24,7 @@ import {
 } from '../SettingsDsl';
 
 export const MULTI_FILE_FORMAT_VERSION = SETTINGS_FORMAT_VERSION;
-export const MULTI_FILE_ENTRY_NAME = 'project.gdevelop';
-export const MULTI_FILE_ENTRY_URI = 'game://project.gdevelop';
+export { MULTI_FILE_ENTRY_NAME, MULTI_FILE_ENTRY_URI };
 export const MULTI_FILE_RESOURCES_URI = 'game://resources.gdl';
 export const MULTI_FILE_CONSTANTS_URI = 'game://constants.toml';
 export const MULTI_FILE_TESTS_URI = 'game://tests.gdl';
@@ -2313,7 +2313,7 @@ const parseSettings = (files, uri) => {
     if (decoded.kind !== 'project')
       fail(
         'MULTIFILE_INVALID_LOCAL_SETTINGS',
-        'project.gdevelop requires a project root.',
+        'project.gdl requires a project root.',
         uri
       );
     return {
@@ -2893,7 +2893,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
   ) {
     fail(
       'MULTIFILE_UNSUPPORTED_VERSION',
-      'Unsupported project.gdevelop format marker.',
+      'Unsupported project.gdl format marker.',
       MULTI_FILE_ENTRY_URI
     );
   }
@@ -2932,7 +2932,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
     if (projectNamespace[retiredField] !== undefined) {
       fail(
         'MULTIFILE_INVALID_LOCAL_SETTINGS',
-        `project.gdevelop must not contain retired ${retiredField} ownership.`,
+        `project.gdl must not contain retired ${retiredField} ownership.`,
         MULTI_FILE_ENTRY_URI
       );
     }
@@ -3270,7 +3270,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
     if (projectNamespace.resources !== undefined) {
       fail(
         'MULTIFILE_OWNERSHIP_CONFLICT',
-        'Resources cannot be stored in both project.gdevelop and resources.gdl.',
+        'Resources cannot be stored in both project.gdl and resources.gdl.',
         MULTI_FILE_RESOURCES_URI
       );
     }

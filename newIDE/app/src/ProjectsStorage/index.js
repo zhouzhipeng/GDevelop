@@ -193,7 +193,7 @@ export type StorageProviderOperations = {|
 export type StorageProvider = {|
   internalName: string,
   name: MessageDescriptor,
-  /** Native multi-artifact support is required to store project.gdevelop projects. */
+  /** Native multi-artifact support is required to store project.gdl projects. */
   multiFileProjectSupport?: 'native' | 'archive' | 'none',
   needUserAuthentication?: boolean,
   hiddenInOpenDialog?: boolean,

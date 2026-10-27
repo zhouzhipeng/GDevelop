@@ -1,4 +1,5 @@
 // @flow
+import { getSystemInstructionName } from '../ProjectsStorage/SettingsDsl/SystemInstructionNames';
 import {
   getInstructionSemantics,
   INSTRUCTION_CATALOG_VERSION,
@@ -433,9 +434,9 @@ const describeBehaviorParameterHint = (behaviorType: ?string): string => {
     }". Fill the behavior NAME (not the type), no quotes.`;
   }
   if (behaviorType) {
-    return `behavior NAME on the object for type "${behaviorType}" (not the type itself), no quotes. Read the object's project source and the generated settings catalog to find its behavior names.`;
+    return `behavior NAME on the object for type "${behaviorType}" (not the type itself), no quotes. Read the object's project source and the generated GDL catalog to find its behavior names.`;
   }
-  return `behavior NAME on the object (not the behavior type), no quotes. Read the object's project source and the generated settings catalog to find the names.`;
+  return `behavior NAME on the object (not the behavior type), no quotes. Read the object's project source and the generated GDL catalog to find the names.`;
 };
 
 // Enumerated parameter types whose legal literal values are a FIXED small set
@@ -715,7 +716,7 @@ const getDeprecatedInstructionDiagnostic = ({
     : null;
   const suggestion =
     [deprecationMessage, replacementSuggestion].filter(Boolean).join(' ') ||
-    `Search .gdevelop/instructions-catalog.json for kind "${kind}" and "${metadata.getFullName() ||
+    `Search .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json for kind "${kind}" and "${metadata.getFullName() ||
       type}" to find a current replacement.`;
 
   return {
@@ -1500,7 +1501,7 @@ export const getEventsJsonExamples = ({
     },
     commonInstructionTypes: {
       summary:
-        'Common current GDevelop internal instruction types (verify parameter order with .gdevelop/instructions-catalog.json):',
+        'Common current GDevelop internal instruction types (verify parameter order with .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json):',
       setObjectPositionX: 'SetX (action)',
       setObjectPositionY: 'SetY (action)',
       setObjectPosition: 'SetXY (action)',
@@ -1638,7 +1639,7 @@ export const getExactInstructionMetadata = ({
     const rawMetadata = getRawInstructionMetadata(project, type, kind);
     if (!rawMetadata) {
       return {
-        error: `No ${kind} metadata found for "${type}". Search .gdevelop/instructions-catalog.json for the exact type.`,
+        error: `No ${kind} metadata found for "${type}". Search .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json for the exact type.`,
       };
     }
     if (isDeprecatedOrHiddenInstructionMetadata(rawMetadata)) {
@@ -1661,7 +1662,7 @@ export const getExactInstructionMetadata = ({
   );
   if (!metadata) {
     return {
-      error: `No ${kind} metadata found for "${type}". Search .gdevelop/instructions-catalog.json for the exact type.`,
+      error: `No ${kind} metadata found for "${type}". Search .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json for the exact type.`,
     };
   }
   return {
@@ -2023,6 +2024,7 @@ const catalogInstruction = (
 ): Object => {
   const instruction: Object = {
     type: summary.type,
+    dslName: summary.type,
     name: summary.fullName,
     description: summary.description,
     sentence: summary.sentence,
@@ -2106,14 +2108,13 @@ export const buildCompleteProjectInstructionCatalog = ({
         metadata: instruction.metadata,
         fullGroupName: instruction.fullGroupName,
       });
-      entriesByType.set(
-        instruction.type,
-        catalogInstruction(
-          summary,
-          instruction.scope,
-          isCondition ? 'condition' : 'action'
-        )
-      );
+      const kind = isCondition ? 'condition' : 'action';
+      const entry = catalogInstruction(summary, instruction.scope, kind);
+      // Project/community events-based extensions keep their exact native names.
+      const extensionName = instruction.scope.extension.name;
+      if (!project.hasEventsFunctionsExtensionNamed(extensionName))
+        entry.dslName = getSystemInstructionName(kind, entry.type, entry.owner);
+      entriesByType.set(instruction.type, entry);
     });
     return Array.from(entriesByType.values()).sort((left, right) =>
       left.type.localeCompare(right.type)
@@ -2161,7 +2162,7 @@ export const buildCompleteProjectInstructionCatalog = ({
   const conditions = collectInstructions(true);
 
   return {
-    format: 'gdevelop-settings-instruction-catalog',
+    format: 'gdevelop-gdl-instruction-catalog',
     formatVersion: INSTRUCTION_CATALOG_VERSION,
     semanticsVersion: SEMANTICS_VERSION,
     semanticsRulesRevision: SEMANTICS_RULES_REVISION,
@@ -2208,7 +2209,7 @@ export const buildInstruction = ({
   );
   if (!metadata) {
     throw new Error(
-      `Unknown ${kind} type "${type}". Search .gdevelop/instructions-catalog.json for the exact type.`
+      `Unknown ${kind} type "${type}". Search .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json for the exact type.`
     );
   }
   if (isDeprecatedOrHiddenInstructionMetadata(metadata)) {
@@ -2817,7 +2818,7 @@ const withActionableSuggestion = (issue: Object): Object => {
         issue.relatedBehaviorParameterIndex
       } contains "${
         issue.relatedBehaviorParameterValue
-      }", which looks like a behavior TYPE. Behavior parameters take the behavior NAME on the object (e.g. "PlatformerObject"), not the type. Read the object source and generated settings catalog for the configured behavior name.`,
+      }", which looks like a behavior TYPE. Behavior parameters take the behavior NAME on the object (e.g. "PlatformerObject"), not the type. Read the object source and generated GDL catalog for the configured behavior name.`,
     };
   }
 
@@ -2886,7 +2887,7 @@ const withActionableSuggestion = (issue: Object): Object => {
       ...issue,
       suggestion: `Parameter ${
         issue.parameterIndex
-      } expects a behavior NAME (the instance name on the object, e.g. "PlatformerObject"), not the behavior type, and without quotes. Read the object source and generated settings catalog to see the names.`,
+      } expects a behavior NAME (the instance name on the object, e.g. "PlatformerObject"), not the behavior type, and without quotes. Read the object source and generated GDL catalog to see the names.`,
     };
   }
 
@@ -2949,13 +2950,13 @@ const withActionableSuggestion = (issue: Object): Object => {
       ...issue,
       suggestion: `If this parameter expects a text/string expression, wrap the literal in quotes (e.g. ${JSON.stringify(
         value
-      )}). If it expects an object/behavior/variable name or a number, leave it unquoted. Confirm with .gdevelop/instructions-catalog.json.`,
+      )}). If it expects an object/behavior/variable name or a number, leave it unquoted. Confirm with .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json.`,
     };
   }
   return {
     ...issue,
     suggestion:
-      'Check the exact parameter type/order in .gdevelop/instructions-catalog.json, then rewrite this parameter for that type.',
+      'Check the exact parameter type/order in .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json, then rewrite this parameter for that type.',
   };
 };
 

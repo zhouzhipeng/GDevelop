@@ -7,7 +7,7 @@ import {
 
 const makeProject = (): any => ({
   getName: () => 'Test project',
-  getProjectFile: () => 'C:\\Games\\Test\\project.gdevelop',
+  getProjectFile: () => 'C:\\Games\\Test\\project.gdl',
 });
 
 const descriptors: Array<McpGameplayTestDescriptor> = [

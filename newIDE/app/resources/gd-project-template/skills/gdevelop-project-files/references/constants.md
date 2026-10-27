@@ -52,19 +52,19 @@ can be inspected by players.
 
 In a canonical multi-file project, `constants.toml` is the sole source for the
 complete Constants object. It is discovered by its fixed root path; do not
-add a reference to it in `project.gdevelop`.
+add a reference to it in `project.gdl`.
 
 Ownership is strict:
 
 - The whole TOML document is user configuration data.
 - There is no `[settings]` or `[constants]` wrapper and no format metadata.
-- `project.gdevelop` must not contain a constants table.
+- `project.gdl` must not contain a constants table.
 
 `constants.toml` is required. Empty Constants is an empty file.
 
 The GDevelop editor auto-saves grid, Raw TOML, Raw JSON, and import changes to
 this file for local multi-file projects. A normal project save also writes the
-same source; neither path adds Constants to `project.gdevelop`.
+same source; neither path adds Constants to `project.gdl`.
 
 Do not edit `.gdevelop/game.json`; it is generated output and does not contain
 Constants. Runtime exports also omit the map after resolving supported
@@ -241,7 +241,7 @@ code substitution that is not supported, and the third is not a constants path.
 
 ## Use placeholders in events
 
-Read the events DSL guide and `.gdevelop/instructions-catalog.json` before
+Read the events DSL guide and `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` before
 editing. With a project context, current instruction code generation enables
 Constants replacement for both actions and conditions. String-expression
 text nodes are the primary supported surface. Some raw string-like parameter
@@ -260,12 +260,12 @@ events {
 
     conditions {
 
-      SceneJustBegins
+      sceneBegins
     }
 
     actions {
 
-      EmitSceneSignal signal_name="{{signals.card.refresh}}" payload="startup"
+      emitSceneSignal signal_name="{{signals.card.refresh}}" payload="startup"
     }
   }
 }
@@ -284,12 +284,12 @@ events {
 
     conditions {
 
-      SceneJustBegins
+      sceneBegins
     }
 
     actions {
 
-      DebuggerTools::ConsoleLog message_to_log="Sunflower costs {{cards.Sunflower.price}}"
+      log message_to_log="Sunflower costs {{cards.Sunflower.price}}"
     }
   }
 }
@@ -384,12 +384,12 @@ events {
 
     conditions {
 
-      SceneJustBegins
+      sceneBegins
     }
 
     actions {
 
-      JSONToVariableStructure2 json_string="GlobalVariableString(Translations)" variable_where_to_store_the_json_object="Translations"
+      jsonToVariableStructure2 json_string="GlobalVariableString(Translations)" variable_where_to_store_the_json_object="Translations"
     }
   }
 }
@@ -492,7 +492,7 @@ property value are different responsibilities. Do not replace the example with
 `{{cards.Sunflower}}`: keep a concrete JSON schema example, then put the
 placeholder in the actual object/behavior configuration value. Exact serialized
 locations vary by object type and owner; inspect the target `.gdl` data and
-`settings-catalog.json`, and copy a compatible existing property configuration
+`gdl-catalog.json`, and copy a compatible existing property configuration
 shape rather than inventing serializer fields.
 
 ## Design reusable components
@@ -579,12 +579,12 @@ events {
 
     conditions {
 
-      SceneJustBegins
+      sceneBegins
     }
 
     actions {
 
-      EmitSceneSignal signal_name="{{signals.inventory.request}}" payload="initial-load"
+      emitSceneSignal signal_name="{{signals.inventory.request}}" payload="initial-load"
     }
   }
 }
@@ -612,7 +612,7 @@ an array whose elements share one TOML type.
 
 - Read the whole current `constants.toml` before modifying one subtree.
 - Edit direct-root data only; do not add metadata or wrapper tables.
-- Do not duplicate constants in `project.gdevelop`.
+- Do not duplicate constants in `project.gdl`.
 - Do not add a manifest/index entry for `constants.toml`.
 - Never use an MCP Constants tool; none exists. Modify `constants.toml`
   directly.
@@ -649,7 +649,7 @@ error with a fabricated value unless that default is part of the user's design.
 
 - Treating Constants as runtime mutable state.
 - Editing generated `.gdevelop/game.json` instead of `constants.toml`.
-- Putting constants in `project.gdevelop`.
+- Putting constants in `project.gdl`.
 - Adding `[settings]`, `[constants]`, or serializer metadata wrappers.
 - Trying to store JSON `null`, mixed-type arrays, dates, or unsafe integers.
 - Using inconsistent types for the same field across content records.

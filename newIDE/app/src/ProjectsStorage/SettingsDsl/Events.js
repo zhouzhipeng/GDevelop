@@ -153,7 +153,7 @@ const decodeInstruction = (n, kind, options, uri, depth) => {
   } catch (cause) {
     const argument = n.arguments[cause.parameterName];
     const location = argument
-      ? cause.code === 'SETTINGS_CATALOG_UNKNOWN_PARAMETER'
+      ? cause.code === 'GDL_CATALOG_UNKNOWN_PARAMETER'
         ? argument.keyLocation
         : argument.location
       : n.location;
@@ -161,7 +161,7 @@ const decodeInstruction = (n, kind, options, uri, depth) => {
       cause.message,
       { ...n, location },
       uri,
-      cause.code === 'SETTINGS_CATALOG_UNKNOWN_INSTRUCTION'
+      cause.code === 'GDL_CATALOG_UNKNOWN_INSTRUCTION'
         ? 'SETTINGS_INSTRUCTION_UNKNOWN'
         : 'SETTINGS_INSTRUCTION_ARGUMENT'
     );

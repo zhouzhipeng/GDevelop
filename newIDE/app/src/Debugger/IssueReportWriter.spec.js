@@ -187,8 +187,8 @@ describe('IssueReportWriter', () => {
   });
 
   test('recognizes only absolute local project paths', () => {
-    expect(getLocalProjectRoot('project.gdevelop')).toBe(null);
-    const absoluteProjectFile = path.resolve('game', 'project.gdevelop');
+    expect(getLocalProjectRoot('project.gdl')).toBe(null);
+    const absoluteProjectFile = path.resolve('game', 'project.gdl');
     expect(getLocalProjectRoot(absoluteProjectFile)).toBe(
       path.dirname(absoluteProjectFile)
     );
@@ -207,7 +207,7 @@ describe('IssueReportWriter', () => {
       path.join(os.tmpdir(), 'gdevelop-issue-report-')
     );
     temporaryDirectories.push(projectRoot);
-    const projectFile = path.join(projectRoot, 'project.gdevelop');
+    const projectFile = path.join(projectRoot, 'project.gdl');
 
     const firstPath = await writeIssueReport({
       projectFile,
@@ -304,7 +304,7 @@ describe('IssueReportWriter', () => {
       path.join(os.tmpdir(), 'gdevelop-invalid-issue-report-')
     );
     temporaryDirectories.push(projectRoot);
-    const projectFile = path.join(projectRoot, 'project.gdevelop');
+    const projectFile = path.join(projectRoot, 'project.gdl');
 
     await expect(
       writeIssueReport({

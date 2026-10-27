@@ -1,8 +1,8 @@
 // @noflow
 import {
-  buildProjectSettingsCatalog,
-  validateProjectSettingsCatalog,
-  serializeProjectSettingsCatalog,
+  buildProjectGdlCatalog,
+  validateProjectGdlCatalog,
+  serializeProjectGdlCatalog,
   buildBehaviorPropertySchemasByType,
 } from './ProjectSourceCatalog';
 import { serializeToJSObject } from '../Utils/Serializer';
@@ -20,13 +20,38 @@ describe('GDevelop Language (GDL) authoring catalogs', () => {
   });
   afterEach(() => project.delete());
   const catalogFor = project =>
-    buildProjectSettingsCatalog({
+    buildProjectGdlCatalog({
       project,
       serializedProject: serializeToJSObject(project),
     });
   test('publishes the same strict node schemas used by the current parser', () => {
     const catalog = catalogFor(project);
-    expect(catalog.formatVersion).toBe(10);
+    expect(catalog.formatVersion).toBe(12);
+    expect(catalog.layoutNodes.map(entry => entry.node)).toEqual(
+      expect.arrayContaining([
+        'editor',
+        'camera',
+        'effect',
+        'behavior',
+        'layer',
+        'instance',
+      ])
+    );
+    expect(catalog.counts.layoutNodes).toBe(catalog.layoutNodes.length);
+    const assertCurrentSchema = value => {
+      if (!value || typeof value !== 'object') return;
+      Object.entries(value).forEach(([key, child]) => {
+        expect([
+          'layoutTables',
+          'table',
+          'childTables',
+          'header',
+          'emptyForm',
+        ]).not.toContain(key);
+        assertCurrentSchema(child);
+      });
+    };
+    assertCurrentSchema(catalog);
     const variableSchema = catalog.variableSchemas.variable;
     expect(variableSchema.children.metadata).toBeUndefined();
     expect(variableSchema.children.variable).toMatchObject({
@@ -61,10 +86,8 @@ describe('GDevelop Language (GDL) authoring catalogs', () => {
       )
     ).toBe(true);
     expect(JSON.stringify(catalog)).not.toContain('[[layout');
-    expect(JSON.parse(serializeProjectSettingsCatalog(catalog))).toEqual(
-      catalog
-    );
-    expect(validateProjectSettingsCatalog(catalog)).toBe(catalog);
+    expect(JSON.parse(serializeProjectGdlCatalog(catalog))).toEqual(catalog);
+    expect(validateProjectGdlCatalog(catalog)).toBe(catalog);
   });
   test('registers hidden and deprecated effect parameters without advertising them as public editor properties', () => {
     const platform = gd.JsPlatform.get();
@@ -113,7 +136,7 @@ describe('GDevelop Language (GDL) authoring catalogs', () => {
         getLayoutTypeContext().effectParameterTypesByType[entry.type]
       ).toMatchObject({ frustumSize: 'number', internalColor: 'string' });
       expect(() =>
-        validateProjectSettingsCatalog({
+        validateProjectGdlCatalog({
           ...catalog,
           effectTypes: [{ ...entry, serializedParameters: null }],
         })
@@ -125,16 +148,27 @@ describe('GDevelop Language (GDL) authoring catalogs', () => {
   test('rejects stale catalogs, duplicate types and missing node contracts', () => {
     const catalog = catalogFor(project);
     expect(() =>
-      validateProjectSettingsCatalog({ ...catalog, formatVersion: 4 })
+      validateProjectGdlCatalog({ ...catalog, formatVersion: 11 })
     ).toThrow();
+    ['', null, 42].forEach(node => {
+      expect(() =>
+        validateProjectGdlCatalog({ ...catalog, layoutNodes: [{ node }] })
+      ).toThrow('identity');
+    });
     expect(() =>
-      validateProjectSettingsCatalog({
+      validateProjectGdlCatalog({
+        ...catalog,
+        layoutNodes: [catalog.layoutNodes[0], catalog.layoutNodes[0]],
+      })
+    ).toThrow('Duplicate layout node');
+    expect(() =>
+      validateProjectGdlCatalog({
         ...catalog,
         objectTypes: [...catalog.objectTypes, catalog.objectTypes[0]],
       })
     ).toThrow();
     expect(() =>
-      validateProjectSettingsCatalog({
+      validateProjectGdlCatalog({
         ...catalog,
         fileKinds: [{ ...catalog.fileKinds[0], schema: null }],
       })

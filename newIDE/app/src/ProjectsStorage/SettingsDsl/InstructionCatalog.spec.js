@@ -4,6 +4,9 @@ import { withTestInstructionSemantics } from './TestHelpers';
 import { appendSettingsEvents, compileSettingsEvents } from './Events';
 import { parseLegacyEventsJson } from './EventModel';
 import {
+  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  serializeInstructionCatalogFiles,
+  assembleInstructionCatalogFiles,
   buildProjectDeprecatedInstructionCatalog,
   buildProjectInstructionCatalog,
   buildLegacyInstructionCatalogDelta,
@@ -28,8 +31,8 @@ const areLegacyEventsEquivalent = (left, right) =>
   JSON.stringify(parseLegacyEventsJson(right));
 
 const catalogFixture = withTestInstructionSemantics({
-  format: 'gdevelop-settings-instruction-catalog',
-  formatVersion: 4,
+  format: 'gdevelop-gdl-instruction-catalog',
+  formatVersion: 6,
   actions: [
     {
       type: 'Network::Send',
@@ -75,7 +78,7 @@ const catalogFixture = withTestInstructionSemantics({
 });
 
 describe('project Settings instruction catalog', () => {
-  test('requires the semantic version 4 catalog without authoring prose', () => {
+  test('requires the semantic version 6 catalog without authoring prose', () => {
     expect(() =>
       validateProjectInstructionCatalog(
         withTestInstructionSemantics({
@@ -83,7 +86,7 @@ describe('project Settings instruction catalog', () => {
           formatVersion: 1,
         })
       )
-    ).toThrow('expected version 4');
+    ).toThrow('expected version 6');
     expect(() =>
       validateProjectInstructionCatalog(
         withTestInstructionSemantics({
@@ -574,7 +577,7 @@ describe('project Settings instruction catalog', () => {
         resolveInstruction: createCatalogInstructionResolver(completeCatalog),
       });
 
-      expect(dsl).toContain('"Physics2::Remove joint"');
+      expect(dsl).toContain('removeJoint');
       expect(dsl).not.toContain('@exact');
       expect(areLegacyEventsEquivalent(input, output)).toBe(true);
     } finally {
@@ -696,7 +699,7 @@ describe('project Settings instruction catalog', () => {
     expect(
       catalog.expressions.some(({ type }) => type === 'TextObject::String')
     ).toBe(false);
-    expect(catalog.formatVersion).toBe(4);
+    expect(catalog.formatVersion).toBe(6);
     expect(catalog.authoring).toBeUndefined();
     expect(serialized).not.toContain('"authoring"');
     expect(serialized).not.toContain('serialized operand');
@@ -746,7 +749,7 @@ describe('project Settings instruction catalog', () => {
     const sceneDsl = serializeEventDocument(sceneInput, {
       formatInstruction: createCatalogInstructionFormatter(catalog),
     });
-    expect(sceneDsl).toContain('SceneJustBegins');
+    expect(sceneDsl).toContain('sceneBegins');
     expect(sceneDsl).not.toContain('scene begins');
     expect(sceneDsl).not.toContain('parameter_0=');
     expect(
@@ -827,7 +830,7 @@ describe('project Settings instruction catalog', () => {
       }
     );
     expect(omittedCollisionDefaultDsl).toContain(
-      'CollisionNP first_object="Player" second_object="Platform"'
+      'collision first_object="Player" second_object="Platform"'
     );
     expect(omittedCollisionDefaultDsl).not.toContain(
       `${optionalCollisionParameter.dslName}=`
@@ -943,4 +946,80 @@ test('unified operand diagnostics identify the exact argument value in the ownin
     expect(failure.fileUri).toBe('game://Test.gdl');
     expect(source.slice(failure.offset, failure.endOffset)).toBe('42');
   }
+});
+
+describe('instruction catalog files', () => {
+  const filesFor = (catalog: Object) =>
+    Object.fromEntries(
+      Object.entries(serializeInstructionCatalogFiles(catalog)).map(
+        ([file, contents]) => [file, JSON.parse(contents)]
+      )
+    );
+  test('splits deterministically, round trips all kinds, and filters deprecated entries', () => {
+    const deprecated = {
+      ...catalogFixture,
+      actions: catalogFixture.actions.map(entry => ({
+        ...entry,
+        type: 'Legacy::Send',
+        dslName: 'Legacy::Send',
+      })),
+      conditions: [],
+      expressions: [],
+    };
+    const serialized = serializeInstructionCatalogFiles(
+      catalogFixture,
+      deprecated
+    );
+    expect(serialized).toEqual(
+      serializeInstructionCatalogFiles(catalogFixture, deprecated)
+    );
+    expect(Object.keys(serialized).sort()).toEqual(
+      Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).sort()
+    );
+    const files = Object.fromEntries(
+      Object.entries(serialized).map(([file, contents]) => [
+        file,
+        JSON.parse(contents),
+      ])
+    );
+    const complete = assembleInstructionCatalogFiles(files);
+    expect(
+      complete.actions.find(entry => entry.type === 'Legacy::Send')
+        .authoringAvailable
+    ).toBe(false);
+    expect(
+      assembleInstructionCatalogFiles(files, true).actions.map(
+        entry => entry.type
+      )
+    ).toEqual(catalogFixture.actions.map(entry => entry.type));
+    for (const [kind, file] of Object.entries(
+      PROJECT_INSTRUCTION_CATALOG_PATHS
+    )) {
+      expect(files[file].entries.every(entry => entry.kind === kind)).toBe(
+        true
+      );
+      expect(files[file].entries.length).toBe(files[file].count);
+      expect(
+        serialized[file]
+          .split('\n')
+          .slice(1, -2)
+          .filter(Boolean).length
+      ).toBe(files[file].count);
+    }
+  });
+  test.each(['missing', 'kind', 'version', 'fingerprint', 'count', 'entry'])(
+    'rejects %s with a file diagnostic',
+    failure => {
+      const files = filesFor(catalogFixture);
+      const file = PROJECT_INSTRUCTION_CATALOG_PATHS.action;
+      if (failure === 'missing') delete files[file];
+      if (failure === 'kind') files[file].kind = 'condition';
+      if (failure === 'version') files[file].instructionCatalogVersion = 5;
+      if (failure === 'fingerprint')
+        files[file].sourceFingerprint = 'different';
+      if (failure === 'count') files[file].count++;
+      if (failure === 'entry') files[file].entries[0].authoringAvailable = null;
+      expect(() => assembleInstructionCatalogFiles(files)).toThrow(file);
+    }
+  );
 });

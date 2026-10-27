@@ -26,7 +26,7 @@ test('registers GDL, formatting and live syntax diagnostics once', () => {
   expect(languages.register).toHaveBeenCalledTimes(1);
   expect(languages.register).toHaveBeenCalledWith({
     id: 'gdevelop-gdl',
-    extensions: ['.gdl', '.gdevelop'],
+    extensions: ['.gdl'],
     aliases: ['GDevelop Language', 'GDL'],
   });
   const formatting =

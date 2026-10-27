@@ -189,7 +189,7 @@ export const registerSettingsLanguage = (monaco: any) => {
   const language = 'gdevelop-gdl';
   monaco.languages.register({
     id: language,
-    extensions: ['.gdl', '.gdevelop'],
+    extensions: ['.gdl'],
     aliases: ['GDevelop Language', 'GDL'],
   });
   monaco.languages.setMonarchTokensProvider(language, {

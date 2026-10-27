@@ -1,6 +1,6 @@
 # Scene lifecycle functions
 
-Status: current GDL authoring format 12. See the [GDL documentation entry](settings-dsl-spec.md) and [event contract](unified-settings-events-dsl-spec.md).
+Status: current GDL authoring format 13. See the [GDL documentation entry](settings-dsl-spec.md) and [event contract](unified-settings-events-dsl-spec.md).
 
 ## Ownership and presence
 

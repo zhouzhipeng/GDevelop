@@ -210,7 +210,7 @@ export const buildProjectModuleMap = (
       name:
         (serializedProject.properties && serializedProject.properties.name) ||
         '',
-      settingsPath: 'project.gdevelop',
+      settingsPath: 'project.gdl',
     },
     scenes,
     externalEvents,

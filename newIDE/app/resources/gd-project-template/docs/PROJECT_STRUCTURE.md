@@ -1,10 +1,10 @@
 # Project structure
 
-Paths are relative to the directory containing `project.gdevelop`. This document defines the template's auxiliary-directory conventions. Engine-owned source paths still follow the [GDevelop file contract](../skills/gdevelop-project-files/SKILL.md) and generated catalogs.
+Paths are relative to the directory containing `project.gdl`. This document defines the template's auxiliary-directory conventions. Engine-owned source paths still follow the [GDevelop file contract](../skills/gdevelop-project-files/SKILL.md) and generated catalogs.
 
 | Path | Purpose | Version control |
 | --- | --- | --- |
-| `project.gdevelop`, `resources.gdl`, `constants.toml` | Project entry, resource registry and editor constants | Track |
+| `project.gdl`, `resources.gdl`, `constants.toml` | Project entry, resource registry and editor constants | Track |
 | `scenes/`, `extensions/`, `objects/` | Canonical scene, extension and global-object sources | Track components when created; preserve prescribed hierarchy |
 | `tests.gdl`, `tests/*.js` | Gameplay-test manifest and flat test sources | Track; no nested test source directories |
 | `assets/` | Runtime resources, accompanying manifests and license notices | Track; preserve registered resource paths |
@@ -41,3 +41,9 @@ Use `artifacts/previews/` for independent display screenshots and `artifacts/loc
 Project-specific tools live in `tools/`; bundled workflow helpers stay in their owning skill's `scripts/` directory. State each project tool's inputs, outputs, dependencies, overwrite behavior and repeatability. Identify historical one-off project modifiers so they are not mistaken for a current build pipeline.
 
 Keep the root README concise and current. Put detailed design and instructions in `docs/`, with superseded descriptions in `docs/history/` when useful. Neither a historical report nor a template placeholder is evidence that a new project has passed validation.
+
+Instruction metadata is generated into three files: `.gdevelop/conditions-catalog.json`,
+`.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`. Read the
+file matching the instruction kind and use its `entries` with
+`authoringAvailable=true` for new GDL. Regenerate all three together; never edit
+generated catalogs. See [the GDevelop authoring skill](../skills/gdevelop-project-files/SKILL.md) for the full contract.

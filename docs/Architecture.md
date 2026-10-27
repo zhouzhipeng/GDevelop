@@ -20,7 +20,7 @@ overview. Related focused references include:
 - `newIDE/docs/Supported-JavaScript-features-and-coding-style.md` — editor/runtime JavaScript constraints.
 
 > This branch differs materially from stock GDevelop. In particular, local
-> projects default to a Git-oriented `project.gdevelop` source tree, Constants
+> projects default to a Git-oriented `project.gdl` source tree, Constants
 > is compiled out of exports, preview/export applies additional validation, and
 > the runtime contains a queued signal bus. Those behaviors are called out
 > explicitly below.
@@ -581,7 +581,7 @@ Metadata drives more than the instruction picker:
 - code generation and include collection;
 - object/behavior factories;
 - refactoring and diagnostics;
-- this branch's generated instruction/settings catalogs.
+- this branch's generated instruction/GDL catalogs.
 
 `ValueTypeMetadata` and `ParameterMetadata` classify number, string, boolean,
 operator, object, behavior, variable/property, resource, layer/camera, and
@@ -698,9 +698,9 @@ requested.
 | Representation            | Entry                                           | Status in this checkout                                                                                            |
 | ------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Native JSON model | Internal serialization and template-service snapshots | Engine/editor interchange; URL template import produces the current GDL model. |
-| Multi-file source project | `project.gdevelop` | Primary local authoring format: GDL 12 configuration and embedded events, with separate gameplay-test JavaScript sources. |
+| Multi-file source project | `project.gdl` | Primary local authoring format: GDL 13 configuration and embedded events, with separate gameplay-test JavaScript sources. |
 
-The current authoring reader accepts GDL 12 only. It does not detect or migrate
+The current authoring reader accepts GDL 13 only. It does not detect or migrate
 older authoring formats. Native JSON template import is a separate boundary,
 not a fallback GDL reader. See the [current GDL contract](settings-dsl-spec.md).
 
@@ -709,7 +709,7 @@ open the selected document through the positional project argument; macOS
 queues Finder `open-file` events received before application readiness and
 routes later events immediately. Launch arguments are retained per editor
 window so simultaneous document requests cannot select the wrong project.
-Only the exact canonical basename `project.gdevelop` is a valid multi-file
+Only the exact canonical basename `project.gdl` is a valid multi-file
 entry.
 
 ### Multi-file source tree
@@ -722,7 +722,7 @@ owns filesystem discovery, URI/path safety, transactions, and recovery.
 A representative source tree is:
 
 ```text
-project.gdevelop
+project.gdl
 resources.gdl
 constants.toml
 tests.gdl
@@ -749,7 +749,7 @@ extensions/<encoded-name>/prefabs/<encoded-name>/
     objects/<encoded-name>.gdl
 ```
 
-- `*.gdl` and `project.gdevelop` use GDL; `constants.toml` remains TOML.
+- `*.gdl` and `project.gdl` use GDL; `constants.toml` remains TOML.
 - Configuration and layout share the owning component root. Functions and
   external fragments contain their own `events` body in the same GDL file.
 - Root `tests.gdl` owns project and extension gameplay-test metadata;
@@ -772,7 +772,7 @@ memory, and compares normalized projects before touching authoring sources.
 `writeMultiFileSourceTree` serializes concurrent writes per project root and
 only writes changed managed URIs. A transaction is staged under
 `.gdevelop/transactions/<id>` with flushed files, backups, and a journal.
-Managed files are committed in dependency order, with `project.gdevelop` last.
+Managed files are committed in dependency order, with `project.gdl` last.
 Failures restore backups; opening a project recovers any interrupted staged or
 committed transaction. Obsolete managed files and now-empty owned directories
 are removed without deleting user-owned files.
@@ -789,8 +789,8 @@ prevent authored sources from opening.
 
 A multi-file save also regenerates editor/tooling projections:
 
-- `.gdevelop/instructions-catalog.json` and the deprecated instruction catalog;
-- `.gdevelop/settings-catalog.json`, including settings and embedded-layout
+- `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` (deprecated entries are marked `authoringAvailable=false`);
+- `.gdevelop/gdl-catalog.json`, including settings and embedded-layout
   authoring schemas and owner contexts;
 - `.gdevelop/runtime-api.d.ts` and `project-api.d.ts`;
 - `.gdevelop/game.json`, a legacy-shaped compatibility projection without
@@ -1012,7 +1012,7 @@ Consider a scene event: “when `Player` is on the floor, set its Y position to
    inside the current WASM `gd::Project`. React holds UI state and borrowed
    wrappers; the C++ model is authoritative.
 3. **Save.** Core serializes one logical project tree. For a
-   `project.gdevelop` project, the editor decomposes it into GDL configuration/layout/event
+   `project.gdl` project, the editor decomposes it into GDL configuration/layout/event
    sources, recomposes and compares it, transactionally commits changed files,
    and regenerates `.gdevelop` catalogs and declarations.
 4. **Preflight.** Preview/export scans serialized events and runs native code

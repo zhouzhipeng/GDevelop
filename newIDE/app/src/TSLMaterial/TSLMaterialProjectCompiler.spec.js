@@ -165,7 +165,7 @@ describe('TSL material project compiler', () => {
     temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-tsl-project-compiler-')
     );
-    project.setProjectFile(path.join(temporaryDirectory, 'project.gdevelop'));
+    project.setProjectFile(path.join(temporaryDirectory, 'project.gdl'));
     addTSLMaterial(project, 'Tint', 'materials/Tint.tsl.ts');
     const serializedProject = serializeToJSObject(project, 'serializeTo');
     const javascriptArtifacts = buildJavaScriptAuthoringArtifacts(

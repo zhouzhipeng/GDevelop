@@ -144,11 +144,24 @@ export const analyzeGdlEvents = ({
   const { root } = compiled.syntax;
   const maps = detail === 'steps' ? buildEventSourceMap(root, file) : [];
   const lookups = {
-    conditions: new Map(catalog.conditions.map(entry => [entry.type, entry])),
-    while_conditions: new Map(
-      catalog.conditions.map(entry => [entry.type, entry])
+    conditions: new Map(
+      catalog.conditions.flatMap(entry => [
+        [entry.type, entry],
+        [entry.dslName, entry],
+      ])
     ),
-    actions: new Map(catalog.actions.map(entry => [entry.type, entry])),
+    while_conditions: new Map(
+      catalog.conditions.flatMap(entry => [
+        [entry.type, entry],
+        [entry.dslName, entry],
+      ])
+    ),
+    actions: new Map(
+      catalog.actions.flatMap(entry => [
+        [entry.type, entry],
+        [entry.dslName, entry],
+      ])
+    ),
   };
   const taintedStates = new WeakSet();
   const symbolOrigins = new Map(
@@ -424,7 +437,8 @@ export const analyzeGdlEvents = ({
         const metadata = lookups[listKind].get(instruction.type);
         const semantics = metadata.semantics;
         const step = {
-          instructionType: instruction.type,
+          instructionType: metadata.type,
+          dslName: metadata.dslName,
           instructionPath,
           list: listKind,
           source: sourceLocation(instruction, file),
@@ -597,7 +611,7 @@ export const analyzeGdlEvents = ({
       // The generator special case is restricted to enabled, non-inverted top-level conditions.
       const signal = listInstructions(node, 'conditions').find(
         instruction =>
-          instruction.type === 'SignalReceived' &&
+          lookups.conditions.get(instruction.type).type === 'SignalReceived' &&
           !nodeValue(instruction, 'disabled', false) &&
           !nodeValue(instruction, 'inverted', false)
       );

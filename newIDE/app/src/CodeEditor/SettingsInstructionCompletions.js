@@ -1,4 +1,9 @@
 // @noflow
+import { MULTI_FILE_ENTRY_NAME } from '../ProjectsStorage/ProjectEntry';
+import {
+  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  assembleInstructionCatalogFiles,
+} from '../ProjectsStorage/SettingsDsl/InstructionCatalog';
 import optionalRequire from '../Utils/OptionalRequire';
 const catalogs = new Map();
 const diskCatalogs = new Map();
@@ -19,19 +24,30 @@ export const getSettingsInstructionCatalog = uri => {
   if (!fs || !path || uri.scheme !== 'file' || !uri.fsPath) return null;
   let directory = path.dirname(uri.fsPath);
   while (directory && directory !== path.dirname(directory)) {
-    if (fs.existsSync(path.join(directory, 'project.gdevelop'))) {
-      const file = path.join(directory, '.gdevelop/instructions-catalog.json');
+    if (fs.existsSync(path.join(directory, MULTI_FILE_ENTRY_NAME))) {
+      const projectRoot = directory;
       try {
-        const stat = fs.statSync(file),
-          cached = diskCatalogs.get(file);
-        if (cached && cached.modified === stat.mtimeMs) return cached.catalog;
-        const catalog = JSON.parse(fs.readFileSync(file, 'utf8'));
-        if (
-          catalog.format !== 'gdevelop-settings-instruction-catalog' ||
-          catalog.formatVersion !== 4
-        )
-          return null;
-        diskCatalogs.set(file, { modified: stat.mtimeMs, catalog });
+        const paths = Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS);
+        const signature = paths
+          .map(file => {
+            const stat = fs.statSync(path.join(projectRoot, file));
+            if (stat.size > 32 * 1024 * 1024)
+              throw new Error('Catalog too large');
+            return `${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`;
+          })
+          .join('|');
+        const cached = diskCatalogs.get(projectRoot);
+        if (cached && cached.signature === signature) return cached.catalog;
+        const catalog = assembleInstructionCatalogFiles(
+          Object.fromEntries(
+            paths.map(file => [
+              file,
+              JSON.parse(fs.readFileSync(path.join(projectRoot, file), 'utf8')),
+            ])
+          ),
+          true
+        );
+        diskCatalogs.set(projectRoot, { signature, catalog });
         return catalog;
       } catch (_) {
         return null;
@@ -66,9 +82,16 @@ export const getSettingsInstructionCompletions = (source, catalog) => {
     .reverse()
     .find(name => ['conditions', 'while_conditions', 'actions'].includes(name));
   if (!owner) return [];
-  const entries = owner === 'actions' ? catalog.actions : catalog.conditions;
+  const candidates = owner === 'actions' ? catalog.actions : catalog.conditions;
+  const entries = Array.isArray(candidates)
+    ? candidates.filter(entry => entry.authoringAvailable !== false)
+    : candidates;
   if (!Array.isArray(entries)) return [];
-  const parent = entries.find(entry => entry.type === stack[stack.length - 1]);
+  const parent = entries.find(
+    entry =>
+      entry.dslName === stack[stack.length - 1] ||
+      entry.type === stack[stack.length - 1]
+  );
   if (parent && !parent.canHaveSubInstructions) {
     return (owner === 'actions'
       ? [
@@ -87,16 +110,16 @@ export const getSettingsInstructionCompletions = (source, catalog) => {
     return entries
       .filter(entry => typeof entry.type === 'string')
       .map(entry => ({
-        label: entry.type,
+        label: entry.dslName || entry.type,
         replacePrefixLength: line.length,
-        insertText: /\s/.test(entry.type)
-          ? JSON.stringify(entry.type)
-          : entry.type,
+        insertText: /\s/.test(entry.dslName || entry.type)
+          ? JSON.stringify(entry.dslName || entry.type)
+          : entry.dslName || entry.type,
         detail: (entry.parameters || [])
           .filter(p => !p.isCodeOnly)
           .map(p => `${p.dslName}: ${p.valueKind}`)
           .join(', '),
-        documentation: entry.description || '',
+        documentation: `${entry.type}\n${entry.description || ''}`,
       }));
   let type = parsed[1];
   if (type.startsWith('"')) {
@@ -106,7 +129,9 @@ export const getSettingsInstructionCompletions = (source, catalog) => {
       return [];
     }
   }
-  const entry = entries.find(entry => entry.type === type);
+  const entry = entries.find(
+    entry => entry.dslName === type || entry.type === type
+  );
   if (!entry) return [];
   const present = new Set(
     Array.from(

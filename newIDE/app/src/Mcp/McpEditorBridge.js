@@ -33,7 +33,7 @@ import {
 import { writeProjectSourceCatalogs } from '../ProjectsStorage/LocalFileStorageProvider/LocalProjectWriter';
 import {
   buildBehaviorPropertySchemasByType,
-  validateProjectSettingsCatalog,
+  validateProjectGdlCatalog,
 } from '../ProjectsStorage/ProjectSourceCatalog';
 import {
   buildJavaScriptAuthoringArtifacts,
@@ -5495,7 +5495,7 @@ const callMcpTool = async ({
       path.basename(projectFile).toLowerCase() !== MULTI_FILE_ENTRY_NAME
     ) {
       return errorResult(
-        'generate-catalogs requires a local multi-file project whose entry file is project.gdevelop.',
+        'generate-catalogs requires a local multi-file project whose entry file is project.gdl.',
         {
           catalogsRegenerated: false,
           phase: 'locate-project-files',
@@ -5516,21 +5516,16 @@ const callMcpTool = async ({
         writeMode: 'awaited-and-verified',
         catalogs,
         catalogFiles: {
-          instructions: path.join(
+          conditions: path.join(
             projectRoot,
-            '.gdevelop',
-            'instructions-catalog.json'
+            '.gdevelop/conditions-catalog.json'
           ),
-          deprecatedInstructions: path.join(
+          actions: path.join(projectRoot, '.gdevelop/actions-catalog.json'),
+          expressions: path.join(
             projectRoot,
-            '.gdevelop',
-            'deprecated-instructions-catalog.json'
+            '.gdevelop/expressions-catalog.json'
           ),
-          settings: path.join(
-            projectRoot,
-            '.gdevelop',
-            'settings-catalog.json'
-          ),
+          gdl: path.join(projectRoot, '.gdevelop', 'gdl-catalog.json'),
           runtimeApi: path.join(projectRoot, '.gdevelop', 'runtime-api.d.ts'),
           projectApi: path.join(projectRoot, '.gdevelop', 'project-api.d.ts'),
           harnessApi: path.join(projectRoot, '.gdevelop', 'harness-api.d.ts'),
@@ -5540,7 +5535,7 @@ const callMcpTool = async ({
         nextAction:
           'Read the refreshed catalogs before making edits that depend on newly added or changed project structure. Run validate_project_files after the final source edit before reload_project.',
         note:
-          'All eight generated authoring files, including the cross-hashed TSL declaration and semantic catalog, were written sequentially and verified before this response. Project source files and editor memory were not modified.',
+          'All nine generated authoring files, including the cross-hashed TSL declaration and semantic catalog, were written sequentially and verified before this response. Project source files and editor memory were not modified.',
       });
     } catch (error) {
       const diagnostic = getProjectFilesValidationDiagnostic(
@@ -5605,7 +5600,7 @@ const callMcpTool = async ({
       path.basename(projectFile).toLowerCase() !== MULTI_FILE_ENTRY_NAME
     ) {
       return errorResult(
-        'validate_project_files requires a local multi-file project whose entry file is project.gdevelop.',
+        'validate_project_files requires a local multi-file project whose entry file is project.gdl.',
         {
           valid: false,
           phase: 'locate-project-files',
@@ -5616,7 +5611,7 @@ const callMcpTool = async ({
               phase: 'locate-project-files',
               code: 'PROJECT_FILES_INVALID_ENTRY',
               message:
-                'The open project is not using project.gdevelop as its entry file.',
+                'The open project is not using project.gdl as its entry file.',
               filePath: projectFile,
             },
           ],
@@ -5632,16 +5627,16 @@ const callMcpTool = async ({
         projectRoot,
         catalogs,
       } = await generateProjectSourceCatalogsFromDisk(projectFile);
-      const settingsCatalog = validateProjectSettingsCatalog(
+      const gdlCatalog = validateProjectGdlCatalog(
         JSON.parse(
           fs.readFileSync(
-            path.join(projectRoot, '.gdevelop', 'settings-catalog.json'),
+            path.join(projectRoot, '.gdevelop', 'gdl-catalog.json'),
             'utf8'
           )
         )
       );
       const behaviorPropertySchemasByType = buildBehaviorPropertySchemasByType(
-        settingsCatalog
+        gdlCatalog
       );
       const {
         serializedProject,
@@ -5893,7 +5888,7 @@ const callMcpTool = async ({
       path.basename(projectFile).toLowerCase() !== MULTI_FILE_ENTRY_NAME
     ) {
       return errorResult(
-        'import_extension requires a saved multi-file project whose entry file is project.gdevelop.'
+        'import_extension requires a saved multi-file project whose entry file is project.gdl.'
       );
     }
 

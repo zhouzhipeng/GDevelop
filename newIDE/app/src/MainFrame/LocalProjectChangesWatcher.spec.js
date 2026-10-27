@@ -38,7 +38,7 @@ const Watcher = ({
 |}) => {
   useLocalProjectChangesWatcher({
     enabled,
-    fileIdentifier: 'C:\\game\\project.gdevelop',
+    fileIdentifier: 'C:\\game\\project.gdl',
     lastKnownModificationTime,
     areProjectFilesSameAsMemory,
     onProjectFilesChanged,

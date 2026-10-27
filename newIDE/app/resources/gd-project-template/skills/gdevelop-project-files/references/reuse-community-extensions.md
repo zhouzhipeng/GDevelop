@@ -91,7 +91,7 @@ version, and any later local adaptations in the final report.
 ## Install into multi-file sources
 
 Repository extensions are legacy JSON interchange artifacts, not project
-source. Do not reference or retain them in `project.gdevelop`, `.gdl`,
+source. Do not reference or retain them in `project.gdl`, `.gdl`,
 or `.gdl` and do not ask the model to translate their event trees
 by hand.
 
@@ -161,7 +161,7 @@ The native conversion maps the legacy extension as follows:
 The conversion keeps hidden property descriptors in the owning
 `behavior.gdl` because generated runtime code needs their defaults, but it
 also keeps any existing hidden or extension-owned values on attached behaviors.
-Such properties are absent from `settings-catalog.json`, so models must not
+Such properties are absent from `gdl-catalog.json`, so models must not
 invent or generically edit them; absence from the catalog is not permission to
 delete serializer data that a specialized editor or the runtime requires.
 

@@ -23,7 +23,7 @@ Core/GDCore authoring model and event AST
 Read `docs/Architecture.md` for the detailed engineering reference and
 `Core/GDevelop-Architecture-Overview.md` for the shorter upstream overview.
 This checkout has important branch-specific behavior: multi-file
-`project.gdevelop` projects, unified GDL configuration and event sources, Constants
+`project.gdl` projects, unified GDL configuration and event sources, Constants
 placeholder compilation, extra preview/export validation, deterministic
 single-object checks, and a queued runtime signal bus.
 
@@ -114,7 +114,7 @@ because the agent does not wait for the result.
 | Object/behavior/property editing | `newIDE/app/src/ObjectEditor`, `BehaviorsEditor`, `CompactPropertiesEditor`, `PropertiesEditor` | Core property descriptors, extension editor configuration |
 | Variables editor | `newIDE/app/src/VariablesEditorRedesign` and `VariablesList` | Core variable/source-scope APIs and history/serialization |
 | Events-based extensions or prefabs in the editor | `EventsFunctionsExtensionEditor`, `EventsFunctionsExtensionsLoader`, `EventsFunctionsList`, `PrefabDetailEditor` | Core `EventsFunctionsExtension` model and GDJS function/object/behavior generators |
-| Local project open/save, `project.gdevelop`, GDL configuration, layout or events | `newIDE/app/src/ProjectsStorage` | `MultiFileProjectFormat`, `LayoutDocument`, `LocalFileStorageProvider/LocalMultiFileProject.js`, GDL, format specs |
+| Local project open/save, `project.gdl`, GDL configuration, layout or events | `newIDE/app/src/ProjectsStorage` | `MultiFileProjectFormat`, `LayoutDocument`, `LocalFileStorageProvider/LocalMultiFileProject.js`, GDL, format specs |
 | GDL parsing/formatting/catalog resolution | `newIDE/app/src/ProjectsStorage/SettingsDsl` | `InstructionCatalog.js`, multi-file composition, `docs/unified-settings-events-dsl-spec.md` |
 | Preview/export diagnostics or orchestration | `newIDE/app/src/MainFrame`, `ExportAndShare` | `newIDE/app/src/Utils/EventsValidationScanner.js`, `GDJS/GDJS/IDE/Exporter*` |
 | Exported project data, include/resource collection, Constants placeholder resolution | `GDJS/GDJS/IDE/ExporterHelper.*` | Core project serialization, runtime `types/project-data.d.ts`, local/browser exporter |
@@ -204,7 +204,7 @@ Preserve:
 - decompose/compose equivalence before writes;
 - canonical `game://` URIs and portable encoded names;
 - strict ownership and unknown-data rejection;
-- transaction recovery and `project.gdevelop`-last commit ordering;
+- transaction recovery and `project.gdl`-last commit ordering;
 - generated catalog/API regeneration;
 - reader size/path/symlink safety limits;
 - round-trip, rejected-format, recovery, and native-model import tests.
@@ -238,6 +238,17 @@ Preserve:
   parent dies.
 - Backward compatibility normally belongs in read-time normalization. Do not
   silently discard unknown or old authored data.
+
+## GDL instruction authoring names
+
+System action/condition names are a fixed authoring API in
+`newIDE/app/src/ProjectsStorage/SettingsDsl/SystemInstructionNames.js`. Add an
+explicit kind/type/owner mapping when registering a bundled instruction; run its
+coverage and collision tests. Never generate names from load order or translated
+metadata. Catalog `dslName` is preferred for GDL, completion and examples;
+`type` remains the native instruction identity. Third-party and user instruction
+names, parameter names and expressions are unchanged. The project entry is
+`project.gdl`; version constants remain in their existing owning modules.
 
 ## Generated and external files
 

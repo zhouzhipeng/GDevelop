@@ -9,10 +9,15 @@ import {
 import { parseCatalogInstructionArguments } from './InstructionOperands';
 import { buildCompleteProjectInstructionCatalog } from '../../Mcp/McpEventKnowledge';
 
-export const PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH =
-  '.gdevelop/instructions-catalog.json';
-export const PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH =
-  '.gdevelop/deprecated-instructions-catalog.json';
+export const PROJECT_INSTRUCTION_CATALOG_PATHS: { [string]: string } = {
+  condition: '.gdevelop/conditions-catalog.json',
+  action: '.gdevelop/actions-catalog.json',
+  expression: '.gdevelop/expressions-catalog.json',
+};
+export const RETIRED_INSTRUCTION_CATALOG_PATHS = [
+  '.gdevelop/instructions-catalog.json',
+  '.gdevelop/deprecated-instructions-catalog.json',
+];
 
 export class ProjectInstructionCatalogError extends Error {
   code: string;
@@ -68,6 +73,7 @@ type CatalogParameter = {
 type CatalogEntry = {
   kind?: CatalogKind,
   type: string,
+  dslName: string,
   parameters: Array<CatalogParameter>,
   [string]: any,
 };
@@ -112,7 +118,7 @@ const assertSemanticValue = (
   const valueKind = parameter.valueKind;
   if (!valueKind) {
     return fail(
-      'SETTINGS_CATALOG_VALUE_KIND_MISSING',
+      'GDL_CATALOG_VALUE_KIND_MISSING',
       `${label} has no semantic valueKind.`
     );
   }
@@ -275,7 +281,7 @@ const formatSemanticValue = (
       return JSON.stringify(source);
     default:
       return fail(
-        'SETTINGS_CATALOG_VALUE_KIND_INVALID',
+        'GDL_CATALOG_VALUE_KIND_INVALID',
         `${label} has an unsupported semantic valueKind.`
       );
   }
@@ -319,7 +325,7 @@ const parseCatalogInstructionSource = (
     if (match) return { type: match[1], argumentsSource: match[2] || '' };
   }
   throw new ProjectInstructionCatalogError(
-    'SETTINGS_CATALOG_INSTRUCTION_REQUIRED',
+    'GDL_CATALOG_INSTRUCTION_REQUIRED',
     `Line ${line}: expected InstructionType with named arguments, got ${JSON.stringify(
       source
     )}.`
@@ -341,14 +347,21 @@ const validateCatalogEntry = (
     typeof entry !== 'object' ||
     (entry.kind !== undefined && entry.kind !== kind)
   )
-    fail('SETTINGS_CATALOG_INVALID', `Invalid ${kind} catalog entry.`);
+    fail('GDL_CATALOG_INVALID', `Invalid ${kind} catalog entry.`);
   if (typeof entry.type !== 'string' || !entry.type)
-    fail('SETTINGS_CATALOG_INVALID', `A ${kind} catalog entry has no type.`);
-  if (!Array.isArray(entry.parameters))
+    fail('GDL_CATALOG_INVALID', `A ${kind} catalog entry has no type.`);
+  if (
+    kind !== 'expression' &&
+    (typeof entry.dslName !== 'string' ||
+      !entry.dslName ||
+      (entry.dslName !== entry.type && !DSL_IDENTIFIER.test(entry.dslName)))
+  )
     fail(
-      'SETTINGS_CATALOG_INVALID',
-      `${kind} ${entry.type} has no parameter list.`
+      'GDL_CATALOG_INVALID',
+      `${kind} ${entry.type} has an invalid dslName.`
     );
+  if (!Array.isArray(entry.parameters))
+    fail('GDL_CATALOG_INVALID', `${kind} ${entry.type} has no parameter list.`);
   const names: Set<string> = new Set();
   entry.parameters.forEach((parameter, index) => {
     if (
@@ -359,18 +372,18 @@ const validateCatalogEntry = (
       !DSL_IDENTIFIER.test(parameter.dslName)
     )
       fail(
-        'SETTINGS_CATALOG_INVALID',
+        'GDL_CATALOG_INVALID',
         `${kind} ${entry.type} has an invalid parameter at index ${index}.`
       );
     if (names.has(parameter.dslName))
       fail(
-        'SETTINGS_CATALOG_INVALID',
+        'GDL_CATALOG_INVALID',
         `${kind} ${entry.type} repeats dslName ${parameter.dslName}.`
       );
     if (parameter.isCodeOnly) {
       if (parameter.valueKind !== undefined) {
         fail(
-          'SETTINGS_CATALOG_VALUE_KIND_INVALID',
+          'GDL_CATALOG_VALUE_KIND_INVALID',
           `${kind} ${entry.type}.${
             parameter.dslName
           } is code-only and must not declare valueKind.`
@@ -382,7 +395,7 @@ const validateCatalogEntry = (
         !CATALOG_VALUE_KINDS.has(parameter.valueKind)
       ) {
         fail(
-          'SETTINGS_CATALOG_VALUE_KIND_MISSING',
+          'GDL_CATALOG_VALUE_KIND_MISSING',
           `${kind} ${entry.type}.${
             parameter.dslName
           } has no supported valueKind.`
@@ -404,22 +417,22 @@ export const validateProjectInstructionCatalog = (catalog: any): Catalog => {
   if (
     !catalog ||
     typeof catalog !== 'object' ||
-    catalog.format !== 'gdevelop-settings-instruction-catalog' ||
+    catalog.format !== 'gdevelop-gdl-instruction-catalog' ||
     !Array.isArray(catalog.actions) ||
     !Array.isArray(catalog.conditions) ||
     !Array.isArray(catalog.expressions)
   )
-    fail('SETTINGS_CATALOG_INVALID', 'Unsupported instruction catalog format.');
+    fail('GDL_CATALOG_INVALID', 'Unsupported instruction catalog format.');
   if (catalog.formatVersion !== INSTRUCTION_CATALOG_VERSION) {
     fail(
-      'SETTINGS_CATALOG_VERSION_UNSUPPORTED',
-      'Unsupported instruction catalog version; expected version 4.'
+      'GDL_CATALOG_VERSION_UNSUPPORTED',
+      'Unsupported instruction catalog version; expected version 6.'
     );
   }
   if (catalog.authoring !== undefined) {
     fail(
-      'SETTINGS_CATALOG_INVALID',
-      'Instruction catalog version 4 must not contain authoring prose.'
+      'GDL_CATALOG_INVALID',
+      'Instruction catalog version 6 must not contain authoring prose.'
     );
   }
   if (
@@ -427,25 +440,39 @@ export const validateProjectInstructionCatalog = (catalog: any): Catalog => {
     catalog.semanticsRulesRevision !== SEMANTICS_RULES_REVISION
   )
     fail(
-      'SETTINGS_CATALOG_VERSION_UNSUPPORTED',
+      'GDL_CATALOG_VERSION_UNSUPPORTED',
       'Unsupported instruction semantics revision; regenerate catalogs.'
     );
   const kinds: Array<CatalogKind> = ['action', 'condition'];
   kinds.forEach(kind => {
     const seen: Set<string> = new Set();
+    const names: Map<string, CatalogEntry> = new Map();
     entriesForKind(catalog, kind).forEach(entry => {
       validateCatalogEntry(entry, kind);
       try {
         validateInstructionSemantics(entry.semantics, entry);
       } catch (error) {
-        fail('SETTINGS_CATALOG_INVALID', error.message);
+        fail('GDL_CATALOG_INVALID', error.message);
       }
       if (seen.has(entry.type))
         fail(
-          'SETTINGS_CATALOG_INVALID',
+          'GDL_CATALOG_INVALID',
           `Duplicate ${kind} catalog type ${entry.type}.`
         );
       seen.add(entry.type);
+      [entry.type, entry.dslName].forEach(name => {
+        const previous = names.get(name);
+        if (previous && previous !== entry)
+          fail(
+            'GDL_CATALOG_NAME_CONFLICT',
+            `${kind} name ${name} conflicts between ${
+              previous.type
+            } (${JSON.stringify(previous.owner || {})}) and ${
+              entry.type
+            } (${JSON.stringify(entry.owner || {})}).`
+          );
+        names.set(name, entry);
+      });
     });
   });
   const expressionKeys = new Set<string>();
@@ -454,7 +481,7 @@ export const validateProjectInstructionCatalog = (catalog: any): Catalog => {
     const key = `${entry.type}\u0000${String(entry.returnType)}`;
     if (expressionKeys.has(key)) {
       fail(
-        'SETTINGS_CATALOG_INVALID',
+        'GDL_CATALOG_INVALID',
         `Duplicate expression catalog type ${entry.type}.`
       );
     }
@@ -473,14 +500,15 @@ const createLookup = (catalog: Catalog): CatalogLookup => {
     catalog.semanticsRulesRevision !== SEMANTICS_RULES_REVISION
   )
     fail(
-      'SETTINGS_CATALOG_VERSION_UNSUPPORTED',
+      'GDL_CATALOG_VERSION_UNSUPPORTED',
       'Unsupported instruction semantics revision; regenerate catalogs.'
     );
   const kinds: Array<CatalogKind> = ['action', 'condition'];
   kinds.forEach(kind =>
-    entriesForKind(catalog, kind).forEach(entry =>
-      lookup[kind].set(entry.type, entry)
-    )
+    entriesForKind(catalog, kind).forEach(entry => {
+      lookup[kind].set(entry.type, entry);
+      lookup[kind].set(entry.dslName, entry);
+    })
   );
   return lookup;
 };
@@ -506,7 +534,7 @@ export const createCatalogInstructionResolver = (
     const entry = lookup[kind].get(type);
     if (!entry)
       throw new ProjectInstructionCatalogError(
-        'SETTINGS_CATALOG_UNKNOWN_INSTRUCTION',
+        'GDL_CATALOG_UNKNOWN_INSTRUCTION',
         `Line ${line}: ${kind} ${type} is not in the project instruction catalog.`
       );
     const argumentsByName = parseCatalogInstructionArguments(argumentsSource);
@@ -521,7 +549,7 @@ export const createCatalogInstructionResolver = (
       };
       if (!knownNames.has(name))
         parameterError(
-          'SETTINGS_CATALOG_UNKNOWN_PARAMETER',
+          'GDL_CATALOG_UNKNOWN_PARAMETER',
           `Line ${line}: ${kind} ${type} has no parameter ${name}.`
         );
       const parameter = entry.parameters.find(
@@ -551,7 +579,7 @@ export const createCatalogInstructionResolver = (
       return '';
     });
     const result = {
-      type: { value: type, inverted: false, await: false },
+      type: { value: entry.type, inverted: false, await: false },
       disabled: false,
       parameters,
       subInstructions: [],
@@ -577,7 +605,7 @@ export const createCatalogInstructionFormatter = (
     const instructionParameters = instruction.parameters || [];
     if (!entry) {
       return fail(
-        'SETTINGS_CATALOG_UNKNOWN_INSTRUCTION',
+        'GDL_CATALOG_UNKNOWN_INSTRUCTION',
         `${kind} ${
           instruction.type.value
         } is not in the project instruction catalog.`
@@ -614,9 +642,9 @@ export const createCatalogInstructionFormatter = (
         );
         return `${parameter.dslName}=${semanticValue}`;
       });
-    const formattedType = UNQUOTED_INSTRUCTION_TYPE.test(entry.type)
-      ? entry.type
-      : stringifyJsonValue(entry.type, `${kind} instruction type`);
+    const formattedType = UNQUOTED_INSTRUCTION_TYPE.test(entry.dslName)
+      ? entry.dslName
+      : stringifyJsonValue(entry.dslName, `${kind} instruction type`);
     return `${formattedType}${operands.length ? ` ${operands.join(' ')}` : ''}`;
   };
 };
@@ -891,6 +919,7 @@ export const buildLegacyInstructionCatalogDelta = (
     Array.from(sourcesByKindAndType[kind].entries())
       .map(([type, sourcesByIndex]) => ({
         type,
+        dslName: type,
         parameters: sourcesByIndex.map(inferParameter),
         semantics: {
           status: 'unknown',
@@ -1068,3 +1097,122 @@ export const serializeProjectInstructionCatalog = (catalog: Object): string =>
       '',
     ].join('\n');
   })();
+
+// Disk files are split by kind; consumers share the validated in-memory view.
+export const serializeInstructionCatalogFiles = (
+  authoring: Object,
+  deprecated?: Object
+): Object => {
+  const mark = (catalog: Object, available: boolean): Object => ({
+    ...catalog,
+    ...Object.fromEntries(
+      ['actions', 'conditions', 'expressions'].map(key => [
+        key,
+        catalog[key].map(entry => ({
+          ...entry,
+          authoringAvailable: available,
+        })),
+      ])
+    ),
+  });
+  const catalog = deprecated
+    ? mergeProjectInstructionCatalogs(
+        mark(authoring, true),
+        mark(deprecated, false)
+      )
+    : validateProjectInstructionCatalog(mark(authoring, true));
+  return Object.fromEntries(
+    Object.keys(PROJECT_INSTRUCTION_CATALOG_PATHS).map(kind => {
+      const entries = catalog[`${kind}s`].map(entry => ({ ...entry, kind }));
+      const metadata = {
+        format: 'gdevelop-gdl-instruction-kind-catalog',
+        formatVersion: 1,
+        kind,
+        instructionCatalogVersion: INSTRUCTION_CATALOG_VERSION,
+        semanticsVersion: catalog.semanticsVersion,
+        semanticsRulesRevision: catalog.semanticsRulesRevision,
+        sourceFingerprint: authoring.sourceFingerprint || null,
+        count: entries.length,
+      };
+      return [
+        PROJECT_INSTRUCTION_CATALOG_PATHS[kind],
+        [
+          JSON.stringify(metadata).slice(0, -1) + ',"entries":[',
+          entries.map(entry => JSON.stringify(entry)).join(',\n'),
+          ']}\n',
+        ].join('\n'),
+      ];
+    })
+  );
+};
+
+export const assembleInstructionCatalogFiles = (
+  files: Object,
+  authoringOnly?: boolean
+): Object => {
+  let fingerprint: ?string;
+  const catalog: Object = {
+    format: 'gdevelop-gdl-instruction-catalog',
+    formatVersion: INSTRUCTION_CATALOG_VERSION,
+    semanticsVersion: SEMANTICS_VERSION,
+    semanticsRulesRevision: SEMANTICS_RULES_REVISION,
+    counts: {},
+  };
+  Object.keys(PROJECT_INSTRUCTION_CATALOG_PATHS).forEach(kind => {
+    const file = PROJECT_INSTRUCTION_CATALOG_PATHS[kind];
+    const part = files[file];
+    if (
+      !part ||
+      part.format !== 'gdevelop-gdl-instruction-kind-catalog' ||
+      part.formatVersion !== 1 ||
+      part.kind !== kind ||
+      part.instructionCatalogVersion !== INSTRUCTION_CATALOG_VERSION ||
+      part.semanticsVersion !== SEMANTICS_VERSION ||
+      part.semanticsRulesRevision !== SEMANTICS_RULES_REVISION ||
+      !Array.isArray(part.entries) ||
+      part.count !== part.entries.length ||
+      !Object.keys(part).includes('sourceFingerprint') ||
+      part.entries.some(
+        entry =>
+          !entry ||
+          typeof entry.authoringAvailable !== 'boolean' ||
+          entry.kind !== kind
+      )
+    )
+      fail('GDL_CATALOG_INVALID', `Invalid instruction catalog: ${file}`);
+    const currentFingerprint = JSON.stringify(part.sourceFingerprint);
+    if (fingerprint !== undefined && fingerprint !== currentFingerprint)
+      fail(
+        'GDL_CATALOG_INVALID',
+        `Instruction catalog fingerprint mismatch: ${file}`
+      );
+    fingerprint = currentFingerprint;
+    catalog.sourceFingerprint = part.sourceFingerprint;
+    // Validate every entry, including entries hidden from authoring consumers.
+    const entries = part.entries;
+    try {
+      const validationCatalog: Object = {
+        ...catalog,
+        actions: [],
+        conditions: [],
+        expressions: [],
+      };
+      validationCatalog[`${kind}s`] = entries;
+      validateProjectInstructionCatalog(validationCatalog);
+    } catch (error) {
+      fail(
+        'GDL_CATALOG_INVALID',
+        `Invalid instruction catalog ${file}: ${error.message}`
+      );
+    }
+    catalog[`${kind}s`] = entries;
+    catalog.counts[`${kind}s`] = entries.length;
+  });
+  validateProjectInstructionCatalog(catalog);
+  if (authoringOnly)
+    ['actions', 'conditions', 'expressions'].forEach(key => {
+      catalog[key] = catalog[key].filter(entry => entry.authoringAvailable);
+      catalog.counts[key] = catalog[key].length;
+    });
+  return validateProjectInstructionCatalog(catalog);
+};

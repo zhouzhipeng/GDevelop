@@ -3,7 +3,7 @@
 - 状态：已批准；基础分析链路已实施。完整契约仍含未实施阶段，实际覆盖与验证见 [首版实施记录](gdl-event-semantics-implementation-report.md)。本文的设计要求不能直接视为已实现能力。
 - 日期：2026-10-26。
 - 目标使用者：通过 GDL 源码阅读、修改项目的 AI，以及事件编辑器、校验器和后续调试工具。
-- 当前版本：GDL 作者格式 12、Settings catalog 10、instruction catalog 4。
+- 当前版本：GDL 作者格式 13、GDL catalog 12、instruction catalog 6。
 - 范围：执行次数、对象选择（picking）、动作作用范围、父子与兄弟上下文、分析诊断和验证证据。
 - 基础语言契约：[统一 GDL 规范](unified-settings-events-dsl-spec.md)。本文不替代该规范，也不改变原生执行行为。
 
@@ -41,11 +41,11 @@ function {
   events {
     event {
       conditions {
-        CollisionNP first_object="Player" second_object="Coin"
+        collision first_object="Player" second_object="Coin"
       }
       actions {
-        Delete object="Coin"
-        SetNumberVariable variable="Score" modification_sign="+" value=1
+        deleteObject object="Coin"
+        setNumber variable="Score" modification_sign="+" value=1
       }
     }
   }
@@ -75,15 +75,15 @@ function {
   events {
     event {
       conditions {
-        CollisionNP first_object="Player" second_object="Coin"
+        collision first_object="Player" second_object="Coin"
       }
 
       event {
         type = "for_each"
         object = "Coin"
         actions {
-          Delete object="Coin"
-          SetNumberVariable variable="Score" modification_sign="+" value=1
+          deleteObject object="Coin"
+          setNumber variable="Score" modification_sign="+" value=1
         }
       }
     }
@@ -237,7 +237,7 @@ type SelectionFact = {
 
 ### 6.2 Catalog 版本
 
-instruction catalog 当前为 4，发布结构化 `semantics`；GDL 作者格式为 12，Settings catalog 为 10。后续契约变化需独立评审版本。
+instruction catalog 当前为 6，发布结构化 `semantics`；GDL 作者格式为 12，GDL catalog 为 11。后续契约变化需独立评审版本。
 
 - catalog 生成器、严格校验器、编辑器、deprecated delta 合并和所有消费者同时更新。
 - 本地生成文件重建为新版本，不引入旧 GDL 作者格式兼容入口。

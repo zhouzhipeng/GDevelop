@@ -82,7 +82,7 @@ Authoring workflows will use canonical project files instead:
 
 - Actions and signal instructions are authored in `.gdl` sources using the
   exact instruction types and named parameters from
-  `.gdevelop/instructions-catalog.json`.
+  `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`.
 - `onSignal` handlers are authored as canonical object/behavior function
   sources under the owning extension, following the fixed lifecycle signature
   and existing project-file guidance.

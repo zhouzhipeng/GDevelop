@@ -1,12 +1,19 @@
 # 统一 GDevelop Language (GDL)：函数、事件与 JavaScript 作者格式规范
 
-- 状态：已实施。当前作者格式 12；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
+- 状态：已实施。当前作者格式 13；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
 - 日期：2026-10-26。
 - 决策依据：函数声明和事件正文合入同一个 `.gdl` 文件；只保留 GDevelop Language (GDL)，不考虑任何作者格式兼容性。
-- 当前作者格式：12。Settings catalog 版本：10；instruction catalog 版本：4，发布本文的新指令结构契约。
+- 当前作者格式：12。GDL catalog 版本：12；instruction catalog 版本：6，发布本文的新指令结构契约。
 - 运行时边界：仍投影到 GDevelop 原生事件模型与代码生成器；不重新定义对象 picking、事件调度或表达式求值。
 
-文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdevelop`，`constants.toml` 和 JavaScript 测试文件保持各自格式。格式 12 不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
+文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdl`，`constants.toml` 和 JavaScript 测试文件保持各自格式。格式 13 不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
+
+系统 action/condition 由引擎固定映射发布作者短名。instruction catalog 6 的
+每条 action/condition 必须有 `dslName`：系统为固定短名，第三方和用户指令
+保持完整 `type`。GDL 和 AI 优先使用 `dslName`，解析器也接受精确原生 `type`，
+格式化统一输出 `dslName`。参数名称及 `expr(...)` 中的表达式名称不变。
+同一 kind 内短名与原生名称不得交叉冲突；错误必须明确拒绝。
+详见 [系统指令与入口契约](gdl-system-instruction-names-and-project-entry-spec.md)。
 
 ## 1. 最终结论
 
@@ -49,7 +56,7 @@ GDevelop Language (GDL) 成为唯一的项目配置及事件作者语言。函�
 ## 3. 文件组织与所有权
 
 ```text
-project.gdevelop
+project.gdl
 resources.gdl
 tests.gdl
 constants.toml
@@ -108,12 +115,12 @@ function {
 
       event {
         conditions {
-          CollisionNP first_object="Player" second_object="Coin"
+          collision first_object="Player" second_object="Coin"
         }
 
         actions {
-          Delete object="Coin"
-          SetNumberVariable variable="Score" modification_sign="+" value=1
+          deleteObject object="Coin"
+          setNumber variable="Score" modification_sign="+" value=1
         }
 
         event {
@@ -165,7 +172,7 @@ codeBlock        := 'code' '{' NEWLINE javascriptBody closingCodeBrace
 
 以上为说明性语法；instructionList/codeBlock 是普通节点语法的上下文特化，必须由同一个 Settings parser 管理范围、预算和诊断。条件列表只查条件 catalog，动作列表只查动作 catalog；子指令继承父指令种类。同名条件/动作无歧义。指令不能直接出现在 event、group 或其他配置节点中。
 
-指令类型必须是 catalog 精确 type；包含空格时使用 JSON 字符串。列表内部 `Name = value` 是非法赋值，不可当作指令；指令头使用 `Type arg=value`。指令块内赋值只表示已注册标记，不表示新的参数。
+指令优先使用 catalog 精确 dslName；也接受精确原生 type，包含空格时使用 JSON 字符串。列表内部 `Name = value` 是非法赋值，不可当作指令；指令头使用 `Type arg=value`。指令块内赋值只表示已注册标记，不表示新的参数。
 
 `expr(...)` 专用于 catalog 允许表达式的参数与循环字段，不能出现在普通 settings 属性中。扫描理解嵌套括号、引号和转义，不用正则截取第一个右括号。参数不得重复、不得使用位置参数。指令头不任意跨行；唯一例外是平衡括号包围的 expr(...) 内容可跨行，保留原生表达式的精确源码。官方模板包含此类表达式，不能折叠空白或截断。编辑器可用软换行展示其他长指令。
 
@@ -190,11 +197,11 @@ function {
       }
 
       conditions {
-        CollisionNP first_object="Player" second_object="Enemy"
+        collision first_object="Player" second_object="Enemy"
       }
 
       actions {
-        Delete object="Enemy"
+        deleteObject object="Enemy"
       }
 
       event {
@@ -238,7 +245,7 @@ conditions {
     disabled = false
   }
 
-  Or {
+  or {
     SomeCondition target="Enemy"
     AnotherCondition target="Enemy"
   }
@@ -257,7 +264,7 @@ SomeCondition/SomeAction 为示意 catalog 类型，不是新增别名。简单�
 - 无异步能力的动作写 awaited=true 报错。
 - 指令子块直接列子指令，不再增加 conditions/actions 包装；种类从父指令继承。
 - 只有 catalog 标明支持子指令的类型才能包含子指令。标记赋值和子指令由语法区分，不依赖先后阶段；规范输出先标记后子指令。
-- Or 必须是 catalog 的原生 OR 条件，保留原生 picking；不提供 or 行和 if/do 别名，不展开成多个事件。
+- `or` 是 catalog 中原生 `Or` 条件的固定作者名称，保留原生 picking 和子指令结构；不展开成多个事件，也不提供 if/do 语法。
 - 子指令顺序及标记无损投影原生 subInstructions。
 
 参数采用语义值：text/object/behavior/variable/resource/name 为字符串，number/boolean 为字面量，计算值使用 expr(...)。code-only 参数不写；必需参数缺失报错；可选空槽由 catalog 明确默认规则投影。隐藏/废弃但确需无损保留的指令通过专用 catalog 登记，不允许新作者任意使用。
@@ -368,14 +375,14 @@ event {
   index = "i"
 
   while_conditions {
-    NumberVariable variable="QueueSize" comparison_sign=">" value=0
+    numberVariable variable="QueueSize" comparison_sign=">" value=0
   }
 
   conditions {
     SomeCondition target="Player"
   }
   actions {
-    SetNumberVariable variable="QueueSize" modification_sign="-" value=1
+    setNumber variable="QueueSize" modification_sign="-" value=1
   }
 }
 ```
@@ -450,7 +457,7 @@ external_events {
   events {
     event {
       actions {
-        DebuggerTools::ConsoleLog message_to_log="Shared combat"
+        log message_to_log="Shared combat"
       }
     }
   }
@@ -516,7 +523,7 @@ code 是原始多行区域，不解码反斜杠、不做字符串插值、不自
 
 新建代码可按示例缩进，但 formatter 和事件块移动不得机械缩进 code 内容，尤其不能改变模板字符串文本。只调整 code 开启行、关闭行和外层 event 的缩进；代码内容的格式化必须是独立且显式的 JS 编辑操作。
 
-作者多行区域统一使用 LF；非空代码内容以换行结束。原生 inlineCode 无末尾换行时，writer 在生成作者格式时仅规范化一个末尾 LF；CRLF 规范化为 LF，不改动其他代码内容。此规范化属于格式 12 的明确等价规则，比较前对两侧应用同一规则，不允许整个字符串 trim。不会因不存在字符串备用写法而偷偷回退。
+作者多行区域统一使用 LF；非空代码内容以换行结束。原生 inlineCode 无末尾换行时，writer 在生成作者格式时仅规范化一个末尾 LF；CRLF 规范化为 LF，不改动其他代码内容。此规范化属于格式 13 的明确等价规则，比较前对两侧应用同一规则，不允许整个字符串 trim。不会因不存在字符串备用写法而偷偷回退。
 
 原生字符串若包含会受换行规范化影响的特殊 JavaScript 字面量，应经同版本 JS parser 确认语义保持；无法证明或发现不合法源码时保存失败并给出范围和原因，不输出转义字符串绕过规则。代码原始内容仍计入共享文件大小和 JS 解析预算。
 
@@ -575,7 +582,7 @@ CodeBlock AST 保存开启/关闭符号、整个区域和内容切片的范围�
 
 ## 16. Catalog 与编辑器
 
-Settings catalog 必须发布：
+GDL catalog 必须发布：
 
 - function/external_events 的 events 唯一容器及允许的子事件种类。
 - event.type 判别 schema、独立 group/comment/link schema、各容器基数、规范输出顺序、递归规则和 Else 相邻约束。
@@ -589,7 +596,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 ## 17. 项目读取、写入与事务
 
-读取顺序：入口格式 12 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
+读取顺序：入口格式 13 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
 
 签名注册先于事件调用解析，支持跨文件函数和现有合法递归调用；不能通过文件枚举顺序决定可见性。
 
@@ -661,7 +668,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 ## 20. 后续优化的边界
 
-事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 4；GDL 作者格式仍为 12，Settings catalog 仍为 10。静态摘要不改变原生执行行为，也不代替运行验证。
+事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 6；GDL 作者格式仍为 12，GDL catalog 仍为 10。静态摘要不改变原生执行行为，也不代替运行验证。
 
 
 picking 可视化、行为相关 diff 和按 AST 的安全块移动是推荐编辑器能力，可独立迭代；不能将它们未完成视为可改变基础语法的理由。实现基础格式时至少保留精确 AST 和语义位置，使后续工具无需重新解析另一套正文语言。

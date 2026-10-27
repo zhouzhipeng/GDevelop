@@ -3,7 +3,7 @@ import { SEMANTICS_RULE_EVIDENCE } from './RuleEvidence';
 // These rules describe reviewed GDJS generators, not author-supplied prose.
 export const SEMANTICS_VERSION = 1;
 export const SEMANTICS_RULES_REVISION = 'gdjs-picking-1';
-export const INSTRUCTION_CATALOG_VERSION = 4;
+export const INSTRUCTION_CATALOG_VERSION = 6;
 
 const unknown = reason => ({ status: 'unknown', reason });
 const objectParameters = entry =>

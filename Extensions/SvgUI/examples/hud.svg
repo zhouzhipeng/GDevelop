@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
+  <rect width="320" height="180" rx="16" fill="#182331"/>
+  <text id="score-text" x="20" y="35" fill="white" font-family="sans-serif" font-size="20">Score: 0</text>
+  <rect x="20" y="55" width="280" height="16" rx="8" fill="#384657"/>
+  <rect id="health-fill" x="20" y="55" width="280" height="16" rx="8" fill="#42d39a"/>
+  <g id="start-button">
+    <rect x="80" y="100" width="160" height="50" rx="10" fill="#3978ef"/>
+    <text x="160" y="132" text-anchor="middle" fill="white" font-family="sans-serif" font-size="20">Start</text>
+  </g>
+</svg>

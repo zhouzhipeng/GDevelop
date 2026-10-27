@@ -1,7 +1,7 @@
 # Gameplay-test harness
 
 Read this guide in full before creating or materially changing a gameplay test.
-It describes the strict GDL 12 project layout and the harness shipped by
+It describes the strict GDL 13 project layout and the harness shipped by
 this branch. For exact, current signatures and result shapes, the generated
 `.gdevelop/harness-api.d.ts` file is authoritative.
 
@@ -65,7 +65,7 @@ The `file` is a canonical identity, not a URI:
 - It has no `game://` prefix, drive letter, absolute prefix, query, fragment,
   traversal segment, or nested directory.
 - The preferred basename is the test name for a project test and
-  `<Extension> - <Test>` for an extension test. The GDL 12 writer applies
+  `<Extension> - <Test>` for an extension test. The GDL 13 writer applies
   managed-name percent encoding and deterministic suffixes for normalized
   filename collisions.
 - Existing tests must use their exact recorded `file`; do not substitute the
@@ -417,8 +417,8 @@ generate-catalogs
 Apply it as follows:
 
 1. Call no-input `generate-catalogs`. Require
-   `catalogsRegenerated: true` and a verified receipt for all three catalogs
-   plus all three declarations, including the `harnessApi` path.
+   `catalogsRegenerated: true` and a verified receipt for all five catalogs
+   plus all four declarations, including the `harnessApi` path.
 2. Read the exact `tests.gdl` record, selected source, this reference, and
    the three generated declarations. Patch authored files directly; never
    edit `.gdevelop/harness-api.d.ts` or use MCP to author a test.

@@ -1,7 +1,7 @@
 # Author JavaScript Events
 
 Use JavaScript only inside a Settings event with type = "javascript" and a raw multiline code block. Prefer current
-instructions from `.gdevelop/instructions-catalog.json`; JavaScript is for
+instructions from `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`; JavaScript is for
 logic that is materially clearer or not expressible with those instructions.
 It is not a replacement file format and it does not create standalone `.js`
 project sources.
@@ -228,7 +228,7 @@ events {
 
     conditions {
 
-      CollisionNP first_object="Player" second_object="Enemy"
+      collision first_object="Player" second_object="Enemy"
     }
 
     event {
@@ -257,7 +257,7 @@ events {
 
     conditions {
 
-      KeyPressed key="Space"
+      keyPressed key="Space"
     }
 
     event {
@@ -287,7 +287,7 @@ events {
 
     conditions {
 
-      SceneJustBegins
+      sceneBegins
     }
 
     event {

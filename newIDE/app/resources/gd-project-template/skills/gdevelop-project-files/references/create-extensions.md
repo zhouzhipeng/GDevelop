@@ -37,13 +37,13 @@ composition, and executable logic in `.gdl`.
 4. Create the owner settings and every required child file in one patch.
 5. Keep each settings document independently valid and local-root. Its path
    supplies the mounted namespace. Never add
-   child-settings indexes to `project.gdevelop` or `extension.gdl`.
+   child-settings indexes to `project.gdl` or `extension.gdl`.
 6. Keep each function signature and its events in one `.gdl` document.
    Do not derive, create or read a sibling body file. The events examples below
    are blocks to insert inside that same function root.
 7. Write variables blocks with scalar shorthand or typed variable children, following settings-dsl.md.
-8. Use exact instruction types and `dslName` parameters from
-   `.gdevelop/instructions-catalog.json` in every event body.
+8. Use catalog instruction `dslName` and parameter `dslName` from
+   `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` in every event body.
 9. Call `generate-catalogs` after the declaration/files exist. If the extension
    adds instruction types, re-read the regenerated catalog before writing or
    changing callers.
@@ -133,12 +133,12 @@ events {
 
     conditions {
 
-      BooleanVariable variable="ResetRequested" check_if_the_value_is="True"
+      booleanVariable variable="ResetRequested" check_if_the_value_is="True"
     }
 
     actions {
 
-      SetBooleanVariable variable="ResetRequested" modification_sign="False"
+      variablesSetBooleanVariable variable="ResetRequested" modification_sign="False"
     }
   }
 }
@@ -213,12 +213,12 @@ events {
 
     conditions {
 
-      BooleanObjectVariable object="Object" variable="Initialized" check_if_the_value_is="False"
+      booleanObjectVariable object="Object" variable="Initialized" check_if_the_value_is="False"
     }
 
     actions {
 
-      SetBooleanObjectVariable object="Object" variable="Initialized" modification_sign="True"
+      setBooleanObjectVariable object="Object" variable="Initialized" modification_sign="True"
     }
   }
 }
@@ -245,7 +245,7 @@ object grouping. Add only instances, layers,
 spatial bounds, and editor layout state to `prefab.gdl` directly below the component root. Copy the complete
 object-definition shape from an existing compatible object `.gdl` file
 rather than inventing serializer fields. For attached behaviors, copy only
-author-writable properties listed for that type in `settings-catalog.json` when
+author-writable properties listed for that type in `gdl-catalog.json` when
 creating a new attachment. When migrating an existing attachment, use only its registered serialized fields. Keep
 `propertyDescriptors` as one flat ordered array in `prefab.gdl`; never add
 property folders.
@@ -322,12 +322,12 @@ events {
 
     conditions {
 
-      NumberObjectVariable object="Object" variable="HP" comparison_sign=">" value=0
+      numberObjectVariable object="Object" variable="HP" comparison_sign=">" value=0
     }
 
     actions {
 
-      SetNumberObjectVariable object="Object" variable="HP" modification_sign="-" value=expr(Amount)
+      setNumberObjectVariable object="Object" variable="HP" modification_sign="-" value=expr(Amount)
     }
   }
 }

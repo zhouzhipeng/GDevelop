@@ -85,7 +85,7 @@ identifies the resource domain. Do not use `.gdmaterial.ts`, `.tsl`, or a
 generic JavaScript resource for a TSL material.
 
 In a current multi-file project, register the source in `resources.gdl`.
-The exact resource schema comes from `settings-catalog.json`; a minimal entry is:
+The exact resource schema comes from `gdl-catalog.json`; a minimal entry is:
 
 ```settings
 resources {
@@ -479,7 +479,7 @@ The built-in `TSLMaterial::Material` behavior has these properties:
 
 For direct multi-file edits, the behavior record belongs in the Model3D object's
 own `.gdl` file, not in the layout subtree. Use the current
-`settings-catalog.json` entry for exact field casing and required fields. A
+`gdl-catalog.json` entry for exact field casing and required fields. A
 conceptual record is:
 
 ```settings
@@ -524,8 +524,8 @@ active slots, the last error code/message, and the active backend.
 
 When authoring events:
 
-1. Read `references/events-dsl.md` and the current `.gdevelop/instructions-catalog.json`.
-2. Use the exact instruction `type`, scope, and parameter `dslName`; never
+1. Read `references/events-dsl.md` and the current `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`.
+2. Use the instruction `dslName`, scope, and parameter `dslName`; never
    invent a prose alias from the UI label.
 3. Pass the bare resource name (for example `Hologram`), not a file path or
    `game://` URI, to a `tslMaterialResource` parameter.

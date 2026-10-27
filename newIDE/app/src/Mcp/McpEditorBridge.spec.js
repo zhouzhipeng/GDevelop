@@ -419,7 +419,7 @@ describe('McpEditorBridge', () => {
     );
     const project = gd.ProjectHelper.createNewGDJSProject();
     try {
-      const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+      const projectFile = path.join(temporaryDirectory, 'project.gdl');
       const modelDirectory = path.join(temporaryDirectory, 'models');
       const modelFile = path.join(modelDirectory, 'Hero.glb');
       fs.mkdirSync(modelDirectory, { recursive: true });
@@ -492,7 +492,7 @@ describe('McpEditorBridge', () => {
       path.join(os.tmpdir(), 'gdevelop-mcp-glb-')
     );
     try {
-      const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+      const projectFile = path.join(temporaryDirectory, 'project.gdl');
       const modelDirectory = path.join(temporaryDirectory, 'assets', 'models');
       const modelFile = path.join(modelDirectory, 'Hero.glb');
       fs.mkdirSync(modelDirectory, { recursive: true });
@@ -632,7 +632,7 @@ describe('McpEditorBridge', () => {
     );
 
     const project: any = {
-      getProjectFile: () => path.join(os.tmpdir(), 'game', 'project.gdevelop'),
+      getProjectFile: () => path.join(os.tmpdir(), 'game', 'project.gdl'),
     };
     const outsideProject = await makeBridge({
       getProject: () => project,
@@ -651,7 +651,7 @@ describe('McpEditorBridge', () => {
   it('dispatches authored gameplay-test starts by canonical file and queries results', async () => {
     const project = gd.ProjectHelper.createNewGDJSProject();
     project.setName('Gameplay test project');
-    project.setProjectFile('C:\\Games\\Test\\project.gdevelop');
+    project.setProjectFile('C:\\Games\\Test\\project.gdl');
     project
       .getTests()
       .insertNewTest('Player can jump', 0)
@@ -859,7 +859,7 @@ describe('McpEditorBridge', () => {
     const projectPath = path.join(
       os.tmpdir(),
       'gdevelop-mcp-open-project',
-      'project.gdevelop'
+      'project.gdl'
     );
     const reportProgress: any = jest.fn();
     const beginPreviewLaunchSequence: any = jest.fn(() => true);
@@ -913,7 +913,7 @@ describe('McpEditorBridge', () => {
     const projectPath = path.join(
       os.tmpdir(),
       'gdevelop-mcp-open-project',
-      'project.gdevelop'
+      'project.gdl'
     );
     const openProjectAndWait: any = jest.fn();
     const bridge = makeBridge({
@@ -945,7 +945,7 @@ describe('McpEditorBridge', () => {
     const projectPath = path.join(
       os.tmpdir(),
       'gdevelop-mcp-open-project',
-      'project.gdevelop'
+      'project.gdl'
     );
     const openProjectAndWait: any = jest.fn();
     const bridge = makeBridge({
@@ -976,7 +976,7 @@ describe('McpEditorBridge', () => {
     const projectPath = path.join(
       os.tmpdir(),
       'gdevelop-mcp-open-project',
-      'project.gdevelop'
+      'project.gdl'
     );
     const openProjectAndWait: any = jest.fn(async request => ({
       opened: true,
@@ -1019,7 +1019,7 @@ describe('McpEditorBridge', () => {
       method: 'tools/call',
       params: {
         name: 'open_project',
-        arguments: { project_path: 'games/project.gdevelop' },
+        arguments: { project_path: 'games/project.gdl' },
       },
     });
     const unsupportedResponse = await bridge.handleRendererMcpRequest({
@@ -1045,7 +1045,7 @@ describe('McpEditorBridge', () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-generate-catalogs-')
     );
-    const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+    const projectFile = path.join(temporaryDirectory, 'project.gdl');
     const project = gd.ProjectHelper.createNewGDJSProject();
     project.setName('Catalog generation test');
     project.setProjectFile(projectFile);
@@ -1091,12 +1091,10 @@ describe('McpEditorBridge', () => {
     const catalogDirectory = path.join(temporaryDirectory, '.gdevelop');
     fs.mkdirSync(catalogDirectory, { recursive: true });
     const catalogFiles = {
-      instructions: path.join(catalogDirectory, 'instructions-catalog.json'),
-      deprecatedInstructions: path.join(
-        catalogDirectory,
-        'deprecated-instructions-catalog.json'
-      ),
-      settings: path.join(catalogDirectory, 'settings-catalog.json'),
+      actions: path.join(catalogDirectory, 'actions-catalog.json'),
+      conditions: path.join(catalogDirectory, 'conditions-catalog.json'),
+      expressions: path.join(catalogDirectory, 'expressions-catalog.json'),
+      gdl: path.join(catalogDirectory, 'gdl-catalog.json'),
       runtimeApi: path.join(catalogDirectory, 'runtime-api.d.ts'),
       projectApi: path.join(catalogDirectory, 'project-api.d.ts'),
       harnessApi: path.join(catalogDirectory, 'harness-api.d.ts'),
@@ -1107,13 +1105,11 @@ describe('McpEditorBridge', () => {
       catalogDirectory,
       'layout-catalog.json'
     );
-    [
-      catalogFiles.instructions,
-      catalogFiles.deprecatedInstructions,
-      catalogFiles.settings,
-    ].forEach(catalogFile => {
-      fs.writeFileSync(catalogFile, '{ stale catalog', 'utf8');
-    });
+    [catalogFiles.actions, catalogFiles.conditions, catalogFiles.gdl].forEach(
+      catalogFile => {
+        fs.writeFileSync(catalogFile, '{ stale catalog', 'utf8');
+      }
+    );
     fs.writeFileSync(retiredLayoutCatalog, '{ stale catalog', 'utf8');
     const reloadProjectAndWait: any = jest.fn();
     const bridge = makeBridge({
@@ -1138,20 +1134,18 @@ describe('McpEditorBridge', () => {
         writeMode: 'awaited-and-verified',
         catalogs: expect.objectContaining({
           instructions: expect.any(Object),
-          settings: expect.any(Object),
+          gdl: expect.any(Object),
         }),
         catalogFiles,
       })
     );
-    [
-      catalogFiles.instructions,
-      catalogFiles.deprecatedInstructions,
-      catalogFiles.settings,
-    ].forEach(catalogFile => {
-      expect(() =>
-        JSON.parse(fs.readFileSync(catalogFile, 'utf8'))
-      ).not.toThrow();
-    });
+    [catalogFiles.actions, catalogFiles.conditions, catalogFiles.gdl].forEach(
+      catalogFile => {
+        expect(() =>
+          JSON.parse(fs.readFileSync(catalogFile, 'utf8'))
+        ).not.toThrow();
+      }
+    );
     expect(fs.readFileSync(catalogFiles.runtimeApi, 'utf8')).toContain(
       'declare namespace gdjs'
     );
@@ -1178,11 +1172,9 @@ describe('McpEditorBridge', () => {
     expect(fs.existsSync(retiredLayoutCatalog)).toBe(false);
     expect(result.generatedGameJson).toBeUndefined();
     expect(result.nextAction).toContain('Read the refreshed catalogs');
-    const settingsCatalog = JSON.parse(
-      fs.readFileSync(catalogFiles.settings, 'utf8')
-    );
+    const gdlCatalog = JSON.parse(fs.readFileSync(catalogFiles.gdl, 'utf8'));
     expect(
-      settingsCatalog.objectTypes.some(
+      gdlCatalog.objectTypes.some(
         objectType => objectType.type === 'Local::UnreferencedCard'
       )
     ).toBe(true);
@@ -1192,7 +1184,7 @@ describe('McpEditorBridge', () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-validate-project-files-')
     );
-    const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+    const projectFile = path.join(temporaryDirectory, 'project.gdl');
     const project = gd.ProjectHelper.createNewGDJSProject();
     project.setName('Disk validation test');
     project.setProjectFile(projectFile);
@@ -1213,7 +1205,7 @@ describe('McpEditorBridge', () => {
     const catalogDirectory = path.join(temporaryDirectory, '.gdevelop');
     fs.mkdirSync(catalogDirectory, { recursive: true });
     fs.writeFileSync(
-      path.join(catalogDirectory, 'instructions-catalog.json'),
+      path.join(catalogDirectory, 'actions-catalog.json'),
       '{ stale and invalid catalog',
       'utf8'
     );
@@ -1241,7 +1233,7 @@ describe('McpEditorBridge', () => {
         javascriptApiRegenerated: true,
         catalogs: expect.objectContaining({
           instructions: expect.any(Object),
-          settings: expect.objectContaining({
+          gdl: expect.objectContaining({
             layoutContexts: expect.any(Number),
           }),
         }),
@@ -1280,12 +1272,12 @@ describe('McpEditorBridge', () => {
     );
     expect(
       fs.existsSync(
-        path.join(temporaryDirectory, '.gdevelop', 'instructions-catalog.json')
+        path.join(temporaryDirectory, '.gdevelop', 'actions-catalog.json')
       )
     ).toBe(true);
     expect(
       fs.existsSync(
-        path.join(temporaryDirectory, '.gdevelop', 'settings-catalog.json')
+        path.join(temporaryDirectory, '.gdevelop', 'gdl-catalog.json')
       )
     ).toBe(true);
     expect(
@@ -1329,10 +1321,7 @@ describe('McpEditorBridge', () => {
       temporaryDirectory,
       'scenes/Scene/functions/sceneUpdate.gdl'
     );
-    const catalogPath = path.join(
-      catalogDirectory,
-      'instructions-catalog.json'
-    );
+    const catalogPath = path.join(catalogDirectory, 'actions-catalog.json');
     const catalogBefore = fs.readFileSync(catalogPath, 'utf8');
     const sourceBefore = fs.readFileSync(diskFile, 'utf8');
     const analyzed = await invoke('analyze_gdl_events', {
@@ -1353,6 +1342,12 @@ describe('McpEditorBridge', () => {
       type: 'SceneJustBegins',
     });
     expect(exact.instruction.semantics.status).toBe('known');
+    const short = await invoke('get_gdl_instruction_semantics', {
+      kind: 'condition',
+      type: 'sceneBegins',
+    });
+    expect(short.instruction).toEqual(exact.instruction);
+    expect(short.instruction.dslName).toBe('sceneBegins');
     expect(fs.readFileSync(catalogPath, 'utf8')).toBe(catalogBefore);
     expect(fs.readFileSync(diskFile, 'utf8')).toBe(sourceBefore);
     const stale = await invoke('analyze_gdl_events', {
@@ -1387,7 +1382,7 @@ describe('McpEditorBridge', () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-validate-disk-extension-')
     );
-    const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+    const projectFile = path.join(temporaryDirectory, 'project.gdl');
     const extensionName = 'DiskOnlyValidationExtension';
     const actionType = `${extensionName}::Initialize`;
     const editorProject = gd.ProjectHelper.createNewGDJSProject();
@@ -1481,7 +1476,7 @@ describe('McpEditorBridge', () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-invalid-javascript-api-')
     );
-    const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+    const projectFile = path.join(temporaryDirectory, 'project.gdl');
     const project = gd.ProjectHelper.createNewGDJSProject();
     project.setProjectFile(projectFile);
     project.insertNewLayout('Scene', 0);
@@ -1537,13 +1532,13 @@ describe('McpEditorBridge', () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-invalid-project-files-')
     );
-    const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+    const projectFile = path.join(temporaryDirectory, 'project.gdl');
     const project = gd.ProjectHelper.createNewGDJSProject();
     project.setProjectFile(projectFile);
     const files = decomposeLegacyProjectToFiles(
       serializeProjectWithConstants(project)
     );
-    files['game://project.gdevelop'] += '\ninvalid = [\n';
+    files['game://project.gdl'] += '\ninvalid = [\n';
     await writeMultiFileSourceTree({ entryPath: projectFile, files });
     const bridge = makeBridge({ getProject: () => project });
 
@@ -1560,7 +1555,7 @@ describe('McpEditorBridge', () => {
         severity: 'error',
         phase: 'parse-settings',
         code: 'SETTINGS_SYNTAX',
-        fileUri: 'game://project.gdevelop',
+        fileUri: 'game://project.gdl',
         filePath: projectFile,
       }),
     ]);
@@ -1570,13 +1565,13 @@ describe('McpEditorBridge', () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-verify-invalid-')
     );
-    const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+    const projectFile = path.join(temporaryDirectory, 'project.gdl');
     const project = gd.ProjectHelper.createNewGDJSProject();
     project.setProjectFile(projectFile);
     const files = decomposeLegacyProjectToFiles(
       serializeProjectWithConstants(project)
     );
-    files['game://project.gdevelop'] += '\ninvalid = [\n';
+    files['game://project.gdl'] += '\ninvalid = [\n';
     await writeMultiFileSourceTree({ entryPath: projectFile, files });
     const reloadProjectAndWait: any = jest.fn();
     const runCommand: any = jest.fn();
@@ -1657,7 +1652,7 @@ describe('McpEditorBridge', () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-verify-success-')
     );
-    const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+    const projectFile = path.join(temporaryDirectory, 'project.gdl');
     const project = gd.ProjectHelper.createNewGDJSProject();
     project.setName('Runtime verification test');
     project.setProjectFile(projectFile);
@@ -1845,22 +1840,22 @@ describe('McpEditorBridge', () => {
     const endPreviewLaunchSequence: any = jest.fn();
     let currentProject: any = {
       getName: () => 'Before reload',
-      getProjectFile: () => 'C:\\game\\project.gdevelop',
+      getProjectFile: () => 'C:\\game\\project.gdl',
     };
     const reloadProjectAndWait: any = (jest.fn(async receivedReporter => {
       expect(receivedReporter).toBe(reportProgress);
       receivedReporter({ phase: 'editor-loading' });
       currentProject = {
         getName: () => 'After reload',
-        getProjectFile: () => 'C:\\game\\project.gdevelop',
+        getProjectFile: () => 'C:\\game\\project.gdl',
       };
       return {
         reloaded: true,
-        fileIdentifier: 'C:\\game\\project.gdevelop',
+        fileIdentifier: 'C:\\game\\project.gdl',
         catalogsRegenerated: true,
         catalogs: {
           instructions: { actions: 123 },
-          settings: { objectTypes: 45, layoutContexts: 2 },
+          gdl: { objectTypes: 45, layoutContexts: 2 },
         },
       };
     }): any);
@@ -1892,11 +1887,11 @@ describe('McpEditorBridge', () => {
         reloaded: true,
         discardedUnsavedInMemoryChanges: true,
         projectName: 'After reload',
-        projectFile: 'C:\\game\\project.gdevelop',
+        projectFile: 'C:\\game\\project.gdl',
         catalogsRegenerated: true,
         catalogs: {
           instructions: { actions: 123 },
-          settings: { objectTypes: 45, layoutContexts: 2 },
+          gdl: { objectTypes: 45, layoutContexts: 2 },
         },
       })
     );
@@ -1913,7 +1908,7 @@ describe('McpEditorBridge', () => {
     const bridge = makeBridge({
       getProject: () => ({
         getName: () => 'Busy project',
-        getProjectFile: () => 'C:\\game\\project.gdevelop',
+        getProjectFile: () => 'C:\\game\\project.gdl',
       }),
       reloadProjectAndWait,
       beginPreviewLaunchSequence,
@@ -1935,16 +1930,16 @@ describe('McpEditorBridge', () => {
   });
 
   it('preserves catalog subphase diagnostics when reload fails', async () => {
-    const catalogError: any = new Error('Unable to replace settings catalog.');
+    const catalogError: any = new Error('Unable to replace GDL catalog.');
     catalogError.code = 'MCP_RELOAD_CATALOG_SUBPHASE_FAILED';
-    catalogError.catalogPhase = 'catalog-settings-writing';
-    catalogError.catalogArtifact = 'settings';
+    catalogError.catalogPhase = 'catalog-gdl-writing';
+    catalogError.catalogArtifact = 'gdl';
     const beginPreviewLaunchSequence: any = jest.fn(() => true);
     const endPreviewLaunchSequence: any = jest.fn();
     const bridge = makeBridge({
       getProject: () => ({
         getName: () => 'Catalog failure project',
-        getProjectFile: () => 'C:\\game\\project.gdevelop',
+        getProjectFile: () => 'C:\\game\\project.gdl',
       }),
       reloadProjectAndWait: jest.fn(async () => {
         throw catalogError;
@@ -1963,10 +1958,10 @@ describe('McpEditorBridge', () => {
     expect(result).toEqual(
       expect.objectContaining({
         success: false,
-        error: 'Unable to replace settings catalog.',
+        error: 'Unable to replace GDL catalog.',
         code: 'MCP_RELOAD_CATALOG_SUBPHASE_FAILED',
-        catalogPhase: 'catalog-settings-writing',
-        catalogArtifact: 'settings',
+        catalogPhase: 'catalog-gdl-writing',
+        catalogArtifact: 'gdl',
       })
     );
     expect(beginPreviewLaunchSequence).toHaveBeenCalledTimes(1);
@@ -1977,7 +1972,7 @@ describe('McpEditorBridge', () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-extension-import-')
     );
-    const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+    const projectFile = path.join(temporaryDirectory, 'project.gdl');
     const project = new gd.Project();
     project.setProjectFile(projectFile);
     const ensureExtensionInstalled: any = jest.fn(async (options: any) => {
@@ -2090,7 +2085,7 @@ describe('McpEditorBridge', () => {
     const temporaryDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), 'gdevelop-mcp-extension-import-events-')
     );
-    const projectFile = path.join(temporaryDirectory, 'project.gdevelop');
+    const projectFile = path.join(temporaryDirectory, 'project.gdl');
     const project = gd.ProjectHelper.createNewGDJSProject();
     project.setProjectFile(projectFile);
     const baseFiles = decomposeLegacyProjectToFiles(
@@ -2167,7 +2162,7 @@ describe('McpEditorBridge', () => {
       path.join(os.tmpdir(), 'gdevelop-mcp-extension-preflight-')
     );
     const project = new gd.Project();
-    project.setProjectFile(path.join(temporaryDirectory, 'project.gdevelop'));
+    project.setProjectFile(path.join(temporaryDirectory, 'project.gdl'));
     const saveProjectAndWait: any = jest.fn();
     const ensureExtensionInstalled: any = jest.fn(async options => {
       const compatibility = await options.preflightExtension({
@@ -2225,7 +2220,7 @@ describe('McpEditorBridge', () => {
       path.join(os.tmpdir(), 'gdevelop-mcp-extension-unsaved-')
     );
     const project = new gd.Project();
-    project.setProjectFile(path.join(temporaryDirectory, 'project.gdevelop'));
+    project.setProjectFile(path.join(temporaryDirectory, 'project.gdl'));
     const bridge = makeBridge({
       getProject: () => project,
       ensureExtensionInstalled: async options => {

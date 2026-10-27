@@ -57,7 +57,7 @@ export const allResourceKindsAndMetadata = [
   {
     kind: 'image',
     displayName: (t`Image`: any),
-    fileExtensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+    fileExtensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'],
     createNewResource: (): gdImageResource => new gd.ImageResource(),
   },
   {

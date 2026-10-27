@@ -8,4 +8,4 @@
 
 Add design, controls, audio, performance and other topic documents as needed. Keep this index current. Preserve superseded descriptions in `history/` with their applicable revision rather than presenting them as current behavior.
 
-Paths in report data are relative to the project root containing `project.gdevelop`; Markdown links are relative to the document containing them.
+Paths in report data are relative to the project root containing `project.gdl`; Markdown links are relative to the document containing them.

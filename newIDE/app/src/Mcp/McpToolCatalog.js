@@ -54,7 +54,7 @@ const openProjectSchema = {
     project_path: {
       type: 'string',
       description:
-        'Absolute path to a local project.gdevelop entry file or a legacy GDevelop JSON project file.',
+        'Absolute path to a local project.gdl entry file or a legacy GDevelop JSON project file.',
     },
     discard_unsaved_changes: {
       type: 'boolean',
@@ -123,7 +123,7 @@ const inspectGlbModelSchema = {
       minLength: 1,
       maxLength: 4096,
       description:
-        'Absolute path to a local .glb file, or a path relative to the directory containing the open project.gdevelop file.',
+        'Absolute path to a local .glb file, or a path relative to the directory containing the open project.gdl file.',
     },
   },
   required: ['file_path'],
@@ -1478,7 +1478,7 @@ const readTools: Array<McpTool> = [
   {
     name: 'open_project',
     description:
-      'Open a specific local GDevelop project in the current editor window by absolute entry-file path. Accepts project.gdevelop or a legacy JSON project file and waits for project loading, resource fetching, and extension loading to finish. By default, refuses to replace a project with unsaved in-memory changes; pass discard_unsaved_changes:true to explicitly discard them. Opening project.gdevelop may bootstrap missing generated .gdevelop catalogs; opening legacy JSON may migrate it to the multi-file format.',
+      'Open a specific local GDevelop project in the current editor window by absolute entry-file path. Accepts project.gdl or a legacy JSON project file and waits for project loading, resource fetching, and extension loading to finish. By default, refuses to replace a project with unsaved in-memory changes; pass discard_unsaved_changes:true to explicitly discard them. Opening project.gdl may bootstrap missing generated .gdevelop catalogs; opening legacy JSON may migrate it to the multi-file format.',
     inputSchema: openProjectSchema,
     annotations: {
       readOnlyHint: false,
@@ -1612,7 +1612,7 @@ const readTools: Array<McpTool> = [
   {
     name: 'generate-catalogs',
     description:
-      'Regenerate .gdevelop/instructions-catalog.json, .gdevelop/deprecated-instructions-catalog.json, .gdevelop/settings-catalog.json, .gdevelop/runtime-api.d.ts, .gdevelop/project-api.d.ts, .gdevelop/harness-api.d.ts, .gdevelop/tsl-api.d.ts, and .gdevelop/tsl-catalog.json from the current local multi-file project sources. The call waits for all eight generated authoring files to be written and verified before returning. Accepts no inputs, writes only generated authoring files, removes the retired layout-catalog.json, and does not validate sources or reload editor memory.',
+      'Regenerate .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json (use instruction dslName for GDL authoring; parameter dslName is unchanged), .gdevelop/gdl-catalog.json, .gdevelop/runtime-api.d.ts, .gdevelop/project-api.d.ts, .gdevelop/harness-api.d.ts, .gdevelop/tsl-api.d.ts, and .gdevelop/tsl-catalog.json from the current local multi-file project sources. The call waits for all nine generated authoring files to be written and verified before returning. Accepts no inputs, writes only generated authoring files, removes the retired layout-catalog.json, and does not validate sources or reload editor memory.',
     inputSchema: noInputSchema,
     annotations: {
       readOnlyHint: false,
@@ -1651,7 +1651,7 @@ const readTools: Array<McpTool> = [
   {
     name: 'get_gdl_instruction_semantics',
     description:
-      'Read one exact action or condition signature and its reviewed GDJS execution/selection semantics from current disk catalogs. Unknown or partial rules remain explicit; no code is executed and no generated files are written.',
+      'Read one action or condition by exact catalog dslName (preferred) or native type, returning both identities and its reviewed GDJS execution/selection semantics from current disk catalogs. Unknown or partial rules remain explicit; no code is executed and no generated files are written.',
     inputSchema: {
       type: 'object',
       required: ['kind', 'type'],
@@ -1671,7 +1671,7 @@ const readTools: Array<McpTool> = [
   {
     name: 'validate_project_files',
     description:
-      'Load the current local multi-file project from project.gdevelop, regenerate all three catalogs and all three public JavaScript declaration files (including .gdevelop/harness-api.d.ts), reload the sources using the fresh instruction catalog, reconstruct the legacy game.json representation in memory, validate JavaScript event blocks against the generated context-aware API, then validate through GDevelop and preflight generated extension JavaScript. strict=true JavaScript API violations block validation; compatibility blocks report semantic warnings while syntax errors still block. Returns a separate conservative pickingAnalysis with rule coverage and unknown effects. valid:true proves structural, JavaScript authoring-API, and code-generation validity only; it does NOT verify runtime gameplay semantics, object picking, or action side effects. Accepts no inputs, writes only six generated .gdevelop authoring files, does not reload editor memory, and reports the blocking file, error code, line, column, and source excerpt when available. Call this after direct project-file edits and require valid:true before reload_project, then runtime-test behavior-sensitive changes with a paused preview and run_frames or authored tests with run_gameplay_tests.',
+      'Load the current local multi-file project from project.gdl, regenerate all five catalogs and all four public JavaScript declaration files (including .gdevelop/harness-api.d.ts), reload the sources using the fresh instruction catalog, reconstruct the legacy game.json representation in memory, validate JavaScript event blocks against the generated context-aware API, then validate through GDevelop and preflight generated extension JavaScript. strict=true JavaScript API violations block validation; compatibility blocks report semantic warnings while syntax errors still block. Returns a separate conservative pickingAnalysis with rule coverage and unknown effects. valid:true proves structural, JavaScript authoring-API, and code-generation validity only; it does NOT verify runtime gameplay semantics, object picking, or action side effects. Accepts no inputs, writes only nine generated .gdevelop authoring files, does not reload editor memory, and reports the blocking file, error code, line, column, and source excerpt when available. Call this after direct project-file edits and require valid:true before reload_project, then runtime-test behavior-sensitive changes with a paused preview and run_frames or authored tests with run_gameplay_tests.',
     inputSchema: noInputSchema,
     annotations: {
       readOnlyHint: false,
@@ -1868,14 +1868,14 @@ const toolUsageExamples: { [string]: Array<Object> } = {
     {
       description: 'Open a local multi-file GDevelop project.',
       arguments: {
-        project_path: 'C:\\Games\\MyGame\\project.gdevelop',
+        project_path: 'C:\\Games\\MyGame\\project.gdl',
       },
     },
     {
       description:
         'Open another project and explicitly discard unsaved changes in the current editor project.',
       arguments: {
-        project_path: 'C:\\Games\\AnotherGame\\project.gdevelop',
+        project_path: 'C:\\Games\\AnotherGame\\project.gdl',
         discard_unsaved_changes: true,
       },
     },
@@ -2431,7 +2431,7 @@ export const getCapabilitiesSummary = (
   });
   return {
     note:
-      'GDevelop MCP is intentionally limited to local project creation and opening, one extension import/conversion tool, editor queries, bounded local GLB metadata inspection, synchronization, validation, authored gameplay-test execution, and preview debugging. There are no Constants MCP tools: the AI model must read and modify constants.toml directly on disk. After create_project or import_extension generates canonical sources, author the game through project files and the generated .gdevelop/settings-catalog.json (including embedded-layout authoring data) and .gdevelop/instructions-catalog.json. Before authoring JavaScript events, also read .gdevelop/runtime-api.d.ts and .gdevelop/project-api.d.ts; before authoring gameplay tests, read .gdevelop/harness-api.d.ts.',
+      'GDevelop MCP is intentionally limited to local project creation and opening, one extension import/conversion tool, editor queries, bounded local GLB metadata inspection, synchronization, validation, authored gameplay-test execution, and preview debugging. There are no Constants MCP tools: the AI model must read and modify constants.toml directly on disk. After create_project or import_extension generates canonical sources, author the game through project files and the generated .gdevelop/gdl-catalog.json (including embedded-layout authoring data) and .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json. Before authoring JavaScript events, also read .gdevelop/runtime-api.d.ts and .gdevelop/project-api.d.ts; before authoring gameplay tests, read .gdevelop/harness-api.d.ts.',
     permissions: {
       writeToolsEnabled: !!permissions.allowWriteTools,
       commandToolsEnabled: !!permissions.allowCommandTools,

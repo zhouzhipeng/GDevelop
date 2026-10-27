@@ -1,9 +1,9 @@
 // @noflow
 // Shared authoring field inventory. SettingsDsl converts these descriptors to
 // strict node schemas; catalogs publish the same schemas used by the parser.
-export const SETTINGS_FORMAT_VERSION = 12;
+export const SETTINGS_FORMAT_VERSION = 13;
 const MULTI_FILE_FORMAT_VERSION = SETTINGS_FORMAT_VERSION;
-const MULTI_FILE_ENTRY_URI = 'game://project.gdevelop';
+const MULTI_FILE_ENTRY_URI = 'game://project.gdl';
 const SCENE_LIFECYCLE_SOURCES = [
   'sceneLoad',
   'sceneSignal',
@@ -57,8 +57,8 @@ const variableRecordFields = [
   settingsField('id', 'empty string or lowercase UUIDv4 string'),
   settingsField('hasMixedValues', 'boolean'),
 ];
-const variableTable = (name: string): Object => ({
-  table: name,
+const variableNode = (name: string): Object => ({
+  serializedKey: name,
   variableCollection: true,
   repeated: true,
   fields: variableRecordFields,
@@ -66,22 +66,17 @@ const variableTable = (name: string): Object => ({
     'Direct variable nodes with literal values or explicit structure/array type and nested variable declarations. Array children have no names; structure children require unique names. Never mix value with children; metadata nodes are forbidden.',
 });
 
-const objectGroupsTable = (prefix: string = ''): Object => ({
-  table: `${prefix}objectGroups`,
-  header: `[${prefix}objectGroups]`,
+const objectGroupsNode = (prefix: string = ''): Object => ({
+  serializedKey: `${prefix}objectGroups`,
   optional: true,
-  emptyForm: prefix
-    ? `objectGroups = { } inside [[${prefix.slice(0, -1)}]]`
-    : 'objectGroups = { }',
   dynamicFields: {
     key: 'unique object-group name',
     value: 'ordered string array of existing object names',
   },
 });
 
-const objectGroupRequiredBehaviorsTable = (prefix: string = ''): Object => ({
-  table: `${prefix}objectGroupRequiredBehaviors`,
-  header: `[${prefix}objectGroupRequiredBehaviors]`,
+const objectGroupRequiredBehaviorsNode = (prefix: string = ''): Object => ({
+  serializedKey: `${prefix}objectGroupRequiredBehaviors`,
   optional: true,
   dynamicFields: {
     key: `object-group name also present in ${prefix}objectGroups`,
@@ -89,9 +84,8 @@ const objectGroupRequiredBehaviorsTable = (prefix: string = ''): Object => ({
   },
 });
 
-const quickCustomizationTable = (prefix: string): Object => ({
-  table: `${prefix}.propertiesQuickCustomizationVisibilities`,
-  header: `[${prefix}.propertiesQuickCustomizationVisibilities]`,
+const quickCustomizationNode = (prefix: string): Object => ({
+  serializedKey: `${prefix}.propertiesQuickCustomizationVisibilities`,
   optional: true,
   dynamicFields: {
     key: 'serialized property name',
@@ -99,11 +93,9 @@ const quickCustomizationTable = (prefix: string): Object => ({
   },
 });
 
-const attachedBehaviorTable = {
-  table: 'behaviors',
-  header: '[[behaviors]]',
+const attachedBehaviorNode = {
+  serializedKey: 'behaviors',
   repeated: true,
-  emptyForm: 'behaviors = [ ]',
   fields: [
     settingsField('name', 'unique object-local string', { required: true }),
     settingsField('type', 'registered behaviorTypes[].type', {
@@ -116,7 +108,7 @@ const attachedBehaviorTable = {
       values: ['default', 'visible', 'hidden'],
     }),
   ],
-  childTables: [quickCustomizationTable('behaviors')],
+  childNodes: [quickCustomizationNode('behaviors')],
   dynamicFields: {
     source: 'behaviorTypes[type].properties',
     key: 'properties[].serializedKey',
@@ -126,11 +118,9 @@ const attachedBehaviorTable = {
     'reject unlisted existing serializer fields according to behaviorTypes[type].unknownPropertyPolicy',
 };
 
-const objectEffectTable = {
-  table: 'effects',
-  header: '[[effects]]',
+const objectEffectNode = {
+  serializedKey: 'effects',
   repeated: true,
-  emptyForm: 'effects = [ ]',
   fields: [
     settingsField('name', 'unique object-local string', { required: true }),
     settingsField('effectType', 'registered effectTypes[].type', {
@@ -139,39 +129,33 @@ const objectEffectTable = {
     settingsField('folded', 'boolean', { default: false }),
     settingsField('disabled', 'boolean', { default: false }),
   ],
-  childTables: [
+  childNodes: [
     {
-      table: 'effects.doubleParameters',
-      header: '[effects.doubleParameters]',
+      serializedKey: 'effects.doubleParameters',
       optional: true,
       dynamicFields: {
         source: 'effectTypes[effectType].parameters',
         key: 'effect parameter name',
         value: 'number',
       },
-      emptyForm: 'doubleParameters = { } inside [[effects]]',
     },
     {
-      table: 'effects.stringParameters',
-      header: '[effects.stringParameters]',
+      serializedKey: 'effects.stringParameters',
       optional: true,
       dynamicFields: {
         source: 'effectTypes[effectType].parameters',
         key: 'effect parameter name',
         value: 'string',
       },
-      emptyForm: 'stringParameters = { } inside [[effects]]',
     },
     {
-      table: 'effects.booleanParameters',
-      header: '[effects.booleanParameters]',
+      serializedKey: 'effects.booleanParameters',
       optional: true,
       dynamicFields: {
         source: 'effectTypes[effectType].parameters',
         key: 'effect parameter name',
         value: 'boolean',
       },
-      emptyForm: 'booleanParameters = { } inside [[effects]]',
     },
   ],
 };
@@ -195,18 +179,14 @@ const propertyDescriptorFields = [
   }),
 ];
 
-const propertyDescriptorTable = (name: string): Object => ({
-  table: name,
-  header: `[[${name}]]`,
+const propertyDescriptorNode = (name: string): Object => ({
+  serializedKey: name,
   repeated: true,
-  emptyForm: `${name} = [ ]`,
   fields: propertyDescriptorFields,
-  childTables: [
+  childNodes: [
     {
-      table: `${name}.choices`,
-      header: `[[${name}.choices]]`,
+      serializedKey: `${name}.choices`,
       repeated: true,
-      emptyForm: 'choices = [ ] inside the parent property descriptor',
       fields: [
         settingsField('value', 'string', { required: true }),
         settingsField('label', 'string', { required: true }),
@@ -252,10 +232,9 @@ const functionSchema = ({ folder, extensionRequired }: Object): Object => ({
     settingsField('deprecated', 'boolean', { default: false }),
     settingsField('deprecationMessage', 'string'),
   ],
-  childTables: [
+  childNodes: [
     {
-      table: 'expressionType',
-      header: '[expressionType]',
+      serializedKey: 'expressionType',
       optional: true,
       requiredForFunctionTypes: [
         'Expression',
@@ -270,10 +249,8 @@ const functionSchema = ({ folder, extensionRequired }: Object): Object => ({
       ],
     },
     {
-      table: 'parameters',
-      header: '[[parameters]]',
+      serializedKey: 'parameters',
       repeated: true,
-      emptyForm: 'parameters = [ ]',
       fields: [
         settingsField('name', 'unique parameter string', { required: true }),
         settingsField('type', 'parameter value type string', {
@@ -288,8 +265,8 @@ const functionSchema = ({ folder, extensionRequired }: Object): Object => ({
         settingsField('codeOnly', 'boolean', { default: false }),
       ],
     },
-    objectGroupsTable(),
-    objectGroupRequiredBehaviorsTable(),
+    objectGroupsNode(),
+    objectGroupRequiredBehaviorsNode(),
   ],
   additionalFields:
     'reject unknown current EventsFunction serializer metadata fields',
@@ -332,16 +309,16 @@ const objectSettingsSchema = {
     settingsField('assetStoreId', 'string'),
     settingsField('resourcesPreloading', 'string'),
   ],
-  childTables: [
-    variableTable('variables'),
-    attachedBehaviorTable,
-    objectEffectTable,
+  childNodes: [
+    variableNode('variables'),
+    attachedBehaviorNode,
+    objectEffectNode,
   ],
   dynamicFields: {
     source: 'the object serializer selected by root field type',
     schema: 'objectTypes[type].schema',
     policy:
-      'Use objectTypes[type].schema for public type-specific configuration and reject unknown legacy or private fields and child tables.',
+      'Use objectTypes[type].schema for public type-specific configuration and reject unknown legacy or private fields and child nodes.',
   },
 };
 
@@ -363,17 +340,15 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
       settingsField('firstLayout', 'existing scene name', { required: true }),
       settingsField('previewLayout', 'existing scene name'),
     ],
-    childTables: [
+    childNodes: [
       {
-        table: 'gdVersion',
-        header: '[gdVersion]',
+        serializedKey: 'gdVersion',
         fields: ['major', 'minor', 'build', 'revision'].map(name =>
           settingsField(name, 'integer', { required: true })
         ),
       },
       {
-        table: 'properties',
-        header: '[properties]',
+        serializedKey: 'properties',
         fields: [
           settingsField('name', 'string', { required: true }),
           settingsField('description', 'string'),
@@ -409,19 +384,16 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
           settingsField('sceneResourcesPreloading', 'string'),
           settingsField('sceneResourcesUnloading', 'string'),
         ],
-        childTables: [
+        childNodes: [
           {
-            table: 'properties.platformSpecificAssets',
-            header: '[properties.platformSpecificAssets]',
-            emptyForm: 'platformSpecificAssets = { } inside [properties]',
+            serializedKey: 'properties.platformSpecificAssets',
             dynamicFields: {
               key: '<platform>-<asset-name>',
               value: 'resource name string',
             },
           },
           {
-            table: 'properties.loadingScreen',
-            header: '[properties.loadingScreen]',
+            serializedKey: 'properties.loadingScreen',
             fields: [
               settingsField('showGDevelopSplash', 'boolean'),
               settingsField('gdevelopLogoStyle', 'string'),
@@ -446,18 +418,15 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
             ],
           },
           {
-            table: 'properties.watermark',
-            header: '[properties.watermark]',
+            serializedKey: 'properties.watermark',
             fields: [
               settingsField('showWatermark', 'boolean'),
               settingsField('placement', 'string'),
             ],
           },
           {
-            table: 'properties.extensionProperties',
-            header: '[[properties.extensionProperties]]',
+            serializedKey: 'properties.extensionProperties',
             repeated: true,
-            emptyForm: 'extensionProperties = [ ] inside [properties]',
             fields: [
               settingsField('extension', 'extension name', { required: true }),
               settingsField('property', 'property name', { required: true }),
@@ -465,10 +434,8 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
             ],
           },
           {
-            table: 'properties.platforms',
-            header: '[[properties.platforms]]',
+            serializedKey: 'properties.platforms',
             repeated: true,
-            emptyForm: 'platforms = [ ] inside [properties]',
             fields: [
               settingsField('name', 'platform name', { required: true }),
             ],
@@ -477,9 +444,9 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
         additionalFields:
           'reject unknown current Project::properties serializer fields',
       },
-      variableTable('variables'),
-      objectGroupsTable(),
-      objectGroupRequiredBehaviorsTable(),
+      variableNode('variables'),
+      objectGroupsNode(),
+      objectGroupRequiredBehaviorsNode(),
     ],
     additionalFields:
       'reject unknown current Project serializer fields except split/forbidden ownership fields',
@@ -491,17 +458,13 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
       settingsField(
         'resourceFolders',
         'preserved homogeneous resource-folder array',
-        {
-          emptyForm: 'resourceFolders = [ ]',
-        }
+        {}
       ),
     ],
-    childTables: [
+    childNodes: [
       {
-        table: 'resources',
-        header: '[[resources]]',
+        serializedKey: 'resources',
         repeated: true,
-        emptyForm: 'resources = [ ]',
         fields: [
           settingsField('kind', 'enum', {
             required: true,
@@ -553,10 +516,9 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
             requiredForKinds: ['json', 'tilemap', 'tileset', 'spine'],
           }),
         ],
-        childTables: [
+        childNodes: [
           {
-            table: 'resources.origin',
-            header: '[resources.origin]',
+            serializedKey: 'resources.origin',
             optional: true,
             fields: [
               settingsField('name', 'origin name string', { required: true }),
@@ -573,12 +535,10 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
   },
   tests: {
     rootFields: [...formatFields({ kind: 'tests' })],
-    childTables: [
+    childNodes: [
       {
-        table: 'tests',
-        header: '[[tests]]',
+        serializedKey: 'tests',
         repeated: true,
-        emptyForm: 'tests = [ ]',
         fields: [
           settingsField('scope', 'enum', {
             required: true,
@@ -611,7 +571,7 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
   },
   constants: {
     rootFields: [],
-    childTables: [],
+    childNodes: [],
     dynamicFields: {
       key: 'arbitrary user-owned TOML-compatible key',
       value:
@@ -632,15 +592,13 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
       settingsField('resourcesUnloading', 'string'),
       settingsField('disableInputWhenNotFocused', 'boolean'),
     ],
-    childTables: [
-      variableTable('variables'),
-      objectGroupsTable(),
-      objectGroupRequiredBehaviorsTable(),
+    childNodes: [
+      variableNode('variables'),
+      objectGroupsNode(),
+      objectGroupRequiredBehaviorsNode(),
       {
-        table: 'behaviorsSharedData',
-        header: '[[behaviorsSharedData]]',
+        serializedKey: 'behaviorsSharedData',
         repeated: true,
-        emptyForm: 'behaviorsSharedData = [ ]',
         fields: [
           settingsField('name', 'unique scene-local string', {
             required: true,
@@ -652,7 +610,7 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
             values: ['default', 'visible', 'hidden'],
           }),
         ],
-        childTables: [quickCustomizationTable('behaviorsSharedData')],
+        childNodes: [quickCustomizationNode('behaviorsSharedData')],
         dynamicFields: {
           source: 'behaviorTypes[type].sharedProperties',
           key: 'sharedProperties[].serializedKey',
@@ -672,13 +630,13 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
       settingsField('description', 'string'),
       settingsField('eventsLogic', 'string'),
     ],
-    childTables: [],
+    childNodes: [],
   },
   externalLayout: {
     rootFields: [
       ...formatFields({ kind: 'externalLayout', ordered: true, name: true }),
     ],
-    childTables: [],
+    childNodes: [],
     additionalFields:
       'reject unknown current ExternalLayout serializer metadata fields except association and embedded layout fields',
   },
@@ -700,10 +658,9 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
       settingsField('helpPath', 'string'),
       settingsField('gdevelopVersion', 'string'),
     ],
-    childTables: [
+    childNodes: [
       {
-        table: 'origin',
-        header: '[origin]',
+        serializedKey: 'origin',
         optional: true,
         fields: [
           settingsField('name', 'origin name string', { required: true }),
@@ -713,8 +670,7 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
         ],
       },
       {
-        table: 'changelog',
-        header: '[[changelog]]',
+        serializedKey: 'changelog',
         repeated: true,
         fields: [
           settingsField('version', 'version string', { required: true }),
@@ -724,10 +680,8 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
         ],
       },
       {
-        table: 'dependencies',
-        header: '[[dependencies]]',
+        serializedKey: 'dependencies',
         repeated: true,
-        emptyForm: 'dependencies = [ ]',
         fields: [
           settingsField('type', 'dependency type string', { required: true }),
           settingsField('exportName', 'string', { required: true }),
@@ -736,8 +690,7 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
         ],
       },
       {
-        table: 'sourceFiles',
-        header: '[[sourceFiles]]',
+        serializedKey: 'sourceFiles',
         repeated: true,
         fields: [
           settingsField('resourceName', 'resource name string', {
@@ -749,8 +702,8 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
           }),
         ],
       },
-      variableTable('globalVariables'),
-      variableTable('sceneVariables'),
+      variableNode('globalVariables'),
+      variableNode('sceneVariables'),
     ],
     additionalFields:
       'reject unknown current EventsFunctionsExtension metadata fields except split child implementations',
@@ -780,12 +733,12 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
       settingsField('iconUrl', 'string'),
       settingsField('helpPath', 'string'),
     ],
-    childTables: [
-      variableTable('variables'),
-      attachedBehaviorTable,
-      propertyDescriptorTable('propertyDescriptors'),
-      objectGroupsTable(),
-      objectGroupRequiredBehaviorsTable(),
+    childNodes: [
+      variableNode('variables'),
+      attachedBehaviorNode,
+      propertyDescriptorNode('propertyDescriptors'),
+      objectGroupsNode(),
+      objectGroupRequiredBehaviorsNode(),
     ],
     additionalFields:
       'reject unknown current EventsBasedObject metadata fields except split functions/layout/objects',
@@ -796,7 +749,7 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
       settingsField('assetStoreAssetId', 'string'),
       settingsField('assetStoreOriginalName', 'string'),
     ],
-    childTables: [objectGroupsTable(), objectGroupRequiredBehaviorsTable()],
+    childNodes: [objectGroupsNode(), objectGroupRequiredBehaviorsNode()],
     additionalFields:
       'reject unknown current EventsBasedObjectVariant metadata fields except split layout/object fields',
   },
@@ -818,10 +771,10 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
         values: ['default', 'visible', 'hidden'],
       }),
     ],
-    childTables: [
-      variableTable('variables'),
-      propertyDescriptorTable('propertyDescriptors'),
-      propertyDescriptorTable('sharedPropertyDescriptors'),
+    childNodes: [
+      variableNode('variables'),
+      propertyDescriptorNode('propertyDescriptors'),
+      propertyDescriptorNode('sharedPropertyDescriptors'),
     ],
     additionalFields:
       'reject unknown current EventsBasedBehavior metadata fields except split functions',

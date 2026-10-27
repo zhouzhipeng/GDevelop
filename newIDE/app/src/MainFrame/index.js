@@ -2508,7 +2508,7 @@ const MainFrame = (props: Props): React.MixedElement => {
             serializedProject,
             constants,
             // Autosaves keep the originally requested metadata. A storage adapter may
-            // explicitly redirect a migrated legacy project to project.gdevelop.
+            // explicitly redirect a migrated legacy project to project.gdl.
             effectiveFileMetadata,
             options && options.reportProgress
           );
@@ -7207,7 +7207,7 @@ const MainFrame = (props: Props): React.MixedElement => {
         const saveStartTime = performance.now();
 
         // Keep saving synchronized with the two-pass project extension loader.
-        // The settings catalog reads registered behavior metadata, which must
+        // The GDL catalog reads registered behavior metadata, which must
         // not be replaced while the project is being serialized.
         await eventsFunctionsExtensionsState.ensureLoadFinished(currentProject);
 

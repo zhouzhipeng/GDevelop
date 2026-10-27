@@ -31,7 +31,7 @@ type GetExpectedNumberOfJSExtensionModulesArguments = {|
 function getExpectedNumberOfJSExtensionModules(
   { filterExamples } /*: GetExpectedNumberOfJSExtensionModulesArguments*/
 ) /*:number*/ {
-  return 35 + (filterExamples ? 0 : 1);
+  return 36 + (filterExamples ? 0 : 1);
 }
 
 /**

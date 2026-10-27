@@ -23,12 +23,12 @@ conditions.
 ## Read the catalog
 
 Before editing an `.gdl` file, inspect the owner settings and search
-`.gdevelop/instructions-catalog.json` for exact instruction types, parameter
+`.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` for instruction `dslName`, parameter
 `dslName` values, expressions, and scopes:
 
 ```sh
-rg 'EmitSceneSignal|EmitSignalToObjectInstance|SubscribeSceneSignal' .gdevelop/instructions-catalog.json
-rg 'SignalName|Payload' .gdevelop/settings-catalog.json
+rg 'EmitSceneSignal|EmitSignalToObjectInstance|SubscribeSceneSignal' .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json
+rg 'SignalName|Payload' .gdevelop/gdl-catalog.json
 ```
 
 The normal surface is:
@@ -74,12 +74,12 @@ events {
 
     conditions {
 
-      SceneJustBegins
+      sceneBegins
     }
 
     actions {
 
-      EmitSceneSignal signal_name="Game.Ready" payload="level-1"
+      emitSceneSignal signal_name="Game.Ready" payload="level-1"
     }
   }
 }
@@ -103,12 +103,12 @@ events {
 
     conditions {
 
-      BuiltinCommonInstructions::CompareStrings first_string_expression=expr(SignalName) comparison_sign="=" second_string_expression="Game.Ready"
+      compareStrings first_string_expression=expr(SignalName) comparison_sign="=" second_string_expression="Game.Ready"
     }
 
     actions {
 
-      DebuggerTools::ConsoleLog message_to_log=expr(Payload)
+      log message_to_log=expr(Payload)
     }
   }
 }
@@ -136,7 +136,7 @@ events {
 
     actions {
 
-      SubscribeSceneSignal signal_name="Locale.Changed"
+      subscribeSceneSignal signal_name="Locale.Changed"
     }
   }
 }
@@ -209,12 +209,12 @@ events {
 
     conditions {
 
-      BuiltinCommonInstructions::CompareStrings first_string_expression=expr(SignalName) comparison_sign="=" second_string_expression="Card.Refresh"
+      compareStrings first_string_expression=expr(SignalName) comparison_sign="=" second_string_expression="Card.Refresh"
     }
 
     actions {
 
-      SetBooleanObjectVariable object="Object" variable="RefreshPending" modification_sign="True"
+      setBooleanObjectVariable object="Object" variable="RefreshPending" modification_sign="True"
     }
   }
 }
@@ -245,12 +245,12 @@ events {
 
     conditions {
 
-      BooleanObjectVariable object="CardSlot" variable="NeedsRefresh" check_if_the_value_is="True"
+      booleanObjectVariable object="CardSlot" variable="NeedsRefresh" check_if_the_value_is="True"
     }
 
     actions {
 
-      EmitSignalToObjectInstance instance_id=expr(CardSlot.InstanceId()) signal_name="Card.Refresh" payload="inventory-changed"
+      emitSignalToObjectInstance instance_id=expr(CardSlot.InstanceId()) signal_name="Card.Refresh" payload="inventory-changed"
     }
   }
 }

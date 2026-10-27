@@ -7,7 +7,8 @@ import { getLegacyProjectFirstDifferenceDescription } from '../MultiFileProjectF
 import { openMultiFileProject } from './LocalMultiFileProject';
 import { onSaveProject } from './LocalProjectWriter';
 import {
-  mergeProjectInstructionCatalogs,
+  assembleInstructionCatalogFiles,
+  PROJECT_INSTRUCTION_CATALOG_PATHS,
   normalizeLegacyProjectInstructionParameters,
 } from '../SettingsDsl/InstructionCatalog';
 import { normalizeDownloadedProject } from '../UrlStorageProvider/NormalizeDownloadedProject';
@@ -58,7 +59,7 @@ describe('Official Platformer template creation', () => {
       });
       const project = global.gd.ProjectHelper.createNewGDJSProject();
       const extensionNames = [];
-      const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
+      const entryPath = path.join(temporaryDirectory, 'project.gdl');
       try {
         unserializeFromJSObject(
           project,
@@ -142,15 +143,12 @@ describe('Official Platformer template creation', () => {
             await openMultiFileProject(entryPath)
           )
         ).toBe(null);
-        const catalog = mergeProjectInstructionCatalogs(
-          fs.readJsonSync(
-            path.join(temporaryDirectory, '.gdevelop/instructions-catalog.json')
-          ),
-          fs.readJsonSync(
-            path.join(
-              temporaryDirectory,
-              '.gdevelop/deprecated-instructions-catalog.json'
-            )
+        const catalog = assembleInstructionCatalogFiles(
+          Object.fromEntries(
+            Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).map(file => [
+              file,
+              fs.readJsonSync(path.join(temporaryDirectory, file)),
+            ])
           )
         );
         expect(

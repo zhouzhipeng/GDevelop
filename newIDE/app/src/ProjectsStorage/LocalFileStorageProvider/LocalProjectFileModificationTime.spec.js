@@ -41,7 +41,7 @@ describe('getLocalProjectLastModifiedDate', () => {
   });
 
   it('returns the newest multi-file project definition modification time', async () => {
-    const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
+    const entryPath = path.join(temporaryDirectory, 'project.gdl');
     writeFileWithModificationTime(entryPath, 100000);
     writeFileWithModificationTime(
       path.join(temporaryDirectory, 'constants.toml'),
@@ -52,7 +52,7 @@ describe('getLocalProjectLastModifiedDate', () => {
       300000
     );
     writeFileWithModificationTime(
-      path.join(temporaryDirectory, '.gdevelop', 'settings-catalog.json'),
+      path.join(temporaryDirectory, '.gdevelop', 'gdl-catalog.json'),
       350000
     );
     writeFileWithModificationTime(
@@ -80,7 +80,7 @@ describe('getLocalProjectLastModifiedDate', () => {
   });
 
   it('ignores resources and generated autosaves', async () => {
-    const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
+    const entryPath = path.join(temporaryDirectory, 'project.gdl');
     writeFileWithModificationTime(entryPath, 100000);
     writeFileWithModificationTime(
       path.join(temporaryDirectory, 'scenes', 'Main', 'scene.gdl'),
@@ -96,7 +96,7 @@ describe('getLocalProjectLastModifiedDate', () => {
         '.gdevelop',
         'autosave',
         'current',
-        'project.gdevelop'
+        'project.gdl'
       ),
       500000
     );
@@ -105,7 +105,7 @@ describe('getLocalProjectLastModifiedDate', () => {
   });
 
   it('ignores Constants changes', async () => {
-    const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
+    const entryPath = path.join(temporaryDirectory, 'project.gdl');
     writeFileWithModificationTime(entryPath, 100000);
     writeFileWithModificationTime(
       path.join(temporaryDirectory, 'scenes', 'Main', 'Main.gdl'),
@@ -127,7 +127,7 @@ describe('getLocalProjectLastModifiedDate', () => {
   });
 
   it('can scan without relying on asynchronous filesystem callbacks', () => {
-    const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
+    const entryPath = path.join(temporaryDirectory, 'project.gdl');
     writeFileWithModificationTime(entryPath, 100000);
     writeFileWithModificationTime(
       path.join(temporaryDirectory, 'scenes', 'Main', 'Main.gdl'),

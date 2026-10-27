@@ -195,7 +195,7 @@ describe('GDevelop Language (GDL) multi-file project format', () => {
     for (const source of [
       'kind = "project"\nsettingsFormatVersion = 7\n',
       files[MULTI_FILE_ENTRY_URI].replace(
-        'formatVersion = 12',
+        'formatVersion = 13',
         'formatVersion = 11'
       ),
     ]) {
@@ -859,7 +859,7 @@ column2 = "ssfssdfsf"
     '../outside.events',
     'game://../outside.events',
     'game://scenes\\Main.events',
-    'game://C:/game/project.gdevelop',
+    'game://C:/game/project.gdl',
     'game://scenes/%2e%2e/file.events',
     'game://scenes/%ZZ/file.events',
   ])('rejects unsafe managed URI %s', uri => {
