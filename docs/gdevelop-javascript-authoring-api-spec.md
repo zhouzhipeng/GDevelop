@@ -10,15 +10,15 @@ automatic JavaScript rename refactoring are future additions
 **Generated artifacts:** `.gdevelop/runtime-api.d.ts` and
 `.gdevelop/project-api.d.ts`
 
-**JavaScript source location:** `@js` blocks in `.events` files
+**JavaScript source location:** raw `code` blocks in GDL `event` nodes with `type = "javascript"`
 
 **Target:** AI-authored and human-authored JavaScript events in GDevelop
 
 Related specifications:
 
-- [IfDo Events DSL](gdevelop-events-dsl-spec.md), especially its JavaScript
+- [GDL events and JavaScript](unified-settings-events-dsl-spec.md), especially its JavaScript
   event syntax and runtime semantics.
-- [GDevelop multi-file project format](gdevelop-new-formats-spec.md), especially
+- [GDevelop multi-file project format](settings-dsl-spec.md), especially
   generated catalogs, save-time validation, and `.gdevelop/` ownership.
 
 ---
@@ -73,28 +73,33 @@ code models and editors, searchable with ordinary text tools, and capable of
 describing overloads, generics, unions, nullability, documentation, and
 project-specific names without inventing another schema.
 
-JavaScript remains embedded in the existing Events DSL form:
+JavaScript is embedded in the current GDL event form:
 
-```events
-@js objects=Enemy
-for (const enemy of objects) {
-  enemy.setOpacity(128);
+```text
+event {
+  type = "javascript"
+  strict = true
+  objects = "Enemy"
+  code {
+    for (const enemy of objects) {
+      enemy.setOpacity(128);
+    }
+  }
 }
-@end js
 ```
 
 Version 1 does not add standalone project `.js` or `.ts` source files. That can
 be considered later if large reusable JavaScript modules become a demonstrated
-need. Keeping JavaScript inside `.events` preserves event order, conditions,
+need. Keeping JavaScript inside `.gdl` preserves event order, conditions,
 object-picking context, ownership, preview behavior, and legacy runtime code
 generation.
 
 An AI model may implement substantial game logic with JavaScript when the user
 explicitly requests it, but GDevelop's normal authoring preference remains:
 
-1. Layout TOML for instances and visual layout.
-2. Settings TOML for definitions and configuration.
-3. Events DSL and catalog instructions for gameplay behavior.
+1. GDL instance and layer nodes for visual layout.
+2. GDL component nodes for definitions and configuration.
+3. GDL events and catalog instructions for gameplay behavior.
 4. JavaScript events only where they materially improve the solution.
 
 ---
@@ -136,10 +141,10 @@ The JavaScript authoring API must:
 2. Give an AI model exact method names, parameter types, return types, and
    nullability.
 3. Describe project-specific symbols using the names already owned by
-   `.gdl` and `.layout` sources.
-4. Type each `@js` block according to its owning scene, external event sheet,
+   GDL component sources.
+4. Type each JavaScript event block according to its owning scene, external event sheet,
    extension function, prefab function, or behavior function.
-5. Reuse the existing `@js ... @end js` Events DSL representation.
+5. Use the GDL JavaScript event and its raw multiline code block.
 6. Keep generated files compact, deterministic, searchable, and read-only.
 7. Prevent new AI-authored code from depending on runtime-private underscore
    fields or generated/minified implementation symbols.
@@ -202,7 +207,7 @@ Examples of deliberate non-duplication:
   instruction catalog.
 - Object serializer fields stay only in the settings catalog and object
   `.gdl` sources.
-- Instance coordinates stay only in `.layout` sources.
+- Instance coordinates stay in the owning scene, prefab, variant or external-layout GDL document.
 - `project-api.d.ts` may declare that `Player` is a Sprite runtime object, but
   it must not copy the Sprite's animations or every object setting.
 - `project-api.d.ts` may declare that `Score` is a number variable, but it must
@@ -220,7 +225,7 @@ Both declaration files are generated editor state below `.gdevelop/`:
 - They are ignored by Git with the rest of `.gdevelop/`.
 - They must never be edited by an AI model or user.
 - Direct edits are overwritten on the next generation.
-- Project source remains the `.gdl`, `.layout`, and `.events` files.
+- Project source remains the `.gdl` and `project.gdevelop` files.
 
 ### 6.2 Determinism
 
@@ -489,7 +494,7 @@ not invent a new precedence rule.
 
 ## 10. JavaScript event contexts
 
-The validator and editor type each `@js` body using its owning `.events` file
+The validator and editor type each JavaScript event body using its owning `.gdl` file
 and structural location.
 
 ### 10.1 Scene event
@@ -501,7 +506,7 @@ declare const runtimeScene: gdjs.RuntimeScene;
 ```
 
 The synthetic checking context binds `runtimeScene` to the exact scene symbol
-map. When the `@js` header has `objects=`, it also declares `objects` with the
+map. When the JavaScript event has an `objects` property, it also declares `objects` with the
 picked object's concrete type.
 
 ### 10.2 External event
@@ -547,8 +552,13 @@ They are never exposed as `_behaviorData`.
 
 For:
 
-```events
-@js objects=Enemy
+```text
+event {
+  type = "javascript"
+  objects = "Enemy"
+  code {
+  }
+}
 ```
 
 the body is checked as if it had:
@@ -711,15 +721,15 @@ function ownership rather than placed in one unconditional frame block.
 `validate_project_files` performs JavaScript checks after parsing Events DSL
 and after generating the two declaration files:
 
-1. Extract each raw `@js` body without changing its contents.
+1. Extract each raw JavaScript event body without changing its contents.
 2. Preserve a source map from the synthetic TypeScript-checking file back to
-   the `.events` line and column.
+   the `.gdl` line and column.
 3. Determine the exact JavaScript event context.
 4. Load `runtime-api.d.ts` and `project-api.d.ts` by their generated hashes.
 5. Parse JavaScript using the runtime's supported ECMAScript target.
 6. Type-check it with `allowJs` and `checkJs` semantics.
 7. Apply AI-authoring policy diagnostics.
-8. Report errors against the original `.events` file.
+8. Report errors against the original `.gdl` file.
 9. Continue existing extension generated-code preflight.
 
 No JavaScript executes during these stages.
@@ -869,7 +879,7 @@ not guess.
 
 A project rename remains one coherent source transaction:
 
-1. Update authoritative `.gdl`, `.layout`, and `.events` sources.
+1. Update authoritative `.gdl` and `project.gdevelop` sources.
 2. Update affected JavaScript literals explicitly (or, in a future version,
    through proven AST-aware edits).
 3. Regenerate all catalogs and declaration files.
@@ -885,7 +895,7 @@ The declaration files are generated after the project model and extensions are
 fully available:
 
 1. Read and merge all `.gdl` files.
-2. Compile embedded `[layout]` subtrees and parse all `.events` files.
+2. Parse GDL component roots, embedded events and their layout data.
 3. Compose and validate the in-memory project model.
 4. Register built-in and project extensions.
 5. Generate instruction catalogs and the settings catalog, including embedded
@@ -910,69 +920,72 @@ operation reports success.
 
 ### 18.1 Mutating explicitly picked objects
 
-```events
-if CollisionNP first_object="Player" second_object="Enemy"
-
-> @js objects=Enemy
-for (const enemy of objects) {
-  enemy.setOpacity(128);
+```text
+event {
+  conditions {
+    CollisionNP first_object="Player" second_object="Enemy"
+  }
+  event {
+    type = "javascript"
+    strict = true
+    objects = "Enemy"
+    code {
+      for (const enemy of objects) {
+        enemy.setOpacity(128);
+      }
+    }
+  }
 }
-> @end js
 ```
 
 The `objects` element type comes from the `Enemy` definition in the current
-scene.
+scene. The explicit object parameter bridge uses the inherited selection;
+`runtimeScene.getObjects("Enemy")` is not a substitute for that bridge.
 
 ### 18.2 Safe object creation
 
-```events
-if KeyPressed key="Space"
+Place this child under the intended input condition; an unguarded update event
+would create an object every frame.
 
-> @js
-const bullet = runtimeScene.createObject("Bullet");
-if (bullet) {
-  bullet.setPosition(100, 200);
-  bullet.addPolarForce(0, 720, 1);
+```text
+event {
+  type = "javascript"
+  strict = true
+  code {
+    const bullet = runtimeScene.createObject("Bullet");
+    if (bullet) {
+      bullet.setPosition(100, 200);
+      bullet.addPolarForce(0, 720, 1);
+    }
+  }
 }
-> @end js
 ```
 
-The checker verifies the `Bullet` name, concrete type, nullable creation result,
-and public methods. This local JavaScript reference does not imply an Events DSL
-picked selection after the block.
+The checker verifies the `Bullet` name, concrete type, nullable creation result
+and public methods. This JavaScript reference does not imply a GDL picked
+selection after the block.
 
-### 18.3 Scene variable
+### 18.3 Scene initialization
 
-```events
-if SceneJustBegins
+Place this event in `sceneLoad.gdl` for once-per-load initialization, preserving
+the generated lifecycle signature:
 
-> @js
-const score = runtimeScene.getVariables().get("Score");
-score.setNumber(0);
-> @end js
+```text
+event {
+  type = "javascript"
+  strict = true
+  code {
+    const score = runtimeScene.getVariables().get("Score");
+    score.setNumber(0);
+  }
+}
 ```
 
 The project declaration verifies that `Score` exists in the scene context and
-is declared as a number.
+is declared as a number. Additional initialization helpers must be declared in
+the generated public API and available in the actual runtime context.
 
-### 18.4 Explicitly guarded initialization
-
-```events
-@group "Procedural water simulation" color=[74,176,228]
-> @event
-> if SceneJustBegins
-
->> @js
-// Initialization occurs once because the parent event is explicitly guarded.
-initializeWaterSimulation(runtimeScene);
->> @end js
-@end group
-```
-
-`initializeWaterSimulation` is valid only if it is present in
-`runtime-api.d.ts`, normally through a reviewed extension declaration.
-
-### 18.5 Forbidden private state
+### 18.4 Forbidden private state
 
 ```js
 player._variables;
@@ -988,7 +1001,7 @@ exist in one runtime build.
 
 ## 19. Diagnostics
 
-Diagnostics use stable codes and include the `.events` URI, JavaScript body
+Diagnostics use stable codes and include the `.gdl` URI, JavaScript body
 line, column, source excerpt, and suggested public alternative when known.
 
 Initial codes:
@@ -1008,7 +1021,7 @@ Initial codes:
 Diagnostics should favor an exact corrective action, for example:
 
 ```text
-JS_API_PRIVATE_MEMBER at game://scenes/Main/Main.events:42:8
+JS_API_PRIVATE_MEMBER at game://scenes/Main/functions/sceneUpdate.gdl:42:8
 `_permanentForceX` is runtime-private. Use `addPolarForce`, `addForce`, or a
 catalog force action, then verify the resulting force with `run_frames`.
 ```
@@ -1068,8 +1081,8 @@ Implementation is incomplete without tests for all of the following.
 - Nullable create/get operations.
 - Private field access.
 - Forbidden globals and dynamic code.
-- Correct `.events` line/column mapping.
-- JavaScript containing text that resembles `@end js` under a delimiter.
+- Correct .gdl line/column mapping.
+- JavaScript containing braces in strings, regular expressions, comments and template literals without ending the surrounding code block.
 
 ### 21.4 Runtime integration
 
@@ -1110,8 +1123,8 @@ Implementation is incomplete without tests for all of the following.
 
 ### Implemented: validation
 
-- Extract and type-check `@js` blocks.
-- Map diagnostics back to `.events` source.
+- Extract and type-check JavaScript event blocks.
+- Map diagnostics back to `.gdl` source.
 - Add private API and forbidden-global policies.
 - Add declaration hashes to validation receipts.
 
@@ -1175,7 +1188,7 @@ reuse. JavaScript is complementary.
 
 Rejected for version 1 because module ownership, loading order, bundling,
 imports, source maps, lifecycle, export targets, and security capabilities need
-a separate design. `@js` blocks already provide an executable integration path.
+a separate design. JavaScript event blocks already provide an executable integration path.
 
 ---
 
@@ -1196,7 +1209,7 @@ Version 1 is implemented. The following decisions remain for later versions:
 6. What tighter save-time and declaration-size budgets are appropriate for
    very large projects after measuring real projects?
 7. After version 1 is stable, is there enough need to design standalone
-   `scripts/` modules, or are extension/function-owned `@js` blocks sufficient?
+   `scripts/` modules, or are extension/function-owned JavaScript event blocks sufficient?
 
 ---
 

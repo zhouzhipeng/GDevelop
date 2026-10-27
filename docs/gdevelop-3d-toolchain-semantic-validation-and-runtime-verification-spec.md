@@ -84,7 +84,7 @@ those APIs.
 
 ## 4. Non-goals
 
-1. Renaming the existing TOML `lighting` field or legacy
+1. Renaming the GDL `lighting` field or legacy
    `isLightingLayer` JSON field.
 2. Supporting simultaneous 2D Lighting Layer compositing and Scene3D
    rendering in one layer. They remain separate layer modes.
@@ -104,7 +104,7 @@ those APIs.
 
 ### 5.1 GD-3D-001: 3D layer marked as a Lighting Layer
 
-`newIDE/app/src/ProjectsStorage/LayoutToml/index.js` compiles `rendering` and
+`newIDE/app/src/ProjectsStorage/LayoutDocument/index.js` compiles `rendering` and
 `lighting` independently. The editor UI normally preserves the invariant by
 hiding incompatible controls, but hand-authored multi-file layouts can bypass
 the UI.
@@ -242,7 +242,7 @@ messages.
 
 Checks that naturally own precise locations remain close to their parsers:
 
-- layout cross-field checks in the Layout TOML compiler;
+- layout cross-field checks in the shared LayoutDocument validator;
 - literal keyboard checks in the event validation scanner;
 - Physics3D editor property checks in the extension definition;
 - resource-source checks in the image manager.
@@ -256,7 +256,7 @@ It must not force non-event diagnostics into the event-only
 
 #### Authoring-time rule
 
-After `rendering` and `lighting` are parsed, the Layout TOML compiler must
+After `rendering` and `lighting` are parsed, the shared LayoutDocument validator must
 reject:
 
 ```text
@@ -281,7 +281,7 @@ The error must point to the layer and, where available, the `lighting` source
 line. Default/2D rendering with `lighting = true` remains valid.
 
 The same invariant must be checked for legacy serialized JSON before preview
-or export so non-TOML entry points cannot bypass it.
+or export so native-model entry points cannot bypass it.
 
 #### Runtime compatibility fallback
 
@@ -873,7 +873,7 @@ at frame end like a physical wheel event.
 
 | Surface                       | Change                                                                     | Compatibility                                                                                             |
 | ----------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Layout TOML                   | Cross-field diagnostic for 3D rendering plus `lighting=true`               | Invalid, previously non-rendering input is rejected; serialized keys unchanged.                           |
+| GDL layout validation                   | Cross-field diagnostic for 3D rendering plus `lighting=true`               | Invalid, previously non-rendering input is rejected; serialized keys unchanged.                           |
 | Legacy project validation     | Same layer invariant                                                       | Existing projects still open; preview/export gets a precise error and runtime fallback remains available. |
 | Core behavior deserialization | New explicit default-overlay path                                          | Valid complete data unchanged; overriding behavior semantics unchanged.                                   |
 | Runtime input                 | Digit/`DigitN` aliases                                                     | Additive; canonical reverse names stay `NumN`.                                                            |
@@ -901,8 +901,8 @@ these ownership areas.
 
 ### Multi-file format and catalogs
 
-- `newIDE/app/src/ProjectsStorage/LayoutToml/index.js`
-- `newIDE/app/src/ProjectsStorage/LayoutToml/index.spec.js`
+- `newIDE/app/src/ProjectsStorage/LayoutDocument/index.js`
+- `newIDE/app/src/ProjectsStorage/LayoutDocument/index.spec.js`
 - `newIDE/app/src/ProjectsStorage/MultiFileProjectFormat/index.js`
 - `newIDE/app/src/ProjectsStorage/MultiFileProjectFormat/index.spec.js`
 - `newIDE/app/src/ProjectsStorage/ProjectSourceCatalog.js`
@@ -1167,7 +1167,7 @@ The final manual/automated verification must establish:
 | ------------------------------------------------- | --------------------------------------------------------------------- |
 | Multi-file defaults match editor-created projects | Core overlay and multi-file equivalence tests                         |
 | Catalog describes key semantics                   | Layer constraint, resource capability, and keyboard catalog snapshots |
-| 3D/Lighting conflict is detected                  | TOML and legacy semantic tests                                        |
+| 3D/Lighting conflict is detected                  | GDL and native-model semantic tests                                        |
 | Cube3D texture capability is validated            | SVG/unsupported-source browser tests                                  |
 | Invalid key names are detected                    | Literal event scanner tests                                           |
 | Missing Physics3D defaults cannot produce `NaN`   | Runtime normalization and finite-coordinate tests                     |

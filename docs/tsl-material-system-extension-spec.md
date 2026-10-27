@@ -16,9 +16,8 @@ rendering, preview, and export
 Related specifications:
 
 - [GDevelop architecture](Architecture.md)
-- [GDevelop TypeScript code events](gdevelop-typescript-event-spec.md)
 - [GDevelop JavaScript authoring API](gdevelop-javascript-authoring-api-spec.md)
-- [GDevelop multi-file project format](gdevelop-new-formats-spec.md)
+- [GDevelop multi-file project format](settings-dsl-spec.md)
 - [3D toolchain semantic validation and runtime verification](gdevelop-3d-toolchain-semantic-validation-and-runtime-verification-spec.md)
 - [Spring-bone dynamics system extension](spring-bone-dynamics-system-extension-spec.md)
 - [Cloth simulation system extension](cloth-simulation-system-extension-spec.md)

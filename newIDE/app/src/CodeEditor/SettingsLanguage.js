@@ -1,5 +1,9 @@
 // @flow
 import {
+  analyzeSettingsBuffer,
+  getSettingsEventSemanticsHover,
+} from './SettingsEventSemantics';
+import {
   getSettingsInstructionCatalog,
   getSettingsInstructionCompletions,
 } from './SettingsInstructionCompletions';
@@ -328,10 +332,23 @@ export const registerSettingsLanguage = (monaco: any) => {
   });
   if (monaco.languages.registerHoverProvider)
     monaco.languages.registerHoverProvider(language, {
-      provideHover: async (model, position) => {
+      provideHover: async (model, position, cancellation) => {
+        if (cancellation && cancellation.isCancellationRequested) return null;
         const embedded = embeddedAt(model, position);
-        if (!embedded || !monaco.languages.typescript.getJavaScriptWorker)
-          return null;
+        if (!embedded) {
+          const analysis = analyzeSettingsBuffer(
+            model,
+            getSettingsInstructionCatalog(model.uri)
+          );
+          return (
+            analysis &&
+            getSettingsEventSemanticsHover(
+              analysis,
+              model.getOffsetAt(position)
+            )
+          );
+        }
+        if (!monaco.languages.typescript.getJavaScriptWorker) return null;
         const getWorker = await monaco.languages.typescript.getJavaScriptWorker();
         const worker = await getWorker(embedded.model.uri);
         const info = await worker.getQuickInfoAtPosition(

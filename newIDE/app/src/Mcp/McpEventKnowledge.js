@@ -1,5 +1,11 @@
 // @flow
 import {
+  getInstructionSemantics,
+  INSTRUCTION_CATALOG_VERSION,
+  SEMANTICS_VERSION,
+  SEMANTICS_RULES_REVISION,
+} from '../EventsSemantics/InstructionSemanticsRegistry';
+import {
   enumerateAllExpressions,
   enumerateAllExpressionsForExtension,
 } from '../InstructionOrExpression/EnumerateExpressions';
@@ -2010,7 +2016,11 @@ const catalogOwner = (scope: Object): ?Object => {
   return Object.keys(owner).length ? owner : undefined;
 };
 
-const catalogInstruction = (summary: Object, scope: Object): Object => {
+const catalogInstruction = (
+  summary: Object,
+  scope: Object,
+  kind: string
+): Object => {
   const instruction: Object = {
     type: summary.type,
     name: summary.fullName,
@@ -2027,6 +2037,7 @@ const catalogInstruction = (summary: Object, scope: Object): Object => {
     instruction.deprecationMessage = summary.deprecationMessage;
   const owner = catalogOwner(scope);
   if (owner) instruction.owner = owner;
+  instruction.semantics = getInstructionSemantics(kind, instruction);
   return instruction;
 };
 
@@ -2097,7 +2108,11 @@ export const buildCompleteProjectInstructionCatalog = ({
       });
       entriesByType.set(
         instruction.type,
-        catalogInstruction(summary, instruction.scope)
+        catalogInstruction(
+          summary,
+          instruction.scope,
+          isCondition ? 'condition' : 'action'
+        )
       );
     });
     return Array.from(entriesByType.values()).sort((left, right) =>
@@ -2147,7 +2162,9 @@ export const buildCompleteProjectInstructionCatalog = ({
 
   return {
     format: 'gdevelop-settings-instruction-catalog',
-    formatVersion: 3,
+    formatVersion: INSTRUCTION_CATALOG_VERSION,
+    semanticsVersion: SEMANTICS_VERSION,
+    semanticsRulesRevision: SEMANTICS_RULES_REVISION,
     project: {
       name: project.getName(),
       uuid: project.getProjectUuid(),

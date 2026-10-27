@@ -1,6 +1,6 @@
 # GDevelop Language (GDL) — current authoring syntax
 
-Only format 11 is accepted. `.gdl` and `project.gdevelop` use the same
+Only format 12 is accepted. `.gdl` and `project.gdevelop` use the same
 parser. constants.toml remains TOML; event bodies are embedded in function/fragment settings. .events files are forbidden.
 
 ## Syntax
@@ -46,8 +46,9 @@ screen/row/column layout nodes are not implemented.
   arguments, semicolons, inline objects outside variable.value, TOML headers or settings/layout wrapper.
 - One declaration per line. Strings use JSON escapes. Arrays can span lines
   and have a trailing comma. `//` starts a comment outside a string.
-- Values are strings, finite numbers, booleans and arrays; variable.value also accepts structure literals. Null, dates,
-  expressions and includes are forbidden. Integers must be safe integers.
+- Values are strings, finite numbers, booleans and arrays; variable.value also accepts structure literals. Null, dates and includes are forbidden. Ordinary configuration fields do not
+  accept expressions; event instruction operands and supported loop fields use
+  expr(...) as described in events-dsl.md. Integers must be safe integers.
 - Unknown fields/nodes and duplicate properties/singleton nodes are errors.
 - Only project.gdevelop declares formatVersion. All other root fields come
   directly from the matching component schema.

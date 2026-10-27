@@ -1622,9 +1622,56 @@ const readTools: Array<McpTool> = [
     },
   },
   {
+    name: 'analyze_gdl_events',
+    description:
+      'Explain execution counts, object picking, action targets and unknown effects in one saved GDL function or external fragment. Reads disk sources and current generated catalogs; never regenerates, reloads or executes code. Mixed event_path includes groups, comments and links. Analyzes parent context before selecting the returned subtree. complete means rule coverage, not gameplay correctness. Refresh catalogs with generate-catalogs if catalog-stale.',
+    inputSchema: {
+      type: 'object',
+      required: ['file'],
+      additionalProperties: false,
+      properties: {
+        file: {
+          type: 'string',
+          description: 'Project-relative managed .gdl path.',
+        },
+        event_path: { type: 'array', items: { type: 'integer', minimum: 0 } },
+        detail: { type: 'string', enum: ['summary', 'steps'] },
+        max_events: { type: 'integer', minimum: 1, maximum: 200 },
+        expected_snapshot: { type: ['string', 'null'] },
+        disabled_rules: { type: 'array', items: { type: 'string' } },
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'get_gdl_instruction_semantics',
+    description:
+      'Read one exact action or condition signature and its reviewed GDJS execution/selection semantics from current disk catalogs. Unknown or partial rules remain explicit; no code is executed and no generated files are written.',
+    inputSchema: {
+      type: 'object',
+      required: ['kind', 'type'],
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', enum: ['action', 'condition'] },
+        type: { type: 'string' },
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
     name: 'validate_project_files',
     description:
-      'Load the current local multi-file project from project.gdevelop, regenerate all three catalogs and all three public JavaScript declaration files (including .gdevelop/harness-api.d.ts), reload the sources using the fresh instruction catalog, reconstruct the legacy game.json representation in memory, validate JavaScript event blocks against the generated context-aware API, then validate through GDevelop and preflight generated extension JavaScript. strict=true JavaScript API violations block validation; compatibility blocks report semantic warnings while syntax errors still block. valid:true proves structural, JavaScript authoring-API, and code-generation validity only; it does NOT verify runtime gameplay semantics, object picking, or action side effects. Accepts no inputs, writes only six generated .gdevelop authoring files, does not reload editor memory, and reports the blocking file, error code, line, column, and source excerpt when available. Call this after direct project-file edits and require valid:true before reload_project, then runtime-test behavior-sensitive changes with a paused preview and run_frames or authored tests with run_gameplay_tests.',
+      'Load the current local multi-file project from project.gdevelop, regenerate all three catalogs and all three public JavaScript declaration files (including .gdevelop/harness-api.d.ts), reload the sources using the fresh instruction catalog, reconstruct the legacy game.json representation in memory, validate JavaScript event blocks against the generated context-aware API, then validate through GDevelop and preflight generated extension JavaScript. strict=true JavaScript API violations block validation; compatibility blocks report semantic warnings while syntax errors still block. Returns a separate conservative pickingAnalysis with rule coverage and unknown effects. valid:true proves structural, JavaScript authoring-API, and code-generation validity only; it does NOT verify runtime gameplay semantics, object picking, or action side effects. Accepts no inputs, writes only six generated .gdevelop authoring files, does not reload editor memory, and reports the blocking file, error code, line, column, and source excerpt when available. Call this after direct project-file edits and require valid:true before reload_project, then runtime-test behavior-sensitive changes with a paused preview and run_frames or authored tests with run_gameplay_tests.',
     inputSchema: noInputSchema,
     annotations: {
       readOnlyHint: false,
@@ -1969,6 +2016,23 @@ const toolUsageExamples: { [string]: Array<Object> } = {
         extension_name: 'Cards',
         include_events: true,
       },
+    },
+  ],
+  analyze_gdl_events: [
+    {
+      description:
+        'Inspect a GDL subtree and its inherited selection before editing.',
+      arguments: {
+        file: 'scenes/Main/functions/sceneUpdate.gdl',
+        detail: 'summary',
+        max_events: 40,
+      },
+    },
+  ],
+  get_gdl_instruction_semantics: [
+    {
+      description: 'Read exact collision signature and picking semantics.',
+      arguments: { kind: 'condition', type: 'CollisionNP' },
     },
   ],
   validate_project_files: [

@@ -376,7 +376,7 @@ implementation is materially simpler. Record that decision in the task result.
 ## Event authoring
 
 Read [the unified event syntax](references/events-dsl.md) before editing function
-or fragment bodies. Only GDevelop Language (GDL) format 11 is supported. Function signatures
+or fragment bodies. Only GDevelop Language (GDL) format 12 is supported. Function signatures
 and events share one .gdl file; .events files are rejected. Use explicit
 conditions/actions blocks containing bare catalog instructions, typed event
 nodes, independent group/comment/link nodes, and raw multiline code blocks.
@@ -384,6 +384,15 @@ nodes, independent group/comment/link nodes, and raw multiline code blocks.
 Use sceneLoad for initialization; never author SceneJustBegins. Guard per-frame
 sceneUpdate actions with effective conditions. Keep parent picking and source
 order semantics. New JavaScript uses strict=true and the generated public API.
+
+For behavior-sensitive edits, use `get_gdl_instruction_semantics` with exact
+`kind` and `type`, then `analyze_gdl_events` with the project-relative GDL file
+and optional mixed-list `event_path`. These tools do not refresh catalogs or
+reload the editor. On `catalog-stale`, run `generate-catalogs` and retry.
+Read `unknownReasons`, coverage and truncation before relying on a summary.
+`complete` means covered static rules, not verified gameplay. Current complex
+logical merges, inversion, arbitrary expressions/JS, loops and cross-file calls
+may remain partial. See [event analysis](references/events-dsl.md#execution-and-picking-analysis).
 
 ## Direct-edit workflow
 
@@ -530,6 +539,8 @@ The complete public protocol surface is the following allowlist:
   `inspect_model_materials`.
 - TSL authoring and validation: `get_tsl_authoring_context`,
   `validate_tsl_file`, and `render_tsl_material_preview`.
+- GDL execution and picking inspection: `analyze_gdl_events` and
+  `get_gdl_instruction_semantics` (read-only disk-source analysis).
 - Catalog, validation, and tool discovery:
   `generate-catalogs`, `validate_project_files`, `inspect_tool_schema`,
   and `get_tool_usage_examples`.

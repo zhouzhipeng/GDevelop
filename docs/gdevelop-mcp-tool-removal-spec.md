@@ -45,7 +45,7 @@ dispatch, tests, and bundled authoring guidance.
 - Do not remove generated instruction catalogues or the internal instruction
   metadata/building utilities used outside these public wrappers.
 - Do not change project serialization, the multi-file project format, the
-  IfDo event DSL, write/command permission preferences, or MCP transport.
+  GDL event syntax, write/command permission preferences, or MCP transport.
 - Do not add replacement aliases, deprecated shims, feature flags, or hidden
   compatibility endpoints for the removed names.
 
@@ -80,7 +80,7 @@ handler.
 
 Authoring workflows will use canonical project files instead:
 
-- Actions and signal instructions are authored in `.events` sources using the
+- Actions and signal instructions are authored in `.gdl` sources using the
   exact instruction types and named parameters from
   `.gdevelop/instructions-catalog.json`.
 - `onSignal` handlers are authored as canonical object/behavior function
@@ -157,7 +157,7 @@ these callable surfaces, not merely hide them from `tools/list`.
 
 MCP clients should refresh `tools/list` after upgrading. Workflows that used
 the removed construction helpers must switch to generated instruction
-catalogues plus direct `.events` authoring. Workflows that used the removed
+catalogues plus direct `.gdl` authoring. Workflows that used the removed
 `onSignal` writer must create or update canonical extension function sources
 directly and follow the validation/reload gates in the bundled project-files
 skill.

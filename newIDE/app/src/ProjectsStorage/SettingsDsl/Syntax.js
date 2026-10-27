@@ -364,6 +364,18 @@ export const parseSettingsSyntax = (source, fileUri) => {
         ? trailingComment.offset
         : headerEnd;
     result.source = source.slice(start, sourceEnd).trim();
+    if (!hasBlock) {
+      // Include all operands (including multiline expr) in instruction ranges.
+      const endOffset = start + source.slice(start, sourceEnd).trimEnd().length;
+      const lastArgument = Object.values(args).slice(-1)[0];
+      const end = lastArgument ? lastArgument.location : head.location;
+      result.location = {
+        ...head.location,
+        endOffset,
+        endLine: end.endLine,
+        endColumn: end.endColumn,
+      };
+    }
     if (!hasBlock) boundary();
     return result;
   };

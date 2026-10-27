@@ -625,8 +625,7 @@ export const extractSettingsJavaScriptBlocks = (source, fileUri) => {
   visit(syntax.root);
   return blocks;
 };
-export const compileSettingsEvents = (source, options = {}, fileUri) => {
-  const syntax = parseSettingsSyntax(source, fileUri);
+const compileParsedSettingsEvents = (syntax, options, fileUri) => {
   if (!['function', 'external_events'].includes(syntax.root.type))
     error(
       'Only functions and external fragments own events.',
@@ -640,6 +639,26 @@ export const compileSettingsEvents = (source, options = {}, fileUri) => {
     ? decodeEventList(containers[0], options, fileUri)
     : [];
 };
+export const compileSettingsEvents = (source, options = {}, fileUri) =>
+  compileParsedSettingsEvents(
+    parseSettingsSyntax(source, fileUri),
+    options,
+    fileUri
+  );
+
+// A companion API keeps source metadata outside the persisted native model.
+export const compileSettingsEventsWithSyntax = (
+  source,
+  options = {},
+  fileUri
+) => {
+  const syntax = parseSettingsSyntax(source, fileUri);
+  return {
+    events: compileParsedSettingsEvents(syntax, options, fileUri),
+    syntax,
+  };
+};
+
 export const appendSettingsEvents = (source, events, options = {}, uri) => {
   const syntax = parseSettingsSyntax(source, uri);
   syntax.root.children = syntax.root.children.filter(c => c.type !== 'events');

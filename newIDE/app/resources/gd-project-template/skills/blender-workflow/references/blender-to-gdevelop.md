@@ -251,7 +251,7 @@ GDevelop's [3D Model object guide](https://wiki.gdevelop.io/gdevelop5/objects/3d
 
 Create or select a layer and enable 3D rendering. Keep 2D interface objects on a separate 2D layer when possible.
 
-In multi-file layout TOML, use `rendering = "3d"` or `"2d+3d"` with
+In the owning GDL layer node, use `rendering = "3d"` or `"2d+3d"` with
 `lighting = false`. The `lighting` flag means a dedicated 2D Lighting Layer;
 it does not enable Scene3D lighting and the invalid 3D-plus-lighting
 combination fails with `LAYOUT_3D_LAYER_MARKED_AS_LIGHTING_LAYER`. Add 3D light

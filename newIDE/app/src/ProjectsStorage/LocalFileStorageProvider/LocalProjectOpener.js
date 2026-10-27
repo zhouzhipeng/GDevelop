@@ -1,4 +1,5 @@
 // @flow
+import { createCatalogSourceFingerprint } from '../../EventsSemantics/ProjectContext';
 import optionalRequire from '../../Utils/OptionalRequire';
 import { type FileMetadata } from '../index';
 import { openFilePicker } from '../../Utils/FileSystem';
@@ -6,7 +7,10 @@ import {
   serializeToJSObject,
   unserializeFromJSObject,
 } from '../../Utils/Serializer';
-import { openMultiFileProject } from './LocalMultiFileProject';
+import {
+  openMultiFileProject,
+  openMultiFileProjectWithSources,
+} from './LocalMultiFileProject';
 import { writeProjectSourceCatalogs } from './LocalProjectWriter';
 import {
   MULTI_FILE_ENTRY_NAME,
@@ -15,6 +19,7 @@ import {
 import {
   PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH,
   PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH,
+  validateProjectInstructionCatalog,
 } from '../SettingsDsl/InstructionCatalog';
 import {
   generateEventsFunctionExtensionMetadata,
@@ -96,8 +101,28 @@ const bootstrapProjectSourceCatalogs = async (
   } catch (error) {
     // Missing, invalid, or retired catalogs are regenerated below.
   }
+  let hasCurrentInstructionCatalogs = false;
+  try {
+    [
+      PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH,
+      PROJECT_DEPRECATED_INSTRUCTION_CATALOG_RELATIVE_PATH,
+    ].forEach(relativePath => {
+      validateProjectInstructionCatalog(
+        JSON.parse(
+          fs.readFileSync(
+            path.join(projectRoot, ...relativePath.split('/')),
+            'utf8'
+          )
+        )
+      );
+    });
+    hasCurrentInstructionCatalogs = true;
+  } catch (_) {
+    // Generated signatures are disposable; a retired catalog is not a retired GDL project.
+  }
   if (
     hasCurrentSettingsCatalog &&
+    hasCurrentInstructionCatalogs &&
     !fs.existsSync(retiredLayoutCatalogPath) &&
     generatedArtifactRelativePaths.every(relativePath =>
       fs.existsSync(path.join(projectRoot, ...relativePath.split('/')))
@@ -119,7 +144,10 @@ const bootstrapProjectSourceCatalogs = async (
   // A first open has no generated instruction catalog yet, so reconstruct the
   // project without compiling events, build isolated metadata for its local
   // extensions, and write every generated authoring artifact before reopening.
-  const catalogSource = await openMultiFileProject(projectFile, {
+  const {
+    serializedProject: catalogSource,
+    sourceTree,
+  } = await openMultiFileProjectWithSources(projectFile, {
     ignoreInstructionCatalog: true,
     skipEventsCompilation: true,
   });
@@ -133,6 +161,7 @@ const bootstrapProjectSourceCatalogs = async (
     );
     await writeProjectSourceCatalogs(catalogProject, projectRoot, {
       additionalExtensions,
+      sourceFingerprint: createCatalogSourceFingerprint(sourceTree.files),
     });
   } finally {
     additionalExtensions.forEach(extension => extension.delete());

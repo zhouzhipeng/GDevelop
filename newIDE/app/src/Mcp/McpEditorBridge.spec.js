@@ -1313,6 +1313,74 @@ describe('McpEditorBridge', () => {
     expect(result.nextAction).toContain('RUNTIME VERIFICATION REQUIRED');
     expect(result.note).toContain('does not prove object picking');
     expect(result.note).toContain('RUNTIME NOT VERIFIED');
+    expect(result.pickingAnalysis).toMatchObject({
+      status: 'complete',
+      runtimeVerified: false,
+      analyzedFiles: expect.any(Number),
+    });
+    const invoke = async (name, args) => {
+      const response = await bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: { name, arguments: args },
+      });
+      return JSON.parse(response.content[0].text);
+    };
+    const diskFile = path.join(
+      temporaryDirectory,
+      'scenes/Scene/functions/sceneUpdate.gdl'
+    );
+    const catalogPath = path.join(
+      catalogDirectory,
+      'instructions-catalog.json'
+    );
+    const catalogBefore = fs.readFileSync(catalogPath, 'utf8');
+    const sourceBefore = fs.readFileSync(diskFile, 'utf8');
+    const analyzed = await invoke('analyze_gdl_events', {
+      file: 'scenes/Scene/functions/sceneUpdate.gdl',
+      detail: 'steps',
+    });
+    expect(analyzed).toMatchObject({
+      success: true,
+      status: 'complete',
+      sourceKind: 'disk',
+      runtimeVerified: false,
+    });
+    expect(analyzed.events[0].conditions[0].ruleId).toBe(
+      'gdjs.condition.boolean-gate'
+    );
+    const exact = await invoke('get_gdl_instruction_semantics', {
+      kind: 'condition',
+      type: 'SceneJustBegins',
+    });
+    expect(exact.instruction.semantics.status).toBe('known');
+    expect(fs.readFileSync(catalogPath, 'utf8')).toBe(catalogBefore);
+    expect(fs.readFileSync(diskFile, 'utf8')).toBe(sourceBefore);
+    const stale = await invoke('analyze_gdl_events', {
+      file: 'scenes/Scene/functions/sceneUpdate.gdl',
+      expected_snapshot: 'old',
+    });
+    expect(stale.status).toBe('stale');
+    const outside = await invoke('analyze_gdl_events', {
+      file: '../outside.gdl',
+    });
+    expect(outside.success).toBe(false);
+    fs.writeFileSync(
+      diskFile,
+      sourceBefore.replace('name = "sceneUpdate"', 'name = "ChangedName"')
+    );
+    const staleCatalog = await invoke('analyze_gdl_events', {
+      file: 'scenes/Scene/functions/sceneUpdate.gdl',
+    });
+    expect(staleCatalog.status).toBe('catalog-stale');
+    expect(fs.readFileSync(catalogPath, 'utf8')).toBe(catalogBefore);
+    const pending = path.join(catalogDirectory, 'transactions/pending');
+    fs.mkdirSync(pending, { recursive: true });
+    const pendingRead = await invoke('analyze_gdl_events', {
+      file: 'scenes/Scene/functions/sceneUpdate.gdl',
+    });
+    expect(pendingRead.code).toBe('MULTIFILE_PENDING_TRANSACTION');
+    expect(fs.existsSync(pending)).toBe(true);
+    expect(reloadProjectAndWait).not.toHaveBeenCalled();
   });
 
   it('validates calls to a disk-only project extension before editor reload', async () => {

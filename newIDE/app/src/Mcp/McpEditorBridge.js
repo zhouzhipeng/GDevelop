@@ -1,4 +1,10 @@
 // @flow
+import { analyzeProjectGdl } from '../EventsSemantics/ProjectAnalysis';
+import {
+  callGdlSemanticsTool,
+  readGdlSemanticsCatalog,
+} from './McpGdlSemantics';
+import { createCatalogSourceFingerprint } from '../EventsSemantics/ProjectContext';
 import { decodeSettingsDocument } from '../ProjectsStorage/SettingsDsl';
 
 import {
@@ -20,7 +26,7 @@ import {
   getGameplayTestDescriptors,
 } from '../ProjectsStorage/MultiFileProjectFormat';
 import {
-  openMultiFileProject,
+  openMultiFileProjectWithSources,
   readMultiFileSourceTree,
   resolveGameUriToPath,
 } from '../ProjectsStorage/LocalFileStorageProvider/LocalMultiFileProject';
@@ -424,10 +430,16 @@ const generateProjectSourceCatalogsFromDisk = async (
   // Bootstrap from disk without trusting the potentially stale generated
   // instruction catalog. Each catalog write is awaited and verified by the
   // project writer before this helper resolves.
-  const catalogSource = await openMultiFileProject(projectFile, {
+  const {
+    serializedProject: catalogSource,
+    sourceTree: fingerprintSource,
+  } = await openMultiFileProjectWithSources(projectFile, {
     ignoreInstructionCatalog: true,
     skipEventsCompilation: true,
   });
+  const sourceFingerprint = createCatalogSourceFingerprint(
+    fingerprintSource.files
+  );
   const catalogProject = gd.ProjectHelper.createNewGDJSProject();
   const additionalExtensions: Array<gdPlatformExtension> = [];
   try {
@@ -439,7 +451,7 @@ const generateProjectSourceCatalogsFromDisk = async (
       const catalogs = await writeProjectSourceCatalogs(
         catalogProject,
         projectRoot,
-        { additionalExtensions }
+        { additionalExtensions, sourceFingerprint }
       );
       return { projectRoot, catalogs };
     } catch (error) {
@@ -5544,6 +5556,30 @@ const callMcpTool = async ({
     }
   }
 
+  if (
+    toolName === 'analyze_gdl_events' ||
+    toolName === 'get_gdl_instruction_semantics'
+  ) {
+    if (!project) return errorResult('No project opened.');
+    try {
+      const result = await callGdlSemanticsTool(
+        project.getProjectFile(),
+        toolName,
+        args
+      );
+      return result.success === false
+        ? errorResult(result.reason || result.status, result)
+        : textResult(result);
+    } catch (error) {
+      return errorResult(error.message, {
+        success: false,
+        status: 'blocked',
+        runtimeVerified: false,
+        code: error.code || 'GDL_ANALYSIS_FAILED',
+      });
+    }
+  }
+
   if (toolName === 'validate_project_files') {
     if (!project) return errorResult('No project opened.');
     const projectFile = project.getProjectFile();
@@ -5607,10 +5643,12 @@ const callMcpTool = async ({
       const behaviorPropertySchemasByType = buildBehaviorPropertySchemasByType(
         settingsCatalog
       );
-      const serializedProject = await openMultiFileProject(projectFile, {
+      const {
+        serializedProject,
+        sourceTree,
+      } = await openMultiFileProjectWithSources(projectFile, {
         behaviorPropertySchemasByType,
       });
-      const sourceTree = await readMultiFileSourceTree(projectFile);
       // Avoid a pretty-printed JSON string plus encodeURIComponent/unescape
       // copies. On large 3D projects, those transient strings compete with the
       // embedded scene renderer for the same renderer-process heap.
@@ -5663,7 +5701,21 @@ const callMcpTool = async ({
             ),
           }
         : validation.javascriptAuthoring;
+      let pickingAnalysis;
+      try {
+        pickingAnalysis = analyzeProjectGdl({
+          files: sourceTree.files,
+          catalog: readGdlSemanticsCatalog(projectRoot),
+        });
+      } catch (error) {
+        pickingAnalysis = {
+          status: 'analysis-failed',
+          runtimeVerified: false,
+          reason: error.message,
+        };
+      }
       const sourceLocatedValidation = {
+        pickingAnalysis,
         ...validation,
         errors: sourceLocatedErrors,
         javascriptAuthoring,

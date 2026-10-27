@@ -31,7 +31,7 @@ guidance must agree on the new contract.
   second execution engine.
 - Return from `run_gameplay_tests` immediately with a stable operation ID while
   the run continues in the renderer.
-- Identify tests by the strict version 5 multi-file path contract: a
+- Identify tests by the strict GDL 12 multi-file path contract: a
   scheme-free, flat `tests/<Encoded name>.js` path with no `game://` prefix.
 - Run the current in-memory test source associated with that path, so MCP and
   the editor execute the same project model.
@@ -62,15 +62,14 @@ guidance must agree on the new contract.
 - Do not replace `verify_project_change`, the preview debugger tools, or the
   local `RUN_ALL_TESTS` CLI command.
 - Do not change gameplay-test JavaScript APIs, runtime assertion semantics,
-  the version 5 project format, or legacy single-file serialization.
+  the GDL 12 project format, or legacy single-file serialization.
 - Do not copy the official gameplay-test guide verbatim or make network access
   to that guide a prerequisite for using the bundled skill.
 - Do not hand-author `.gdevelop/harness-api.d.ts` inside user projects or treat
   it as project source.
 - Do not persist full MCP operation history or screenshot bytes to project
   source or `.gdevelop`.
-- Do not add version 6 or a compatibility alias for the retired authored
-  `source` path field.
+- Do not add a compatibility alias for the retired authored `source` path field.
 
 ## Current Behavior
 
@@ -140,7 +139,7 @@ Its input schema is:
 ```
 
 - When `file` is present, it must exactly match one canonical `file` value in
-  the active project's transient version 5 `tests.gdl` projection, for
+  the active project's transient GDL 12 `tests.gdl` projection, for
   example `tests/Player%20can%20jump.js`.
 - When `file` is omitted, all tests run in canonical project order: project
   tests in container order, then each extension in project order and its tests
@@ -379,7 +378,7 @@ three JavaScript declarations. Save, open/reload catalog refresh,
 `generate-catalogs`, and the catalog phase of `validate_project_files` all use
 `writeProjectSourceCatalogs`, so they receive the new artifact consistently.
 
-`harness-api.d.ts` is a generated/editor artifact, never an authored version 5
+`harness-api.d.ts` is a generated/editor artifact, never an authored GDL 12
 source. It declares the global `harness` available to the body of a gameplay
 test and the reviewed public supporting types needed by its methods. The
 declaration covers the supported contracts for:
@@ -409,7 +408,7 @@ declaration may use the public `gdjs` and `GDevelopProject` types from the two
 other generated declarations. Its header records content hashes for itself and
 the declarations it depends on. Adding this third artifact increments the
 JavaScript authoring artifact format version while leaving the multi-file
-project format at strict version 5.
+project format at strict GDL 12.
 
 `buildJavaScriptAuthoringArtifacts` returns `harnessApi` plus its hash, and
 `writeProjectJavaScriptAuthoringApi` writes all three declarations
@@ -450,7 +449,7 @@ It must explain:
 - the meaning of passed, failed, error, stopped, and timeout results;
 - representative, newly written examples for movement/jumping, collection or
   damage, layer-based menus, scene variables, and performance profiling;
-- project tests versus extension-owned tests and their flat version 5 file
+- project tests versus extension-owned tests and their flat GDL 12 file
   identities;
 - when screenshots are useful, and that the initial MCP run surface suppresses
   screenshot capture even though editor/CLI harness runs can retain it;
@@ -620,7 +619,7 @@ The file is regenerated with the existing catalogs and declarations, carries a
 generated-content/dependency hash header, and is returned in catalog receipts.
 It is public authoring guidance but not serialized project data. The JavaScript
 authoring artifact version changes; the multi-file project remains strict
-version 5.
+GDL 12.
 
 The operation registry is transient editor state. Full MCP results are not
 written to `tests.gdl`, test scripts, project/extension settings,
@@ -639,12 +638,12 @@ No migration rewrites `project.gdevelop`, `tests.gdl`, or a test script.
 Older builds ignore the extra generated file. New builds regenerate a missing
 or stale file rather than treating it as authored input.
 
-Only strict version 5 multi-file canonical paths are accepted as `file`
-selectors. No `game://` prefix, old `source` field, version 6 marker, nested
+Only strict GDL 12 multi-file canonical paths are accepted as `file`
+selectors. No `game://` prefix, old `source` field, unsupported format marker, nested
 test folder, test-name alias, or legacy compatibility parsing is introduced.
 Running all tests remains available when the active project was imported from
 legacy JSON, but selecting a test by `file` requires that the current project
-can produce the strict version 5 canonical test projection.
+can produce the strict GDL 12 canonical test projection.
 
 ## Error Handling
 
@@ -844,7 +843,7 @@ JavaScript events.
 ### Link only to the official online gameplay-test guide
 
 Rejected because the bundled skill must work offline and must describe this
-branch's strict version 5 file layout, generated declaration, and MCP tools.
+branch's strict GDL 12 file layout, generated declaration, and MCP tools.
 The official guide supplies the user-facing testing model; the local reference
 remains authoritative for branch-specific workflow and points back to it.
 

@@ -28,7 +28,7 @@ export const getSettingsInstructionCatalog = uri => {
         const catalog = JSON.parse(fs.readFileSync(file, 'utf8'));
         if (
           catalog.format !== 'gdevelop-settings-instruction-catalog' ||
-          catalog.formatVersion !== 3
+          catalog.formatVersion !== 4
         )
           return null;
         diskCatalogs.set(file, { modified: stat.mtimeMs, catalog });

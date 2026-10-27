@@ -183,3 +183,129 @@ if (pickedCount > 0) { objects[0].setX(42); }
     restored.delete();
   }
 });
+
+// These fixtures are executed by scripts/test-unified-settings-runtime.cjs.
+// Each case reaches its event list once, so frame repetition cannot hide a
+// mistaken action/instance cardinality assumption.
+test('generates native cardinality fixtures and checks their static contracts', () => {
+  const { analyzeGdlEvents } = require('../../EventsSemantics/AnalyzeEvents');
+  const fixtures = [];
+  const project = global.gd.ProjectHelper.createNewGDJSProject();
+  try {
+    const scene = project.insertNewLayout('Main', 0);
+    ['Player', 'Coin', 'Enemy'].forEach(name =>
+      scene
+        .getObjects()
+        .insertNewObject(
+          project,
+          'Sprite',
+          name,
+          scene.getObjects().getObjectsCount()
+        )
+    );
+    const catalog = buildProjectInstructionCatalog(project);
+    const options = {
+      resolveInstruction: createCatalogInstructionResolver(catalog),
+    };
+    const objectArgument = type =>
+      catalog.actions
+        .find(entry => entry.type === type)
+        .parameters.find(parameter => parameter.valueKind === 'object').dslName;
+    const collision = 'CollisionNP first_object="Player" second_object="Coin"';
+    const score =
+      'SetNumberVariable variable="Score" modification_sign="+" value=1';
+    const picked = 'conditions {\n' + collision + '\n}\n';
+    const cases = [
+      {
+        name: 'multi-delete-single-score',
+        body: `event {\n${picked}actions {\nDelete object="Coin"\n${score}\n}\n}`,
+        coins: 1,
+        score: 1,
+        advisory: true,
+      },
+      {
+        name: 'post-filter-for-each',
+        body: `event {\n${picked}event {\ntype = "for_each"\nobject = "Coin"\nactions {\nDelete object="Coin"\n${score}\n}\n}\n}`,
+        coins: 1,
+        score: 2,
+        advisory: false,
+      },
+      {
+        name: 'repick-all-after-filter',
+        body: `event {\n${picked}actions {\nPickAllInstances ${objectArgument(
+          'PickAllInstances'
+        )}="Coin"\nDelete object="Coin"\n${score}\n}\n}`,
+        coins: 0,
+        score: 1,
+        advisory: true,
+      },
+      {
+        name: 'random-current-selection',
+        body: `event {\n${picked}actions {\nPickRandomInstance ${objectArgument(
+          'PickRandomInstance'
+        )}="Coin"\nDelete object="Coin"\n${score}\n}\n}`,
+        coins: 2,
+        score: 1,
+        advisory: false,
+      },
+      {
+        name: 'sibling-selection-reset',
+        body: `event {\n${picked}}\nevent {\nactions {\nDelete object="Coin"\n}\n}`,
+        coins: 0,
+        score: 0,
+        advisory: false,
+      },
+      {
+        name: 'selected-js-versus-container',
+        body: `event {\n${picked}event {\ntype = "javascript"\nobjects = "Coin"\ncode {\nruntimeScene.getVariables().get("Score").setNumber(objects.length);\nruntimeScene.getVariables().get("AllCoins").setNumber(runtimeScene.getObjects("Coin").length);\n}\n}\n}`,
+        coins: 3,
+        score: 2,
+        allCoins: 3,
+        advisory: false,
+      },
+    ];
+    for (const fixture of cases) {
+      const source = `function {\nname = "sceneUpdate"\nevents {\n${
+        fixture.body
+      }\n}\n}\n`;
+      const analysis = analyzeGdlEvents({
+        source,
+        catalog,
+        owner: {
+          kind: 'scene',
+          functionName: 'sceneUpdate',
+          variables: { Score: 'scene' },
+        },
+        symbols: {
+          Player: { id: 'Player' },
+          Coin: { id: 'Coin' },
+          Enemy: { id: 'Enemy' },
+        },
+      });
+      expect(analysis.success).toBe(true);
+      expect(
+        analysis.diagnostics.some(
+          item => item.code === 'GDL_MULTI_SELECTION_SINGLE_EFFECT'
+        )
+      ).toBe(fixture.advisory);
+      const model = serializeToJSObject(project);
+      model.layouts[0].variables = [
+        { name: 'Score', type: 'number', value: 0 },
+      ];
+      model.layouts[0].events = compileSettingsEvents(source, options);
+      unserializeFromJSObject(project, model);
+      const generated = generateEventsCodeForScope(project, {
+        layout: project.getLayoutAt(0),
+      });
+      expect(generated.error).toBeNull();
+      fixtures.push({ ...fixture, code: generated.code });
+    }
+    if (process.env.GDEVELOP_UNIFIED_RUNTIME_FIXTURE)
+      require('fs').appendFileSync(
+        process.env.GDEVELOP_UNIFIED_RUNTIME_FIXTURE,
+        `window.__gdlSemanticsFixtures = ${JSON.stringify(fixtures)};\n`
+      );
+  } finally {
+    project.delete();
+  }
+});

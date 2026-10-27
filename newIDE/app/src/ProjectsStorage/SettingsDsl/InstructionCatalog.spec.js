@@ -1,4 +1,5 @@
 // @flow
+import { withTestInstructionSemantics } from './TestHelpers';
 
 import { appendSettingsEvents, compileSettingsEvents } from './Events';
 import { parseLegacyEventsJson } from './EventModel';
@@ -26,9 +27,9 @@ const areLegacyEventsEquivalent = (left, right) =>
   JSON.stringify(parseLegacyEventsJson(left)) ===
   JSON.stringify(parseLegacyEventsJson(right));
 
-const catalogFixture = {
+const catalogFixture = withTestInstructionSemantics({
   format: 'gdevelop-settings-instruction-catalog',
-  formatVersion: 3,
+  formatVersion: 4,
   actions: [
     {
       type: 'Network::Send',
@@ -71,21 +72,25 @@ const catalogFixture = {
     },
   ],
   expressions: [],
-};
+});
 
 describe('project Settings instruction catalog', () => {
-  test('requires the semantic version 3 catalog without authoring prose', () => {
+  test('requires the semantic version 4 catalog without authoring prose', () => {
     expect(() =>
-      validateProjectInstructionCatalog({
-        ...catalogFixture,
-        formatVersion: 1,
-      })
-    ).toThrow('expected version 3');
+      validateProjectInstructionCatalog(
+        withTestInstructionSemantics({
+          ...catalogFixture,
+          formatVersion: 1,
+        })
+      )
+    ).toThrow('expected version 4');
     expect(() =>
-      validateProjectInstructionCatalog({
-        ...catalogFixture,
-        authoring: { rules: [] },
-      })
+      validateProjectInstructionCatalog(
+        withTestInstructionSemantics({
+          ...catalogFixture,
+          authoring: { rules: [] },
+        })
+      )
     ).toThrow('must not contain authoring prose');
   });
 
@@ -98,20 +103,22 @@ describe('project Settings instruction catalog', () => {
 
   test('rejects catalog parameter names that the DSL cannot parse', () => {
     expect(() =>
-      validateProjectInstructionCatalog({
-        ...catalogFixture,
-        actions: [
-          {
-            type: 'Invalid::Action',
-            parameters: [{ dslName: '3d_capability' }],
-          },
-        ],
-      })
+      validateProjectInstructionCatalog(
+        withTestInstructionSemantics({
+          ...catalogFixture,
+          actions: [
+            {
+              type: 'Invalid::Action',
+              parameters: [{ dslName: '3d_capability' }],
+            },
+          ],
+        })
+      )
     ).toThrow('invalid parameter');
   });
 
   test('round-trips an instruction whose displayed parameter starts with a digit', () => {
-    const digitParameterCatalog = {
+    const digitParameterCatalog = withTestInstructionSemantics({
       ...catalogFixture,
       actions: [
         {
@@ -125,7 +132,7 @@ describe('project Settings instruction catalog', () => {
           ],
         },
       ],
-    };
+    });
     const input = JSON.stringify([
       {
         type: 'BuiltinCommonInstructions::Standard',
@@ -204,7 +211,7 @@ describe('project Settings instruction catalog', () => {
   });
 
   test('normalizes parameters that cannot be represented by a catalog signature', () => {
-    const normalizationCatalog = {
+    const normalizationCatalog = withTestInstructionSemantics({
       ...catalogFixture,
       actions: [
         ...catalogFixture.actions,
@@ -236,7 +243,7 @@ describe('project Settings instruction catalog', () => {
           ],
         },
       ],
-    };
+    });
     const normalized = normalizeLegacyProjectInstructionParameters(
       {
         layouts: [
@@ -329,7 +336,7 @@ describe('project Settings instruction catalog', () => {
   });
 
   test('rejects operands that do not match the catalog valueKind', () => {
-    const typedCatalog = {
+    const typedCatalog = withTestInstructionSemantics({
       ...catalogFixture,
       actions: [
         {
@@ -341,7 +348,7 @@ describe('project Settings instruction catalog', () => {
           ],
         },
       ],
-    };
+    });
     const compile = (source: string): string =>
       compileSettingsJson(source, {
         resolveInstruction: createCatalogInstructionResolver(typedCatalog),
@@ -407,7 +414,7 @@ describe('project Settings instruction catalog', () => {
   });
 
   test('writes empty text and calculated text without nested operand quoting', () => {
-    const textCatalog = {
+    const textCatalog = withTestInstructionSemantics({
       ...catalogFixture,
       actions: [
         {
@@ -421,7 +428,7 @@ describe('project Settings instruction catalog', () => {
           ],
         },
       ],
-    };
+    });
     const input = JSON.stringify([
       {
         type: 'BuiltinCommonInstructions::Standard',
@@ -483,7 +490,7 @@ describe('project Settings instruction catalog', () => {
   });
 
   test('quotes and round-trips an exact instruction type containing whitespace', () => {
-    const spacedTypeCatalog = {
+    const spacedTypeCatalog = withTestInstructionSemantics({
       ...catalogFixture,
       actions: [
         {
@@ -499,7 +506,7 @@ describe('project Settings instruction catalog', () => {
           ],
         },
       ],
-    };
+    });
     const input = JSON.stringify([
       {
         type: 'BuiltinCommonInstructions::Standard',
@@ -689,7 +696,7 @@ describe('project Settings instruction catalog', () => {
     expect(
       catalog.expressions.some(({ type }) => type === 'TextObject::String')
     ).toBe(false);
-    expect(catalog.formatVersion).toBe(3);
+    expect(catalog.formatVersion).toBe(4);
     expect(catalog.authoring).toBeUndefined();
     expect(serialized).not.toContain('"authoring"');
     expect(serialized).not.toContain('serialized operand');

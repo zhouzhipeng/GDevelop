@@ -179,9 +179,8 @@ dependency/compatibility issue before retrying.
 
 ## Verify and report
 
-1. Parse every new settings TOML fragment independently and as combined
-   settings; semantically compile every generated root layout nodes
-   as layout TOML version 1.
+1. Parse each new GDL component and validate the composed project, including
+   layout nodes, embedded events, references and registered type schemas.
 2. Confirm no downloaded `.json` file was added to project source.
 3. Confirm the import receipt lists the requested extension, its generated
    `extension.gdl`, source files for all imported dependencies, and the

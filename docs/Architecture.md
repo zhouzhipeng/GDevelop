@@ -697,14 +697,12 @@ requested.
 
 | Representation            | Entry                                           | Status in this checkout                                                                                            |
 | ------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Single JSON               | arbitrary `*.json`                              | Legacy input/output path supported by the serializer/storage layer.                                                |
-| Split JSON folder project | a JSON entry plus referenced `*.json` fragments | Legacy format using `ObjectSplitter` and `__REFERENCE_TO_SPLIT_OBJECT`. Still readable; not the new source format. |
-| Multi-file source project | `project.gdevelop`                              | Primary local authoring format; version 6 TOML settings with embedded layouts, IfDo events, and flat gameplay-test JavaScript sources. |
+| Native JSON model | Internal serialization and template-service snapshots | Engine/editor interchange; URL template import produces the current GDL model. |
+| Multi-file source project | `project.gdevelop` | Primary local authoring format: GDL 12 configuration and embedded events, with separate gameplay-test JavaScript sources. |
 
-Opening a legacy single-JSON project normalizes it through the current libGD
-serializer, decomposes it directly to version 6 next to the source, verifies a
-compose round trip, and redirects the open file metadata to
-`project.gdevelop`. Production accepts only version 6 multi-file projects; earlier source trees need an explicit one-time conversion.
+The current authoring reader accepts GDL 12 only. It does not detect or migrate
+older authoring formats. Native JSON template import is a separate boundary,
+not a fallback GDL reader. See the [current GDL contract](settings-dsl-spec.md).
 
 Packaged desktop builds associate `.gdevelop` with GDevelop. Windows and Linux
 open the selected document through the positional project argument; macOS
@@ -719,7 +717,7 @@ entry.
 `newIDE/app/src/ProjectsStorage/MultiFileProjectFormat/index.js` owns the pure
 logical projection between the legacy-shaped JS object and source documents.
 `newIDE/app/src/ProjectsStorage/LocalFileStorageProvider/LocalMultiFileProject.js`
-owns filesystem discovery, URI/path safety, transactions, and migration.
+owns filesystem discovery, URI/path safety, transactions, and recovery.
 
 A representative source tree is:
 
@@ -735,33 +733,29 @@ scenes/<encoded-name>/
   scene.gdl
   objects/<encoded-name>.gdl
   functions/<lifecycle>.gdl
-  functions/<lifecycle>.events
-  external-events/<encoded-name>.events
+  external-events/<encoded-name>.gdl
   external-layout/<encoded-name>.gdl
 extensions/<encoded-name>/extension.gdl
-extensions/<encoded-name>/functions/<encoded-name>.gdl|.events
+extensions/<encoded-name>/functions/<encoded-name>.gdl
 extensions/<encoded-name>/behaviors/<encoded-name>/
   behavior.gdl
-  functions/<encoded-name>.gdl|.events
+  functions/<encoded-name>.gdl
 extensions/<encoded-name>/prefabs/<encoded-name>/
   prefab.gdl
   objects/<encoded-name>.gdl
-  functions/<encoded-name>.gdl|.events
+  functions/<encoded-name>.gdl
   variants/<encoded-name>/
     variant.gdl
     objects/<encoded-name>.gdl
 ```
 
-- `*.gdl` and `constants.toml` use TOML. Layout-bearing owners embed the
-  strict layout schema below `[layout]`; there are no managed `.layout` files.
-- `*.events` uses the IfDo DSL in
-  `newIDE/app/src/EventsSheet/IfDoEventsDsl`.
-- Root `tests.gdl` owns all project and extension gameplay-test metadata;
+- `*.gdl` and `project.gdevelop` use GDL; `constants.toml` remains TOML.
+- Configuration and layout share the owning component root. Functions and
+  external fragments contain their own `events` body in the same GDL file.
+- Root `tests.gdl` owns project and extension gameplay-test metadata;
   each scheme-free `file` points to one direct child of root `tests/`.
-- Physical owner paths derive component association. Same-stem function event
-  bodies and embedded layouts do not use URI fields.
-- Every managed `.events` file is a function body and has a same-stem
-  `.gdl` file in the same `functions/` directory.
+- Physical owner paths derive component association. No separate event or
+  layout source, paired body path or embedded layout namespace is used.
 - Display names are encoded into portable, case-safe physical segments.
 - Objects remain first-class sources below a dedicated `objects/` directory in
   every object-owning scope, including named prefab variants.
@@ -805,7 +799,7 @@ A multi-file save also regenerates editor/tooling projections:
   hydrated into the in-memory test model without dirtying authored sources;
 - autosave and transaction state in dedicated subdirectories.
 
-These files support IfDo name resolution, AI/MCP authoring, validation,
+These files support GDL name resolution, AI/MCP authoring, validation,
 JavaScript blocks, compatibility consumers, and recovery. They are derived from
 the project plus loaded metadata. Do not make them the only home of authored
 state.
@@ -978,7 +972,7 @@ Electron packages.
 | Runtime or TS extension        | `cd GDJS && npm run check-types` and `npm run build`                    | `cd GDJS/tests && npm test` (Karma/Mocha, headless browser) plus extension specs                    |
 | Editor/UI/storage              | `cd newIDE/app && npm run flow`, `npm run lint`, `npm run check-format` | `npm test` / targeted `*.spec.js`; Storybook for visual states                                      |
 | Electron integration           | `newIDE/electron-app` package scripts                                   | `newIDE/electron-app/test`                                                                          |
-| Multi-file format              | Editor Jest suite                                                       | `MultiFileProjectFormat`, `LayoutToml`, `IfDoEventsDsl`, `LocalMultiFileProject`, and catalog specs |
+| Multi-file format              | Editor Jest suite                                                       | `MultiFileProjectFormat`, `LayoutDocument`, `SettingsDsl`, `LocalMultiFileProject`, and catalog specs |
 
 `newIDE/app`'s install/import scripts copy or build the GDJS runtime, extensions,
 themes, editor resources, and `libGD` into the app's public resources. A runtime
@@ -1001,7 +995,7 @@ at the declaring class:
 
 When an instruction parameter type changes, audit metadata classification,
 parameter rendering, validation/autocompletion, code generation, source
-catalogs/IfDo formatting, runtime signature, and extension tests.
+catalogs/GDL formatting, runtime signature, and extension tests.
 
 ---
 
@@ -1018,7 +1012,7 @@ Consider a scene event: “when `Player` is on the floor, set its Y position to
    inside the current WASM `gd::Project`. React holds UI state and borrowed
    wrappers; the C++ model is authoritative.
 3. **Save.** Core serializes one logical project tree. For a
-   `project.gdevelop` project, the editor decomposes it into TOML/layout/IfDo
+   `project.gdevelop` project, the editor decomposes it into GDL configuration/layout/event
    sources, recomposes and compares it, transactionally commits changed files,
    and regenerates `.gdevelop` catalogs and declarations.
 4. **Preflight.** Preview/export scans serialized events and runs native code
@@ -1064,9 +1058,9 @@ once per logical frame; unload runs once, synchronously, before scene-owned
 state is destroyed. A Link expands the same external fragment body in every role, at the Link's
 position and with its current object selection. Association alone never executes
 it. External source files are discovered directly as
-`scenes/<Scene>/external-events/<Fragment>.events`, without settings, function
-folders or a manifest. See `docs/external-events-snippets-spec.md` for the
-version 6 contract and `docs/scene-event-phases-spec.md` for scene timing.
+`scenes/<Scene>/external-events/<Fragment>.gdl`, with fragment metadata and
+an embedded events body. See `docs/unified-settings-events-dsl-spec.md` for
+fragment semantics and `docs/scene-event-phases-spec.md` for scene timing.
 
 ---
 
@@ -1085,8 +1079,8 @@ version 6 contract and `docs/scene-event-phases-spec.md` for scene timing.
 | Extensions and metadata         | `Core/GDCore/Extensions`, `GDJS/GDJS/Extensions`, `Extensions`, `newIDE/app/src/EventsFunctionsExtensionsLoader`                                                                                                                                                          |
 | WASM bindings                   | `GDevelop.js/Bindings`, `GDevelop.js/Gruntfile.js`, `GDevelop.js/types`, `GDevelop.js/types.d.ts`                                                                                                                                                                         |
 | Logical serialization           | `Core/GDCore/Serialization`, model `SerializeTo`/`UnserializeFrom` methods                                                                                                                                                                                                |
-| Multi-file source format        | `newIDE/app/src/ProjectsStorage/MultiFileProjectFormat`, `newIDE/app/src/ProjectsStorage/LayoutToml`, `newIDE/app/src/ProjectsStorage/LocalFileStorageProvider/LocalMultiFileProject.js`, `newIDE/app/src/ProjectsStorage/LocalFileStorageProvider/LocalProjectWriter.js` |
-| Source catalogs/APIs            | `newIDE/app/src/ProjectsStorage/ProjectSourceCatalog.js`, `newIDE/app/src/ProjectsStorage/JavaScriptAuthoringApi.js`, `newIDE/app/src/EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog.js`                                                                             |
+| Multi-file source format        | `newIDE/app/src/ProjectsStorage/MultiFileProjectFormat`, `newIDE/app/src/ProjectsStorage/LayoutDocument`, `newIDE/app/src/ProjectsStorage/LocalFileStorageProvider/LocalMultiFileProject.js`, `newIDE/app/src/ProjectsStorage/LocalFileStorageProvider/LocalProjectWriter.js` |
+| Source catalogs/APIs            | `newIDE/app/src/ProjectsStorage/ProjectSourceCatalog.js`, `newIDE/app/src/ProjectsStorage/JavaScriptAuthoringApi.js`, `newIDE/app/src/ProjectsStorage/SettingsDsl/InstructionCatalog.js`                                                                             |
 | Constants                       | `Core/GDCore/Project/Project.*`, `newIDE/app/src/Constants`, `docs/Constants.md`                                                                                                                                                                                          |
 | Preview and export              | `GDJS/GDJS/IDE/Exporter*`, `newIDE/app/src/ExportAndShare`, `newIDE/app/src/HotReload`, `newIDE/app/src/EmbeddedGame`                                                                                                                                                     |
 | Editor shell                    | `newIDE/app/src/index.js`, `newIDE/app/src/LocalApp.js`, `newIDE/app/src/BrowserApp.js`, `newIDE/app/src/MainFrame`, domain editor directories                                                                                                                            |

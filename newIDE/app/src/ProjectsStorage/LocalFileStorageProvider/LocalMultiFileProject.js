@@ -914,7 +914,8 @@ const discoverOwnedSettingsUris = async (
 };
 
 export const readMultiFileSourceTree = async (
-  entryPath: string
+  entryPath: string,
+  options?: {| readOnly?: boolean |}
 ): Promise<{| projectRoot: string, files: { [string]: string } |}> => {
   requireFileSystem();
   if (path.basename(entryPath) !== MULTI_FILE_ENTRY_NAME) {
@@ -924,8 +925,27 @@ export const readMultiFileSourceTree = async (
     );
   }
   const projectRoot = path.resolve(path.dirname(entryPath));
-  await recoverMultiFileTransactions(projectRoot);
-  resetSettingsTypes();
+  const assertNoPendingTransaction = () => {
+    const transactionsRoot = path.join(
+      projectRoot,
+      '.gdevelop',
+      'transactions'
+    );
+    assertInside(projectRoot, transactionsRoot);
+    if (
+      fs.existsSync(transactionsRoot) &&
+      fs.readdirSync(transactionsRoot).length
+    )
+      throw new MultiFileProjectError(
+        'MULTIFILE_PENDING_TRANSACTION',
+        'Read-only analysis cannot recover or read a pending project transaction. Finish the save or reopen the project first.'
+      );
+  };
+  if (options && options.readOnly) assertNoPendingTransaction();
+  else {
+    await recoverMultiFileTransactions(projectRoot);
+    resetSettingsTypes();
+  }
   const files: { [string]: string } = {};
   const pending: Array<string> = [
     MULTI_FILE_ENTRY_URI,
@@ -983,14 +1003,16 @@ export const readMultiFileSourceTree = async (
       }
     }
   }
+  if (options && options.readOnly) assertNoPendingTransaction();
   return { projectRoot, files };
 };
 
-export const openMultiFileProject = async (
+export const openMultiFileProjectWithSources = async (
   entryPath: string,
   options?: Object
 ): Promise<Object> => {
-  const { projectRoot, files } = await readMultiFileSourceTree(entryPath);
+  const sourceTree = await readMultiFileSourceTree(entryPath);
+  const { projectRoot, files } = sourceTree;
   const effectiveOptions = { ...(options || {}) };
   const ignoreInstructionCatalog =
     effectiveOptions.ignoreInstructionCatalog === true;
@@ -1045,11 +1067,20 @@ export const openMultiFileProject = async (
     }
   }
   const project = composeLegacyProjectFromFiles(files, effectiveOptions);
-  return applyGameplayTestResultsToLegacyProject(
-    project,
-    await readGameplayTestResults(entryPath)
-  );
+  return {
+    serializedProject: applyGameplayTestResultsToLegacyProject(
+      project,
+      await readGameplayTestResults(entryPath)
+    ),
+    sourceTree,
+  };
 };
+
+export const openMultiFileProject = async (
+  entryPath: string,
+  options?: Object
+): Promise<Object> =>
+  (await openMultiFileProjectWithSources(entryPath, options)).serializedProject;
 
 const sortForCommit = (left: string, right: string): number => {
   const priority = (uri: string): number =>

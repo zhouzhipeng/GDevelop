@@ -19,6 +19,8 @@ const fs = require('fs');
 const path = require('path');
 
 const expectedAlwaysAvailableTools = [
+  'analyze_gdl_events',
+  'get_gdl_instruction_semantics',
   'open_project',
   'gdevelop_get_editor_state',
   'gdevelop_get_editor_selection',

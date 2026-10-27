@@ -324,6 +324,7 @@ const writeAndCheckGeneratedFileSync = (
 
 type ProjectSourceCatalogWriteOptions = {|
   reportProgress?: (phase: string) => void,
+  sourceFingerprint?: string,
   instructionCatalog?: Object,
   deprecatedInstructionCatalog?: Object,
   additionalExtensions?: Array<gdPlatformExtension>,
@@ -420,6 +421,10 @@ export const writeProjectInstructionCatalog = async (
     projectPath,
     ...PROJECT_INSTRUCTION_CATALOG_RELATIVE_PATH.split('/')
   );
+  catalog = {
+    ...catalog,
+    sourceFingerprint: (options && options.sourceFingerprint) || null,
+  };
   reportCatalogProgress(options, 'catalog-instructions-writing');
   writeAndCheckGeneratedFileSync(
     serializeProjectInstructionCatalog(catalog),

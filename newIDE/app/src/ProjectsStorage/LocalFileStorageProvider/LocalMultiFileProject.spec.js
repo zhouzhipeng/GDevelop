@@ -1,4 +1,5 @@
 // @flow
+import { withTestInstructionSemantics } from '../SettingsDsl/TestHelpers';
 import { replaceEmbeddedEventBody } from '../SettingsDsl/TestHelpers';
 
 // $FlowFixMe[cannot-resolve-module] Jest runs these filesystem tests in Node.
@@ -662,9 +663,9 @@ describe('Local multi-file project storage', () => {
       'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send url="https://example.com"\n      }\n    }\n  }\n}\n'
     );
     await writeMultiFileSourceTree({ entryPath, files });
-    const catalog = {
+    const catalog = withTestInstructionSemantics({
       format: 'gdevelop-settings-instruction-catalog',
-      formatVersion: 3,
+      formatVersion: 4,
       actions: [
         {
           kind: 'action',
@@ -687,7 +688,7 @@ describe('Local multi-file project storage', () => {
       ],
       conditions: [],
       expressions: [],
-    };
+    });
     const catalogPath = path.join(
       temporaryDirectory,
       '.gdevelop/instructions-catalog.json'
@@ -786,6 +787,42 @@ describe('Local multi-file project storage', () => {
     expect(
       fs.existsSync(path.join(temporaryDirectory, '.gdevelop/harness-api.d.ts'))
     ).toBe(true);
+  });
+
+  test('rebuilds retired instruction catalogs while preserving current GDL sources', async () => {
+    const entryPath = path.join(temporaryDirectory, 'project.gdevelop');
+    const project = global.gd.ProjectHelper.createNewGDJSProject();
+    ensureProjectHasDefaultScene(project);
+    const files = decomposeLegacyProjectToFiles({
+      ...serializeToJSObject(project),
+      constants: {},
+    });
+    project.delete();
+    await writeMultiFileSourceTree({ entryPath, files });
+    await onOpen({ fileIdentifier: entryPath });
+    const before = (await readMultiFileSourceTree(entryPath)).files;
+    for (const name of [
+      'instructions-catalog.json',
+      'deprecated-instructions-catalog.json',
+    ]) {
+      const catalogPath = path.join(temporaryDirectory, '.gdevelop', name);
+      const old = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+      old.formatVersion = 3;
+      delete old.semanticsVersion;
+      fs.writeFileSync(catalogPath, JSON.stringify(old));
+      await onOpen({ fileIdentifier: entryPath });
+      expect(
+        JSON.parse(fs.readFileSync(catalogPath, 'utf8')).formatVersion
+      ).toBe(4);
+      expect((await readMultiFileSourceTree(entryPath)).files).toEqual(before);
+    }
+    const refreshed = JSON.parse(
+      fs.readFileSync(
+        path.join(temporaryDirectory, '.gdevelop/instructions-catalog.json'),
+        'utf8'
+      )
+    );
+    expect(refreshed.sourceFingerprint).toMatch(/^sha256:/);
   });
 
   test('rebuilds a stale behavior schema catalog and removes the retired layout catalog', async () => {
@@ -1490,7 +1527,7 @@ describe('Local multi-file project storage', () => {
     ).toBe(false);
     const serializedCatalog = fs.readFileSync(catalogPath, 'utf8');
     const parsedCatalog = JSON.parse(serializedCatalog);
-    expect(parsedCatalog.formatVersion).toBe(3);
+    expect(parsedCatalog.formatVersion).toBe(4);
     expect(parsedCatalog.authoring).toBeUndefined();
     expect(serializedCatalog).not.toContain('serialized operand');
     expect(serializedCatalog).not.toContain('embedded quotes');

@@ -141,7 +141,7 @@ pass.
 Work through remaining production clusters in dependency order:
 
 1. `MainFrame`, preview state, autosave, browser/webview, and preferences;
-2. IfDo/project instruction catalogs and project-source catalogs;
+2. GDL/project instruction catalogs and project-source catalogs;
 3. resource lists, previews, editors, and project-files panels;
 4. object, behavior, properties, and compact editor schemas;
 5. remaining UI and utility files.
@@ -189,7 +189,7 @@ Primary ownership is under `newIDE/app/src`, especially:
   `McpEditorBridge.js` plus their specs;
 - `MainFrame/index.js`, preview state/autosave specs, editor tabs, browser
   section, preferences, and sticky notes;
-- `EventsSheet/IfDoEventsDsl/ProjectInstructionCatalog.js`;
+- `ProjectsStorage/SettingsDsl/InstructionCatalog.js`;
 - `ProjectsStorage` source-catalog and multi-file tests;
 - `ResourcesList` and `ResourcesEditor` files and specs;
 - object, behavior, instance, and properties editor schemas;

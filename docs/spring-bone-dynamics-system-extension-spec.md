@@ -670,7 +670,7 @@ assets/config/twin_kunai_spring_bones.json
 scenes/Test/objects/TwinKunai3D.gdl
 scenes/Test/objects/TwinKunaiHairCloth.gdl       # removed
 scenes/Test/scene.gdl
-scenes/Test/functions/sceneUpdate.events
+scenes/Test/functions/sceneUpdate.gdl
 ```
 
 Generated `.gdevelop` catalogs and declarations are regenerated but never

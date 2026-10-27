@@ -9,11 +9,12 @@
 On Windows, a resource discovered with `path.relative` can receive a logical
 resource name containing its full relative path and backslashes:
 
-```toml
-[[resources]]
-name = "assets\\models\\model.glb"
-file = "assets\\models\\model.glb"
-kind = "three-dimensional-model"
+```text
+resource {
+  name = "assets\\models\\model.glb"
+  file = "assets\\models\\model.glb"
+  kind = "three-dimensional-model"
+}
 ```
 
 The resource `name` is a project-wide identifier, while `file` locates the
@@ -132,11 +133,12 @@ resource is inserted; registration never replaces an existing resource.
 The suffix changes only the logical `name`. It does not rename or duplicate
 the physical file:
 
-```toml
-[[resources]]
-name = "model2.glb"
-file = "characters/model.glb"
-kind = "three-dimensional-model"
+```text
+resource {
+  name = "model2.glb"
+  file = "characters/model.glb"
+  kind = "three-dimensional-model"
+}
 ```
 
 ### 5.3 Existing resource names
@@ -149,11 +151,12 @@ or conflicts stylistically with the new convention.
 For example, this remains unchanged after open, Save, Save As, migration,
 preview, and export:
 
-```toml
-[[resources]]
-name = "assets\\models\\model.glb"
-file = "assets/models/model.glb"
-kind = "three-dimensional-model"
+```text
+resource {
+  name = "assets\\models\\model.glb"
+  file = "assets/models/model.glb"
+  kind = "three-dimensional-model"
+}
 ```
 
 Because existing names are not changed, no project-wide resource refactor is
@@ -170,16 +173,20 @@ new-name helper.
 For multi-file projects, `/` is the only separator written for local resource
 `file` values. File normalization is independent from resource naming:
 
-```toml
-name = "model.glb"
-file = "assets/models/model.glb"
+```text
+resource {
+  name = "model.glb"
+  file = "assets/models/model.glb"
+}
 ```
 
 An absolute Windows file path is serialized with a drive prefix and forward
 slashes:
 
-```toml
-file = "C:/SharedAssets/model.glb"
+```text
+resource {
+  file = "C:/SharedAssets/model.glb"
+}
 ```
 
 The `file` value of an `http:`, `https:`, `ftp:`, `blob:`, or `data:` resource
@@ -272,7 +279,7 @@ self-check retains the previous source files.
 
 ### 7.1 Schema
 
-No TOML key or value type changes. `name` and `file` remain strings.
+No GDL key or value type changes. `name` and `file` remain strings.
 
 The value contract is:
 
@@ -287,7 +294,7 @@ The value contract is:
 ### 7.2 Reader and writer compatibility
 
 The reader accepts every existing resource name without normalization. The
-writer preserves those names exactly, so no `settingsFormatVersion` increase
+writer preserves those names exactly, so no project `formatVersion` increase
 is required.
 
 Old source remains readable, and new short names use the existing string field
@@ -309,7 +316,7 @@ while changing only the export projection of `file`.
 
 ### Documentation
 
-- `docs/gdevelop-new-formats-spec.md`
+- `docs/settings-dsl-spec.md`
   - Declare canonical `/` separators for local resource `file` values.
   - Document filename-only names for newly registered resources.
   - Explicitly state that names loaded from existing projects are preserved.
@@ -342,7 +349,7 @@ while changing only the export projection of `file`.
 - `newIDE/app/src/ProjectsStorage/LocalFileStorageProvider/LocalMultiFileProject.spec.js`
   - Verify name preservation and canonical files across save and reopen.
 
-The multi-file TOML serializer remains a pure ownership projection. It must not
+The multi-file GDL serializer remains a pure ownership projection. It must not
 derive or rewrite resource names because it cannot distinguish loaded legacy
 resources from newly registered resources.
 

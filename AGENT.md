@@ -23,8 +23,8 @@ Core/GDCore authoring model and event AST
 Read `docs/Architecture.md` for the detailed engineering reference and
 `Core/GDevelop-Architecture-Overview.md` for the shorter upstream overview.
 This checkout has important branch-specific behavior: multi-file
-`project.gdevelop` projects, strict layout TOML and IfDo event sources, Static
-Data placeholder compilation, extra preview/export validation, deterministic
+`project.gdevelop` projects, unified GDL configuration and event sources, Constants
+placeholder compilation, extra preview/export validation, deterministic
 single-object checks, and a queued runtime signal bus.
 
 ## Non-negotiable workflow
@@ -114,8 +114,8 @@ because the agent does not wait for the result.
 | Object/behavior/property editing | `newIDE/app/src/ObjectEditor`, `BehaviorsEditor`, `CompactPropertiesEditor`, `PropertiesEditor` | Core property descriptors, extension editor configuration |
 | Variables editor | `newIDE/app/src/VariablesEditorRedesign` and `VariablesList` | Core variable/source-scope APIs and history/serialization |
 | Events-based extensions or prefabs in the editor | `EventsFunctionsExtensionEditor`, `EventsFunctionsExtensionsLoader`, `EventsFunctionsList`, `PrefabDetailEditor` | Core `EventsFunctionsExtension` model and GDJS function/object/behavior generators |
-| Local project open/save, `project.gdevelop`, TOML, layout or event source | `newIDE/app/src/ProjectsStorage` | `MultiFileProjectFormat`, `LayoutToml`, `LocalFileStorageProvider/LocalMultiFileProject.js`, IfDo DSL, format specs |
-| IfDo event parsing/formatting/catalog resolution | `newIDE/app/src/EventsSheet/IfDoEventsDsl` | `ProjectInstructionCatalog.js`, multi-file composition, `docs/gdevelop-events-dsl-spec.md` |
+| Local project open/save, `project.gdevelop`, GDL configuration, layout or events | `newIDE/app/src/ProjectsStorage` | `MultiFileProjectFormat`, `LayoutDocument`, `LocalFileStorageProvider/LocalMultiFileProject.js`, GDL, format specs |
+| GDL parsing/formatting/catalog resolution | `newIDE/app/src/ProjectsStorage/SettingsDsl` | `InstructionCatalog.js`, multi-file composition, `docs/unified-settings-events-dsl-spec.md` |
 | Preview/export diagnostics or orchestration | `newIDE/app/src/MainFrame`, `ExportAndShare` | `newIDE/app/src/Utils/EventsValidationScanner.js`, `GDJS/GDJS/IDE/Exporter*` |
 | Exported project data, include/resource collection, Constants placeholder resolution | `GDJS/GDJS/IDE/ExporterHelper.*` | Core project serialization, runtime `types/project-data.d.ts`, local/browser exporter |
 | Hot reload, debugger, in-game editor | `newIDE/app/src/HotReload`, `Debugger`, `EmbeddedGame` and `GDJS/Runtime/debugger-client`, `InGameEditor` | Persistent UUIDs, runtime object lifecycle, Electron preview server |
@@ -169,7 +169,7 @@ Trace the type through:
 3. `GDJS/GDJS/Events/CodeGeneration` argument conversion.
 4. `newIDE/app/src/EventsSheet/ParameterRenderingService.js` and instruction
    enumeration.
-5. IfDo/source catalogs and generated declarations.
+5. GDL/source catalogs and generated declarations.
 6. Runtime function signature and extension tests.
 
 ### Change custom objects, prefabs, or events-based behaviors
@@ -193,21 +193,21 @@ semantics.
 
 ### Change the multi-file project format
 
-Read `docs/gdevelop-new-formats-spec.md`,
-`docs/gdevelop-layout-toml-spec.md`, and
-`docs/gdevelop-events-dsl-spec.md` first. Format changes are usually breaking
+Read `docs/settings-dsl-spec.md`,
+`docs/settings-dsl-variable-values-spec.md`, and
+`docs/unified-settings-events-dsl-spec.md` first. Format changes are usually breaking
 and therefore require the spec-review gate above.
 
 Preserve:
 
-- legacy-project normalization and migration;
+- current native-model import boundaries; no old GDL readers or automatic migration;
 - decompose/compose equivalence before writes;
 - canonical `game://` URIs and portable encoded names;
 - strict ownership and unknown-data rejection;
 - transaction recovery and `project.gdevelop`-last commit ordering;
 - generated catalog/API regeneration;
 - reader size/path/symlink safety limits;
-- round-trip, migration, recovery, and compatibility tests.
+- round-trip, rejected-format, recovery, and native-model import tests.
 
 ## Architectural invariants
 

@@ -6,4 +6,4 @@ For each tool, document its purpose, dependencies, exact command, inputs, output
 
 Use `sources/` for editable production output, `assets/` for runtime exports and `tmp/` for intermediate candidates. Some converters emit both source and export into one temporary directory; inspect the results and install each into its final location. Save reviewed evidence in `artifacts/verification/<task-or-version>/`.
 
-Run Blender helpers through the Blender executable as described in the [Blender workflow](../skills/blender-workflow/SKILL.md). Mark historical one-off scripts that modify `.gdl` or `.events` as such; do not include them in a repeatable asset build by default.
+Run Blender helpers through the Blender executable as described in the [Blender workflow](../skills/blender-workflow/SKILL.md). Keep one-off scripts that modify GDL project sources out of repeatable asset builds.

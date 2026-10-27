@@ -1,4 +1,10 @@
 // @flow
+import {
+  INSTRUCTION_CATALOG_VERSION,
+  SEMANTICS_VERSION,
+  SEMANTICS_RULES_REVISION,
+  validateInstructionSemantics,
+} from '../../EventsSemantics/InstructionSemanticsRegistry';
 
 import { parseCatalogInstructionArguments } from './InstructionOperands';
 import { buildCompleteProjectInstructionCatalog } from '../../Mcp/McpEventKnowledge';
@@ -404,23 +410,36 @@ export const validateProjectInstructionCatalog = (catalog: any): Catalog => {
     !Array.isArray(catalog.expressions)
   )
     fail('SETTINGS_CATALOG_INVALID', 'Unsupported instruction catalog format.');
-  if (catalog.formatVersion !== 3) {
+  if (catalog.formatVersion !== INSTRUCTION_CATALOG_VERSION) {
     fail(
       'SETTINGS_CATALOG_VERSION_UNSUPPORTED',
-      'Unsupported instruction catalog version; expected version 3.'
+      'Unsupported instruction catalog version; expected version 4.'
     );
   }
   if (catalog.authoring !== undefined) {
     fail(
       'SETTINGS_CATALOG_INVALID',
-      'Instruction catalog version 3 must not contain authoring prose.'
+      'Instruction catalog version 4 must not contain authoring prose.'
     );
   }
+  if (
+    catalog.semanticsVersion !== SEMANTICS_VERSION ||
+    catalog.semanticsRulesRevision !== SEMANTICS_RULES_REVISION
+  )
+    fail(
+      'SETTINGS_CATALOG_VERSION_UNSUPPORTED',
+      'Unsupported instruction semantics revision; regenerate catalogs.'
+    );
   const kinds: Array<CatalogKind> = ['action', 'condition'];
   kinds.forEach(kind => {
     const seen: Set<string> = new Set();
     entriesForKind(catalog, kind).forEach(entry => {
       validateCatalogEntry(entry, kind);
+      try {
+        validateInstructionSemantics(entry.semantics, entry);
+      } catch (error) {
+        fail('SETTINGS_CATALOG_INVALID', error.message);
+      }
       if (seen.has(entry.type))
         fail(
           'SETTINGS_CATALOG_INVALID',
@@ -449,6 +468,14 @@ const createLookup = (catalog: Catalog): CatalogLookup => {
     action: new Map(),
     condition: new Map(),
   };
+  if (
+    catalog.semanticsVersion !== SEMANTICS_VERSION ||
+    catalog.semanticsRulesRevision !== SEMANTICS_RULES_REVISION
+  )
+    fail(
+      'SETTINGS_CATALOG_VERSION_UNSUPPORTED',
+      'Unsupported instruction semantics revision; regenerate catalogs.'
+    );
   const kinds: Array<CatalogKind> = ['action', 'condition'];
   kinds.forEach(kind =>
     entriesForKind(catalog, kind).forEach(entry =>
@@ -865,6 +892,10 @@ export const buildLegacyInstructionCatalogDelta = (
       .map(([type, sourcesByIndex]) => ({
         type,
         parameters: sourcesByIndex.map(inferParameter),
+        semantics: {
+          status: 'unknown',
+          reason: 'unregistered-legacy-instruction',
+        },
       }))
       .sort((left, right) => left.type.localeCompare(right.type));
   const actions = buildEntries('action');

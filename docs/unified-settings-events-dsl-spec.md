@@ -1,10 +1,9 @@
 # 统一 GDevelop Language (GDL)：函数、事件与 JavaScript 作者格式规范
 
-- 状态：已实施。当前作者格式 12；验证记录见 [实施与验证报告](unified-settings-events-implementation-report-2026-10-26.md)。
+- 状态：已实施。当前作者格式 12；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
 - 日期：2026-10-26。
 - 决策依据：函数声明和事件正文合入同一个 `.gdl` 文件；只保留 GDevelop Language (GDL)，不考虑任何作者格式兼容性。
-- 基线：当前 GDevelop Language (GDL) 作者格式 10，变量使用直接声明、字面量及嵌套 `variable`，不使用 metadata/path。
-- 当前作者格式：12。Settings catalog 版本：10；instruction catalog 版本：3，发布本文的新指令结构契约。
+- 当前作者格式：12。Settings catalog 版本：10；instruction catalog 版本：4，发布本文的新指令结构契约。
 - 运行时边界：仍投影到 GDevelop 原生事件模型与代码生成器；不重新定义对象 picking、事件调度或表达式求值。
 
 文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdevelop`，`constants.toml` 和 JavaScript 测试文件保持各自格式。格式 12 不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
@@ -628,41 +627,9 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 统一限制文件字节、token、节点、事件/指令/值递归深度及表达式/代码字节。解析线性扫描，重复名与 ID 索引不使用全树反复搜索。JS 不在读取/格式化/校验时执行。项目路径、资源和脚本能力沿用现有验证边界。
 
-## 19. 明确删除的内容
+## 19. 验证要求
 
-最终代码和公开文档中移除：
-
-- `.events` 的发现、配对、读写、恢复、监听和 source URI。
-- IfDo 独立 parser、formatter、coverage version、语言注册及教学语法。
-- `>`、`?`、@event、@instruction、@group、@comment、@while、@js、@end。
-- 依赖“if 出现在动作之后”推断事件边界的状态机。
-- if/do 前缀、local/var(...)、or 行、else if 头、do await 等并行简写。
-- 独立 javascript/else/repeat/while/for_each/for_each_child 事件节点与 type=group/type=comment/type=link 包装。
-- 子事件 events 包装、code 字符串赋值、三引号与 tagged raw 等备用正文形式。
-- 旧格式探测、兼容适配器、自动转换器、迁移命令、双读双写、旧 catalog 猜测。
-
-可以复用现有 catalog 参数编解码和原生事件验证算法，但必须重命名/搬迁为统一 Settings 模块，不保留旧源码入口作为隐藏兼容层。
-
-原生 JSON 模板服务不是旧 DSL 作者格式。URL 导入边界仍可从当前有效原生模型直接生成格式 12 settings；这是模型导入，不是 `.events` 迁移。内部原生事件 JSON 和生成 game.json 仍存在，不属于公开作者语言。
-
-## 20. 实施步骤
-
-1. 建立事件及指令完整字段清单，对照当前事件序列化器逐项确认。
-2. 扩展 Syntax：指令语句、expr 扫描、JS code 块边界解析、位置映射和统一预算。
-3. 新增 SettingsDsl/Events 编解码及严格 schema；保留原生运行语义。
-4. 将 function/external_events 的正文合入现有组件编码；更新分解/组合与等价比较。
-5. 同步本地/云/下载存储、事务、恢复和 watcher；删除配对路径逻辑。
-6. 更新 Settings catalog、instruction catalog、项目模块地图、JS 声明生成和 MCP 源定位。
-7. 更新编辑器语法服务及内嵌 JS 服务；移除 IfDo 入口。
-8. 更新新项目模板、原生 JSON 模板导入、示例、技能及测试夹具；作者格式切至 12。
-9. 删除旧 IfDo 实现和测试；将仍有价值的运行语义断言转写为新格式测试。
-10. 完成全部验收后发布新契约；不得以同时支持旧格式作为过渡发布方案。
-
-实施过程中可以在未发布分支分步开发，但最终入口只接受格式 12。实施与验证结果记录在独立报告中。
-
-## 21. 验收矩阵
-
-### 21.1 语法与边界
+### 19.1 语法与边界
 
 - 相邻 action-only / condition-only / empty 事件不合并。
 - 删除或增加空行不改变事件树；移动块仅改变显式源顺序/父级。
@@ -674,7 +641,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 - 未闭合代码准确定位；尾换行规范化和 CRLF 处理按明确等价规则验证；不能保真时拒绝而非转义回退。
 - formatter/块移动保持模板字符串、注释和代码正文空白，不自动重排 JS。
 
-### 21.2 模型与行为
+### 19.2 模型与行为
 
 - 所有当前持久化事件及标记，原生 → settings → 原生等价。
 - 参数语义字面量、expr、空文本、可选槽、代码参数和异步标记正确投影。
@@ -683,7 +650,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 - 变量 enum/身份/false 编辑标记、结构字段顺序和数组顺序无损保留；无 metadata/path。
 - JS 的实际作用域、对象传参、strict 和展开状态往返，语法/类型错误定位回 settings。
 
-### 21.3 存储与工具
+### 19.3 存储与工具
 
 - 函数签名/正文一次原子保存；失败恢复不会生成半套组件。
 - 模块地图、catalog、引用重构、生命周期和外部片段只定位 settings。
@@ -692,7 +659,10 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 - 规模测试覆盖大量事件、深指令树、大 JS 代码块及预算上限，记录实测而非预设性能承诺。
 - 最终受管理项目不产生 `.events`，公开工具无旧语言入口；过期作者格式明确拒绝。
 
-## 22. 后续优化的边界
+## 20. 后续优化的边界
+
+事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 4；GDL 作者格式仍为 12，Settings catalog 仍为 10。静态摘要不改变原生执行行为，也不代替运行验证。
+
 
 picking 可视化、行为相关 diff 和按 AST 的安全块移动是推荐编辑器能力，可独立迭代；不能将它们未完成视为可改变基础语法的理由。实现基础格式时至少保留精确 AST 和语义位置，使后续工具无需重新解析另一套正文语言。
 
