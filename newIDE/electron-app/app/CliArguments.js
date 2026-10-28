@@ -9,6 +9,8 @@ const argsParserOptions = {
     'headless',
   ],
   string: ['_', 'run-command', 'cmd-args', 'mcp-port'],
+  // Preserve the settings file value when this flag is absent.
+  default: { 'block-on-diagnostic-errors': null },
 };
 
 // Drop switches Chromium may inject into argv (e.g. --allow-file-access-from-files)

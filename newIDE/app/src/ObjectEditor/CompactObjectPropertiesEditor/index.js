@@ -896,7 +896,7 @@ export const CompactObjectPropertiesEditorContent = ({
           ) && (
             <CompactEffectsListEditor
               layerRenderingType={'2d'}
-              target={'layer'}
+              target={'object'}
               project={project}
               resourceManagementProps={resourceManagementProps}
               projectScopedContainersAccessor={projectScopedContainersAccessor}

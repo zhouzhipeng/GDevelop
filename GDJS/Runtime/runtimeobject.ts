@@ -1478,7 +1478,8 @@ namespace gdjs {
       if (array.getChildrenCount() === 0) {
         return '';
       }
-      return array.getAllChildrenArray()[0].getAsString();
+      const firstChild = array.getAllChildrenArray()[0];
+      return firstChild ? firstChild.getAsString() : '';
     };
 
     /**
@@ -1488,7 +1489,8 @@ namespace gdjs {
       if (array.getChildrenCount() === 0) {
         return 0;
       }
-      return array.getAllChildrenArray()[0].getAsNumber();
+      const firstChild = array.getAllChildrenArray()[0];
+      return firstChild ? firstChild.getAsNumber() : 0;
     };
 
     /**
@@ -1496,9 +1498,11 @@ namespace gdjs {
      */
     static getLastVariableString = function (array: gdjs.Variable): string {
       const children = array.getAllChildrenArray();
-      return children.length === 0
-        ? ''
-        : children[children.length - 1].getAsString();
+      if (children.length === 0) {
+        return '';
+      }
+      const lastChild = children[children.length - 1];
+      return lastChild ? lastChild.getAsString() : '';
     };
 
     /**
@@ -1506,9 +1510,11 @@ namespace gdjs {
      */
     static getLastVariableNumber = function (array: gdjs.Variable): number {
       const children = array.getAllChildrenArray();
-      return children.length === 0
-        ? 0
-        : children[children.length - 1].getAsNumber();
+      if (children.length === 0) {
+        return 0;
+      }
+      const lastChild = children[children.length - 1];
+      return lastChild ? lastChild.getAsNumber() : 0;
     };
 
     /**

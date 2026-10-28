@@ -169,7 +169,7 @@ declare type VariableData = Readonly<{
   /** The allowed values of an enum variable. Leave blank for unrestricted enums. */
   values?: string[];
   /** The children of the structure. Leave blank if value is defined. */
-  children?: VariableData[];
+  children?: Array<VariableData | undefined>;
   /** The type of the variable. Defaults to number. */
   type?: VariableType;
   /**
@@ -185,7 +185,7 @@ declare type RootVariableData = Omit<VariableData, 'name'> & { name: string };
 
 declare type UnnamedVariableNetworkSyncData = {
   value: string | float | boolean;
-  children?: VariableNetworkSyncData[];
+  children?: Array<VariableNetworkSyncData | undefined>;
   type: VariableType;
   owner: number | null;
 };
