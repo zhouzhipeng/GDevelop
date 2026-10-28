@@ -35,9 +35,9 @@ export const buildProjectContexts = files => {
   });
   return file => {
     const root = roots.get(file);
-    if (!root || !['function', 'external_events'].includes(root.type))
+    if (!root || !['function', 'fragment'].includes(root.type))
       throw new Error(
-        'The selected managed source must be a function or external_events document.'
+        'The selected managed source must be a function or fragment document.'
       );
     const segments = file.slice('game://'.length).split('/');
     const container = segments.slice(0, -2).join('/');
@@ -46,7 +46,7 @@ export const buildProjectContexts = files => {
     const owner = {
       identity: `game://${container}`,
       kind:
-        root.type === 'external_events'
+        root.type === 'fragment'
           ? 'externalEvents'
           : scene
           ? 'scene'

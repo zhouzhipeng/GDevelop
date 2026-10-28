@@ -122,7 +122,7 @@ export const getSettingsVariableCompletions = (
   if (stack.some(entry => entry.name === 'code')) return [];
   const eventSuggestions = [];
   const snippet = (label, text) => eventSuggestions.push(field(label, text));
-  if (['function', 'external_events'].includes(frame.name)) {
+  if (['function', 'fragment'].includes(frame.name)) {
     if (!frame.fields.has('@events'))
       snippet('events', 'events {\n  event {\n    $0\n  }\n}');
   }
@@ -440,7 +440,7 @@ export const registerSettingsLanguage = (monaco: any) => {
           model.getValue(),
           model.uri.toString()
         );
-        if (['function', 'external_events'].includes(syntax.root.type))
+        if (['function', 'fragment'].includes(syntax.root.type))
           compileSettingsEvents(
             model.getValue(),
             {

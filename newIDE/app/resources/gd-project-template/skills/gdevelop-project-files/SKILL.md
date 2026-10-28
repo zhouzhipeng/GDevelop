@@ -185,13 +185,13 @@ All `.gdl` and `project.gdl` use **GDevelop Language (GDL)**, not TOML. Read
   IDs and all properties belong inside the node. Two-space indentation is
   canonical; braces determine ownership. One declaration per line.
 - Every document has exactly one typed root: project, resources, tests,
-  scene, prefab, variant, external, external_events, object, function,
+  scene, prefab, variant, layout, fragment, object, function,
   extension or behavior. The physical path supplies the owning scope.
 - Only project.gdl has `formatVersion = 13`. Do not write kind,
   settingsFormatVersion, TOML headers, per-document format versions, or
   settings/layout wrapper nodes. Extension metadata can still have a semantic
   version string when its schema defines one.
-- Scene, prefab, variant and external settings contain their own configuration
+- Scene, prefab, variant and layout settings contain their own configuration
   and layout. Put layer and instance directly below that root. Layer contains
   camera/effect; instance contains properties/variable/behavior overrides.
   Root instance order is global serialized order; preserve UUIDs.

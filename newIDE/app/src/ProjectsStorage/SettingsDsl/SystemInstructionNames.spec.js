@@ -186,3 +186,31 @@ test('rejects missing/illegal names and every same-kind short/native collision',
     )
   ).not.toThrow();
 });
+
+test('uses concise, meaningful names for verbose system parameters', () => {
+  const action = catalog.actions.find(
+    entry => entry.type === 'SetReturnBoolean'
+  );
+  expect(action.parameters[0].dslName).toBe('value');
+  expect(action.parameters[0].description).toBeTruthy();
+  for (const type of ['SetReturnString', 'SetReturnNumber']) {
+    expect(
+      catalog.actions.find(entry => entry.type === type).parameters[0].dslName
+    ).toBe('value');
+  }
+  const resolve = createCatalogInstructionResolver(catalog);
+  const format = createCatalogInstructionFormatter(catalog);
+  const instruction = resolve({
+    kind: 'action',
+    source: 'setReturnBoolean { value = true }',
+    line: 1,
+  });
+  expect(format({ kind: 'action', instruction })).toContain('value=true');
+  expect(
+    resolve({
+      kind: 'action',
+      source: format({ kind: 'action', instruction }),
+      line: 1,
+    })
+  ).toEqual(instruction);
+});

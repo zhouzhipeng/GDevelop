@@ -173,7 +173,7 @@ array      := "[" (value ("," value)* ","?)? "]"
 | `scene` | 必需 | 禁止 | 支持 | 支持 |
 | `prefab` | 禁止 | 必需 | 支持 | 支持 |
 | `variant` | 禁止 | 必需 | 支持 | 支持 |
-| `external` | 禁止 | 禁止 | 仅已有图层引用 | 支持 |
+| `layout` | 禁止 | 禁止 | 仅已有图层引用 | 支持 |
 
 本节表格针对包含空间布局的四种组件；其他根见第 5.1 节。根节点必须与 owner 类型匹配。Variant 表示当前模型中的完整变体布局，不在语法版本 1 引入差量继承或 patch 语义。
 
@@ -189,12 +189,12 @@ array      := "[" (value ("," value)* ","?)? "]"
 | scene.gdl | scene | 场景自有配置与布局 |
 | prefab.gdl | prefab | Prefab 自有配置与默认布局 |
 | variant.gdl | variant | Variant 自有配置与布局 |
-| external-layout/*.gdl | external | External 自有配置与布局 |
+| external-layout/*.gdl | layout | External 自有配置与布局 |
 | objects/*.gdl | object | 对象类型、资源引用、变量、行为 |
 | functions/*.gdl | function | 函数签名、参数、返回信息 |
 | behaviors/*/behavior.gdl | behavior | 行为定义、自有配置与属性声明 |
 | extensions/*/extension.gdl | extension | 扩展元数据与自有配置 |
-| external-events/*.gdl | external_events | 外部事件元数据 |
+| external-events/*.gdl | fragment | 外部事件元数据 |
 
 路径中具名所有者的具体分配保持当前目录契约；表格中的 behavior 路径只表示所属作用域，不要求重构已有目录。全局、场景、Prefab 和 Variant 对象共用 object 根，所属目录决定解析作用域。生命周期函数及扩展/行为/Prefab 函数共用 function 根。
 
@@ -288,7 +288,7 @@ function {
 ```
 
 ```text
-external_events {
+fragment {
   name = "SharedCombat"
   description = "共享战斗事件"
 }
@@ -738,7 +738,7 @@ variant {
 ## 12. External 声明示例
 
 ```text
-external {
+layout {
   name = "BonusRoom"
   order = 0
 

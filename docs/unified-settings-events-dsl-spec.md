@@ -18,7 +18,7 @@
 
 ## 1. 最终结论
 
-GDevelop Language (GDL) 成为唯一的项目配置及事件作者语言。函数签名、参数和事件正文属于一个 `function` 根；外部事件片段的声明和正文属于一个 `external_events` 根。函数和片段的顶层事件正文放在唯一可选的 `events {}` 容器中；子事件直接嵌套，不再包一层 events。
+GDevelop Language (GDL) 成为唯一的项目配置及事件作者语言。函数签名、参数和事件正文属于一个 `function` 根；外部事件片段的声明和正文属于一个 `fragment` 根。函数和片段的顶层事件正文放在唯一可选的 `events {}` 容器中；子事件直接嵌套，不再包一层 events。
 
 统一规则：
 
@@ -77,7 +77,7 @@ extensions/Combat/prefabs/Knight/functions/sceneUpdate.gdl
 | 根类型 | 允许 events | 原因 |
 | --- | --- | --- |
 | function | 0/1 | 函数签名与正文共同保存 |
-| external_events | 0/1 | 片段身份与正文共同保存 |
+| fragment | 0/1 | 片段身份与正文共同保存 |
 | scene / prefab / variant / behavior / extension | 禁止 | 事件属于所属函数，避免第二个所有者 |
 | project / object / resources / tests / external | 禁止 | 保持现有组件职责 |
 
@@ -478,7 +478,7 @@ comment 是独立的持久化注释节点，投影为原生 Comment 事件，tex
 ## 12. 外部事件片段与 Link
 
 ```settings
-external_events {
+fragment {
   name = "SharedCombat"
   description = "共享接触处理"
   eventsLogic = "在调用者选择范围内处理战斗"
@@ -592,7 +592,7 @@ CodeBlock AST 保存开启/关闭符号、整个区域和内容切片的范围�
 | 作者结构 | 原生模型 |
 | --- | --- |
 | function.events | 函数 events 列表 |
-| external_events.events | 外部片段 events 列表 |
+| fragment.events | 外部片段 events 列表 |
 | event（省略 type 或 standard） | Standard |
 | event.type = else | Else |
 | event.type = repeat / count | Repeat / repeatExpression |
@@ -616,7 +616,7 @@ CodeBlock AST 保存开启/关闭符号、整个区域和内容切片的范围�
 
 GDL catalog 必须发布：
 
-- function/external_events 的 events 唯一容器及允许的子事件种类。
+- function/fragment 的 events 唯一容器及允许的子事件种类。
 - event.type 判别 schema、独立 group/comment/link schema、各容器基数、规范输出顺序、递归规则和 Else 相邻约束。
 - 裸指令从 conditions/actions/while_conditions 继承的种类、标记和子树能力。
 - 表达式的合法字段位置、JavaScript 原始 code 块及其版本/边界规则。

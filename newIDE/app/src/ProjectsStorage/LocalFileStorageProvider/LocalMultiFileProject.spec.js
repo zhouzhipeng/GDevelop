@@ -506,7 +506,7 @@ describe('Local multi-file project storage', () => {
       'scenes/Main/external-events/Shared Combat.gdl'
     );
     expect(fs.readFileSync(fragmentSettingsPath, 'utf8')).toContain(
-      'external_events {'
+      'fragment {'
     );
     fs.writeFileSync(
       fragmentSettingsPath,
@@ -563,7 +563,7 @@ describe('Local multi-file project storage', () => {
     fs.unlinkSync(path.join(root, 'New fragment.events'));
     fs.writeFileSync(
       path.join(root, 'New fragment.gdl'),
-      'external_events {\n name = "New fragment"\n description = ""\n eventsLogic = ""\n}\n',
+      'fragment {\n name = "New fragment"\n description = ""\n eventsLogic = ""\n}\n',
       'utf8'
     );
     const project = await openMultiFileProject(entryPath);

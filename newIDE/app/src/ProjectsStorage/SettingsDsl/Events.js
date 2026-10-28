@@ -660,7 +660,7 @@ export const extractSettingsJavaScriptBlocks = (source, fileUri) => {
   return blocks;
 };
 const compileParsedSettingsEvents = (syntax, options, fileUri) => {
-  if (!['function', 'external_events'].includes(syntax.root.type))
+  if (!['function', 'fragment'].includes(syntax.root.type))
     error(
       'Only functions and external fragments own events.',
       syntax.root,

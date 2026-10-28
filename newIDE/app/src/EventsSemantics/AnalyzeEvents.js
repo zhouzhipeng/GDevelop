@@ -247,7 +247,7 @@ export const analyzeGdlEvents = ({
       }
       state[id] = fact(
         id,
-        root.type === 'external_events'
+        root.type === 'fragment'
           ? 'unknown'
           : symbolOrigins.get(id) || 'container'
       );
@@ -777,8 +777,7 @@ export const analyzeGdlEvents = ({
   const container = root.children.find(child => child.type === 'events');
   const dimensions = [
     {
-      unit:
-        root.type === 'external_events' ? 'caller-context' : 'function-call',
+      unit: root.type === 'fragment' ? 'caller-context' : 'function-call',
       count: 'runtime-dependent',
       lifecycle: owner.functionName || null,
     },

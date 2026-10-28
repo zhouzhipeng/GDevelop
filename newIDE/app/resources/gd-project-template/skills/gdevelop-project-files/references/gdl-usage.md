@@ -65,7 +65,7 @@ screen/row/column layout nodes are not implemented.
 ## Other component roots
 
 ```settings
-external_events {
+fragment {
   name = "SharedCombat"
   description = "Shared combat fragment"
   eventsLogic = "Apply damage after collision selection"
@@ -88,7 +88,7 @@ function {
 ```
 
 Scene/prefab/behavior lifecycle signatures and order have fixed contracts.
-External layouts use `external`; variants use `variant`. Both retain name
+External layouts use `layout`; variants use `variant`. Both retain name
 and applicable order inside the root. External layer nodes only contain id
 and name, resolving existing layers in the owning scene.
 
@@ -205,7 +205,7 @@ that a scene-variable action adds once per coin. Use for_each when required.
 
 ### Structure
 
-- Only function and external_events roots own one optional top-level events
+- Only function and fragment roots own one optional top-level events
   container. Canonical output includes an empty events container when needed.
 - Executable events use event. Its type defaults to standard. Other types:
   else, repeat, while, for_each, for_each_child and javascript.

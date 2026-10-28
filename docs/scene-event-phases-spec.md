@@ -44,7 +44,7 @@ are implemented by `GDJS/Runtime/runtimescene.ts` and generated scene code in
 ## External fragments and Link
 
 External Events are scene-owned fragments at
-`scenes/<Scene>/external-events/<Fragment>.gdl`. Their root is `external_events`
+`scenes/<Scene>/external-events/<Fragment>.gdl`. Their root is `fragment`
 and owns metadata plus one event list. They have no lifecycle functions of their
 own and do not execute automatically.
 

@@ -738,6 +738,30 @@ column2 = "ssfssdfsf"
     ).toEqual(['getmoney', 'GetMoney']);
   });
 
+  test('writes and reads external events with the fragment root', () => {
+    const files = decomposeLegacyProjectToFiles(projectFixture);
+    const uri = 'game://scenes/Main/external-events/Shared%20Combat.gdl';
+    expect(files[uri]).toMatch(/^fragment\s*\{/);
+    expect(composeLegacyProjectFromFiles(files).externalEvents).toMatchObject(
+      projectFixture.externalEvents
+    );
+
+    files[uri] = files[uri].replace(/^fragment\b/, 'external_events');
+    expect(() => composeLegacyProjectFromFiles(files)).toThrow();
+  });
+
+  test('writes and reads external layouts with the layout root', () => {
+    const files = decomposeLegacyProjectToFiles(projectFixture);
+    const uri = 'game://scenes/Main/external-layout/Shared%20Combat.gdl';
+    expect(files[uri]).toMatch(/^layout\s*\{/);
+    expect(composeLegacyProjectFromFiles(files).externalLayouts).toEqual(
+      projectFixture.externalLayouts
+    );
+
+    files[uri] = files[uri].replace(/^layout\b/, 'external');
+    expect(() => composeLegacyProjectFromFiles(files)).toThrow();
+  });
+
   test('rejects an external layout whose linked scene was removed', () => {
     const project = JSON.parse(JSON.stringify(projectFixture));
     project.externalLayouts[0].associatedLayout = 'Removed Scene';

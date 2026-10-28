@@ -54,7 +54,7 @@ describe('project module map', () => {
       'game://scenes/Game/functions/sceneUpdate.gdl':
         'function {\n name = "sceneUpdate"\n description = "Every frame"\n}\n',
       'game://scenes/Game/external-events/HUD.gdl':
-        'external_events {\n name = "HUD"\n description = "Show player status"\n eventsLogic = "Refresh labels"\n}\n',
+        'fragment {\n name = "HUD"\n description = "Show player status"\n eventsLogic = "Refresh labels"\n}\n',
       'game://extensions/Local/functions/Update.gdl':
         'function {\n name = "Update"\n description = "Update local state"\n}\n',
     };

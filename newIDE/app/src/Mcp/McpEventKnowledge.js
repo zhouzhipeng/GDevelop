@@ -1,4 +1,5 @@
 // @flow
+import { SYSTEM_INSTRUCTION_PARAMETER_NAMES } from './SystemInstructionParameterNames';
 import { getSystemInstructionName } from '../ProjectsStorage/SettingsDsl/SystemInstructionNames';
 import {
   getInstructionSemantics,
@@ -1868,7 +1869,7 @@ const getInstructionParameterBaseName = (
     parameterMetadata.getName() ||
     parameterMetadata.getDescription() ||
     `Parameter ${index}`;
-  return (
+  const baseName =
     getInstructionParameterName(parameterMetadata) ||
     displayName
       .trim()
@@ -1876,8 +1877,8 @@ const getInstructionParameterBaseName = (
       .replace(/['’]s\b/g, '')
       .replace(/[^a-z0-9]+/g, '_')
       .replace(/^_+|_+$/g, '') ||
-    `parameter_${index}`
-  );
+    `parameter_${index}`;
+  return SYSTEM_INSTRUCTION_PARAMETER_NAMES[baseName] || baseName;
 };
 
 export const normalizeInstructionParameterDslName = (
