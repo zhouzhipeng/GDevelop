@@ -20,7 +20,10 @@ import {
 } from './InstructionCatalog';
 import { enumerateAllInstructions } from '../../InstructionOrExpression/EnumerateInstructions';
 import { enumerateAllExpressions } from '../../InstructionOrExpression/EnumerateExpressions';
-import { normalizeInstructionParameterDslName } from '../../Mcp/McpEventKnowledge';
+import {
+  normalizeInstructionParameterDslName,
+  getCatalogParameterValueKind,
+} from '../../Mcp/McpEventKnowledge';
 
 const compileSettingsJson = (source, options) =>
   JSON.stringify(compileSettingsEvents(source, options));
@@ -78,6 +81,50 @@ const catalogFixture = withTestInstructionSemantics({
 });
 
 describe('project Settings instruction catalog', () => {
+  test('key and mouse selectors round-trip as raw names', () => {
+    for (const [type, value] of [['key', 'r'], ['mouse', 'Left']]) {
+      const valueKind = getCatalogParameterValueKind({
+        type,
+        valueType: { isString: true },
+      });
+      expect(valueKind).toBe('name');
+      const catalog = withTestInstructionSemantics({
+        ...catalogFixture,
+        conditions: [
+          {
+            type: 'Input',
+            parameters: [
+              { dslName: 'scene', type: 'currentScene', isCodeOnly: true },
+              { dslName: 'selector', type, valueKind },
+            ],
+          },
+        ],
+      });
+      const input = JSON.stringify([
+        {
+          type: 'BuiltinCommonInstructions::Standard',
+          conditions: [{ type: { value: 'Input' }, parameters: ['', value] }],
+          actions: [],
+        },
+      ]);
+      const dsl = serializeEventDocument(input, {
+        formatInstruction: createCatalogInstructionFormatter(catalog),
+      });
+      const output = JSON.parse(
+        compileSettingsJson(dsl, {
+          resolveInstruction: createCatalogInstructionResolver(catalog),
+        })
+      );
+      expect(output[0].conditions[0].parameters[1]).toBe(value);
+    }
+    expect(
+      getCatalogParameterValueKind({
+        type: 'mouseButton',
+        valueType: { isString: true },
+      })
+    ).toBe('text');
+  });
+
   test('requires the semantic version 6 catalog without authoring prose', () => {
     expect(() =>
       validateProjectInstructionCatalog(

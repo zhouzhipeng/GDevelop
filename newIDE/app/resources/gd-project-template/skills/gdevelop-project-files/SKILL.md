@@ -61,7 +61,7 @@ partial files before retrying with a fresh destination.
 
 If you encounter an engine-level issue or bug while working on a GDevelop
 project, pause the current project task immediately. Investigate and fix the
-engine bug first in the GDevelop engine source at `D:\code\GDevelop`, verify
+engine bug first in the GDevelop engine source at `/Volumes/ssd512/GDevelop`, verify
 the engine fix, and only then resume the project task. Do not work around an
 engine bug solely in project files or continue the project task while the
 engine issue remains unresolved.

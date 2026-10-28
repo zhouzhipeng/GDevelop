@@ -1921,7 +1921,9 @@ const getUniqueInstructionParameterNames = (metadata: any): Array<string> => {
   });
 };
 
-const getCatalogParameterValueKind = (parameter: Object): string => {
+export const getCatalogParameterValueKind = (parameter: Object): string => {
+  // These selector parameters are serialized as raw names, not text expressions.
+  if (parameter.type === 'key' || parameter.type === 'mouse') return 'name';
   if (parameter.type === 'yesorno' || parameter.type === 'trueorfalse') {
     return 'boolean';
   }
