@@ -7,7 +7,7 @@ import {
   resolveGameUriToPath,
 } from '../ProjectsStorage/LocalFileStorageProvider/LocalMultiFileProject';
 import {
-  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  ALL_INSTRUCTION_CATALOG_PATHS,
   assembleInstructionCatalogFiles,
 } from '../ProjectsStorage/SettingsDsl/InstructionCatalog';
 import { analyzeProjectGdl } from '../EventsSemantics/ProjectAnalysis';
@@ -19,7 +19,7 @@ const path = optionalRequire('path');
 export const readGdlSemanticsCatalog = projectRoot => {
   return assembleInstructionCatalogFiles(
     Object.fromEntries(
-      Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).map(file => {
+      ALL_INSTRUCTION_CATALOG_PATHS.map(file => {
         const fullPath = path.join(projectRoot, file);
         if (fs.statSync(fullPath).size > 32 * 1024 * 1024)
           throw new Error(

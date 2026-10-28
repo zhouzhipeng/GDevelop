@@ -1,7 +1,7 @@
 // @noflow
 import { MULTI_FILE_ENTRY_NAME } from '../ProjectsStorage/ProjectEntry';
 import {
-  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  ALL_INSTRUCTION_CATALOG_PATHS,
   assembleInstructionCatalogFiles,
 } from '../ProjectsStorage/SettingsDsl/InstructionCatalog';
 import optionalRequire from '../Utils/OptionalRequire';
@@ -27,7 +27,7 @@ export const getSettingsInstructionCatalog = uri => {
     if (fs.existsSync(path.join(directory, MULTI_FILE_ENTRY_NAME))) {
       const projectRoot = directory;
       try {
-        const paths = Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS);
+        const paths = ALL_INSTRUCTION_CATALOG_PATHS;
         const signature = paths
           .map(file => {
             const stat = fs.statSync(path.join(projectRoot, file));

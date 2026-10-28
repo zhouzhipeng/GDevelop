@@ -5,6 +5,8 @@ import { appendSettingsEvents, compileSettingsEvents } from './Events';
 import { parseLegacyEventsJson } from './EventModel';
 import {
   PROJECT_INSTRUCTION_CATALOG_PATHS,
+  ALL_INSTRUCTION_CATALOG_PATHS,
+  DEPRECATED_INSTRUCTION_CATALOG_PATH,
   serializeInstructionCatalogFiles,
   assembleInstructionCatalogFiles,
   buildProjectDeprecatedInstructionCatalog,
@@ -35,7 +37,7 @@ const areLegacyEventsEquivalent = (left, right) =>
 
 const catalogFixture = withTestInstructionSemantics({
   format: 'gdevelop-gdl-instruction-catalog',
-  formatVersion: 6,
+  formatVersion: 7,
   actions: [
     {
       type: 'Network::Send',
@@ -125,7 +127,7 @@ describe('project Settings instruction catalog', () => {
     ).toBe('text');
   });
 
-  test('requires the semantic version 6 catalog without authoring prose', () => {
+  test('requires the semantic version 7 catalog without authoring prose', () => {
     expect(() =>
       validateProjectInstructionCatalog(
         withTestInstructionSemantics({
@@ -133,7 +135,7 @@ describe('project Settings instruction catalog', () => {
           formatVersion: 1,
         })
       )
-    ).toThrow('expected version 6');
+    ).toThrow('expected version 7');
     expect(() =>
       validateProjectInstructionCatalog(
         withTestInstructionSemantics({
@@ -750,7 +752,7 @@ describe('project Settings instruction catalog', () => {
     expect(
       catalog.expressions.some(({ type }) => type === 'TextObject::String')
     ).toBe(false);
-    expect(catalog.formatVersion).toBe(6);
+    expect(catalog.formatVersion).toBe(7);
     expect(catalog.authoring).toBeUndefined();
     expect(serialized).not.toContain('"authoring"');
     expect(serialized).not.toContain('serialized operand');
@@ -1054,7 +1056,7 @@ describe('instruction catalog files', () => {
       serializeInstructionCatalogFiles(catalogFixture, deprecated)
     );
     expect(Object.keys(serialized).sort()).toEqual(
-      Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).sort()
+      ALL_INSTRUCTION_CATALOG_PATHS.slice().sort()
     );
     const files = Object.fromEntries(
       Object.entries(serialized).map(([file, contents]) => [
@@ -1064,8 +1066,10 @@ describe('instruction catalog files', () => {
     );
     const complete = assembleInstructionCatalogFiles(files);
     expect(
-      Object.values(files).every(file =>
-        file.entries.every(entry => entry.authoringAvailable === undefined)
+      Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).every(path =>
+        files[path].entries.every(
+          entry => entry.authoringAvailable === undefined
+        )
       )
     ).toBe(true);
     expect(
@@ -1075,7 +1079,12 @@ describe('instruction catalog files', () => {
       assembleInstructionCatalogFiles(files, true).actions.map(
         entry => entry.type
       )
-    ).toEqual(complete.actions.map(entry => entry.type));
+    ).not.toContain('Legacy::Send');
+    expect(
+      files[DEPRECATED_INSTRUCTION_CATALOG_PATH].actions.map(
+        entry => entry.type
+      )
+    ).toContain('Legacy::Send');
     for (const file of Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS)) {
       expect(files[file].entries.every(entry => entry.kind === undefined)).toBe(
         true
@@ -1099,6 +1108,19 @@ describe('instruction catalog files', () => {
       ).toBe(files[file].count);
     }
   });
+  test.each(['missing', 'version', 'fingerprint', 'count'])(
+    'rejects invalid compatibility catalog: %s',
+    failure => {
+      const files = filesFor(catalogFixture);
+      const file = DEPRECATED_INSTRUCTION_CATALOG_PATH;
+      if (failure === 'missing') delete files[file];
+      if (failure === 'version') files[file].formatVersion = 6;
+      if (failure === 'fingerprint')
+        files[file].sourceFingerprint = 'different';
+      if (failure === 'count') files[file].counts.actions++;
+      expect(() => assembleInstructionCatalogFiles(files)).toThrow(file);
+    }
+  );
   test.each(['missing', 'kind', 'version', 'fingerprint', 'count', 'entry'])(
     'rejects %s with a file diagnostic',
     failure => {

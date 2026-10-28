@@ -143,6 +143,8 @@ files or write IfDo syntax. Read the current settings and instruction catalogs.
 
 ### Catalog instruction names
 
+When deciding which instruction implements a behavior, search the generated catalogs yourself using relevant keywords. Once you have a candidate name, call `lookup_instruction_catalog` with an exact `name` (a `dslName` or `type`) and optional `kind` to quickly retrieve all matching entries, including their parameters and scope. This tool is for exact detail lookup; it does not replace keyword search or instruction selection. The tool reads generated files on disk; run `generate-catalogs` after structural changes or if the catalogs are missing.
+
 For a catalog parameter, `valueKind` defaults to `type` when omitted.
 
 Author actions and conditions using the catalog entry's **`dslName`** when present;
@@ -374,9 +376,7 @@ unverified. Use real preview/gameplay evidence for behavior-sensitive edits.
 Read `.gdevelop/conditions-catalog.json` for condition metadata,
 `.gdevelop/actions-catalog.json` for action metadata, and
 `.gdevelop/expressions-catalog.json` for expression metadata. Each file exposes
-its corresponding `kind`, `entries`, and `count`. Catalogs also include compatibility entries; check deprecation information
-before using an instruction in new GDL. All three files must be regenerated
-together; do not use the retired combined or deprecated catalog files.
+its corresponding `kind`, `entries`, and `count`. Use these files for new events. `.gdevelop/deprecated-instructions-catalog.json` is only for understanding existing legacy instructions; never use it to write new events. Regenerate all four files together; do not use the retired combined catalog.
 
 ### Behavior properties
 

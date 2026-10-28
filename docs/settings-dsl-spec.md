@@ -1,6 +1,6 @@
 # GDevelop Language (GDL) 当前规范与文档入口
 
-- 状态：已实施；当前作者格式 13，GDL catalog 12，instruction catalog 6。
+- 状态：已实施；当前作者格式 13，GDL catalog 12，instruction catalog 7。
 - 统一事件契约：[统一 GDevelop Language (GDL)：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。作者格式 13 将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
 - 变量契约：[直接 variable 声明与值字面量](settings-dsl-variable-values-spec.md)。第 8.2 节仅作摘要，完整规则由该文档维护。
 - 更新日期：2026-10-27

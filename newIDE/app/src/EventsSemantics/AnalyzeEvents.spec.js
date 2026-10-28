@@ -56,7 +56,7 @@ const analyze = (body, options = {}) =>
 const codes = result => result.diagnostics.map(item => item.code);
 
 test('exact reviewed signatures and validated semantics', () => {
-  expect(catalog.formatVersion).toBe(6);
+  expect(catalog.formatVersion).toBe(7);
   expect(
     catalog.conditions
       .find(entry => entry.type === 'CollisionNP')

@@ -17,7 +17,7 @@ import {
   MultiFileProjectError,
 } from '../MultiFileProjectFormat';
 import {
-  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  ALL_INSTRUCTION_CATALOG_PATHS,
   RETIRED_INSTRUCTION_CATALOG_PATHS,
   assembleInstructionCatalogFiles,
 } from '../SettingsDsl/InstructionCatalog';
@@ -84,7 +84,7 @@ const bootstrapProjectSourceCatalogs = async (
     'layout-catalog.json'
   );
   const generatedArtifactRelativePaths = [
-    ...Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS),
+    ...ALL_INSTRUCTION_CATALOG_PATHS,
     PROJECT_GDL_CATALOG_RELATIVE_PATH,
     PROJECT_RUNTIME_API_RELATIVE_PATH,
     PROJECT_API_RELATIVE_PATH,
@@ -102,7 +102,7 @@ const bootstrapProjectSourceCatalogs = async (
   try {
     assembleInstructionCatalogFiles(
       Object.fromEntries(
-        Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).map(file => [
+        ALL_INSTRUCTION_CATALOG_PATHS.map(file => [
           file,
           fs.readJsonSync(path.join(projectRoot, file)),
         ])

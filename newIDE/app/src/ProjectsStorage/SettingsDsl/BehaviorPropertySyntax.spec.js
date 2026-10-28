@@ -42,7 +42,7 @@ const property = (kind, name, valueKind) => ({
 });
 const catalog = withTestInstructionSemantics({
   format: 'gdevelop-gdl-instruction-catalog',
-  formatVersion: 6,
+  formatVersion: 7,
   actions: ['action'].flatMap(kind =>
     ['Height', 'Title', 'Fresh'].map((name, index) =>
       property(kind, name, ['number', 'text', 'boolean'][index])

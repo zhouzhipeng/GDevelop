@@ -3,7 +3,7 @@
 - 状态：已批准；基础分析链路已实施。完整契约仍含未实施阶段，实际覆盖与验证见 [首版实施记录](gdl-event-semantics-implementation-report.md)。本文的设计要求不能直接视为已实现能力。
 - 日期：2026-10-26。
 - 目标使用者：通过 GDL 源码阅读、修改项目的 AI，以及事件编辑器、校验器和后续调试工具。
-- 当前版本：GDL 作者格式 13、GDL catalog 12、instruction catalog 6。
+- 当前版本：GDL 作者格式 13、GDL catalog 12、instruction catalog 7。
 - 范围：执行次数、对象选择（picking）、动作作用范围、父子与兄弟上下文、分析诊断和验证证据。
 - 基础语言契约：[统一 GDL 规范](unified-settings-events-dsl-spec.md)。本文不替代该规范，也不改变原生执行行为。
 

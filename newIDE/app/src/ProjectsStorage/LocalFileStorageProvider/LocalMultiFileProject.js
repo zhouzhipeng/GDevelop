@@ -28,7 +28,7 @@ import {
   validateGameUri,
 } from '../MultiFileProjectFormat';
 import {
-  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  ALL_INSTRUCTION_CATALOG_PATHS,
   assembleInstructionCatalogFiles,
   createCatalogInstructionResolver,
 } from '../SettingsDsl/InstructionCatalog';
@@ -171,6 +171,21 @@ const removeEmptyManagedParentDirectories = async (
   }
 };
 
+const removeEmptyTransactionsRoot = async (root: string): Promise<void> => {
+  const transactionsRoot = path.join(root, '.gdevelop', 'transactions');
+  assertInside(root, transactionsRoot);
+  try {
+    await fs.rmdir(transactionsRoot);
+  } catch (error) {
+    if (
+      error.code !== 'ENOENT' &&
+      error.code !== 'ENOTEMPTY' &&
+      error.code !== 'EEXIST'
+    )
+      throw error;
+  }
+};
+
 export const recoverMultiFileTransactions = async (
   projectRoot: string
 ): Promise<void> => {
@@ -259,6 +274,7 @@ export const recoverMultiFileTransactions = async (
     assertInside(root, transactionRoot);
     await fs.remove(transactionRoot);
   }
+  await removeEmptyTransactionsRoot(root);
 };
 
 // Source reads also run during renderer catalog regeneration. Use bounded synchronous
@@ -1032,7 +1048,7 @@ export const openMultiFileProjectWithSources = async (
     let catalog;
     try {
       const parts: Object = {};
-      for (const file of Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS)) {
+      for (const file of ALL_INSTRUCTION_CATALOG_PATHS) {
         const catalogPath = path.join(projectRoot, ...file.split('/'));
         try {
           parts[file] = JSON.parse(await readBoundedUtf8(catalogPath));
@@ -1329,6 +1345,7 @@ const writeMultiFileSourceTreeTransaction = async ({
   } finally {
     assertInside(projectRoot, transactionRoot);
     await fs.remove(transactionRoot);
+    await removeEmptyTransactionsRoot(projectRoot);
   }
   return [...changedUris, ...obsoleteUris];
 };

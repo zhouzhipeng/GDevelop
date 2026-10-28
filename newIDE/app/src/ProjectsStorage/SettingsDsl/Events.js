@@ -558,6 +558,13 @@ export const encodeEventList = (events, options = {}, uri, depth = 0) => {
       Object.entries(extra[kind]).forEach(([key, nativeKey]) => {
         if (event[nativeKey] === undefined) return;
         const value = event[nativeKey];
+        if (
+          kind === 'group' &&
+          ((key === 'source' && value === '') ||
+            (key === 'creationTime' && value === 0) ||
+            (key === 'parameters' && Array.isArray(value) && !value.length))
+        )
+          return;
         if (expressionFields.includes(key)) {
           if (value !== '')
             data[key] =
@@ -577,12 +584,15 @@ export const encodeEventList = (events, options = {}, uri, depth = 0) => {
                   };
         } else data[key] = value;
       });
-      if (kind === 'group')
-        data.color = [
+      if (kind === 'group') {
+        const groupColor = [
           event.colorR ?? 74,
           event.colorG ?? 176,
           event.colorB ?? 228,
         ];
+        if (groupColor.some((component, i) => component !== [74, 176, 228][i]))
+          data.color = groupColor;
+      }
       if (kind === 'comment') {
         const c = event.color || {};
         data.background = [c.r || 0, c.g || 0, c.b || 0];

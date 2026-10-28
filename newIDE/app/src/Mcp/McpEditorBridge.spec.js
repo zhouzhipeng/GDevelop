@@ -115,6 +115,54 @@ describe('McpEditorBridge', () => {
       ...overrides,
     });
 
+  it('looks up all exact instruction names and reports missing catalogs', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gdevelop-lookup-'));
+    const directory = path.join(root, '.gdevelop');
+    fs.mkdirSync(directory);
+    const project = { getProjectFile: () => path.join(root, 'project.gdl') };
+    const bridge = makeBridge({ getProject: () => project });
+    const call = args =>
+      bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: { name: 'lookup_instruction_catalog', arguments: args },
+      });
+    try {
+      for (const kind of ['action', 'condition', 'expression']) {
+        fs.writeFileSync(
+          path.join(directory, `${kind}s-catalog.json`),
+          JSON.stringify({
+            kind,
+            entries:
+              kind === 'expression'
+                ? []
+                : [
+                    {
+                      type: 'TextObject::String',
+                      dslName: kind === 'action' ? 'updateText' : 'string',
+                      parameters: [],
+                    },
+                  ],
+          })
+        );
+      }
+      let result = await call({ name: 'TextObject::String' });
+      expect(JSON.parse(result.content[0].text).matches).toHaveLength(2);
+      result = await call({ name: 'updateText', kind: 'action' });
+      expect(JSON.parse(result.content[0].text).matches[0]).toMatchObject({
+        kind: 'action',
+        type: 'TextObject::String',
+      });
+      result = await call({ name: 'missing' });
+      expect(JSON.parse(result.content[0].text).matches).toEqual([]);
+      fs.unlinkSync(path.join(directory, 'conditions-catalog.json'));
+      result = await call({ name: 'missing' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('generate-catalogs');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   // Build a mock preview debugger server that answers TARGETED requests: when
   // sendMessage(id, {command, messageId}) is called, it replies (via the
   // registered onHandleParsedMessage callback) from that id with the same

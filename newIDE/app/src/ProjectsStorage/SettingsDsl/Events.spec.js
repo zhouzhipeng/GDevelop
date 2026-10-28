@@ -109,6 +109,27 @@ test('round trips groups, comments and links as dedicated ordered nodes', () => 
     )
   ).toEqual(events);
 });
+test('omits default group fields while preserving non-default values', () => {
+  const events = compileSettingsEvents(
+    wrap(
+      'group {\n name = "Default"\n }\ngroup {\n name = "Custom"\n source = "template"\n creationTime = 123\n parameters = ["a"]\n color = [0, 176, 228]\n }'
+    ),
+    options
+  );
+  const output = appendSettingsEvents('function {}\n', events, options);
+  const groups = parseSettingsSyntax(output).root.children[0].children;
+  expect(Object.keys(groups[0].properties)).toEqual(['name']);
+  expect(Object.keys(groups[1].properties)).toEqual(
+    expect.arrayContaining([
+      'name',
+      'source',
+      'creationTime',
+      'parameters',
+      'color',
+    ])
+  );
+  expect(compileSettingsEvents(output, options)).toEqual(events);
+});
 test('expression operands and type-specific while lists stay separate', () => {
   const source = wrap(
     'event {\n type = "while"\n while_conditions {\n C { value={{Func("(", (1 + 2))}} }\n }\n conditions {\n D {}\n }\n actions {\n A {}\n }\n}'

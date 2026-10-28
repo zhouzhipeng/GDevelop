@@ -1476,6 +1476,34 @@ const inspectSignalUsageSchema = {
 
 const readTools: Array<McpTool> = [
   {
+    name: 'lookup_instruction_catalog',
+    description:
+      'Find exact dslName or type matches in the current project’s generated action, condition and expression catalogs. Returns all matches with their kind and full catalog metadata. Run generate-catalogs first when files are missing or project structure has changed.',
+    inputSchema: {
+      type: 'object',
+      required: ['name'],
+      additionalProperties: false,
+      properties: {
+        name: {
+          type: 'string',
+          minLength: 1,
+          description: 'Exact instruction dslName or type.',
+        },
+        kind: {
+          type: 'string',
+          enum: ['action', 'condition', 'expression'],
+          description: 'Optional catalog kind filter.',
+        },
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
     name: 'open_project',
     description:
       'Open a specific local GDevelop project in the current editor window by absolute entry-file path. Accepts project.gdl or a legacy JSON project file and waits for project loading, resource fetching, and extension loading to finish. By default, refuses to replace a project with unsaved in-memory changes; pass discard_unsaved_changes:true to explicitly discard them. Opening project.gdl may bootstrap missing generated .gdevelop catalogs; opening legacy JSON may migrate it to the multi-file format.',
@@ -2398,6 +2426,7 @@ export const getCapabilitiesSummary = (
       'inspect_model_materials',
       'validate_tsl_file',
       'render_tsl_material_preview',
+      'lookup_instruction_catalog',
     ],
     'Project-file validation': [
       'generate-catalogs',

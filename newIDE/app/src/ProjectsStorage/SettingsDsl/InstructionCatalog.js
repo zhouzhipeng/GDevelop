@@ -15,9 +15,14 @@ export const PROJECT_INSTRUCTION_CATALOG_PATHS: { [string]: string } = {
   action: '.gdevelop/actions-catalog.json',
   expression: '.gdevelop/expressions-catalog.json',
 };
+export const DEPRECATED_INSTRUCTION_CATALOG_PATH =
+  '.gdevelop/deprecated-instructions-catalog.json';
+export const ALL_INSTRUCTION_CATALOG_PATHS = [
+  ...Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS),
+  DEPRECATED_INSTRUCTION_CATALOG_PATH,
+];
 export const RETIRED_INSTRUCTION_CATALOG_PATHS = [
   '.gdevelop/instructions-catalog.json',
-  '.gdevelop/deprecated-instructions-catalog.json',
 ];
 
 export class ProjectInstructionCatalogError extends Error {
@@ -423,13 +428,13 @@ export const validateProjectInstructionCatalog = (catalog: any): Catalog => {
   if (catalog.formatVersion !== INSTRUCTION_CATALOG_VERSION) {
     fail(
       'GDL_CATALOG_VERSION_UNSUPPORTED',
-      'Unsupported instruction catalog version; expected version 6.'
+      'Unsupported instruction catalog version; expected version 7.'
     );
   }
   if (catalog.authoring !== undefined) {
     fail(
       'GDL_CATALOG_INVALID',
-      'Instruction catalog version 6 must not contain authoring prose.'
+      'Instruction catalog version 7 must not contain authoring prose.'
     );
   }
   if (
@@ -1158,10 +1163,8 @@ export const serializeInstructionCatalogFiles = (
   authoring: Object,
   deprecated?: Object
 ): Object => {
-  const catalog = deprecated
-    ? mergeProjectInstructionCatalogs(authoring, deprecated)
-    : validateProjectInstructionCatalog(authoring);
-  return Object.fromEntries(
+  const catalog = validateProjectInstructionCatalog(authoring);
+  const result = Object.fromEntries(
     Object.keys(PROJECT_INSTRUCTION_CATALOG_PATHS).map(kind => {
       const entries = catalog[`${kind}s`].map(entry => {
         const { authoringAvailable, kind: entryKind, ...rest } = entry;
@@ -1187,11 +1190,41 @@ export const serializeInstructionCatalogFiles = (
       ];
     })
   );
+  const extra = deprecated
+    ? validateProjectInstructionCatalog(deprecated)
+    : {
+        ...catalog,
+        actions: [],
+        conditions: [],
+        expressions: [],
+        counts: { actions: 0, conditions: 0, expressions: 0 },
+      };
+  const key = (entry, kind) =>
+    kind === 'expressions'
+      ? `${entry.type}\u0000${String(entry.returnType)}`
+      : entry.type;
+  const delta = {
+    ...extra,
+    sourceFingerprint: catalog.sourceFingerprint || null,
+  };
+  ['actions', 'conditions', 'expressions'].forEach(kind => {
+    const existing = new Set(catalog[kind].map(entry => key(entry, kind)));
+    delta[kind] = extra[kind].filter(entry => !existing.has(key(entry, kind)));
+  });
+  delta.counts = {
+    actions: delta.actions.length,
+    conditions: delta.conditions.length,
+    expressions: delta.expressions.length,
+  };
+  result[
+    DEPRECATED_INSTRUCTION_CATALOG_PATH
+  ] = serializeProjectInstructionCatalog(delta);
+  return result;
 };
 
 export const assembleInstructionCatalogFiles = (
   files: Object,
-  _authoringOnly?: boolean
+  authoringOnly?: boolean
 ): Object => {
   let fingerprint: ?string;
   const catalog: Object = {
@@ -1252,6 +1285,27 @@ export const assembleInstructionCatalogFiles = (
     catalog[`${kind}s`] = entries;
     catalog.counts[`${kind}s`] = entries.length;
   });
-  validateProjectInstructionCatalog(catalog);
-  return validateProjectInstructionCatalog(catalog);
+  const file = DEPRECATED_INSTRUCTION_CATALOG_PATH;
+  const extra = files[file];
+  try {
+    validateProjectInstructionCatalog(extra);
+    if (
+      !Object.prototype.hasOwnProperty.call(extra, 'sourceFingerprint') ||
+      !extra.counts ||
+      ['actions', 'conditions', 'expressions'].some(
+        kind => extra.counts[kind] !== extra[kind].length
+      )
+    )
+      throw new Error('Invalid counts or missing fingerprint');
+    if (JSON.stringify(extra.sourceFingerprint) !== fingerprint)
+      throw new Error('Fingerprint mismatch');
+  } catch (error) {
+    fail(
+      'GDL_CATALOG_INVALID',
+      `Invalid instruction catalog ${file}: ${error.message}`
+    );
+  }
+  return authoringOnly
+    ? validateProjectInstructionCatalog(catalog)
+    : mergeProjectInstructionCatalogs(catalog, extra);
 };

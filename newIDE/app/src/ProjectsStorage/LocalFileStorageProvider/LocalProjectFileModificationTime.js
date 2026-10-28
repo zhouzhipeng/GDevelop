@@ -1,6 +1,6 @@
 // @flow
 import optionalRequire from '../../Utils/OptionalRequire';
-import { PROJECT_INSTRUCTION_CATALOG_PATHS } from '../SettingsDsl/InstructionCatalog';
+import { ALL_INSTRUCTION_CATALOG_PATHS } from '../SettingsDsl/InstructionCatalog';
 import { MULTI_FILE_ENTRY_NAME } from '../MultiFileProjectFormat';
 import { PROJECT_GDL_CATALOG_RELATIVE_PATH } from '../ProjectSourceCatalog';
 
@@ -138,7 +138,7 @@ const getMultiFileProjectPathsToInspect = (projectRoot: string) => [
   ...multiFileProjectRootFiles.map(fileName =>
     path.join(projectRoot, fileName)
   ),
-  ...Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).map(file =>
+  ...Object.values(ALL_INSTRUCTION_CATALOG_PATHS).map(file =>
     path.join(projectRoot, ...file.split('/'))
   ),
   path.join(projectRoot, ...PROJECT_GDL_CATALOG_RELATIVE_PATH.split('/')),

@@ -39,7 +39,7 @@ import {
   serializeConstantsToToml,
 } from '../MultiFileProjectFormat';
 import {
-  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  ALL_INSTRUCTION_CATALOG_PATHS,
   RETIRED_INSTRUCTION_CATALOG_PATHS,
   serializeInstructionCatalogFiles,
   assembleInstructionCatalogFiles,
@@ -498,7 +498,7 @@ export const writeProjectGdlCatalog = async (
     const { files } = await readMultiFileSourceTree(entryPath);
     const instructionCatalog = assembleInstructionCatalogFiles(
       Object.fromEntries(
-        Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).map(file => [
+        ALL_INSTRUCTION_CATALOG_PATHS.map(file => [
           file,
           fs.readJsonSync(path.join(projectPath, file)),
         ])

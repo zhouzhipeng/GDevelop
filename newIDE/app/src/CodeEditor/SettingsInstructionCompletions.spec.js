@@ -90,7 +90,7 @@ test('loads all three files, invalidates the disk cache, and hides deprecated en
   };
   const makeCatalog = type => ({
     format: 'gdevelop-gdl-instruction-catalog',
-    formatVersion: 6,
+    formatVersion: 7,
     semanticsVersion: 1,
     semanticsRulesRevision: 'gdjs-picking-1',
     actions: [

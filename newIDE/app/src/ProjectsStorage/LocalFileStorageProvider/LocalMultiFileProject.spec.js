@@ -366,6 +366,9 @@ describe('Local multi-file project storage', () => {
     const changed = await writeMultiFileSourceTree({ entryPath, files });
 
     expect(changed).toContain('game://project.gdl');
+    expect(
+      fs.existsSync(path.join(temporaryDirectory, '.gdevelop/transactions'))
+    ).toBe(false);
     expect(fs.existsSync(entryPath)).toBe(true);
     expect(fs.existsSync(path.join(temporaryDirectory, 'resources.gdl'))).toBe(
       true
@@ -730,7 +733,7 @@ describe('Local multi-file project storage', () => {
     await writeMultiFileSourceTree({ entryPath, files });
     const catalog = withTestInstructionSemantics({
       format: 'gdevelop-gdl-instruction-catalog',
-      formatVersion: 6,
+      formatVersion: 7,
       actions: [
         {
           kind: 'action',
@@ -872,7 +875,9 @@ describe('Local multi-file project storage', () => {
       const catalogPath = path.join(temporaryDirectory, '.gdevelop', name);
       fs.writeFileSync(catalogPath, '{"formatVersion":3}');
       await onOpen({ fileIdentifier: entryPath });
-      expect(fs.existsSync(catalogPath)).toBe(false);
+      expect(fs.existsSync(catalogPath)).toBe(
+        name === 'deprecated-instructions-catalog.json'
+      );
       expect(
         JSON.parse(
           fs.readFileSync(
@@ -883,7 +888,7 @@ describe('Local multi-file project storage', () => {
             'utf8'
           )
         ).instructionCatalogVersion
-      ).toBe(6);
+      ).toBe(7);
       expect((await readMultiFileSourceTree(entryPath)).files).toEqual(before);
     }
     const refreshed = JSON.parse(
@@ -1610,6 +1615,12 @@ describe('Local multi-file project storage', () => {
         return [file, part];
       })
     );
+    parts['.gdevelop/deprecated-instructions-catalog.json'] = fs.readJsonSync(
+      path.join(
+        temporaryDirectory,
+        '.gdevelop/deprecated-instructions-catalog.json'
+      )
+    );
     const loadedCounts = assembleInstructionCatalogFiles(parts).counts;
     for (const kind of ['actions', 'conditions', 'expressions'])
       expect(loadedCounts[kind]).toBeGreaterThanOrEqual(catalog.counts[kind]);
@@ -1618,6 +1629,7 @@ describe('Local multi-file project storage', () => {
     ).toEqual([
       'actions-catalog.json',
       'conditions-catalog.json',
+      'deprecated-instructions-catalog.json',
       'expressions-catalog.json',
     ]);
     expect(catalog.counts.actions).toBeGreaterThan(100);
@@ -2669,5 +2681,6 @@ column2 = "333"
     await recoverMultiFileTransactions(temporaryDirectory);
     expect(fs.readFileSync(target, 'utf8')).toBe('old content');
     expect(fs.existsSync(transactionRoot)).toBe(false);
+    expect(fs.existsSync(path.dirname(transactionRoot))).toBe(false);
   });
 });

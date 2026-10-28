@@ -5478,6 +5478,62 @@ const callMcpTool = async ({
     }
   }
 
+  if (toolName === 'lookup_instruction_catalog') {
+    if (!project) return errorResult('No project opened.');
+    const projectFile = project.getProjectFile();
+    if (
+      !fs ||
+      !path ||
+      !projectFile ||
+      path.basename(projectFile).toLowerCase() !== MULTI_FILE_ENTRY_NAME
+    ) {
+      return errorResult(
+        'A local multi-file project is required to look up instruction catalogs.'
+      );
+    }
+    if (
+      typeof args.name !== 'string' ||
+      !args.name.trim() ||
+      (args.kind && !['action', 'condition', 'expression'].includes(args.kind))
+    ) {
+      return errorResult(
+        'Provide a non-empty name and an optional valid kind.'
+      );
+    }
+    try {
+      const kinds = args.kind
+        ? [args.kind]
+        : ['action', 'condition', 'expression'];
+      const matches = [];
+      for (const kind of kinds) {
+        const file = path.join(
+          path.dirname(projectFile),
+          '.gdevelop',
+          `${kind}s-catalog.json`
+        );
+        const catalog = JSON.parse(fs.readFileSync(file, 'utf8'));
+        if (catalog.kind !== kind || !Array.isArray(catalog.entries))
+          throw new Error(`Invalid ${kind} catalog.`);
+        catalog.entries.forEach(entry => {
+          if (entry.dslName === args.name || entry.type === args.name)
+            matches.push({ kind, ...entry });
+        });
+      }
+      return textResult({
+        name: args.name,
+        matches,
+        count: matches.length,
+        note:
+          'Results reflect generated files on disk; run generate-catalogs after structural changes.',
+      });
+    } catch (error) {
+      return errorResult(
+        'Unable to read instruction catalogs. Run generate-catalogs and retry.',
+        { detail: error.message }
+      );
+    }
+  }
+
   if (toolName === 'generate-catalogs') {
     if (!project) return errorResult('No project opened.');
     const projectFile = project.getProjectFile();

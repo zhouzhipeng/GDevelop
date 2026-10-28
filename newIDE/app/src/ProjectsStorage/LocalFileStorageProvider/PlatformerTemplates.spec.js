@@ -8,7 +8,7 @@ import { openMultiFileProject } from './LocalMultiFileProject';
 import { onSaveProject } from './LocalProjectWriter';
 import {
   assembleInstructionCatalogFiles,
-  PROJECT_INSTRUCTION_CATALOG_PATHS,
+  ALL_INSTRUCTION_CATALOG_PATHS,
   normalizeLegacyProjectInstructionParameters,
 } from '../SettingsDsl/InstructionCatalog';
 import { normalizeDownloadedProject } from '../UrlStorageProvider/NormalizeDownloadedProject';
@@ -145,7 +145,7 @@ describe('Official Platformer template creation', () => {
         ).toBe(null);
         const catalog = assembleInstructionCatalogFiles(
           Object.fromEntries(
-            Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS).map(file => [
+            ALL_INSTRUCTION_CATALOG_PATHS.map(file => [
               file,
               fs.readJsonSync(path.join(temporaryDirectory, file)),
             ])

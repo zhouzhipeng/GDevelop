@@ -1442,7 +1442,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|TSLMaterial||TSLMaterial::Material|TSLMaterial::SetVector4Parameter':
     'setMaterialVector4Parameter',
   'action|TextContainerCapability||TextContainerCapability::TextContainerBehavior|TextContainerCapability::TextContainerBehavior::SetValue':
-    'textContainerCapabilitySetValue',
+    'setTextValue',
   'action|TextInput|TextInput::TextInputObject||TextInput::TextInputObject::Focus':
     'textInputFocus',
   'action|TextInput|TextInput::TextInputObject||TextInput::TextInputObject::SetBorderColor':
@@ -1495,7 +1495,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'action|TextObject|TextObject::Text||TextObject::SetWrapping': 'setWrapping',
   'action|TextObject|TextObject::Text||TextObject::ShowShadow': 'showShadow',
   'action|TextObject|TextObject::Text||TextObject::Size': 'size',
-  'action|TextObject|TextObject::Text||TextObject::String': 'string',
+  'action|TextObject|TextObject::Text||TextObject::String': 'updateText',
   'action|TextObject|TextObject::Text||TextObject::Text::SetFontSize':
     'textObjectSetFontSize',
   'action|TextObject|TextObject::Text||TextObject::Text::SetLineHeight':

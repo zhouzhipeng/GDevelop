@@ -1,6 +1,6 @@
 # Instruction catalog 按指令种类拆分
 
-状态：已批准并实施。
+状态：历史契约，已由 [兼容指令拆分规范](instruction-catalog-compatibility-split-spec.md) 取代。
 
 ## 问题与目标
 

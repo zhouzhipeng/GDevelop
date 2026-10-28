@@ -3,12 +3,12 @@
 - 状态：已实施。当前作者格式 13；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
 - 日期：2026-10-26。
 - 决策依据：函数声明和事件正文合入同一个 `.gdl` 文件；只保留 GDevelop Language (GDL)，不考虑任何作者格式兼容性。
-- 当前作者格式：12。GDL catalog 版本：12；instruction catalog 版本：6，发布本文的新指令结构契约。
+- 当前作者格式：12。GDL catalog 版本：12；instruction catalog 版本：7，发布本文的新指令结构契约。
 - 运行时边界：仍投影到 GDevelop 原生事件模型与代码生成器；不重新定义对象 picking、事件调度或表达式求值。
 
 文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdl`，`constants.toml` 和 JavaScript 测试文件保持各自格式。格式 13 不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
 
-系统 action/condition 由引擎固定映射发布作者短名。instruction catalog 6 的
+系统 action/condition 由引擎固定映射发布作者短名。instruction catalog 7 的
 action/condition 的 `dslName` 与 `type` 相同时省略。GDL 和 AI 优先使用
 `dslName`，缺失时使用精确原生 `type`；解析器也接受精确原生 `type`，
 格式化优先输出 `dslName`，缺失时输出 `type`。参数名称及 `{{...}}` 中的表达式名称通常不变；
@@ -700,7 +700,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 ## 20. 后续优化的边界
 
-事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 6；GDL 作者格式仍为 12，GDL catalog 仍为 10。静态摘要不改变原生执行行为，也不代替运行验证。
+事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 7；GDL 作者格式仍为 12，GDL catalog 仍为 10。静态摘要不改变原生执行行为，也不代替运行验证。
 
 
 picking 可视化、行为相关 diff 和按 AST 的安全块移动是推荐编辑器能力，可独立迭代；不能将它们未完成视为可改变基础语法的理由。实现基础格式时至少保留精确 AST 和语义位置，使后续工具无需重新解析另一套正文语言。

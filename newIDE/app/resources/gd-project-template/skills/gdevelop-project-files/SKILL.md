@@ -79,11 +79,15 @@ Read, in order:
 6. `.gdevelop/project-module-map.json` to locate scene, external-fragment, and
    extension event sources and their static Link relationships; then read the
    referenced `.gdl` documents for current logic.
-7. Read `.gdevelop/conditions-catalog.json` for conditions,
+7. Search the generated catalogs by relevant keywords to discover which instructions can implement the desired behavior. Once you have a candidate name, use the `lookup_instruction_catalog` MCP tool with an exact `name` (DSL name or type), and optionally `kind`, to quickly retrieve its details. The tool only performs exact lookups; it does not replace keyword search or instruction selection. It returns all exact matches; check the kind and scope. Regenerate catalogs after structural changes. Read `.gdevelop/conditions-catalog.json` for conditions,
    `.gdevelop/actions-catalog.json` for actions, and
    `.gdevelop/expressions-catalog.json` for expressions. Each file has `kind`,
-   `entries`, and `count`; search its `entries` for exact metadata. Catalogs also include compatibility entries; check deprecation information
-   before using an instruction in new events.
+   `entries`, and `count`; search its `entries` for exact metadata. Use these authoring catalogs to select instructions for new events.
+
+   If `.gdevelop/deprecated-instructions-catalog.json` is present, use it only
+   to understand and read instructions already present in older projects. It is
+   a compatibility reference, not an instruction source for writing new events:
+   never select or introduce an instruction from that file into new event logic.
 8. `.gdevelop/runtime-api.d.ts` and `.gdevelop/project-api.d.ts` before adding
    or changing any JavaScript event, and `.gdevelop/harness-api.d.ts` plus its
    runtime/project declaration dependencies before adding or changing a
@@ -99,10 +103,9 @@ with `rg`: use file kind, object,
 behavior, effect, owner, or layout context in the source catalogs, and use
 instruction type, displayed name, group, description, parameter `dslName`, or
 expression name in the instruction catalog. Generated JSON keeps one catalog
-entry per line so a matching search returns only relevant metadata. The three
-instruction files share an instruction catalog version and source fingerprint;
-regenerate all three together if any is absent or stale. Old combined and
-deprecated catalog files are removed during generation and are never read.
+entry per line so a matching search returns only relevant metadata. The three instruction files and the compatibility catalog share an instruction
+catalog version and source fingerprint; regenerate all four together if any is
+absent or stale. The old combined instruction catalog is removed during generation.
 
 After a large structural source change, call the no-input GDevelop MCP
 `generate-catalogs` tool and wait for `catalogsRegenerated: true` before making
