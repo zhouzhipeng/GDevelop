@@ -1997,16 +1997,6 @@ const catalogParameters = (parameters: Array<Object>): Array<Object> =>
     return catalogParameter;
   });
 
-const catalogEventScopes = (eventScopes: Object): Array<string> =>
-  [
-    'scene',
-    'extensionFunction',
-    'behaviorFunction',
-    'objectFunction',
-    'asyncFunction',
-    'customObjectInternal',
-  ].filter(scopeName => eventScopes[scopeName].valid);
-
 const catalogOwner = (scope: Object): ?Object => {
   const owner: Object = {};
   if (scope.extension && scope.extension.name)
@@ -2018,19 +2008,13 @@ const catalogOwner = (scope: Object): ?Object => {
   return Object.keys(owner).length ? owner : undefined;
 };
 
-const catalogInstruction = (
-  summary: Object,
-  scope: Object,
-  kind: string
-): Object => {
+const catalogInstruction = (summary: Object, kind: string): Object => {
   const instruction: Object = {
     type: summary.type,
-    dslName: summary.type,
     name: summary.fullName,
     description: summary.description,
     sentence: summary.sentence,
     group: summary.group,
-    eventScopes: catalogEventScopes(summary.eventScopes),
     parameters: catalogParameters(summary.parameters || []),
   };
   if (summary.canHaveSubInstructions) instruction.canHaveSubInstructions = true;
@@ -2038,26 +2022,26 @@ const catalogInstruction = (
   if (summary.isOptionallyAsync) instruction.isOptionallyAsync = true;
   if (summary.deprecationMessage)
     instruction.deprecationMessage = summary.deprecationMessage;
-  const owner = catalogOwner(scope);
-  if (owner) instruction.owner = owner;
-  instruction.semantics = getInstructionSemantics(kind, instruction);
+  const semantics = getInstructionSemantics(kind, instruction);
+  if (
+    semantics.status !== 'unknown' ||
+    semantics.reason !== 'unregistered-instruction'
+  )
+    instruction.semantics = semantics;
   return instruction;
 };
 
-const catalogExpression = (summary: Object, scope: Object): Object => {
+const catalogExpression = (summary: Object): Object => {
   const expression: Object = {
     type: summary.type,
     name: summary.fullName,
     description: summary.description,
     group: summary.group,
     returnType: summary.returnType,
-    eventScopes: catalogEventScopes(summary.eventScopes),
     parameters: catalogParameters(summary.parameters || []),
   };
   if (summary.deprecationMessage)
     expression.deprecationMessage = summary.deprecationMessage;
-  const owner = catalogOwner(scope);
-  if (owner) expression.owner = owner;
   return expression;
 };
 
@@ -2110,11 +2094,16 @@ export const buildCompleteProjectInstructionCatalog = ({
         fullGroupName: instruction.fullGroupName,
       });
       const kind = isCondition ? 'condition' : 'action';
-      const entry = catalogInstruction(summary, instruction.scope, kind);
+      const entry = catalogInstruction(summary, kind);
       // Project/community events-based extensions keep their exact native names.
       const extensionName = instruction.scope.extension.name;
       if (!project.hasEventsFunctionsExtensionNamed(extensionName))
-        entry.dslName = getSystemInstructionName(kind, entry.type, entry.owner);
+        entry.dslName = getSystemInstructionName(
+          kind,
+          entry.type,
+          catalogOwner(instruction.scope)
+        );
+      if (entry.dslName === entry.type) delete entry.dslName;
       entriesByType.set(instruction.type, entry);
     });
     return Array.from(entriesByType.values()).sort((left, right) =>
@@ -2152,7 +2141,7 @@ export const buildCompleteProjectInstructionCatalog = ({
       metadata: expression.metadata,
       fullGroupName: expression.fullGroupName,
     });
-    expressionsByKey.set(key, catalogExpression(summary, expression.scope));
+    expressionsByKey.set(key, catalogExpression(summary));
   });
   const expressions = Array.from(expressionsByKey.values()).sort(
     (left, right) =>

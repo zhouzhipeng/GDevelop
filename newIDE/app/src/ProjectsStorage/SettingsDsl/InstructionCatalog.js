@@ -82,7 +82,7 @@ type CatalogParameter = {
 type CatalogEntry = {
   kind?: CatalogKind,
   type: string,
-  dslName: string,
+  dslName?: string,
   parameters: Array<CatalogParameter>,
   [string]: any,
 };
@@ -343,6 +343,7 @@ const validateCatalogEntry = (
     fail('GDL_CATALOG_INVALID', `A ${kind} catalog entry has no type.`);
   if (
     kind !== 'expression' &&
+    entry.dslName !== undefined &&
     (typeof entry.dslName !== 'string' ||
       !entry.dslName ||
       (entry.dslName !== entry.type && !DSL_IDENTIFIER.test(entry.dslName)))
@@ -381,6 +382,11 @@ const validateCatalogEntry = (
         );
       }
     } else {
+      if (
+        parameter.valueKind === undefined &&
+        CATALOG_VALUE_KINDS.has(parameter.type)
+      )
+        parameter.valueKind = parameter.type;
       if (
         typeof parameter.valueKind !== 'string' ||
         !CATALOG_VALUE_KINDS.has(parameter.valueKind)
@@ -441,7 +447,8 @@ export const validateProjectInstructionCatalog = (catalog: any): Catalog => {
     entriesForKind(catalog, kind).forEach(entry => {
       validateCatalogEntry(entry, kind);
       try {
-        validateInstructionSemantics(entry.semantics, entry);
+        if (entry.semantics !== undefined)
+          validateInstructionSemantics(entry.semantics, entry);
       } catch (error) {
         fail('GDL_CATALOG_INVALID', error.message);
       }
@@ -451,16 +458,14 @@ export const validateProjectInstructionCatalog = (catalog: any): Catalog => {
           `Duplicate ${kind} catalog type ${entry.type}.`
         );
       seen.add(entry.type);
-      [entry.type, entry.dslName].forEach(name => {
+      [entry.type, ...(entry.dslName ? [entry.dslName] : [])].forEach(name => {
         const previous = names.get(name);
         if (previous && previous !== entry)
           fail(
             'GDL_CATALOG_NAME_CONFLICT',
-            `${kind} name ${name} conflicts between ${
-              previous.type
-            } (${JSON.stringify(previous.owner || {})}) and ${
+            `${kind} name ${name} conflicts between ${previous.type} and ${
               entry.type
-            } (${JSON.stringify(entry.owner || {})}).`
+            }.`
           );
         names.set(name, entry);
       });
@@ -498,7 +503,7 @@ const createLookup = (catalog: Catalog): CatalogLookup => {
   kinds.forEach(kind =>
     entriesForKind(catalog, kind).forEach(entry => {
       lookup[kind].set(entry.type, entry);
-      lookup[kind].set(entry.dslName, entry);
+      if (entry.dslName) lookup[kind].set(entry.dslName, entry);
     })
   );
   return lookup;
@@ -672,9 +677,10 @@ export const createCatalogInstructionFormatter = (
       fileUri
     );
     if (propertySource) return propertySource;
-    const formattedType = UNQUOTED_INSTRUCTION_TYPE.test(entry.dslName)
-      ? entry.dslName
-      : stringifyJsonValue(entry.dslName, `${kind} instruction type`);
+    const authoringName = entry.dslName || entry.type;
+    const formattedType = UNQUOTED_INSTRUCTION_TYPE.test(authoringName)
+      ? authoringName
+      : stringifyJsonValue(authoringName, `${kind} instruction type`);
     return `${formattedType} {${
       operands.length ? ` ${operands.join(' ')} ` : ''
     }}`;
@@ -1100,6 +1106,19 @@ export const mergeProjectInstructionCatalogs = (
   });
 };
 
+const compactCatalogEntry = (entry: Object): Object => ({
+  ...entry,
+  parameters: entry.parameters.map(parameter => {
+    if (
+      parameter.valueKind === undefined ||
+      parameter.valueKind !== parameter.type
+    )
+      return parameter;
+    const { valueKind, ...rest } = parameter;
+    return rest;
+  }),
+});
+
 export const serializeProjectInstructionCatalog = (catalog: Object): string =>
   (() => {
     const validatedCatalog = validateProjectInstructionCatalog(catalog);
@@ -1111,7 +1130,9 @@ export const serializeProjectInstructionCatalog = (catalog: Object): string =>
       `${JSON.stringify(name)}:[`,
       ...entries.map(
         (entry, index) =>
-          `${JSON.stringify(entry)}${index === entries.length - 1 ? '' : ','}`
+          `${JSON.stringify(compactCatalogEntry(entry))}${
+            index === entries.length - 1 ? '' : ','
+          }`
       ),
       ']',
     ];
@@ -1137,27 +1158,15 @@ export const serializeInstructionCatalogFiles = (
   authoring: Object,
   deprecated?: Object
 ): Object => {
-  const mark = (catalog: Object, available: boolean): Object => ({
-    ...catalog,
-    ...Object.fromEntries(
-      ['actions', 'conditions', 'expressions'].map(key => [
-        key,
-        catalog[key].map(entry => ({
-          ...entry,
-          authoringAvailable: available,
-        })),
-      ])
-    ),
-  });
   const catalog = deprecated
-    ? mergeProjectInstructionCatalogs(
-        mark(authoring, true),
-        mark(deprecated, false)
-      )
-    : validateProjectInstructionCatalog(mark(authoring, true));
+    ? mergeProjectInstructionCatalogs(authoring, deprecated)
+    : validateProjectInstructionCatalog(authoring);
   return Object.fromEntries(
     Object.keys(PROJECT_INSTRUCTION_CATALOG_PATHS).map(kind => {
-      const entries = catalog[`${kind}s`].map(entry => ({ ...entry, kind }));
+      const entries = catalog[`${kind}s`].map(entry => {
+        const { authoringAvailable, kind: entryKind, ...rest } = entry;
+        return compactCatalogEntry(rest);
+      });
       const metadata = {
         format: 'gdevelop-gdl-instruction-kind-catalog',
         formatVersion: 1,
@@ -1182,7 +1191,7 @@ export const serializeInstructionCatalogFiles = (
 
 export const assembleInstructionCatalogFiles = (
   files: Object,
-  authoringOnly?: boolean
+  _authoringOnly?: boolean
 ): Object => {
   let fingerprint: ?string;
   const catalog: Object = {
@@ -1207,10 +1216,7 @@ export const assembleInstructionCatalogFiles = (
       part.count !== part.entries.length ||
       !Object.keys(part).includes('sourceFingerprint') ||
       part.entries.some(
-        entry =>
-          !entry ||
-          typeof entry.authoringAvailable !== 'boolean' ||
-          entry.kind !== kind
+        entry => !entry || (entry.kind !== undefined && entry.kind !== kind)
       )
     )
       fail('GDL_CATALOG_INVALID', `Invalid instruction catalog: ${file}`);
@@ -1222,8 +1228,12 @@ export const assembleInstructionCatalogFiles = (
       );
     fingerprint = currentFingerprint;
     catalog.sourceFingerprint = part.sourceFingerprint;
-    // Validate every entry, including entries hidden from authoring consumers.
-    const entries = part.entries;
+    const entries = part.entries.map(entry => ({
+      ...entry,
+      parameters: Array.isArray(entry.parameters)
+        ? entry.parameters.map(parameter => ({ ...parameter }))
+        : entry.parameters,
+    }));
     try {
       const validationCatalog: Object = {
         ...catalog,
@@ -1243,10 +1253,5 @@ export const assembleInstructionCatalogFiles = (
     catalog.counts[`${kind}s`] = entries.length;
   });
   validateProjectInstructionCatalog(catalog);
-  if (authoringOnly)
-    ['actions', 'conditions', 'expressions'].forEach(key => {
-      catalog[key] = catalog[key].filter(entry => entry.authoringAvailable);
-      catalog.counts[key] = catalog[key].length;
-    });
   return validateProjectInstructionCatalog(catalog);
 };

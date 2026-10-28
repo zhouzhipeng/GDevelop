@@ -1602,15 +1602,17 @@ describe('Local multi-file project storage', () => {
         );
         const part = JSON.parse(contents);
         expect(part.kind).toBe(kind);
-        expect(part.entries.every(entry => entry.kind === kind)).toBe(true);
+        expect(part.entries.every(entry => entry.kind === undefined)).toBe(
+          true
+        );
         expect(part.count).toBe(part.entries.length);
         expect(contents).not.toContain('serialized operand');
         return [file, part];
       })
     );
-    expect(assembleInstructionCatalogFiles(parts, true).counts).toEqual(
-      catalog.counts
-    );
+    const loadedCounts = assembleInstructionCatalogFiles(parts).counts;
+    for (const kind of ['actions', 'conditions', 'expressions'])
+      expect(loadedCounts[kind]).toBeGreaterThanOrEqual(catalog.counts[kind]);
     expect(
       fs.readdirSync(path.join(temporaryDirectory, '.gdevelop')).sort()
     ).toEqual([

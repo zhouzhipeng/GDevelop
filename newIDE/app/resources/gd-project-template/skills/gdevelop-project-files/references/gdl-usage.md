@@ -143,13 +143,14 @@ files or write IfDo syntax. Read the current settings and instruction catalogs.
 
 ### Catalog instruction names
 
-Author actions and conditions using each catalog entry's **`dslName`**. Its
-`type` is the native engine identifier for exact lookup and diagnostics; do not
-prefer it when a shorter `dslName` is published. System names are fixed by the
-engine. Third-party and user instruction `dslName` remains its complete `type`.
+For a catalog parameter, `valueKind` defaults to `type` when omitted.
+
+Author actions and conditions using the catalog entry's **`dslName`** when present;
+otherwise use its exact `type`. A `dslName` equal to `type` is omitted.
+System names are fixed by the engine.
 Use parameter `dslName` unchanged. Never invent abbreviations or edit generated
 catalogs. Expressions inside `{{...}}` retain their existing names. The
-formatter writes the catalog instruction `dslName`, except for the behavior
+formatter writes `dslName` when present and `type` otherwise, except for the behavior
 property syntax aliases described below (`setProperty` / `getProperty`).
 
 ### Complete function
@@ -216,7 +217,7 @@ that a scene-variable action adds once per coin. Use for_each when required.
 - Standard and loop events have at most one conditions and one actions block.
   Missing or empty blocks represent empty lists. No if/do keywords.
 - Conditions and actions determine catalog instruction kind. Write catalog
-  instruction `dslName` followed by semantic named arguments. No positional args,
+  instruction `dslName` (or `type` if absent) followed by semantic named arguments. No positional args,
   user-defined aliases, @ annotations, > depth prefixes, ? prefixes or raw JSON.
 - Ordinary text/object/behavior/variable/resource/name operands are quoted;
   numbers and booleans are literals. Use {{...}} for calculated expressions.
@@ -328,8 +329,7 @@ project workflow; successful parsing alone is not runtime verification.
 
 ### Execution and picking analysis
 
-Instruction catalog version 6 publishes instruction `dslName` and structured `semantics`. Each action and
-condition is explicitly known, partial or unknown. Exact parameter names still
+Instruction catalog version 6 publishes optional instruction `dslName` and structured `semantics` when available. Missing `semantics` means the instruction is unregistered and unknown. Exact parameter names still
 come from the catalog; no picking attributes are authored in GDL.
 
 Before changing object-sensitive logic, inspect:
@@ -374,8 +374,8 @@ unverified. Use real preview/gameplay evidence for behavior-sensitive edits.
 Read `.gdevelop/conditions-catalog.json` for condition metadata,
 `.gdevelop/actions-catalog.json` for action metadata, and
 `.gdevelop/expressions-catalog.json` for expression metadata. Each file exposes
-its corresponding `kind`, `entries`, and `count`. Use entries whose
-`authoringAvailable` is `true` for new GDL. All three files must be regenerated
+its corresponding `kind`, `entries`, and `count`. Catalogs also include compatibility entries; check deprecation information
+before using an instruction in new GDL. All three files must be regenerated
 together; do not use the retired combined or deprecated catalog files.
 
 ### Behavior properties

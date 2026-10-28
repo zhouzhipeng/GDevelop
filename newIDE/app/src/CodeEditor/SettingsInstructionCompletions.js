@@ -83,9 +83,7 @@ export const getSettingsInstructionCompletions = (source, catalog) => {
     .find(name => ['conditions', 'while_conditions', 'actions'].includes(name));
   if (!owner) return [];
   const candidates = owner === 'actions' ? catalog.actions : catalog.conditions;
-  const entries = Array.isArray(candidates)
-    ? candidates.filter(entry => entry.authoringAvailable !== false)
-    : candidates;
+  const entries = candidates;
   if (!Array.isArray(entries)) return [];
   const parent = entries.find(
     entry =>

@@ -917,7 +917,25 @@ describe('project Settings instruction catalog', () => {
         })
       )
     ).toBe(true);
-    expect(Array.isArray(catalog.actions[0].eventScopes)).toBe(true);
+    for (const entry of [
+      ...catalog.actions,
+      ...catalog.conditions,
+      ...catalog.expressions,
+    ]) {
+      expect(entry.eventScopes).toBeUndefined();
+      expect(entry.owner).toBeUndefined();
+    }
+    for (const entry of [...catalog.actions, ...catalog.conditions]) {
+      expect(entry.semantics).not.toEqual({
+        status: 'unknown',
+        reason: 'unregistered-instruction',
+      });
+    }
+    expect(
+      [...catalog.actions, ...catalog.conditions].some(
+        entry => entry.semantics === undefined
+      )
+    ).toBe(true);
     expect(catalog.actions[0].iconFilename).toBeUndefined();
     expect(catalog.actions[0].parameterShape).toBeUndefined();
     expect(catalog.actions[0].parameters[0].valueType).toBeUndefined();
@@ -959,7 +977,18 @@ describe('instruction catalog files', () => {
         ([file, contents]) => [file, JSON.parse(contents)]
       )
     );
-  test('splits deterministically, round trips all kinds, and filters deprecated entries', () => {
+  test('omits redundant valueKind on disk and restores it when reading', () => {
+    const input = JSON.parse(JSON.stringify(catalogFixture));
+    input.actions[0].parameters[0].type = 'object';
+    input.actions[0].parameters[0].valueKind = 'object';
+    const files = filesFor(input);
+    const parameter =
+      files[PROJECT_INSTRUCTION_CATALOG_PATHS.action].entries[0].parameters[0];
+    expect(parameter.valueKind).toBeUndefined();
+    const restored = assembleInstructionCatalogFiles(files);
+    expect(restored.actions[0].parameters[0].valueKind).toBe('object');
+  });
+  test('splits deterministically and round trips all kinds including deprecated entries', () => {
     const deprecated = {
       ...catalogFixture,
       actions: catalogFixture.actions.map(entry => ({
@@ -988,20 +1017,32 @@ describe('instruction catalog files', () => {
     );
     const complete = assembleInstructionCatalogFiles(files);
     expect(
+      Object.values(files).every(file =>
+        file.entries.every(entry => entry.authoringAvailable === undefined)
+      )
+    ).toBe(true);
+    expect(
       complete.actions.find(entry => entry.type === 'Legacy::Send')
-        .authoringAvailable
-    ).toBe(false);
+    ).toBeDefined();
     expect(
       assembleInstructionCatalogFiles(files, true).actions.map(
         entry => entry.type
       )
-    ).toEqual(catalogFixture.actions.map(entry => entry.type));
-    for (const [kind, file] of Object.entries(
-      PROJECT_INSTRUCTION_CATALOG_PATHS
-    )) {
-      expect(files[file].entries.every(entry => entry.kind === kind)).toBe(
+    ).toEqual(complete.actions.map(entry => entry.type));
+    for (const file of Object.values(PROJECT_INSTRUCTION_CATALOG_PATHS)) {
+      expect(files[file].entries.every(entry => entry.kind === undefined)).toBe(
         true
       );
+      expect(files[file].authoringUnavailable).toBeUndefined();
+      expect(
+        files[file].entries.every(entry =>
+          entry.parameters.every(
+            parameter =>
+              parameter.valueKind === undefined ||
+              parameter.valueKind !== parameter.type
+          )
+        )
+      ).toBe(true);
       expect(files[file].entries.length).toBe(files[file].count);
       expect(
         serialized[file]
@@ -1022,7 +1063,7 @@ describe('instruction catalog files', () => {
       if (failure === 'fingerprint')
         files[file].sourceFingerprint = 'different';
       if (failure === 'count') files[file].count++;
-      if (failure === 'entry') files[file].entries[0].authoringAvailable = null;
+      if (failure === 'entry') files[file].entries[0].kind = 'condition';
       expect(() => assembleInstructionCatalogFiles(files)).toThrow(file);
     }
   );

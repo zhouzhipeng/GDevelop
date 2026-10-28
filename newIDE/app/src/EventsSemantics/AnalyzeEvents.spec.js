@@ -55,7 +55,7 @@ const analyze = (body, options = {}) =>
   });
 const codes = result => result.diagnostics.map(item => item.code);
 
-test('exact reviewed signatures and mandatory validated semantics', () => {
+test('exact reviewed signatures and validated semantics', () => {
   expect(catalog.formatVersion).toBe(6);
   expect(
     catalog.conditions
@@ -74,7 +74,7 @@ test('exact reviewed signatures and mandatory validated semantics', () => {
   ).toBe('unknown');
   const broken = JSON.parse(JSON.stringify(catalog));
   delete broken.actions[0].semantics;
-  expect(() => validateProjectInstructionCatalog(broken)).toThrow('semantics');
+  expect(() => validateProjectInstructionCatalog(broken)).not.toThrow();
   const invalid = JSON.parse(JSON.stringify(catalog));
   invalid.conditions.find(
     entry => entry.type === 'CollisionNP'

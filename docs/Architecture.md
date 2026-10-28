@@ -789,7 +789,7 @@ prevent authored sources from opening.
 
 A multi-file save also regenerates editor/tooling projections:
 
-- `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` (deprecated entries are marked `authoringAvailable=false`);
+- `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` (including compatibility entries);
 - `.gdevelop/gdl-catalog.json`, including settings and embedded-layout
   authoring schemas and owner contexts;
 - `.gdevelop/runtime-api.d.ts` and `project-api.d.ts`;

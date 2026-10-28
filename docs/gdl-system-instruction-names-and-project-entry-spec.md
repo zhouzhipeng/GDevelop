@@ -39,7 +39,7 @@ action 和 condition 各自拥有名称空间，因为源码已经由 actions/co
 
 ## 3. catalog、解析与规范输出
 
-actions 和 conditions 中每条记录新增必需字段 dslName：系统指令使用固定短名，其他指令使用原生 type，后者允许现有的 :: 分隔格式。已有 name 继续表示显示名称，不能改变其含义；参数 dslName 完全不变；expressions 结构及 {{...}} 不变。
+actions 和 conditions 的 dslName 为可选字段：系统指令使用固定短名；当名称等于原生 type 时省略，使用 type，允许现有的 :: 分隔格式。已有 name 继续表示显示名称，不能改变其含义；参数 dslName 完全不变；expressions 结构及 {{...}} 不变。
 
 示例：
 
@@ -64,7 +64,7 @@ actions {
 }
 ```
 
-resolver 建立原生 type 和作者 dslName 的独立索引，先统一校验歧义，再进行精确解析。允许在当前格式文件中显式使用原生 type，作为 catalog 可追踪的精确入口；formatter 一律输出 dslName。该规则不是旧格式读取或迁移器。内部 AST 到原生模型的投影、semantics 规则键和代码生成仍用原生 type。
+resolver 建立原生 type 和作者 dslName 的独立索引，先统一校验歧义，再进行精确解析。允许在当前格式文件中显式使用原生 type，作为 catalog 可追踪的精确入口；formatter 优先输出 dslName，缺失时输出 type。该规则不是旧格式读取或迁移器。内部 AST 到原生模型的投影、semantics 规则键和代码生成仍用原生 type。
 
 对任何输入名称，解析出的原生 instruction.type 必须与旧精确调用相同，参数顺序、默认值、inverted、awaited 和子指令保持不变。解析失败禁止模糊匹配或自动选择候选。
 
@@ -102,7 +102,7 @@ resolver 建立原生 type 和作者 dslName 的独立索引，先统一校验�
 
 ## 6. AI 使用契约
 
-AI 优先使用当前项目 catalog.actions/conditions 的 dslName 和参数 dslName，不能自行缩写或把显示 name 当作可执行名称。第三方和用户指令的 dslName 等于完整 type，因此使用相同规则，不需要 AI 自行判断来源。
+AI 优先使用当前项目 catalog.actions/conditions 的 dslName 和参数 dslName，不能自行缩写或把显示 name 当作可执行名称。缺少 dslName 时使用完整 type，不需要 AI 自行判断来源。
 
 原生 type 只用于精确查询、诊断和底层身份定位。所有生成 GDL 示例、MCP 返回示例、补全、formatter 和项目模板使用作者名称；不能只更新文档而继续由保存器输出长名。
 
@@ -112,7 +112,7 @@ catalog 仍是生成文件，不要求 AI 手工维护或直接修改。工具�
 
 固定映射查找及名称索引构建为 O(N)，单条指令解析为 Map 精确查找；不增加网络请求、运行时代码或每条指令的全表扫描。每条记录新增一个字符串的磁盘开销可接受，不承诺未经测量的模型响应提速。
 
-校验覆盖缺失/非法 dslName、重复作者名称、作者名称与原生标识交叉冲突、错误 owner、缺少系统映射及不支持版本。错误应定位来源和相关身份，不静默回退到另一指令。
+校验覆盖非法 dslName、重复作者名称、作者名称与原生标识交叉冲突、错误 owner、缺少系统映射及不支持版本。错误应定位来源和相关身份，不静默回退到另一指令。
 
 ## 8. 实施顺序与验证
 
@@ -126,7 +126,7 @@ catalog 仍是生成文件，不要求 AI 手工维护或直接修改。工具�
 
 - 系统映射覆盖、名称稳定、不同加载顺序及第三方扩展安装不改变短名；系统来源/owner 精确匹配。
 - 同 kind 冲突拒绝、跨 kind 同名正常；短名遮蔽原生 type 的冲突拒绝。
-- 每条系统 action/condition 的两种名称解析为相同原生身份，formatter 只输出 dslName；第三方和用户指令名称原样保留。
+- 每条系统 action/condition 的两种名称解析为相同原生身份，formatter 优先输出 dslName，缺失时输出 type；第三方和用户指令名称原样保留。
 - 参数、表达式、semantics、异步和子指令行为不变；旧版本 catalog 明确拒绝。
 - 补全插入短名、短名具名参数补全、MCP 精确查询和分析一致。
 - 新项目实际创建 project.gdl；拆分/组合往返、保存恢复、入口最后提交、扫描排除和文件监听正确。

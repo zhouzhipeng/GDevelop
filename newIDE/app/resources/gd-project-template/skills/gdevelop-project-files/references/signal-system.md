@@ -23,7 +23,7 @@ conditions.
 ## Read the catalog
 
 Before editing an `.gdl` file, inspect the owner settings and search
-`.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` for instruction `dslName`, parameter
+`.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` for instruction `dslName` (or `type` if absent), parameter
 `dslName` values, expressions, and scopes:
 
 ```sh

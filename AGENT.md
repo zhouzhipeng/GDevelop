@@ -245,7 +245,7 @@ System action/condition names are a fixed authoring API in
 `newIDE/app/src/ProjectsStorage/SettingsDsl/SystemInstructionNames.js`. Add an
 explicit kind/type/owner mapping when registering a bundled instruction; run its
 coverage and collision tests. Never generate names from load order or translated
-metadata. Catalog `dslName` is preferred for GDL, completion and examples;
+metadata. Catalog `dslName` is preferred for GDL, completion and examples; use `type` when `dslName` is absent.
 `type` remains the native instruction identity. Third-party and user instruction
 names, parameter names and expressions are unchanged. The project entry is
 `project.gdl`; version constants remain in their existing owning modules.

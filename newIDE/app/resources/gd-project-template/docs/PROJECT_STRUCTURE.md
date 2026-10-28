@@ -44,6 +44,6 @@ Keep the root README concise and current. Put detailed design and instructions i
 
 Instruction metadata is generated into three files: `.gdevelop/conditions-catalog.json`,
 `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`. Read the
-file matching the instruction kind and use its `entries` with
-`authoringAvailable=true` for new GDL. Regenerate all three together; never edit
+file matching the instruction kind. Catalogs include compatibility entries;
+check deprecation information before using an instruction in new GDL. Regenerate all three together; never edit
 generated catalogs. See [the GDevelop authoring skill](../skills/gdevelop-project-files/SKILL.md) for the full contract.

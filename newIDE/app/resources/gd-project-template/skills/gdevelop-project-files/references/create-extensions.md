@@ -42,7 +42,7 @@ composition, and executable logic in `.gdl`.
    Do not derive, create or read a sibling body file. The events examples below
    are blocks to insert inside that same function root.
 7. Write variables blocks with scalar shorthand or typed variable children, following gdl-usage.md.
-8. Use catalog instruction `dslName` and parameter `dslName` from
+8. Use catalog instruction `dslName` (or `type` if absent) and parameter `dslName` from
    `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` in event bodies; behavior property aliases below are the supported exception.
 9. Call `generate-catalogs` after the declaration/files exist. If the extension
    adds instruction types, re-read the regenerated catalog before writing or

@@ -147,19 +147,19 @@ export const analyzeGdlEvents = ({
     conditions: new Map(
       catalog.conditions.flatMap(entry => [
         [entry.type, entry],
-        [entry.dslName, entry],
+        [entry.dslName || entry.type, entry],
       ])
     ),
     while_conditions: new Map(
       catalog.conditions.flatMap(entry => [
         [entry.type, entry],
-        [entry.dslName, entry],
+        [entry.dslName || entry.type, entry],
       ])
     ),
     actions: new Map(
       catalog.actions.flatMap(entry => [
         [entry.type, entry],
-        [entry.dslName, entry],
+        [entry.dslName || entry.type, entry],
       ])
     ),
   };
@@ -437,10 +437,13 @@ export const analyzeGdlEvents = ({
         const metadata = lookups[listKind].get(
           instruction.resolvedInstructionType || instruction.type
         );
-        const semantics = metadata.semantics;
+        const semantics = metadata.semantics || {
+          status: 'unknown',
+          reason: 'unregistered-instruction',
+        };
         const step = {
           instructionType: metadata.type,
-          dslName: metadata.dslName,
+          dslName: metadata.dslName || metadata.type,
           instructionPath,
           list: listKind,
           source: sourceLocation(instruction, file),

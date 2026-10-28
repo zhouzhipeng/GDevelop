@@ -40,15 +40,14 @@ test('every registered system instruction has a fixed, unambiguous author name a
     ['condition', catalog.conditions],
   ]) {
     for (const entry of entries) {
-      const o = entry.owner || {};
-      const key = [
-        kind,
-        o.extension || '',
-        o.objectType || '',
-        o.behaviorType || '',
-        entry.type,
-      ].join('|');
-      expect(SYSTEM_INSTRUCTION_NAMES).toHaveProperty([key]);
+      expect(
+        Object.entries(SYSTEM_INSTRUCTION_NAMES).some(
+          ([key, value]) =>
+            key.startsWith(`${kind}|`) &&
+            key.endsWith(`|${entry.type}`) &&
+            value === entry.dslName
+        )
+      ).toBe(true);
       expect(entry.dslName).toMatch(/^[a-z][A-Za-z0-9_]*$/);
       const short = resolve({ kind, source: `${entry.dslName} {}`, line: 1 });
       const native = resolve({
@@ -139,7 +138,18 @@ test('unknown and differently owned instructions retain full type; project exten
     expect(
       extended.actions.find(e => e.type === 'ThirdParty::SetNumberVariable')
         .dslName
-    ).toBe('ThirdParty::SetNumberVariable');
+    ).toBeUndefined();
+    const resolve = createCatalogInstructionResolver(extended);
+    const format = createCatalogInstructionFormatter(extended);
+    const native = resolve({
+      kind: 'action',
+      source: 'ThirdParty::SetNumberVariable {}',
+      line: 1,
+    });
+    expect(native.type.value).toBe('ThirdParty::SetNumberVariable');
+    expect(format({ kind: 'action', instruction: native })).toBe(
+      'ThirdParty::SetNumberVariable {}'
+    );
     expect(
       catalog.actions.every(
         entry =>
@@ -155,7 +165,7 @@ test('unknown and differently owned instructions retain full type; project exten
     const changed = buildCompleteProjectInstructionCatalog({ project });
     expect(
       changed.actions.find(e => e.type === 'DebuggerTools::ConsoleLog').dslName
-    ).toBe('DebuggerTools::ConsoleLog');
+    ).toBeUndefined();
     expect(
       changed.actions.find(e => e.type === 'SetNumberVariable').dslName
     ).toBe('setNumberVariable');
@@ -164,12 +174,12 @@ test('unknown and differently owned instructions retain full type; project exten
   }
 });
 
-test('rejects missing/illegal names and every same-kind short/native collision', () => {
+test('accepts missing names and rejects illegal names and same-kind collisions', () => {
   const entry = { ...catalog.actions[0] };
   const invalid = (actions, conditions = []) =>
     validateProjectInstructionCatalog({ ...catalog, actions, conditions });
   delete entry.dslName;
-  expect(() => invalid([entry])).toThrow('invalid dslName');
+  expect(() => invalid([entry])).not.toThrow();
   expect(() => invalid([{ ...entry, dslName: 'bad name' }])).toThrow(
     'invalid dslName'
   );

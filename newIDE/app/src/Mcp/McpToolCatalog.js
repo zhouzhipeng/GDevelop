@@ -1612,7 +1612,7 @@ const readTools: Array<McpTool> = [
   {
     name: 'generate-catalogs',
     description:
-      'Regenerate .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json (use instruction dslName for GDL authoring; parameter dslName is unchanged), .gdevelop/gdl-catalog.json, .gdevelop/runtime-api.d.ts, .gdevelop/project-api.d.ts, .gdevelop/harness-api.d.ts, .gdevelop/tsl-api.d.ts, and .gdevelop/tsl-catalog.json from the current local multi-file project sources. The call waits for all nine generated authoring files to be written and verified before returning. Accepts no inputs, writes only generated authoring files, removes the retired layout-catalog.json, and does not validate sources or reload editor memory.',
+      'Regenerate .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json (use instruction dslName for GDL authoring when present, otherwise type; parameter dslName is unchanged), .gdevelop/gdl-catalog.json, .gdevelop/runtime-api.d.ts, .gdevelop/project-api.d.ts, .gdevelop/harness-api.d.ts, .gdevelop/tsl-api.d.ts, and .gdevelop/tsl-catalog.json from the current local multi-file project sources. The call waits for all nine generated authoring files to be written and verified before returning. Accepts no inputs, writes only generated authoring files, removes the retired layout-catalog.json, and does not validate sources or reload editor memory.',
     inputSchema: noInputSchema,
     annotations: {
       readOnlyHint: false,

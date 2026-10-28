@@ -190,8 +190,8 @@ The project has two normal AI authoring catalogs:
 | `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` | Events DSL instructions and expressions                           |
 | `.gdevelop/gdl-catalog.json`     | Settings-owned definitions, embedded layouts, and writable fields |
 
-`the corresponding kind catalog (entries with authoringAvailable=false)` remains a compatibility-only
-event catalog and must not be used to construct new logic.
+The kind catalogs include compatibility-only entries for existing events; check
+deprecation information before using an instruction in new logic.
 
 The JavaScript declaration files complement these catalogs; they do not copy
 their complete contents:

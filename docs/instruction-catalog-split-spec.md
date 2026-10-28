@@ -20,7 +20,7 @@
 
 instruction catalog 逻辑契约从 5 升至 6，权威常量仍由 InstructionSemanticsRegistry.js 管理。作者格式、GDL catalog 和事件语义版本不因文件拆分升级。
 
-当前 authoring 和 deprecated catalog 的内容按种类合并到这三个文件，不再生成第四个 deprecated 文件。每条 entry 必须明确标记 authoringAvailable 布尔值，以保留现有“可用于新编写”和“仅供原生数据序列化”的区别。已弃用条目仍不能进入作者补全或改变已有名称解析规则。同种类内按现有原生类型及 owner 身份去重，不覆盖作者条目。
+当前 authoring 和 deprecated catalog 的内容按种类合并到这三个文件，不再生成第四个 deprecated 文件。文件不标记作者可用性；兼容旧数据的条目与其他条目一起提供给读取方。同种类内按现有原生类型及 owner 身份去重，不覆盖作者条目。
 
 加载三文件后重建内部 conditions/actions/expressions 视图，现有解析器与语义分析可继续共享内存索引；该内存视图不是额外生成文件。
 
@@ -50,7 +50,7 @@ instruction catalog 逻辑契约从 5 升至 6，权威常量仍由 InstructionS
 
 ## 验证
 
-- 序列化三个文件各含且仅含目标种类；所有条目按身份及 authoringAvailable 无损往返，输出确定且逐条单行。
+- 序列化三个文件各含且仅含目标种类；所有条目按身份无损往返，输出确定且逐条单行。
 - 三文件缺失、错配、非法条目、版本及源指纹不一致均给出可定位诊断。
 - 普通保存、缓存命中、generate-catalogs、校验再生成和原生导入均生成三个文件，并清理旧文件。
 - 加载后的 GDL 编译、补全、事件语义分析及已弃用原生指令序列化保持正确。

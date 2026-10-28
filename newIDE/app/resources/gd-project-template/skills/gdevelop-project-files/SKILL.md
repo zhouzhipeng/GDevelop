@@ -7,13 +7,14 @@ description: Create, inspect, modify, refactor, and verify GDevelop games throug
 
 ## Catalog instruction names
 
-Author actions and conditions using each catalog entry's **`dslName`**. Its
-`type` is the native engine identifier for exact lookup and diagnostics; do not
-prefer it when a shorter `dslName` is published. System names are fixed by the
-engine. Third-party and user instruction `dslName` remains its complete `type`.
+For a catalog parameter, `valueKind` defaults to `type` when omitted.
+
+Author actions and conditions using the catalog entry's **`dslName`** when present;
+otherwise use its exact `type`. A `dslName` equal to `type` is omitted.
+System names are fixed by the engine.
 Use parameter `dslName` unchanged. Never invent abbreviations or edit generated
 catalogs. Expressions inside `{{...}}` retain their existing names. The
-formatter always writes the catalog instruction `dslName`.
+formatter writes `dslName` when present and `type` otherwise.
 
 ## Source of truth
 
@@ -81,9 +82,8 @@ Read, in order:
 7. Read `.gdevelop/conditions-catalog.json` for conditions,
    `.gdevelop/actions-catalog.json` for actions, and
    `.gdevelop/expressions-catalog.json` for expressions. Each file has `kind`,
-   `entries`, and `count`; search its `entries` for exact metadata. Use only
-   entries with `authoringAvailable=true` when writing new events. Entries
-   with `authoringAvailable=false` support existing native data serialization.
+   `entries`, and `count`; search its `entries` for exact metadata. Catalogs also include compatibility entries; check deprecation information
+   before using an instruction in new events.
 8. `.gdevelop/runtime-api.d.ts` and `.gdevelop/project-api.d.ts` before adding
    or changing any JavaScript event, and `.gdevelop/harness-api.d.ts` plus its
    runtime/project declaration dependencies before adding or changing a
@@ -398,6 +398,18 @@ or fragment bodies. Only GDevelop Language (GDL) format 13 is supported. Functio
 and events share one .gdl file; .events files are rejected. Use explicit
 conditions/actions blocks containing bare catalog instructions, typed event
 nodes, independent group/comment/link nodes, and raw multiline code blocks.
+
+For comment nodes, keep the text readable against its background. Omit
+`background` and `color` to use the defaults when possible. If specifying
+colors, use contrasting values; never set both to black. For example:
+
+```gdl
+comment {
+  text = "游戏进行时执行以下事件；结束后停止移动、生成与碰撞处理。"
+  background = [255, 230, 109]
+  color = [0, 0, 0]
+}
+```
 
 Use sceneLoad for initialization; never author SceneJustBegins. Guard per-frame
 sceneUpdate actions with effective conditions. Keep parent picking and source

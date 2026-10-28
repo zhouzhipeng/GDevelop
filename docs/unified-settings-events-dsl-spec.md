@@ -9,9 +9,9 @@
 文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdl`，`constants.toml` 和 JavaScript 测试文件保持各自格式。格式 13 不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
 
 系统 action/condition 由引擎固定映射发布作者短名。instruction catalog 6 的
-每条 action/condition 必须有 `dslName`：系统为固定短名，第三方和用户指令
-保持完整 `type`。GDL 和 AI 优先使用 `dslName`，解析器也接受精确原生 `type`，
-格式化统一输出 `dslName`。参数名称及 `{{...}}` 中的表达式名称通常不变；
+action/condition 的 `dslName` 与 `type` 相同时省略。GDL 和 AI 优先使用
+`dslName`，缺失时使用精确原生 `type`；解析器也接受精确原生 `type`，
+格式化优先输出 `dslName`，缺失时输出 `type`。参数名称及 `{{...}}` 中的表达式名称通常不变；
 行为内部的 `setProperty` / `getProperty` 是本文末尾定义的语法映射例外。
 同一 kind 内短名与原生名称不得交叉冲突；错误必须明确拒绝。
 详见 [系统指令与入口契约](gdl-system-instruction-names-and-project-entry-spec.md)。
