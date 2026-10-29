@@ -57,6 +57,7 @@ import {
 } from '../../../Utils/Serializer';
 import { MarkdownText } from '../../../UI/MarkdownText';
 import propertiesMapToSchema from '../../../PropertiesEditor/PropertiesMapToSchema';
+import { markPrefabPropertyOverrides } from '../../../PropertiesEditor/PrefabPropertyOverrides';
 import { renameObjectPointReferences } from '../../../Utils/ObjectAnimationsRefactoring';
 
 const gd: libGDevelop = global.gd;
@@ -311,29 +312,52 @@ const CustomObjectPropertiesEditor = (props: Props): React.Node => {
 
   const schema = React.useMemo(
     () =>
-      propertiesMapToSchema({
-        properties: customObjectConfiguration.getProperties(),
-        defaultValueProperties: customObjectEventsBasedObject
-          ? customObjectEventsBasedObject.getPropertyDescriptors()
-          : null,
-        getPropertyValue: (instance, name) =>
+      markPrefabPropertyOverrides(
+        propertiesMapToSchema({
+          properties: customObjectConfiguration.getProperties(),
+          defaultValueProperties: customObjectEventsBasedObject
+            ? customObjectEventsBasedObject.getPropertyDescriptors()
+            : null,
+          getPropertyValue: (instance, name) =>
+            instance
+              .getProperties()
+              .get(name)
+              .getValue(),
+          onUpdateProperty: (instance, name, value) => {
+            instance.updateProperty(name, value);
+          },
+          object,
+          visibility: 'All',
+          layersContainer: null,
+          allowConstantPlaceholders: true,
+          shouldDisabledFieldsWithMixedValues: false,
+          propertyGroups: gd.MetadataProvider.getObjectMetadata(
+            project.getCurrentPlatform(),
+            customObjectConfiguration.getType()
+          ).getPropertyGroups(),
+        }),
+        name => {
+          if (!customObjectEventsBasedObject) return null;
+          const defaults = customObjectEventsBasedObject.getPropertyDescriptors();
+          return defaults.has(name) ? defaults.get(name).getValue() : null;
+        },
+        (instance, name) =>
           instance
             .getProperties()
             .get(name)
             .getValue(),
-        onUpdateProperty: (instance, name, value) => {
-          instance.updateProperty(name, value);
-        },
-        object,
-        visibility: 'All',
-        layersContainer: null,
-        allowConstantPlaceholders: true,
-        shouldDisabledFieldsWithMixedValues: false,
-        propertyGroups: gd.MetadataProvider.getObjectMetadata(
-          project.getCurrentPlatform(),
-          customObjectConfiguration.getType()
-        ).getPropertyGroups(),
-      }),
+        (instance, name, value) => {
+          const property = instance.getProperties().get(name);
+          instance.updateProperty(
+            name,
+            property.getType().toLowerCase() === 'boolean'
+              ? value === 'true'
+                ? '1'
+                : '0'
+              : value
+          );
+        }
+      ),
     [customObjectConfiguration, customObjectEventsBasedObject, object, project]
   );
   const shouldDisplayVariantSelector = !customObjectConfiguration.isForcedToOverrideEventsBasedObjectChildrenConfiguration();

@@ -19,6 +19,8 @@ export type ValueFieldCommonProperties = {|
   getDescription?: Instance => string,
   hideLabel?: boolean,
   isHighlighted?: Instance => boolean,
+  getOverrideDefaultValue?: Instance => ?string,
+  resetOverride?: Instance => void,
   getExtraDescription?: Instance => string,
   hasImpactOnAllOtherFields?: boolean,
   canBeUnlimitedUsingMinus1?: boolean,

@@ -876,6 +876,8 @@ interface Behavior {
     void SetMuted(boolean muted);
 
     boolean IsDefaultBehavior();
+    void ResetInheritedPropertyOverrides();
+    void SerializeEffectiveTo([Ref] SerializerElement element);
     boolean IsInheritedFromObjectType();
     void SetInheritedFromObjectType(boolean isInheritedFromObjectType);
 

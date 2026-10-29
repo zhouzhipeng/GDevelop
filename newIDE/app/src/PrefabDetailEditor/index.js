@@ -1,4 +1,5 @@
 // @flow
+import { serializeToJSObject } from '../Utils/Serializer';
 import { Trans } from '@lingui/macro';
 import { t } from '@lingui/macro';
 import { I18n } from '@lingui/react';
@@ -779,117 +780,18 @@ export default class PrefabDetailEditor extends React.Component<Props, State> {
     return snapshot;
   };
 
-  _isBehaviorInheritedFromObjectType = (behavior: gdBehavior): boolean => {
-    try {
-      return behavior.isInheritedFromObjectType();
-    } catch (error) {
-      return false;
-    }
-  };
-
-  _getBehaviorDefaultProperties = (
-    behaviorTypeName: string
-  ): ?gdMapStringPropertyDescriptor => {
-    try {
-      const behaviorMetadata = gd.MetadataProvider.getBehaviorMetadata(
-        gd.JsPlatform.get(),
-        behaviorTypeName
-      );
-      return gd.MetadataProvider.isBadBehaviorMetadata(behaviorMetadata)
-        ? null
-        : behaviorMetadata.getProperties();
-    } catch (error) {
-      console.error(
-        'Unable to read behavior metadata properties while syncing prefab behavior properties.',
-        error
-      );
-      return null;
-    }
-  };
-
   _syncObjectInheritedBehaviorProperties = (
     object: gdObject,
     previousSnapshot: PrefabBehaviorSnapshot,
     nextSnapshot: PrefabBehaviorSnapshot
   ): boolean => {
     const { project } = this.props;
-    let hasObjectChanged = false;
-
-    const behaviorSignatureBefore = object
-      .getAllBehaviorNames()
-      .toJSArray()
-      .map(behaviorName => {
-        const behavior = object.getBehavior(behaviorName);
-        return `${behaviorName}:${behavior.getTypeName()}:${this._isBehaviorInheritedFromObjectType(
-          behavior
-        ).toString()}`;
-      })
-      .join('\n');
+    const before = JSON.stringify(serializeToJSObject(object));
     project.ensureObjectInheritedBehaviors(object);
-    const behaviorSignatureAfter = object
-      .getAllBehaviorNames()
-      .toJSArray()
-      .map(behaviorName => {
-        const behavior = object.getBehavior(behaviorName);
-        return `${behaviorName}:${behavior.getTypeName()}:${this._isBehaviorInheritedFromObjectType(
-          behavior
-        ).toString()}`;
-      })
-      .join('\n');
-    if (behaviorSignatureBefore !== behaviorSignatureAfter) {
-      hasObjectChanged = true;
-    }
-
-    Object.keys(nextSnapshot).forEach(behaviorName => {
-      if (!object.hasBehaviorNamed(behaviorName)) return;
-
-      const behavior = object.getBehavior(behaviorName);
-      if (!this._isBehaviorInheritedFromObjectType(behavior)) return;
-
-      const nextBehaviorSnapshot = nextSnapshot[behaviorName];
-      if (behavior.getTypeName() !== nextBehaviorSnapshot.type) return;
-
-      const previousBehaviorSnapshot = previousSnapshot[behaviorName];
-      if (
-        !previousBehaviorSnapshot ||
-        previousBehaviorSnapshot.type !== nextBehaviorSnapshot.type
-      ) {
-        return;
-      }
-
-      const behaviorProperties = behavior.getProperties();
-      const behaviorDefaultProperties = this._getBehaviorDefaultProperties(
-        behavior.getTypeName()
-      );
-      Object.keys(nextBehaviorSnapshot.properties).forEach(propertyName => {
-        if (!behaviorProperties.has(propertyName)) return;
-
-        const previousPropertyValue =
-          previousBehaviorSnapshot.properties[propertyName];
-        const currentObjectPropertyValue = behaviorProperties
-          .get(propertyName)
-          .getValue();
-        const defaultPropertyValue =
-          behaviorDefaultProperties &&
-          behaviorDefaultProperties.has(propertyName)
-            ? behaviorDefaultProperties.get(propertyName).getValue()
-            : undefined;
-
-        if (
-          previousPropertyValue === undefined ||
-          currentObjectPropertyValue === previousPropertyValue ||
-          currentObjectPropertyValue === defaultPropertyValue
-        ) {
-          behavior.updateProperty(
-            propertyName,
-            nextBehaviorSnapshot.properties[propertyName]
-          );
-          hasObjectChanged = true;
-        }
-      });
-    });
-
-    return hasObjectChanged;
+    return (
+      before !== JSON.stringify(serializeToJSObject(object)) ||
+      JSON.stringify(previousSnapshot) !== JSON.stringify(nextSnapshot)
+    );
   };
 
   _syncObjectsContainerInheritedBehaviorProperties = (

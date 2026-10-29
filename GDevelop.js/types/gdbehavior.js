@@ -16,6 +16,8 @@ declare class gdBehavior {
   isMuted(): boolean;
   setMuted(muted: boolean): void;
   isDefaultBehavior(): boolean;
+  resetInheritedPropertyOverrides(): void;
+  serializeEffectiveTo(element: gdSerializerElement): void;
   isInheritedFromObjectType(): boolean;
   setInheritedFromObjectType(isInheritedFromObjectType: boolean): void;
   delete(): void;

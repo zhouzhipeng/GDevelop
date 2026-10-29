@@ -6,6 +6,7 @@ import {
   formatSettingsDsl,
   registerLocalSettingsDefinitions,
   registerLocalSettingsSources,
+  registerSettingsTypes,
 } from '.';
 import { compileLayoutDocument } from '../LayoutDocument';
 
@@ -298,4 +299,39 @@ describe('GDevelop Language (GDL)', () => {
       })
     );
   });
+});
+
+test('round trips sparse prefab behavior overrides without copied defaults', () => {
+  registerSettingsTypes({
+    objectTypes: [
+      { type: 'OverrideObject', schema: { fields: [], childNodes: [] } },
+    ],
+    behaviorTypes: [
+      {
+        type: 'OverrideMovement',
+        properties: [{ name: 'speed', type: 'Number' }],
+      },
+    ],
+  });
+  const payload = {
+    name: 'Enemy',
+    type: 'OverrideObject',
+    behaviors: [
+      {
+        name: 'Movement',
+        type: 'OverrideMovement',
+        isInheritedFromObjectType: true,
+        overrides: { speed: 150 },
+      },
+    ],
+  };
+  const source = serializeSettingsDocument('object', payload);
+  expect(decodeSettingsDocument(source).payload).toEqual(payload);
+  const empty = {
+    ...payload,
+    behaviors: [{ ...payload.behaviors[0], overrides: {} }],
+  };
+  expect(
+    decodeSettingsDocument(serializeSettingsDocument('object', empty)).payload
+  ).toEqual(empty);
 });

@@ -819,6 +819,7 @@ const compileBehavior = (record, objectName, context, state) => {
       'instance',
       'name',
       'properties',
+      'overrides',
       'folded',
       'muted',
       'inherited',
@@ -851,6 +852,11 @@ const compileBehavior = (record, objectName, context, state) => {
     record,
     state
   );
+  const overrides =
+    behavior.overrides === undefined
+      ? undefined
+      : expectTable(behavior.overrides, 'behavior overrides', record, state);
+  const validatedProperties = { ...properties, ...(overrides || {}) };
   const propertySchema =
     context.behaviorPropertySchemasByType &&
     context.behaviorPropertySchemasByType[type];
@@ -869,18 +875,18 @@ const compileBehavior = (record, objectName, context, state) => {
       },
       {}
     );
-    Object.keys(properties).forEach(key => {
+    Object.keys(validatedProperties).forEach(key => {
       const property = bySerializedKey[key];
       if (property) {
         const normalizedType = String(property.type || '').toLowerCase();
         const valid = ['number', 'float'].includes(normalizedType)
-          ? typeof properties[key] === 'number' &&
-            Number.isFinite(properties[key])
+          ? typeof validatedProperties[key] === 'number' &&
+            Number.isFinite(validatedProperties[key])
           : normalizedType === 'integer'
-          ? Number.isInteger(properties[key])
+          ? Number.isInteger(validatedProperties[key])
           : normalizedType === 'boolean'
-          ? typeof properties[key] === 'boolean'
-          : typeof properties[key] === 'string';
+          ? typeof validatedProperties[key] === 'boolean'
+          : typeof validatedProperties[key] === 'string';
         if (!valid)
           fail(
             state,
@@ -947,6 +953,7 @@ const compileBehavior = (record, objectName, context, state) => {
     expectBoolean(behavior.inherited, 'behavior inherited', record, state)
   )
     output.isInheritedFromObjectType = true;
+  if (overrides !== undefined) output.overrides = clone(overrides);
   if (behavior.quick !== undefined) {
     const quick = expectEnum(
       behavior.quick,
@@ -1933,6 +1940,7 @@ const decompileBehavior = (override, instance, context) => {
     'isFolded',
     'isMuted',
     'isInheritedFromObjectType',
+    'overrides',
     'quickCustomizationVisibility',
     'propertiesQuickCustomizationVisibilities',
   ]);
@@ -1948,6 +1956,8 @@ const decompileBehavior = (override, instance, context) => {
   };
   if (Object.keys(properties).length)
     output.properties = canonicalLiteral(properties);
+  if (override.overrides !== undefined)
+    output.overrides = canonicalLiteral(override.overrides);
   if (override.isFolded) output.folded = true;
   if (override.isMuted) output.muted = true;
   if (override.isInheritedFromObjectType) output.inherited = true;

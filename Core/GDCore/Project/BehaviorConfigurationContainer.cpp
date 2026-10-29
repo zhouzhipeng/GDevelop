@@ -14,7 +14,8 @@ namespace gd {
 namespace {
 
 void OverlaySerializerElement(gd::SerializerElement& target,
-                              const gd::SerializerElement& source) {
+                              const gd::SerializerElement& source,
+                              bool recursively = true) {
   // Scalars and arrays are complete authored values. Objects can be overlaid,
   // but a source/target type mismatch must replace the default value.
   if (source.ConsideredAsArray() || !source.IsValueUndefined() ||
@@ -43,7 +44,7 @@ void OverlaySerializerElement(gd::SerializerElement& target,
     const std::size_t sourceChildrenCount =
         source.GetChildrenCount(childName);
     const bool canRecursivelyOverlay =
-        !childName.empty() && sourceChildrenCount == 1 &&
+        recursively && !childName.empty() && sourceChildrenCount == 1 &&
         !childEntry.second->ConsideredAsArray() &&
         childEntry.second->IsValueUndefined() &&
         target.GetChildrenCount(childName) == 1 &&
@@ -72,7 +73,62 @@ BehaviorConfigurationContainer::~BehaviorConfigurationContainer(){};
 
 void BehaviorConfigurationContainer::UnserializeFromWithDefaultContent(
     const gd::SerializerElement& element) {
-  OverlaySerializerElement(content, element);
+  OverlaySerializerElement(content, element, !usesInheritedDefaults);
+}
+
+bool BehaviorConfigurationContainer::UpdateProperty(
+    const gd::String& name, const gd::String& value) {
+  if (!UpdateProperty(content, name, value)) return false;
+  if (!usesInheritedDefaults) return true;
+  const auto defaults = GetProperties(inheritedDefaults);
+  const auto effective = GetProperties(content);
+  const auto defaultProperty = defaults.find(name);
+  const auto effectiveProperty = effective.find(name);
+  if (defaultProperty != defaults.end() && effectiveProperty != effective.end() &&
+      defaultProperty->second.GetValue() == effectiveProperty->second.GetValue()) {
+    RemoveInheritedOverrideForProperty(name, value);
+  } else {
+    UpdateProperty(propertyOverrides, name, value);
+  }
+  return true;
+}
+
+void BehaviorConfigurationContainer::RemoveInheritedOverrideForProperty(
+    const gd::String& name, const gd::String& value) {
+  // Ask the behavior to map the editor property name to its serialized keys.
+  gd::SerializerElement writtenKeys;
+  UpdateProperty(writtenKeys, name, value);
+  for (const auto& entry : writtenKeys.GetAllChildren()) {
+    propertyOverrides.RemoveChild(entry.first);
+    propertyOverrides.RemoveAttribute(entry.first);
+  }
+  for (const auto& entry : writtenKeys.GetAllAttributes()) {
+    propertyOverrides.RemoveChild(entry.first);
+    propertyOverrides.RemoveAttribute(entry.first);
+  }
+}
+
+void BehaviorConfigurationContainer::ApplyInheritedDefaults(
+    const gd::SerializerElement& defaults) {
+  if (!usesInheritedDefaults) propertyOverrides.Clear();
+  inheritedDefaults = defaults;
+  usesInheritedDefaults = true;
+  content = defaults;
+  OverlaySerializerElement(content, propertyOverrides, false);
+  const auto defaultsProperties = GetProperties(inheritedDefaults);
+  const auto effectiveProperties = GetProperties(content);
+  for (const auto& property : defaultsProperties) {
+    const auto effective = effectiveProperties.find(property.first);
+    if (effective != effectiveProperties.end() &&
+        effective->second.GetValue() == property.second.GetValue()) {
+      RemoveInheritedOverrideForProperty(property.first, property.second.GetValue());
+    }
+  }
+}
+
+void BehaviorConfigurationContainer::ResetInheritedPropertyOverrides() {
+  propertyOverrides.Clear();
+  if (usesInheritedDefaults) content = inheritedDefaults;
 }
 
 std::map<gd::String, gd::PropertyDescriptor> BehaviorConfigurationContainer::GetProperties() const {

@@ -148,7 +148,7 @@ void BehaviorsContainer::UnserializeFrom(gd::Project &project,
     }
     // end of compatibility code
     else {
-      if (isOverriding) {
+      if (isOverriding || behaviorElement.HasChild("overrides")) {
         behavior->UnserializeFrom(behaviorElement);
       } else {
         behavior->UnserializeFromWithDefaultContent(behaviorElement);

@@ -108,7 +108,14 @@ const attachedBehaviorNode = {
       values: ['default', 'visible', 'hidden'],
     }),
   ],
-  childNodes: [quickCustomizationNode('behaviors')],
+  childNodes: [
+    quickCustomizationNode('behaviors'),
+    {
+      serializedKey: 'overrides',
+      fields: [],
+      dynamicFields: { key: 'serialized property name', value: 'value' },
+    },
+  ],
   dynamicFields: {
     source: 'behaviorTypes[type].properties',
     key: 'properties[].serializedKey',

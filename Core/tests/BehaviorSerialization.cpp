@@ -14,6 +14,7 @@
 #include "GDCore/Events/Serialization.h"
 #include "GDCore/Extensions/Platform.h"
 #include "GDCore/Project/BehaviorConfigurationContainer.h"
+#include "GDCore/IDE/Events/BehaviorDefaultFlagClearer.h"
 #include "GDCore/Project/EventsBasedObject.h"
 #include "GDCore/Project/EventsFunctionsExtension.h"
 #include "GDCore/Project/Layout.h"
@@ -467,6 +468,47 @@ TEST_CASE("BehaviorSerialization", "[common]") {
     REQUIRE(objectBehavior.GetProperties().at("MyProperty").GetValue() ==
             "123456");
 
+    // New inherited configurations persist no copied default properties.
+    SerializerElement sparse;
+    objectBehavior.SerializeTo(sparse);
+    REQUIRE(sparse.HasChild("overrides"));
+    REQUIRE(sparse.GetChild("overrides").GetAllChildren().empty());
+    REQUIRE(sparse.GetChild("overrides").GetAllAttributes().empty());
+    REQUIRE(!sparse.HasChild("MyProperty"));
+    REQUIRE(!sparse.HasAttribute("MyProperty"));
+
+    // Editing back to the prefab default removes the override.
+    objectBehavior.UpdateProperty("MyProperty", "150");
+    objectBehavior.UpdateProperty("MyProperty", "123456");
+    objectBehavior.SerializeTo(sparse);
+    REQUIRE(sparse.GetChild("overrides").GetAllAttributes().empty());
+    REQUIRE(sparse.GetChild("overrides").GetAllChildren().empty());
+    readEventsBasedObject.GetBehavior("MyPrefabBehavior")
+        .UpdateProperty("MyProperty", "999");
+    readProject.EnsureObjectInheritedBehaviors(object);
+    REQUIRE(objectBehavior.GetProperties().at("MyProperty").GetValue() == "999");
+    objectBehavior.UpdateProperty("MyProperty", "150");
+    SerializerElement savedObject;
+    object.SerializeTo(savedObject);
+    auto& restored = layout.GetObjects().InsertNewObject(
+        readProject, "MyOtherEventsExtension::MyEventsBasedObject", "Restored", 5);
+    restored.UnserializeFrom(readProject, savedObject);
+    REQUIRE(restored.GetBehavior("MyPrefabBehavior").GetProperties()
+                .at("MyProperty").GetValue() == "150");
+
+    objectBehavior.ResetInheritedPropertyOverrides();
+    REQUIRE(objectBehavior.GetProperties().at("MyProperty").GetValue() == "999");
+    SerializerElement exportedObject;
+    gd::BehaviorDefaultFlagClearer::SerializeObjectWithCleanDefaultBehaviorFlags(
+        object, exportedObject);
+    const auto& exportedBehavior = exportedObject.GetChild("behaviors").GetChild(0);
+    REQUIRE(!exportedBehavior.HasChild("overrides"));
+    REQUIRE(exportedBehavior.GetStringAttribute("MyProperty") == "999");
+    // Restore the original default for the following resolution checks.
+    readEventsBasedObject.GetBehavior("MyPrefabBehavior")
+        .UpdateProperty("MyProperty", "123456");
+    readProject.EnsureObjectInheritedBehaviors(object);
+
     objectBehavior.UpdateProperty("MyProperty", "654321");
     readProject.EnsureObjectInheritedBehaviors(object);
     REQUIRE(object.GetBehavior("MyPrefabBehavior")
@@ -517,7 +559,7 @@ TEST_CASE("BehaviorSerialization", "[common]") {
     REQUIRE(objectWithCustomizedExistingBehavior.GetBehavior("MyPrefabBehavior")
                 .GetProperties()
                 .at("MyProperty")
-                .GetValue() == "654321");
+                .GetValue() == "123456");
 
     auto &globalObjectWithCustomizedExistingBehavior =
         readProject.GetObjects().InsertNewObject(
@@ -543,10 +585,49 @@ TEST_CASE("BehaviorSerialization", "[common]") {
                 .GetBehavior("MyPrefabBehavior")
                 .GetProperties()
                 .at("MyProperty")
-                .GetValue() == "654321");
+                .GetValue() == "123456");
 
     readEventsBasedObject.RemoveBehavior("MyPrefabBehavior");
     readProject.EnsureObjectInheritedBehaviors(object);
     REQUIRE(!object.HasBehaviorNamed("MyPrefabBehavior"));
   }
+}
+
+TEST_CASE("Inherited behavior overrides preserve native property types") {
+  gd::Platform platform;
+  gd::Project project;
+  SetupProjectWithDummyPlatform(project, platform);
+  auto& layout = project.InsertNewLayout("Scene", 0);
+  auto& object = layout.GetObjects().InsertNewObject(
+      project, "MyExtension::Sprite", "Object", 0);
+  auto* behavior = object.AddNewBehavior(project, "MyExtension::MyBehavior", "Movement");
+  SerializerElement defaults = behavior->GetContent();
+  behavior->ApplyInheritedDefaults(defaults);
+  REQUIRE(behavior->GetProperties().at("booleanProperty").GetValue() == "true");
+  REQUIRE(behavior->UpdateProperty("numberProperty", "456"));
+  SerializerElement saved;
+  behavior->SerializeTo(saved);
+  REQUIRE(saved.GetChild("overrides").GetChild("numberProperty").GetDoubleValue() == 456);
+  REQUIRE(!saved.GetChild("overrides").HasChild("booleanProperty"));
+  REQUIRE(behavior->UpdateProperty("numberProperty", "123"));
+  behavior->SerializeTo(saved);
+  REQUIRE(!saved.GetChild("overrides").HasChild("numberProperty"));
+  behavior->ApplyInheritedDefaults(defaults);
+  REQUIRE(behavior->GetProperties().at("booleanProperty").GetValue() == "true");
+}
+
+TEST_CASE("Inherited structured behavior overrides replace whole property values") {
+  gd::Behavior behavior;
+  SerializerElement defaults;
+  defaults.AddChild("settings").SetStringAttribute("obsolete", "default");
+  defaults.GetChild("settings").SetStringAttribute("retained", "default");
+  SerializerElement saved;
+  saved.AddChild("overrides").AddChild("settings")
+      .SetStringAttribute("retained", "override");
+  behavior.UnserializeFrom(saved);
+  behavior.ApplyInheritedDefaults(defaults);
+  const auto& settings = behavior.GetContent().GetChild("settings");
+  REQUIRE(settings.GetStringAttribute("retained") == "override");
+  REQUIRE(!settings.HasChild("obsolete"));
+  REQUIRE(!settings.HasAttribute("obsolete"));
 }

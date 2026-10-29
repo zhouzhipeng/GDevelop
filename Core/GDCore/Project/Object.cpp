@@ -133,6 +133,7 @@ void Object::UnserializeFrom(gd::Project& project,
   }
 
   configuration->UnserializeFrom(project, element);
+  project.EnsureObjectInheritedBehaviors(*this);
 }
 
 void Object::SerializeTo(SerializerElement& element) const {

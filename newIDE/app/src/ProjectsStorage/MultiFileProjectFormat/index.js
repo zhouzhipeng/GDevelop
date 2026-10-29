@@ -242,6 +242,7 @@ const ATTACHED_BEHAVIOR_IDENTITY_FIELDS = new Set([
   'isFolded',
   'isMuted',
   'isInheritedFromObjectType',
+  'overrides',
   'quickCustomizationVisibility',
   'propertiesQuickCustomizationVisibilities',
 ]);
@@ -2388,6 +2389,25 @@ const validateAttachedBehaviorProperties = (
 ) => {
   if (!behaviorPropertySchemasByType) return;
   (behaviors || []).forEach(behavior => {
+    if (behavior.overrides !== undefined) {
+      if (
+        !behavior.overrides ||
+        typeof behavior.overrides !== 'object' ||
+        Array.isArray(behavior.overrides)
+      ) {
+        fail(
+          'MULTIFILE_INVALID_BEHAVIOR_PROPERTY',
+          'Behavior overrides must be an object.',
+          uri
+        );
+      }
+      validateAttachedBehaviorProperties(
+        [{ ...behavior.overrides, name: behavior.name, type: behavior.type }],
+        behaviorPropertySchemasByType,
+        uri,
+        objectName
+      );
+    }
     const behaviorType = String(behavior.type || '');
     const schema = behaviorPropertySchemasByType[behaviorType];
     if (!schema) return;

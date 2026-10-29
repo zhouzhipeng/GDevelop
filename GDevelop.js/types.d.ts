@@ -774,6 +774,8 @@ export class Behavior extends EmscriptenObject {
   isMuted(): boolean;
   setMuted(muted: boolean): void;
   isDefaultBehavior(): boolean;
+  resetInheritedPropertyOverrides(): void;
+  serializeEffectiveTo(element: SerializerElement): void;
   isInheritedFromObjectType(): boolean;
   setInheritedFromObjectType(isInheritedFromObjectType: boolean): void;
 }

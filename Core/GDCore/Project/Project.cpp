@@ -280,67 +280,17 @@ void Project::EnsureObjectInheritedBehaviors(gd::Object& object) const {
   for (const auto& behaviorName : eventsBasedObject.GetAllBehaviorNames()) {
     const auto& inheritedBehavior = eventsBasedObject.GetBehavior(behaviorName);
     const auto& inheritedBehaviorType = inheritedBehavior.GetTypeName();
-    auto getDefaultProperties = [this](const gd::String& behaviorType) {
-      if (HasEventsBasedBehavior(behaviorType)) {
-        gd::CustomBehavior defaultBehavior("", *this, behaviorType);
-        defaultBehavior.InitializeContent();
-        return defaultBehavior.GetProperties();
-      }
-
-      const gd::BehaviorMetadata& behaviorMetadata =
-          gd::MetadataProvider::GetBehaviorMetadata(GetCurrentPlatform(),
-                                                    behaviorType);
-      if (gd::MetadataProvider::IsBadBehaviorMetadata(behaviorMetadata)) {
-        return std::map<gd::String, gd::PropertyDescriptor>();
-      }
-
-      return behaviorMetadata.GetProperties();
-    };
-    auto copyInheritedBehaviorConfiguration =
-        [&inheritedBehavior, &getDefaultProperties](
-            gd::Behavior& behavior, bool preserveNonDefaultValues = false) {
-      std::map<gd::String, gd::String> propertyValuesToRestore;
-      if (preserveNonDefaultValues) {
-        const auto existingProperties = behavior.GetProperties();
-        const auto defaultProperties =
-            getDefaultProperties(behavior.GetTypeName());
-        for (const auto& property : existingProperties) {
-          const auto defaultProperty = defaultProperties.find(property.first);
-          if (defaultProperty == defaultProperties.end() ||
-              property.second.GetValue() !=
-                  defaultProperty->second.GetValue()) {
-            propertyValuesToRestore[property.first] =
-                property.second.GetValue();
-          }
-        }
-      }
-
-      behavior.UnserializeFrom(inheritedBehavior.GetContent());
-      behavior.SetFolded(inheritedBehavior.IsFolded());
+    auto resolveInheritedBehavior = [&inheritedBehavior](gd::Behavior& behavior) {
+      behavior.ApplyInheritedDefaults(inheritedBehavior.GetContent());
       behavior.SetMuted(inheritedBehavior.IsMuted());
       behavior.SetDefaultBehavior(false);
       behavior.SetInheritedFromObjectType(true);
-
-      if (preserveNonDefaultValues && !propertyValuesToRestore.empty()) {
-        const auto inheritedProperties = behavior.GetProperties();
-        for (const auto& propertyValue : propertyValuesToRestore) {
-          if (inheritedProperties.find(propertyValue.first) ==
-              inheritedProperties.end()) {
-            continue;
-          }
-          behavior.UpdateProperty(propertyValue.first, propertyValue.second);
-        }
-      }
     };
 
     if (object.HasBehaviorNamed(behaviorName)) {
       auto& behavior = object.GetBehavior(behaviorName);
       if (behavior.GetTypeName() == inheritedBehaviorType) {
-        if (!behavior.IsInheritedFromObjectType()) {
-          copyInheritedBehaviorConfiguration(behavior, true);
-        } else {
-          behavior.SetInheritedFromObjectType(true);
-        }
+        resolveInheritedBehavior(behavior);
         continue;
       }
 
@@ -365,7 +315,7 @@ void Project::EnsureObjectInheritedBehaviors(gd::Object& object) const {
                      inheritedBehaviorType);
       continue;
     }
-    copyInheritedBehaviorConfiguration(*behavior);
+    resolveInheritedBehavior(*behavior);
   }
 }
 

@@ -171,3 +171,27 @@ describe('shared layout data validation through GDevelop Language (GDL)', () => 
     expect(() => compileLayoutDocument(data, context)).toThrow();
   });
 });
+
+test('preserves sparse behavior overrides through layout and GDL round trips', () => {
+  const data = document();
+  data.behaviors = [
+    {
+      instance: ids[0],
+      name: 'Movement',
+      inherited: true,
+      overrides: { speed: 150 },
+    },
+  ];
+  const native = compileLayoutDocument(data, context);
+  expect(native.instances[0].behaviorOverridings[0].overrides).toEqual({
+    speed: 150,
+  });
+  const decoded = decodeSettingsDocument(
+    serializeSettingsDocument(
+      'scene',
+      { name: 'Test' },
+      decompileLayoutDocument(native, context)
+    )
+  );
+  expect(decoded.layout.behaviors[0].overrides).toEqual({ speed: 150 });
+});

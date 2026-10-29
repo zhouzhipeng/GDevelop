@@ -27,6 +27,8 @@
 #include "GDCore/Extensions/Platform.h"
 #include "GDCore/Extensions/PlatformExtension.h"
 #include "GDCore/IDE/AbstractFileSystem.h"
+#include "GDCore/IDE/WholeProjectBrowser.h"
+#include "GDCore/IDE/Project/ArbitraryObjectsWorker.h"
 #include "GDCore/IDE/CaptureOptions.h"
 #include "GDCore/IDE/Events/UsedExtensionsFinder.h"
 #include "GDCore/IDE/ExportedDependencyResolver.h"
@@ -648,6 +650,20 @@ void ExporterHelper::StripAndSerializeProjectData(
     gd::Project &project, gd::SerializerElement &rootElement,
     bool isInGameEdition,
     const std::vector<gd::InGameEditorResourceMetadata> &inGameEditorResources) {
+  // Resolve the latest prefab defaults before collecting resources and
+  // materializing runtime data. Authoring persistence stays sparse.
+  class PrefabBehaviorResolver : public gd::ArbitraryObjectsWorker {
+   public:
+    explicit PrefabBehaviorResolver(const gd::Project& project) : project(project) {}
+   private:
+    void DoVisitObject(gd::Object& object) override {
+      project.EnsureObjectInheritedBehaviors(object);
+    }
+    const gd::Project& project;
+  } resolver(project);
+  gd::WholeProjectBrowser browser;
+  browser.ExposeObjects(project, resolver);
+
   project.GetWatermark().ShowGDevelopWatermark(false);
 
   auto projectUsedResources =

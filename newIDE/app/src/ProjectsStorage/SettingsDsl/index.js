@@ -1048,6 +1048,7 @@ const layoutNodeSchema = {
       quick: enumeration(['default', 'visible', 'hidden']),
     },
     {
+      overrides: { key: 'overrides', schema: record({}, {}, 'value') },
       properties: { key: 'properties', schema: record({}, {}, 'value') },
       property_visibility: {
         key: 'property_visibility',

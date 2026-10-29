@@ -1,0 +1,33 @@
+.overridden {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: #ffd54f;
+  min-width: 0;
+}
+.overridden input,
+.overridden textarea,
+.overridden label,
+.overridden span,
+.overridden button,
+.overridden svg {
+  color: #ffd54f !important;
+  -webkit-text-fill-color: #ffd54f;
+}
+.field {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+.defaultValue {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  max-width: 100%;
+}
+.defaultValue > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

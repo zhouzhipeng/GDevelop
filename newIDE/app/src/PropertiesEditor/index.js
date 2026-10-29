@@ -1,5 +1,5 @@
 // @flow
-import { Trans } from '@lingui/macro';
+import { Trans, t } from '@lingui/macro';
 import * as React from 'react';
 import SemiControlledTextField from '../UI/SemiControlledTextField';
 import InlineCheckbox from '../UI/InlineCheckbox';
@@ -29,6 +29,9 @@ import useForceUpdate from '../Utils/UseForceUpdate';
 import RaisedButtonWithSplitMenu from '../UI/RaisedButtonWithSplitMenu';
 import Tooltip from '@material-ui/core/Tooltip';
 import Edit from '../UI/CustomSvgIcons/Edit';
+import Restore from '../UI/CustomSvgIcons/Restore';
+import IconButton from '../UI/IconButton';
+import overrideStyles from './PropertyOverride.module.css';
 import {
   type Schema,
   type ValueField,
@@ -748,82 +751,112 @@ const PropertiesEditor = ({
 
   return renderContainer(
     schema.map(field => {
-      if (!!field.nonFieldType) {
-        if (field.nonFieldType === 'sectionTitle') {
-          return renderSectionTitle(field);
-        } else if (field.nonFieldType === 'button') {
-          return renderButton(field);
+      const renderField = () => {
+        if (!!field.nonFieldType) {
+          if (field.nonFieldType === 'sectionTitle') {
+            return renderSectionTitle(field);
+          } else if (field.nonFieldType === 'button') {
+            return renderButton(field);
+          }
+          return null;
+        } else if (field.children) {
+          if (field.type === 'row') {
+            const contentView = (
+              <UnsavedChangesContext.Consumer key={field.name}>
+                {unsavedChanges => (
+                  <PropertiesEditor
+                    project={project}
+                    resourceManagementProps={resourceManagementProps}
+                    projectScopedContainersAccessor={
+                      projectScopedContainersAccessor
+                    }
+                    schema={field.children}
+                    instances={instances}
+                    mode="row"
+                    unsavedChanges={unsavedChanges}
+                    onInstancesModified={onInstancesModified}
+                    hideConstantPlaceholderHints={hideConstantPlaceholderHints}
+                  />
+                )}
+              </UnsavedChangesContext.Consumer>
+            );
+            if (field.title) {
+              return [
+                <Text key={field.name + '-title'} size="block-title">
+                  {field.title}
+                </Text>,
+                contentView,
+              ];
+            }
+            return contentView;
+          }
+
+          return (
+            <div key={field.name}>
+              <Subheader>{field.name}</Subheader>
+              <UnsavedChangesContext.Consumer key={field.name}>
+                {unsavedChanges => (
+                  <PropertiesEditor
+                    project={project}
+                    resourceManagementProps={resourceManagementProps}
+                    projectScopedContainersAccessor={
+                      projectScopedContainersAccessor
+                    }
+                    schema={field.children}
+                    instances={instances}
+                    mode="column"
+                    unsavedChanges={unsavedChanges}
+                    onInstancesModified={onInstancesModified}
+                    hideConstantPlaceholderHints={hideConstantPlaceholderHints}
+                  />
+                )}
+              </UnsavedChangesContext.Consumer>
+            </div>
+          );
+        } else if (field.valueType === 'resource') {
+          return renderResourceField(field);
+        } else if (field.valueType === 'leaderboardId') {
+          return renderLeaderboardField(field);
+        } else {
+          if (field.getChoices && field.getValue) {
+            if (field.isAutocompleted) {
+              return renderAutocompletionField(field);
+            } else {
+              return renderSelectField(field);
+            }
+          }
+          if (field.getValue) return renderInputField(field);
         }
         return null;
-      } else if (field.children) {
-        if (field.type === 'row') {
-          const contentView = (
-            <UnsavedChangesContext.Consumer key={field.name}>
-              {unsavedChanges => (
-                <PropertiesEditor
-                  project={project}
-                  resourceManagementProps={resourceManagementProps}
-                  projectScopedContainersAccessor={
-                    projectScopedContainersAccessor
-                  }
-                  schema={field.children}
-                  instances={instances}
-                  mode="row"
-                  unsavedChanges={unsavedChanges}
-                  onInstancesModified={onInstancesModified}
-                  hideConstantPlaceholderHints={hideConstantPlaceholderHints}
-                />
-              )}
-            </UnsavedChangesContext.Consumer>
-          );
-          if (field.title) {
-            return [
-              <Text key={field.name + '-title'} size="block-title">
-                {field.title}
-              </Text>,
-              contentView,
-            ];
-          }
-          return contentView;
-        }
-
-        return (
-          <div key={field.name}>
-            <Subheader>{field.name}</Subheader>
-            <UnsavedChangesContext.Consumer key={field.name}>
-              {unsavedChanges => (
-                <PropertiesEditor
-                  project={project}
-                  resourceManagementProps={resourceManagementProps}
-                  projectScopedContainersAccessor={
-                    projectScopedContainersAccessor
-                  }
-                  schema={field.children}
-                  instances={instances}
-                  mode="column"
-                  unsavedChanges={unsavedChanges}
-                  onInstancesModified={onInstancesModified}
-                  hideConstantPlaceholderHints={hideConstantPlaceholderHints}
-                />
-              )}
-            </UnsavedChangesContext.Consumer>
+      };
+      const content = renderField();
+      const defaultValue =
+        field.getOverrideDefaultValue &&
+        field.getOverrideDefaultValue(instances[0]);
+      if (defaultValue == null) return content;
+      return (
+        <div key={field.name} className={overrideStyles.overridden}>
+          <div className={overrideStyles.field}>{content}</div>
+          <div className={overrideStyles.defaultValue}>
+            <span title={defaultValue}>
+              <Trans>Prefab:</Trans> {defaultValue === '' ? '""' : defaultValue}
+            </span>
+            <IconButton
+              size="small"
+              tooltip={t`Reset to prefab default`}
+              onClick={() => {
+                instances.forEach(
+                  instance =>
+                    field.resetOverride && field.resetOverride(instance)
+                );
+                _onInstancesModified(instances);
+              }}
+            >
+              <Restore />
+            </IconButton>
           </div>
-        );
-      } else if (field.valueType === 'resource') {
-        return renderResourceField(field);
-      } else if (field.valueType === 'leaderboardId') {
-        return renderLeaderboardField(field);
-      } else {
-        if (field.getChoices && field.getValue) {
-          if (field.isAutocompleted) {
-            return renderAutocompletionField(field);
-          } else {
-            return renderSelectField(field);
-          }
-        }
-        if (field.getValue) return renderInputField(field);
-      }
-      return null;
+        </div>
+      );
     })
   );
 };

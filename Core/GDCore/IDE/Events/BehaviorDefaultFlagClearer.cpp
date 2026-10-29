@@ -16,6 +16,7 @@ void BehaviorDefaultFlagClearer::DoVisitObject(gd::Object& object) {
 
 void BehaviorDefaultFlagClearer::DoVisitBehavior(gd::Behavior& behavior) {
   behavior.SetDefaultBehavior(false);
+  behavior.SetMaterializeInheritedContent(true);
 };
 
 BehaviorDefaultFlagClearer::~BehaviorDefaultFlagClearer() {}
@@ -25,6 +26,7 @@ void BehaviorDefaultFlagClearer::SerializeObjectWithCleanDefaultBehaviorFlags(
   gd::Object clonedObject(object);
   for (const auto &behaviorName : clonedObject.GetAllBehaviorNames()) {
     clonedObject.GetBehavior(behaviorName).SetDefaultBehavior(false);
+    clonedObject.GetBehavior(behaviorName).SetMaterializeInheritedContent(true);
   }
   clonedObject.SerializeTo(serializerElement);
 }

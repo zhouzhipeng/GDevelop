@@ -50,6 +50,7 @@ import Text from '../UI/Text';
 import { ProjectScopedContainersAccessor } from '../InstructionOrExpression/EventsScope';
 import GDevelopThemeContext from '../UI/Theme/GDevelopThemeContext';
 import Chip from '../UI/Chip';
+import { isBehaviorPropertyOverridden } from './Editors/BehaviorPropertyOverrides';
 
 const gd: libGDevelop = global.gd;
 
@@ -200,11 +201,7 @@ const BehaviorConfigurationEditor = React.forwardRef<
         );
         if (!inheritedBehavior) return;
 
-        unserializeFromJSObject(
-          behavior,
-          serializeToJSObject(inheritedBehavior)
-        );
-        behavior.setInheritedFromObjectType(true);
+        behavior.resetInheritedPropertyOverrides();
 
         onBehaviorsUpdated();
         forceUpdate();
@@ -292,6 +289,14 @@ const BehaviorConfigurationEditor = React.forwardRef<
     const iconUrl = behaviorMetadata.getIconFilename();
     const isMuted = isBehaviorMuted(behavior);
     const shouldShowMutedBadge = canToggleBehaviorMute && isMuted;
+    const overriddenProperties = mapVector(
+      behavior.getProperties().keys(),
+      name => {
+        if (!isBehaviorPropertyOverridden(behavior, name)) return null;
+        const property = behavior.getProperties().get(name);
+        return property.getLabel() || name;
+      }
+    ).filter(Boolean);
 
     return (
       <Accordion
@@ -408,6 +413,12 @@ const BehaviorConfigurationEditor = React.forwardRef<
             // Avoid Physics2 behavior overflow on small screens
             noOverflowParent
           >
+            {overriddenProperties.length > 0 ? (
+              <Text size="body-small">
+                <Trans>* Overrides prefab defaults:</Trans>{' '}
+                {overriddenProperties.join(', ')}
+              </Text>
+            ) : null}
             {enabledTutorialIds.length ? (
               <Line>
                 <ColumnStackLayout expand>
@@ -608,7 +619,10 @@ export const useManageObjectBehaviors = ({
         {
           name: behaviorName,
           type: behavior.getTypeName(),
-          serializedBehavior: serializeToJSObject(behavior),
+          serializedBehavior: serializeToJSObject(
+            behavior,
+            'serializeEffectiveTo'
+          ),
         },
       ]);
       onUpdate();
@@ -628,7 +642,10 @@ export const useManageObjectBehaviors = ({
           return {
             name: behaviorName,
             type: behavior.getTypeName(),
-            serializedBehavior: serializeToJSObject(behavior),
+            serializedBehavior: serializeToJSObject(
+              behavior,
+              'serializeEffectiveTo'
+            ),
           };
         }).filter(Boolean)
       );

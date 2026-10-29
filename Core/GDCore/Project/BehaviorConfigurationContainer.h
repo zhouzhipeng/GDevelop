@@ -76,9 +76,7 @@ class GD_CORE_API BehaviorConfigurationContainer {
    *
    * \return false if the new value cannot be set
    */
-  bool UpdateProperty(const gd::String& name, const gd::String& value) {
-    return UpdateProperty(content, name, value);
-  };
+  bool UpdateProperty(const gd::String& name, const gd::String& value);
 
   /**
    * \brief Called when the IDE wants to rename a custom property of the object
@@ -88,6 +86,10 @@ class GD_CORE_API BehaviorConfigurationContainer {
    */
   virtual bool RenameProperty(const gd::String &oldName,
                               const gd::String &newName) {
+    if (usesInheritedDefaults) {
+      RenameProperty(propertyOverrides, oldName, newName);
+      RenameProperty(inheritedDefaults, oldName, newName);
+    }
     return RenameProperty(content, oldName, newName);
   };
 
@@ -98,11 +100,16 @@ class GD_CORE_API BehaviorConfigurationContainer {
    * \see gd::InitialInstance
    */
   void RemoveProperty(const gd::String &name) {
-    content.RemoveChild(name);
-    content.RemoveAttribute(name);
-    auto uncapitalizedName = name.UncapitalizeFirstLetter();
-    content.RemoveChild(uncapitalizedName);
-    content.RemoveAttribute(uncapitalizedName);
+    auto& values = usesInheritedDefaults ? propertyOverrides : content;
+    values.RemoveChild(name);
+    values.RemoveAttribute(name);
+    const auto uncapitalizedName = name.UncapitalizeFirstLetter();
+    values.RemoveChild(uncapitalizedName);
+    values.RemoveAttribute(uncapitalizedName);
+    if (usesInheritedDefaults) {
+      content = inheritedDefaults;
+      UnserializeFromWithDefaultContent(propertyOverrides);
+    }
   };
 
   /**
@@ -111,12 +118,11 @@ class GD_CORE_API BehaviorConfigurationContainer {
    * \see gd::InitialInstance
    */
   bool HasPropertyValue(const gd::String name) const {
-    if (content.HasChild(name) || content.HasAttribute(name)) {
-      return true;
-    }
-    auto uncapitalizedName = name.UncapitalizeFirstLetter();
-    return content.HasChild(uncapitalizedName) ||
-           content.HasAttribute(uncapitalizedName);
+    const auto& values = usesInheritedDefaults ? propertyOverrides : content;
+    if (values.HasChild(name) || values.HasAttribute(name)) return true;
+    const auto uncapitalizedName = name.UncapitalizeFirstLetter();
+    return values.HasChild(uncapitalizedName) ||
+           values.HasAttribute(uncapitalizedName);
   }
 
   /**
@@ -134,20 +140,37 @@ class GD_CORE_API BehaviorConfigurationContainer {
    */
   void ClearContent() {
     content.Clear();
+    propertyOverrides.Clear();
+    inheritedDefaults.Clear();
+    usesInheritedDefaults = false;
   };
 
   /**
    * \brief Serialize the behavior content.
    */
   virtual void SerializeTo(gd::SerializerElement& element) const {
-    element = content;
+    if (usesInheritedDefaults && !materializeInheritedContent) {
+      element.Clear();
+      element.AddChild("overrides") = propertyOverrides;
+    } else {
+      element = content;
+    }
   };
 
   /**
    * \brief Unserialize the behavior content.
    */
   virtual void UnserializeFrom(const gd::SerializerElement& element) {
-    content = element;
+    if (element.HasChild("overrides")) {
+      propertyOverrides = element.GetChild("overrides");
+      usesInheritedDefaults = true;
+      content = inheritedDefaults;
+      UnserializeFromWithDefaultContent(propertyOverrides);
+    } else {
+      content = element;
+      usesInheritedDefaults = false;
+      propertyOverrides.Clear();
+    }
   };
 
   /**
@@ -160,6 +183,14 @@ class GD_CORE_API BehaviorConfigurationContainer {
    */
   void UnserializeFromWithDefaultContent(
       const gd::SerializerElement& element);
+
+  // Effective content is a cache; only explicit overrides are authored data.
+  void ApplyInheritedDefaults(const gd::SerializerElement& defaults);
+  void ResetInheritedPropertyOverrides();
+  void SerializeEffectiveTo(gd::SerializerElement& element) const { element = content; }
+  void SetMaterializeInheritedContent(bool value) {
+    materializeInheritedContent = value;
+  }
 
   const gd::SerializerElement& GetContent() const { return content; };
   gd::SerializerElement& GetContent() { return content; };
@@ -236,12 +267,18 @@ class GD_CORE_API BehaviorConfigurationContainer {
   virtual void InitializeContent(gd::SerializerElement& behaviorContent) {};
 
  private:
+  void RemoveInheritedOverrideForProperty(const gd::String& name, const gd::String& value);
+
   gd::String name;  ///< Name of the behavior
   gd::String type;  ///< The type of the behavior that is represented. Usually
                     ///< in the form "ExtensionName::BehaviorTypeName"
 
   gd::SerializerElement content;  // Storage for the behavior properties
   bool folded;
+  bool usesInheritedDefaults = false;
+  bool materializeInheritedContent = false;
+  gd::SerializerElement inheritedDefaults;
+  gd::SerializerElement propertyOverrides;
 };
 
 }  // namespace gd

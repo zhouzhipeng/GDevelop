@@ -5,6 +5,7 @@ import * as React from 'react';
 import PropertiesEditorByVisibility from '../../PropertiesEditor/PropertiesEditorByVisibility';
 import { type BehaviorEditorProps } from './BehaviorEditorProps.flow';
 import { Column } from '../../UI/Grid';
+import { markOverriddenBehaviorFields } from './BehaviorPropertyOverrides';
 import propertiesMapToSchema from '../../PropertiesEditor/PropertiesMapToSchema';
 import {
   advancedTweenBehaviorType,
@@ -35,6 +36,15 @@ const BehaviorPropertiesEditor = ({
   const schema = React.useMemo(
     () => {
       const behaviorProperties = behavior.getProperties();
+      const getPrefabDefaultValue = name => {
+        if (!object || !project.hasEventsBasedObject(object.getType()))
+          return null;
+        const prefab = project.getEventsBasedObject(object.getType());
+        if (!prefab.hasBehaviorNamed(behavior.getName())) return null;
+        const defaults = prefab.getBehavior(behavior.getName()).getProperties();
+        return defaults.has(name) ? defaults.get(name).getValue() : null;
+      };
+
       const schema = propertiesMapToSchema({
         properties: behaviorProperties,
         defaultValueProperties: behaviorMetadata.getProperties(),
@@ -56,9 +66,12 @@ const BehaviorPropertiesEditor = ({
         ),
       });
       if (behavior.getTypeName() === advancedTweenBehaviorType) {
-        return customizeAdvancedTweenBehaviorPropertiesSchema(schema);
+        return markOverriddenBehaviorFields(
+          customizeAdvancedTweenBehaviorPropertiesSchema(schema),
+          getPrefabDefaultValue
+        );
       }
-      return schema;
+      return markOverriddenBehaviorFields(schema, getPrefabDefaultValue);
     },
     [behavior, behaviorMetadata, layersContainer, object, project]
   );
