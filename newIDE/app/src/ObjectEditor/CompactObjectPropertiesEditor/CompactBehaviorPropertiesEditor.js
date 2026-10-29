@@ -113,6 +113,7 @@ export const CompactBehaviorPropertiesEditor = ({
         layersContainer,
         visibility: 'All',
         shouldDisabledFieldsWithMixedValues: true,
+        propertyGroups: behaviorMetadata.getPropertyGroups(),
       });
       if (behavior.getTypeName() === advancedTweenBehaviorType) {
         return customizeAdvancedTweenBehaviorPropertiesSchema(schema);

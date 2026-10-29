@@ -531,6 +531,9 @@ export const CompactObjectPropertiesEditorContent = ({
         layersContainer,
         visibility: 'All',
         shouldDisabledFieldsWithMixedValues: false,
+        propertyGroups: objectMetadata
+          ? objectMetadata.getPropertyGroups()
+          : null,
       });
 
       if (layout && layout.getObjects().hasObjectNamed(object.getName())) {
@@ -547,6 +550,7 @@ export const CompactObjectPropertiesEditorContent = ({
       layout,
       onObjectsModified,
       i18n,
+      objectMetadata,
     ]
   );
 

@@ -11,6 +11,8 @@ import {
   customizeAdvancedTweenBehaviorPropertiesSchema,
 } from './AdvancedTweenBehaviorEditorOptions';
 
+const gd: libGDevelop = global.gd;
+
 type Props = BehaviorEditorProps;
 
 const BehaviorPropertiesEditor = ({
@@ -25,13 +27,17 @@ const BehaviorPropertiesEditor = ({
   hideConstantPlaceholderHints,
 }: Props): React.Node => {
   const behavior = behaviors[0];
+  const behaviorMetadata = gd.MetadataProvider.getBehaviorMetadata(
+    gd.JsPlatform.get(),
+    behavior.getTypeName()
+  );
 
   const schema = React.useMemo(
     () => {
       const behaviorProperties = behavior.getProperties();
       const schema = propertiesMapToSchema({
         properties: behaviorProperties,
-        defaultValueProperties: null,
+        defaultValueProperties: behaviorMetadata.getProperties(),
         getPropertyValue: (instance, name) =>
           instance
             .getProperties()
@@ -44,6 +50,7 @@ const BehaviorPropertiesEditor = ({
         layersContainer,
         visibility: 'All',
         shouldDisabledFieldsWithMixedValues: true,
+        propertyGroups: behaviorMetadata.getPropertyGroups(),
         allowConstantPlaceholders: project.hasEventsBasedBehavior(
           behavior.getTypeName()
         ),
@@ -53,7 +60,7 @@ const BehaviorPropertiesEditor = ({
       }
       return schema;
     },
-    [behavior, layersContainer, object, project]
+    [behavior, behaviorMetadata, layersContainer, object, project]
   );
 
   return (

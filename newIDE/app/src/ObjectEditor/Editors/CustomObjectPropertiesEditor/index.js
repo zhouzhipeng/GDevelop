@@ -329,8 +329,12 @@ const CustomObjectPropertiesEditor = (props: Props): React.Node => {
         layersContainer: null,
         allowConstantPlaceholders: true,
         shouldDisabledFieldsWithMixedValues: false,
+        propertyGroups: gd.MetadataProvider.getObjectMetadata(
+          project.getCurrentPlatform(),
+          customObjectConfiguration.getType()
+        ).getPropertyGroups(),
       }),
-    [customObjectConfiguration, customObjectEventsBasedObject, object]
+    [customObjectConfiguration, customObjectEventsBasedObject, object, project]
   );
   const shouldDisplayVariantSelector = !customObjectConfiguration.isForcedToOverrideEventsBasedObjectChildrenConfiguration();
   const variantSelector = shouldDisplayVariantSelector ? (

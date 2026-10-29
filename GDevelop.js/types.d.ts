@@ -1858,6 +1858,8 @@ export class ObjectMetadata extends EmscriptenObject {
   isRenderedIn3D(): boolean;
   setOpenFullEditorLabel(label: string): ObjectMetadata;
   getOpenFullEditorLabel(): string;
+  addPropertyGroup(group: string): ObjectMetadata;
+  getPropertyGroups(): VectorString;
 }
 
 export class InGameEditorResourceMetadata extends EmscriptenObject {
@@ -1922,6 +1924,8 @@ export class BehaviorMetadata extends EmscriptenObject {
   markAsActivatedByDefaultInEditor(): BehaviorMetadata;
   setOpenFullEditorLabel(label: string): BehaviorMetadata;
   getOpenFullEditorLabel(): string;
+  addPropertyGroup(group: string): BehaviorMetadata;
+  getPropertyGroups(): VectorString;
   get(): Behavior;
   getSharedDataInstance(): BehaviorsSharedData;
   getProperties(): MapStringPropertyDescriptor;

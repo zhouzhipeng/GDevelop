@@ -52,6 +52,7 @@ export const CompactBehaviorSharedDataPropertiesEditor = ({
         layersContainer: null,
         visibility: 'All',
         shouldDisabledFieldsWithMixedValues: false,
+        propertyGroups: behaviorMetadata.getPropertyGroups(),
       });
     },
     // The shared data is identified by its pointer, as a new wrapper object is

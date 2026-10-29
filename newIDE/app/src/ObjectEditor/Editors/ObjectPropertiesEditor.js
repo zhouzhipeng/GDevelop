@@ -39,6 +39,10 @@ const ObjectPropertiesEditor = (props: Props): React.Node => {
     gd.ObjectConfiguration
   );
   const properties = objectConfigurationAsGd.getProperties();
+  const objectMetadata = gd.MetadataProvider.getObjectMetadata(
+    project.getCurrentPlatform(),
+    objectConfigurationAsGd.getType()
+  );
 
   const propertiesSchema = propertiesMapToSchema({
     properties,
@@ -55,6 +59,7 @@ const ObjectPropertiesEditor = (props: Props): React.Node => {
       objectConfigurationAsGd.getType()
     ),
     shouldDisabledFieldsWithMixedValues: false,
+    propertyGroups: objectMetadata.getPropertyGroups(),
   });
 
   const extraInformation = getExtraObjectsInformation()[
