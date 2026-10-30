@@ -2,7 +2,7 @@
 import { parseSettingsSyntax } from './Syntax';
 export const parseCatalogInstructionArguments = source => {
   const syntax = parseSettingsSyntax(
-    `function {\n events {\n event {\n actions {\n Operand { ${source} }\n}\n}\n}\n}\n`
+    `function {\n events {\n event {\n actions {\n Operand {\n${source}\n}\n}\n}\n}\n}\n`
   );
   const instruction =
     syntax.root.children[0].children[0].children[0].children[0];

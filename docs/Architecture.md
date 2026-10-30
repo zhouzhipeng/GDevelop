@@ -698,9 +698,9 @@ requested.
 | Representation            | Entry                                           | Status in this checkout                                                                                            |
 | ------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Native JSON model | Internal serialization and template-service snapshots | Engine/editor interchange; URL template import produces the current GDL model. |
-| Multi-file source project | `project.gdl` | Primary local authoring format: GDL 13 configuration and embedded events, with separate gameplay-test JavaScript sources. |
+| Multi-file source project | `project.gdl` | Primary local authoring format: GDL 14 configuration and embedded events, with separate gameplay-test JavaScript sources. |
 
-The current authoring reader accepts GDL 13 only. It does not detect or migrate
+The current authoring reader accepts GDL 14 only. It does not detect or migrate
 older authoring formats. Native JSON template import is a separate boundary,
 not a fallback GDL reader. See the [current GDL contract](settings-dsl-spec.md).
 

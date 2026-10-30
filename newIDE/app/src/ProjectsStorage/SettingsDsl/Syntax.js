@@ -1,5 +1,4 @@
 // @noflow
-import { tokenizer } from 'acorn';
 
 export class SettingsDslError extends Error {
   constructor(code, message, fileUri, location, path) {
@@ -24,6 +23,35 @@ const NUMBER = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/;
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 export const MAX_SETTINGS_DEPTH = 100;
 const MAX_TOKENS = 2000000;
+
+// Tolerant lexical masking for completion in unfinished documents. Preserve
+// offsets and newlines while hiding raw contents from the GDL scope scanners.
+export const maskSettingsRawStrings = source => {
+  const token = /\/\/[^\r\n]*|"{3,}|"(?:[^"\\]|\\.)*"/g;
+  let match;
+  const chunks = [];
+  let cursor = 0;
+  while ((match = token.exec(source))) {
+    if (!/^"{3,}$/.test(match[0])) continue;
+    const tail = source.slice(token.lastIndex).match(/^[ \t]*\r?\n/);
+    if (!tail) continue;
+    const bodyStart = token.lastIndex + tail[0].length;
+    const closing = new RegExp(
+      '^[ \\t]*' + match[0] + '[ \\t]*(?=\\r?$)',
+      'gm'
+    );
+    closing.lastIndex = bodyStart;
+    const end = closing.exec(source);
+    const endOffset = end ? closing.lastIndex : source.length;
+    chunks.push(
+      source.slice(cursor, match.index),
+      source.slice(match.index, endOffset).replace(/[^\r\n]/g, ' ')
+    );
+    cursor = token.lastIndex = endOffset;
+    if (!end) return { source: chunks.join(''), inRawString: true };
+  }
+  return { source: chunks.join('') + source.slice(cursor), inRawString: false };
+};
 
 // Keep newlines as tokens: indentation never controls nesting, but two
 // assignments on the same line are deliberately not part of the language.
@@ -115,6 +143,61 @@ export const parseSettingsSyntax = (source, fileUri) => {
       advance();
       return { type: character, location };
     }
+    if (source.startsWith('"""', offset)) {
+      const delimiterStart = offset;
+      while (source[offset] === '"') advance();
+      const delimiterLength = offset - delimiterStart;
+      while (source[offset] === ' ' || source[offset] === '\t') advance();
+      if (!(source[offset] === '\n' || source.startsWith('\r\n', offset)))
+        error(
+          'A multiline raw string must start with a newline after its delimiter.',
+          location
+        );
+      advance();
+      const contentLocation = { line, column, offset };
+      const bodyLines = [];
+      const lineOffsets = [];
+      while (offset < source.length) {
+        const lineStart = offset;
+        lineOffsets.push(lineStart);
+        while (offset < source.length && !/[\r\n]/.test(source[offset])) {
+          const c = source.charCodeAt(offset);
+          if ((c < 32 && c !== 9) || c === 127)
+            error('Invalid control character in multiline raw string.');
+          advance();
+        }
+        const text = source.slice(lineStart, offset);
+        const closing = text.match(/^[ \t]*("{3,})[ \t]*$/);
+        if (closing && closing[1].length === delimiterLength) {
+          lineOffsets.pop();
+          const value = bodyLines.join('\n');
+          const lastLine = bodyLines.length
+            ? bodyLines[bodyLines.length - 1]
+            : '';
+          return {
+            type: 'string',
+            value,
+            raw: true,
+            delimiterLength,
+            contentLocation: {
+              ...contentLocation,
+              endLine: contentLocation.line + Math.max(0, bodyLines.length - 1),
+              endColumn: lastLine.length + 1,
+              endOffset: bodyLines.length
+                ? lineOffsets[lineOffsets.length - 1] + lastLine.length
+                : contentLocation.offset,
+            },
+            lineOffsets,
+            location,
+          };
+        }
+        bodyLines.push(text);
+        if (source[offset] === '\r' && source[offset + 1] !== '\n')
+          error('Use LF or CRLF in multiline raw strings.');
+        if (offset < source.length) advance();
+      }
+      error('Unterminated multiline raw string.', location);
+    }
     if (character === '"') {
       const start = offset;
       advance();
@@ -205,6 +288,14 @@ export const parseSettingsSyntax = (source, fileUri) => {
       return {
         value: result.value,
         ...(result.type === 'expression' ? { expression: true } : {}),
+        ...(result.raw
+          ? {
+              raw: true,
+              delimiterLength: result.delimiterLength,
+              contentLocation: result.contentLocation,
+              lineOffsets: result.lineOffsets,
+            }
+          : {}),
         location: result.location,
       };
     }
@@ -273,68 +364,6 @@ export const parseSettingsSyntax = (source, fileUri) => {
         endOffset: end.endOffset,
       },
     };
-  };
-  const readCode = nameToken => {
-    const opening = token.location;
-    if (!/^[ \t]*\r?\n/.test(source.slice(offset)))
-      error('code must be a multiline block.', opening);
-    const start = opening.offset;
-    let balance = 0,
-      closing;
-    try {
-      const reader = tokenizer(source.slice(start), { ecmaVersion: 2022 });
-      while (true) {
-        const part = reader.getToken();
-        if (++count > MAX_TOKENS)
-          error('Settings token budget exceeded.', opening);
-        if (part.end > 2 * 1024 * 1024)
-          error('JavaScript code size budget exceeded.', opening);
-        if (part.type.label === 'eof')
-          error('Unterminated code block.', opening);
-        if (part.type.label === '{' || part.type.label === '${') balance++;
-        if (part.type.label === '}' && --balance === 0) {
-          closing = start + part.start;
-          break;
-        }
-      }
-      const lineStart = source.lastIndexOf('\n', closing - 1) + 1;
-      if (
-        !/^[ \t]*$/.test(source.slice(lineStart, closing)) ||
-        !/^[ \t]*(?:\r?\n|$)/.test(source.slice(closing + 1))
-      )
-        error('The code closing brace must occupy its own line.', opening);
-      const contentStart = source.indexOf('\n', start) + 1;
-      const code = source.slice(contentStart, lineStart);
-      while (offset <= closing) advance();
-      token = next();
-      const result = {
-        type: 'code',
-        properties: {},
-        children: [],
-        code,
-        contentLocation: {
-          offset: contentStart,
-          line: opening.line + 1,
-          column: 1,
-        },
-        location: {
-          ...nameToken.location,
-          endOffset: closing + 1,
-          endLine: line,
-          endColumn: column,
-        },
-      };
-      boundary();
-      return result;
-    } catch (cause) {
-      if (cause instanceof SettingsDslError) throw cause;
-      error(
-        `Invalid JavaScript code: ${cause.message}; near ${JSON.stringify(
-          source.slice(start, start + 240)
-        )}`,
-        opening
-      );
-    }
   };
   const instruction = (head, depth) => {
     if (depth > MAX_SETTINGS_DEPTH)
@@ -406,13 +435,19 @@ export const parseSettingsSyntax = (source, fileUri) => {
     // and child instructions, which are decoded separately.
     const type =
       head.type === 'string' ? JSON.stringify(head.value) : head.value;
-    result.source = `${type} { ${operands.join(' ')} }`;
+    result.source = Object.values(result.arguments).some(item => item.raw)
+      ? `${type} {\n${operands.join('\n')}\n}`
+      : `${type} { ${operands.join(' ')} }`;
     return result;
   };
   const node = (nameToken, depth) => {
     if (depth > MAX_SETTINGS_DEPTH)
       error('Settings nesting budget exceeded.', nameToken.location);
-    if (nameToken.value === 'code') return readCode(nameToken);
+    if (nameToken.value === 'code')
+      error(
+        'Use code = """ followed by a multiline raw string; code {} is no longer supported.',
+        nameToken.location
+      );
     consume('{');
     const result = {
       type: nameToken.value,
@@ -502,7 +537,26 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
   };
   const emitLiteral = (prefix, item, depth, suffix = '') => {
     const indent = '  '.repeat(depth);
-    if (item.expression === true) {
+    if (item.raw && typeof item.value === 'string') {
+      // No indentation, escapes, interpolation, or whitespace trimming.
+      if (suffix) {
+        // Container punctuation belongs on a separate line after the delimiter.
+        emitLiteral(prefix, item, depth);
+        lines.push(`${indent}${suffix}`);
+        return;
+      }
+      const runs = item.value.match(/"+/g) || [];
+      const safeLength = runs.reduce(
+        (max, run) => Math.max(max, run.length + 1),
+        3
+      );
+      const delimiter = '"'.repeat(
+        Math.max(safeLength, item.delimiterLength || 3)
+      );
+      lines.push(`${prefix}${delimiter}`);
+      if (item.value) lines.push(item.value);
+      lines.push(delimiter);
+    } else if (item.expression === true) {
       lines.push(`${prefix}{{ ${item.value.expression} }}${suffix}`);
     } else if (
       item.value &&
@@ -532,8 +586,9 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
     } else if (Array.isArray(item.value)) {
       const items = item.items || item.value.map(value => ({ value }));
       const multiline =
-        items.some(entry => entry.value && typeof entry.value === 'object') ||
-        hasLiteralComment(item);
+        items.some(
+          entry => entry.raw || (entry.value && typeof entry.value === 'object')
+        ) || hasLiteralComment(item);
       if (!multiline) {
         lines.push(
           `${prefix}[${items
@@ -557,12 +612,6 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
   const emit = (node, depth) => {
     const indent = '  '.repeat(depth);
     emitComments(node.location ? node.location.line : 0, indent);
-    if (node.type === 'code' && typeof node.code === 'string') {
-      lines.push(`${indent}code {`);
-      if (node.code) lines.push(node.code.replace(/\n$/, ''));
-      lines.push(`${indent}}`);
-      return;
-    }
     if (node.instruction) {
       const type = /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$/.test(
         node.type
@@ -599,6 +648,7 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
         .join(' ')} }`;
       if (
         !flags.length &&
+        !args.some(([, item]) => item.raw) &&
         !node.children.length &&
         !options.expandInstructions &&
         !hasComments &&

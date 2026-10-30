@@ -83,6 +83,7 @@ const extra = {
     strict: 'useStrict',
     objects: 'parameterObjects',
     expanded: 'eventsSheetExpanded',
+    code: 'inlineCode',
   },
   group: {
     name: 'name',
@@ -124,9 +125,7 @@ const normCode = text => {
   if (typeof text !== 'string')
     throw new Error('JavaScript inlineCode must be text.');
   const normalized = text.replace(/\r\n?/g, '\n');
-  return normalized && !normalized.endsWith('\n')
-    ? `${normalized}\n`
-    : normalized;
+  return normalized;
 };
 
 const decodeInstruction = (n, kind, options, uri, depth) => {
@@ -348,37 +347,7 @@ export const decodeEventList = (
         EVENT_NODE_TYPES.includes(child.type)
       )
         children.push(child);
-      else if (
-        kind === 'javascript' &&
-        child.type === 'code' &&
-        typeof child.code === 'string' &&
-        !singleton.has('code')
-      ) {
-        singleton.add('code');
-        try {
-          parseJavaScript(child.code, {
-            ecmaVersion: 2022,
-            allowReturnOutsideFunction: true,
-            allowAwaitOutsideFunction: true,
-          });
-        } catch (cause) {
-          error(
-            `Invalid JavaScript: ${cause.message}`,
-            {
-              type: 'code',
-              location: {
-                ...child.contentLocation,
-                line: child.contentLocation.line + cause.loc.line - 1,
-                column: cause.loc.column + 1,
-                offset: child.contentLocation.offset + cause.pos,
-              },
-            },
-            uri,
-            'SETTINGS_JAVASCRIPT'
-          );
-        }
-        result.inlineCode = child.code;
-      } else
+      else
         error(
           `Invalid ${child.type} inside ${kind}.`,
           child,
@@ -417,13 +386,52 @@ export const decodeEventList = (
     if (kind === 'for_each_child' && !data.iterable)
       error('for_each_child requires iterable.', n, uri);
     if (kind === 'javascript') {
-      if (!singleton.has('code'))
+      if (!own(data, 'code'))
         error(
-          'JavaScript requires a multiline code block.',
+          'JavaScript requires a code string property.',
           n,
           uri,
           'SETTINGS_CODE_BLOCK'
         );
+      const code = n.properties.code;
+      if (!code.raw)
+        error(
+          'code requires a multiline raw string.',
+          code,
+          uri,
+          'SETTINGS_CODE_BLOCK'
+        );
+      if (code.value.length > 2 * 1024 * 1024)
+        error(
+          'JavaScript code size budget exceeded.',
+          code,
+          uri,
+          'SETTINGS_CODE_BLOCK'
+        );
+      try {
+        parseJavaScript(code.value, {
+          ecmaVersion: 2022,
+          allowReturnOutsideFunction: true,
+          allowAwaitOutsideFunction: true,
+        });
+      } catch (cause) {
+        const content = code.contentLocation;
+        error(
+          `Invalid JavaScript: ${cause.message}`,
+          {
+            type: 'code',
+            location: {
+              line: content.line + cause.loc.line - 1,
+              column: cause.loc.column + 1,
+              offset:
+                (code.lineOffsets[cause.loc.line - 1] ?? content.offset) +
+                cause.loc.column,
+            },
+          },
+          uri,
+          'SETTINGS_JAVASCRIPT'
+        );
+      }
       result.parameterObjects = result.parameterObjects || '';
       result.useStrict = !!result.useStrict;
       result.eventsSheetExpanded = !!result.eventsSheetExpanded;
@@ -584,11 +592,7 @@ export const encodeEventList = (events, options = {}, uri, depth = 0) => {
       }
       if (kind === 'link' && event.include && event.include.includeConfig !== 0)
         error('Link supports only entire fragments.', {}, uri);
-      if (kind === 'javascript')
-        children.push({
-          ...make('code'),
-          code: normCode(event.inlineCode || ''),
-        });
+      if (kind === 'javascript') data.code = normCode(event.inlineCode || '');
       if (bodyTypes.includes(kind)) {
         (event.variables || []).forEach(v =>
           children.push(encodeVariableNode(v, null, uri))
@@ -619,7 +623,9 @@ export const encodeEventList = (events, options = {}, uri, depth = 0) => {
           ...encodeEventList(event.events || [], options, uri, depth + 1)
             .children
         );
-      return make(kind === 'standard' ? 'event' : kind, data, children);
+      const node = make(kind === 'standard' ? 'event' : kind, data, children);
+      if (kind === 'javascript') node.properties.code.raw = true;
+      return node;
     })
   );
 };
@@ -628,15 +634,15 @@ export const extractSettingsJavaScriptBlocks = (source, fileUri) => {
     blocks = [];
   const visit = n => {
     if (n.type === 'javascript') {
-      const code = n.children.find(c => c.type === 'code');
-      if (code)
+      const code = n.properties.code;
+      if (code && code.raw)
         blocks.push({
-          code: code.code,
-          source: code.code,
+          code: code.value,
+          source: code.value,
           line: code.contentLocation.line,
           startLine: code.contentLocation.line,
           endLine: code.location.endLine - 1,
-          inlineCode: code.code,
+          inlineCode: code.value,
           bodyLine: code.contentLocation.line,
           headerLine: n.location.line,
           parameterObjects: fields(n).objects || '',
@@ -710,8 +716,16 @@ export const EVENT_SCHEMAS = Object.fromEntries(
               (kind === 'link' && name === 'target') ||
               (kind === 'repeat' && name === 'count') ||
               (kind === 'for_each' && name === 'object') ||
-              (kind === 'for_each_child' && name === 'iterable')
+              (kind === 'for_each_child' && name === 'iterable') ||
+              (kind === 'javascript' && name === 'code')
                 ? { required: true }
+                : {}),
+              ...(kind === 'javascript' && name === 'code'
+                ? {
+                    syntax: 'multiline raw string',
+                    ecmaVersion: 2022,
+                    preservesIndentation: true,
+                  }
                 : {}),
               type: booleans.includes(name)
                 ? 'boolean'
@@ -736,15 +750,6 @@ export const EVENT_SCHEMAS = Object.fromEntries(
             ...(kind === 'while'
               ? { while_conditions: { kind: 'condition', maximum: 1 } }
               : {}),
-          }
-        : kind === 'javascript'
-        ? {
-            code: {
-              required: true,
-              maximum: 1,
-              syntax: 'raw multiline JavaScript block',
-              ecmaVersion: 2022,
-            },
           }
         : {},
       children:

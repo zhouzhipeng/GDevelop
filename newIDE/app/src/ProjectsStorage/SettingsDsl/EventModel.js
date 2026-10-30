@@ -415,7 +415,7 @@ const normalizeEvent = (value: any, label: string): Object => {
         event.inlineCode,
         `${label}.inlineCode`
       ).replace(/\r\n?/g, '\n');
-      return code && !code.endsWith('\n') ? `${code}\n` : code;
+      return code;
     })(),
     parameterObjects: String(event.parameterObjects || ''),
     useStrict: !!event.useStrict,

@@ -129,7 +129,7 @@ test('offers unified event structure without old keywords or redundant child wra
 
 test('routes embedded JavaScript completions through a JS worker and disposes its virtual model', async () => {
   const source =
-    'function {\n events {\n javascript {\n code {\nconsole.\n }\n }\n }\n}\n';
+    'function {\n events {\n javascript {\n code = """\nconsole.\n\n"""\n }\n }\n}\n';
   const getCompletionsAtPosition = jest.fn(async () => ({
     entries: [{ name: 'log' }],
   }));
@@ -187,4 +187,18 @@ test('routes embedded JavaScript completions through a JS worker and disposes it
   expect(getCompletionsAtPosition).toHaveBeenCalledTimes(1);
   onWillDispose.mock.calls[0][0]();
   expect(dispose).toHaveBeenCalledTimes(1);
+});
+
+test('raw code completion preserves body layout and resumes GDL scopes after a literal', () => {
+  const prefix = 'function {\n events {\n javascript {\n ';
+  const code = getSettingsVariableCompletions(prefix).find(
+    item => item.label === 'code'
+  );
+  expect(code.insertText).toBe('code = """\n$0\n"""');
+  expect(getSettingsVariableCompletions(prefix + 'code = """\n ')).toEqual([]);
+  const after = getSettingsVariableCompletions(
+    prefix + 'code = """\nif (x) {\n"""\n '
+  );
+  expect(after.map(item => item.label)).not.toContain('code');
+  expect(after.map(item => item.label)).toContain('strict');
 });

@@ -1,6 +1,6 @@
 # GDevelop Language (GDL) usage
 
-Only format 13 is accepted. `.gdl` and `project.gdl` use the same
+Only format 14 is accepted. `.gdl` and `project.gdl` use the same
 parser. constants.toml remains TOML; event bodies are embedded in function/fragment settings. .events files are forbidden.
 
 ## Syntax
@@ -129,14 +129,14 @@ properties without a type declaration; the object already owns that behavior.
 
 Each component has one settings document. Objects and functions remain separate
 components. Scene configuration, background, layers and instances are one scene
-root. Prefab/variant require bounds with min/max arrays. Function declarations and event bodies share one .gdl file. JavaScript uses raw multiline code blocks inside javascript {... }. No .layout file or layout URI exists.
+root. Prefab/variant require bounds with min/max arrays. Function declarations and event bodies share one .gdl file. JavaScript uses raw multiline raw string properties inside javascript {... }. No .layout file or layout URI exists.
 
 Never edit generated catalogs or .gdevelop/game.json. Validate direct source
 edits, reload, and verify behavior using the project workflow in SKILL.md.
 
 ## Events
 
-Events are part of GDevelop Language (GDL) format 13, not a separate language. Each
+Events are part of GDevelop Language (GDL) format 14, not a separate language. Each
 function's signature and body live in one functions/<Name>.gdl file.
 External fragments use external-events/<Name>.gdl. Never create .events
 files or write IfDo syntax. Read the current settings and instruction catalogs.
@@ -190,10 +190,11 @@ function {
         javascript {
           strict = true
 
-          code {
+          code = """
             const score = runtimeScene.getVariables().get("Score").getAsNumber();
             console.log("Current score:", score);
-          }
+
+"""
         }
       }
     }
@@ -308,11 +309,13 @@ Groups do not create a new runtime local-variable scope.
 
 ### JavaScript
 
-Use only javascript {... code { ... } }. Code must be a raw
-multiline block, never a quoted string, triple-quoted string or tagged literal.
-Strings, regexes, comments and template interpolations follow JavaScript
-syntax; braces inside them do not end the outer block. The code closing brace
-occupies its own line. Empty code still uses separate opening/closing lines.
+Use javascript nodes with a required code = """ multiline raw string.
+Use N >= 3 matching double quotes, with opening/closing markers on separate
+lines. Increase N when the content collides. No escapes, interpolation or
+indentation stripping. Preserve every body space and Tab. The first and last
+separator newlines are excluded; add an empty body line for a final LF.
+Canonical closing markers start in column 1. JS syntax errors do not change
+GDL string boundaries. Old code child blocks are rejected.
 
 Preserve code whitespace and template text during Settings formatting and
 block moves. JavaScript formatting is an explicit separate operation. Use

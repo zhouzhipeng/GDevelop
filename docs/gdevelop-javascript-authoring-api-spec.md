@@ -10,7 +10,7 @@ automatic JavaScript rename refactoring are future additions
 **Generated artifacts:** `.gdevelop/runtime-api.d.ts` and
 `.gdevelop/project-api.d.ts`
 
-**JavaScript source location:** raw `code` blocks in GDL `javascript` nodes
+**JavaScript source location:** raw `code` string properties in GDL `javascript` nodes
 
 **Target:** AI-authored and human-authored JavaScript events in GDevelop
 
@@ -79,11 +79,12 @@ JavaScript is embedded in the current GDL event form:
 javascript {
   strict = true
   objects = "Enemy"
-  code {
+  code = """
     for (const enemy of objects) {
       enemy.setOpacity(128);
     }
-  }
+
+"""
 }
 ```
 
@@ -143,7 +144,7 @@ The JavaScript authoring API must:
    GDL component sources.
 4. Type each JavaScript event block according to its owning scene, external event sheet,
    extension function, prefab function, or behavior function.
-5. Use the GDL JavaScript event and its raw multiline code block.
+5. Use the GDL JavaScript event and its raw multiline raw string property.
 6. Keep generated files compact, deterministic, searchable, and read-only.
 7. Prevent new AI-authored code from depending on runtime-private underscore
    fields or generated/minified implementation symbols.
@@ -554,8 +555,8 @@ For:
 ```text
 javascript {
   objects = "Enemy"
-  code {
-  }
+  code = """
+"""
 }
 ```
 
@@ -926,11 +927,12 @@ event {
   javascript {
     strict = true
     objects = "Enemy"
-    code {
+    code = """
       for (const enemy of objects) {
         enemy.setOpacity(128);
       }
-    }
+
+"""
   }
 }
 ```
@@ -947,13 +949,14 @@ would create an object every frame.
 ```text
 javascript {
   strict = true
-  code {
+  code = """
     const bullet = runtimeScene.createObject("Bullet");
     if (bullet) {
       bullet.setPosition(100, 200);
       bullet.addPolarForce(0, 720, 1);
     }
-  }
+
+"""
 }
 ```
 
@@ -969,10 +972,11 @@ the generated lifecycle signature:
 ```text
 javascript {
   strict = true
-  code {
+  code = """
     const score = runtimeScene.getVariables().get("Score");
     score.setNumber(0);
-  }
+
+"""
 }
 ```
 
@@ -1077,7 +1081,7 @@ Implementation is incomplete without tests for all of the following.
 - Private field access.
 - Forbidden globals and dynamic code.
 - Correct .gdl line/column mapping.
-- JavaScript containing braces in strings, regular expressions, comments and template literals without ending the surrounding code block.
+- JavaScript containing braces in strings, regular expressions, comments and template literals without ending the surrounding raw string property.
 
 ### 21.4 Runtime integration
 

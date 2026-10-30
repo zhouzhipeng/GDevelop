@@ -43,7 +43,7 @@ test('catalog kind comes from its explicit container, and named completion omits
   ).toEqual([]);
   expect(
     getSettingsInstructionCompletions(
-      'function {\n events {\n event {\n code {\n ',
+      'function {\n events {\n event {\n code = """\n ',
       catalog
     )
   ).toEqual([]);

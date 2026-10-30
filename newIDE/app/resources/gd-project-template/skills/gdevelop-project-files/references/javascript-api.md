@@ -1,6 +1,6 @@
 # Author JavaScript Events
 
-Use JavaScript only inside a Settings javascript node and a raw multiline code block. Prefer current
+Use JavaScript only inside a Settings javascript node and a raw multiline raw string property. Prefer current
 instructions from `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`; JavaScript is for
 logic that is materially clearer or not expressible with those instructions.
 It is not a replacement file format and it does not create standalone `.js`
@@ -49,9 +49,10 @@ events {
     objects = ""
     expanded = false
 
-    code {
+    code = """
 const elapsedSeconds = runtimeScene.getElapsedTime() / 1000;
-    }
+
+"""
   }
 }
 ```
@@ -67,20 +68,21 @@ events {
     objects = "Enemy"
     expanded = false
 
-    code {
+    code = """
 for (const enemy of objects) {
   enemy.setOpacity(128);
 }
-    }
+
+"""
   }
 }
 ```
 
-The raw body uses a multiline `code { ... }` block. JavaScript strings,
-comments, regexes and template interpolation follow JS syntax. The matching
-code closing brace occupies its own line. No terminator tags, quoted strings,
-escapes or depth prefixes are used. JavaScript events are leaves. Preserve
-code content during Settings formatting, especially template-string whitespace.
+The code property uses a multiline raw string with N >= 3 double quotes.
+Markers occupy separate lines; increase N for delimiter collisions. Content
+is not escaped, interpolated or dedented. Separator newlines are excluded;
+an extra empty body line preserves a final LF. GDL formatting leaves all JS
+body whitespace unchanged. Canonical closing markers start in column 1.
 
 Set strict = true for new code. Existing strict=false is a runtime checking
 policy, not an older author grammar; syntax still must validate.
@@ -234,11 +236,12 @@ events {
       objects = "Enemy"
       expanded = false
 
-      code {
+      code = """
 for (const enemy of objects) {
   enemy.setOpacity(128);
 }
-      }
+
+"""
     }
   }
 }
@@ -262,12 +265,13 @@ events {
       objects = ""
       expanded = false
 
-      code {
+      code = """
 const bullet = runtimeScene.createObject("Bullet");
 if (bullet) {
   bullet.setPosition(120, 64);
 }
-      }
+
+"""
     }
   }
 }
@@ -291,17 +295,18 @@ events {
       objects = ""
       expanded = false
 
-      code {
+      code = """
 const score = runtimeScene.getVariables().get("Score");
 score.add(10);
-      }
+
+"""
     }
   }
 }
 ```
 
 In real files, prefix the opening and closing directives with the event depth
-inside the raw code block. Never prefix the raw JavaScript body. The
+inside the raw raw string property. Never prefix the raw JavaScript body. The
 examples use `>` only on the directives because the JavaScript event is a child.
 
 ## Validation workflow

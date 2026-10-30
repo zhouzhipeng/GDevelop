@@ -176,7 +176,7 @@ test('logical merge remains partial and does not produce a confident cardinality
 });
 test('disabled events and instructions do not execute or taint a sibling', () => {
   const result = analyze(
-    'event {\n disabled = true\n javascript {\n code {\nthrow new Error("must not execute");\n }\n }\n}\nevent {\n actions {\n Delete { object="Coin"\n\n flags {\ndisabled = true\n}\n }\n }\n}'
+    'event {\n disabled = true\n javascript {\n code = """\nthrow new Error("must not execute");\n\n"""\n }\n}\nevent {\n actions {\n Delete { object="Coin"\n\n flags {\ndisabled = true\n}\n }\n }\n}'
   );
   expect(result.status).toBe('complete');
   expect(result.events).toHaveLength(3);
@@ -185,7 +185,7 @@ test('disabled events and instructions do not execute or taint a sibling', () =>
 });
 test('JS distinguishes passed selection from all container instances and remains unknown', () => {
   const result = analyze(
-    'javascript {\n objects = "Coin"\n code {\nconst all = runtimeScene.getObjects("Coin");\n }\n}'
+    'javascript {\n objects = "Coin"\n code = """\nconst all = runtimeScene.getObjects("Coin");\n\n"""\n}'
   );
   expect(result.status).toBe('partial');
   expect(result.events[0].javascript).toEqual(
@@ -321,7 +321,7 @@ test('subtree reads include parent action selection and map UTF-16 operands exac
 
 test('rule suppression never turns unknown effects into completed coverage', () => {
   const result = analyze(
-    'javascript {\n code {\nconsole.log("unknown");\n }\n}',
+    'javascript {\n code = """\nconsole.log("unknown");\n\n"""\n}',
     { disabledRules: ['GDL_SEMANTICS_UNKNOWN'] }
   );
   expect(result.status).toBe('partial');
@@ -359,7 +359,7 @@ test('child events inherit parent local-variable scope without inventing scene b
 
 test('step maps retain recursive local variables and exact raw JS content slices', () => {
   const source = wrap(
-    'event {\n variable {\n name = "Data"\n type = "structure"\n variable {\n name = "Label"\n value = "中文😀"\n }\n }\n javascript {\n code {\nconst label = `原始😀`;\n }\n }\n}'
+    'event {\n variable {\n name = "Data"\n type = "structure"\n variable {\n name = "Label"\n value = "中文😀"\n }\n }\n javascript {\n code = """\nconst label = `原始😀`;\n\n"""\n }\n}'
   );
   const result = analyze('', { source, detail: 'steps' });
   expect(result.success).toBe(true);

@@ -1,4 +1,5 @@
 // @noflow
+import { maskSettingsRawStrings } from '../ProjectsStorage/SettingsDsl/Syntax';
 import { MULTI_FILE_ENTRY_NAME } from '../ProjectsStorage/ProjectEntry';
 import {
   ALL_INSTRUCTION_CATALOG_PATHS,
@@ -61,6 +62,9 @@ export const getSettingsInstructionCatalog = uri => {
 // Incomplete-document completion only. The real parser remains authoritative.
 export const getSettingsInstructionCompletions = (source, catalog) => {
   if (!catalog) return [];
+  const masked = maskSettingsRawStrings(source);
+  if (masked.inRawString) return [];
+  source = masked.source;
   const start = source.lastIndexOf('\n') + 1;
   const line = source.slice(start).trimStart(),
     stack = [];

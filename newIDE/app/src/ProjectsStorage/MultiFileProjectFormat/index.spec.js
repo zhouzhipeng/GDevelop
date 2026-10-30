@@ -195,7 +195,7 @@ describe('GDevelop Language (GDL) multi-file project format', () => {
     for (const source of [
       'kind = "project"\nsettingsFormatVersion = 7\n',
       files[MULTI_FILE_ENTRY_URI].replace(
-        'formatVersion = 13',
+        'formatVersion = 14',
         'formatVersion = 11'
       ),
     ]) {
@@ -945,4 +945,53 @@ column2 = "ssfssdfsf"
       );
     }
   );
+});
+
+describe('ActionWithOperator parameter declarations', () => {
+  [0, 1, 2].forEach(implicitCount => {
+    it(`persists Value with ${implicitCount} implicit parameters`, () => {
+      const project = JSON.parse(JSON.stringify(projectFixture));
+      const getOwner = project => {
+        const extension = project.eventsFunctionsExtensions[0];
+        return implicitCount === 0
+          ? extension
+          : implicitCount === 1
+          ? extension.eventsBasedObjects[0]
+          : extension.eventsBasedBehaviors[0];
+      };
+      const owner = getOwner(project);
+      const parameters = [
+        { name: 'Object', type: 'object' },
+        { name: 'Behavior', type: 'behavior' },
+      ].slice(0, implicitCount);
+      owner.eventsFunctions = [
+        {
+          ...functionObject('IdleAnimationName'),
+          functionType: 'ExpressionAndCondition',
+          expressionType: { type: 'string' },
+          parameters: [...parameters, { name: 'Index', type: 'expression' }],
+        },
+        {
+          ...functionObject('SetIdleAnimationName'),
+          functionType: 'ActionWithOperator',
+          getterName: 'IdleAnimationName',
+          parameters,
+        },
+      ];
+      const files = decomposeLegacyProjectToFiles(project);
+      const uri = Object.keys(files).find(uri =>
+        uri.endsWith('/SetIdleAnimationName.gdl')
+      );
+      expect(files[uri]).toContain('name = "Value"');
+      const restored = composeLegacyProjectFromFiles(files);
+      expect(getOwner(restored).eventsFunctions[1].parameters).toEqual([
+        ...parameters,
+        { name: 'Value', type: 'string' },
+        { name: 'Index', type: 'expression' },
+      ]);
+      expect(areLegacyProjectsEquivalent(project, restored)).toBe(true);
+      expect(decomposeLegacyProjectToFiles(restored)[uri]).toBe(files[uri]);
+      expect(owner.eventsFunctions[1].parameters).toEqual(parameters);
+    });
+  });
 });

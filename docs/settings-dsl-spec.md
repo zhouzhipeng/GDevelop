@@ -1,7 +1,7 @@
 # GDevelop Language (GDL) 当前规范与文档入口
 
-- 状态：已实施；当前作者格式 13，GDL catalog 12，instruction catalog 7。
-- 统一事件契约：[统一 GDevelop Language (GDL)：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。作者格式 13 将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
+- 状态：已实施；当前作者格式 14，GDL catalog 13，instruction catalog 7。
+- 统一事件契约：[统一 GDevelop Language (GDL)：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。作者格式 14 将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
 - 变量契约：[直接 variable 声明与值字面量](settings-dsl-variable-values-spec.md)。第 8.2 节仅作摘要，完整规则由该文档维护。
 - 更新日期：2026-10-27
 - 范围：全部现有 `.gdl` 作者文件；项目入口 `project.gdl` 同时使用本语法
@@ -24,7 +24,7 @@
 
 版本权威来源分别是 SettingsDsl/SchemaInventory.js、ProjectSourceCatalog.js 和 SettingsDsl/InstructionCatalog.js。项目作者格式、GDL catalog、instruction catalog、项目模块地图是不同版本域，不要求数值相同。模块地图当前为版本 2，仅发布 settingsPath。
 
-普通配置、指令具名参数、GDevelop 的 {{...}}、JavaScript code 块使用不同上下文规则。{{...}} 内不是 JavaScript；code 内才使用 JavaScript。不存在独立事件源文件，constants.toml 与 tests/*.js 是明确的独立格式。所有字段和精确指令签名以当前项目生成的 catalog 为准。
+普通配置、指令具名参数、GDevelop 的 {{...}}、JavaScript code 字符串使用不同上下文规则。{{...}} 内不是 JavaScript；code 内才使用 JavaScript。不存在独立事件源文件，constants.toml 与 tests/*.js 是明确的独立格式。所有字段和精确指令签名以当前项目生成的 catalog 为准。
 
 ## 1. 设计结论
 
@@ -56,7 +56,7 @@ GDL 将实例变量和行为覆盖放在所属实例内，减少局部修改时�
 6. 保留 UUID、图层顺序、全局实例顺序和现有序列化数据。
 7. 对格式未知字段报错，不悄悄忽略。
 
-对象定义、行为定义、函数签名、资源清单和测试配置都在本规范范围内。事件作者语法统一由上方格式 13 契约定义。非目标：重写 JavaScript 测试正文、图片模型音频资源或生成的运行时 JSON；支持配置中的任意表达式或完整 CSS。
+对象定义、行为定义、函数签名、资源清单和测试配置都在本规范范围内。事件作者语法统一由上方格式 14 契约定义。非目标：重写 JavaScript 测试正文、图片模型音频资源或生成的运行时 JSON；支持配置中的任意表达式或完整 CSS。
 
 ## 3. 文件归属
 
@@ -92,7 +92,7 @@ extensions/Combat/prefabs/Knight/
 - 根不写 `kind`、`settingsFormatVersion` 或每文件 `version`。根节点类型提供组件种类，整个项目只支持当前 schema；`project.gdl` 的 `formatVersion` 是精确匹配的格式标记，不是版本协商入口。
 - 所有 `.gdl` 只由新解析器读取，不探测 TOML。禁止根级 `layout` 包装和独立 `.layout` 布局源；同一组件数据只允许一个所有者。
 - 编辑器状态暂保留在 `editor`，个人视图状态是否迁出另行评估。
-- `project.gdl` 使用相同 DSL，根为 `project`，统一入口后缀为 .gdl。formatVersion 使用当前常量 13。任何不匹配直接拒绝，不尝试旧读取器。
+- `project.gdl` 使用相同 DSL，根为 `project`，统一入口后缀为 .gdl。formatVersion 使用当前常量 14。任何不匹配直接拒绝，不尝试旧读取器。
 - 事件正文合入所属 .gdl；测试 `.js` 正文不变。`constants.toml` 是显式例外，仍为独立的编辑器常量文档；它不是 settings，也不属于本轮替换。生成的 catalog JSON 与运行时 JSON 不改语法。
 - 单文件内配置与布局一起验证、保存；重命名或跨文件引用更新仍须事务保存。
 
@@ -114,6 +114,8 @@ extensions/Combat/prefabs/Knight/
 对象组、所需行为、共享数据和其他复杂配置必须逐项登记节点类型、基数、字段和默认值；禁止直接透传任意块。当前运行时模型中需要表达的数据必须显式建模；新语法不提供 rawJson、旧字段透传或兼容包装。未知字段直接报错。
 
 字段清单以共享 SchemaInventory、SettingsDsl 节点 schema 及注册类型元数据为准，生成 catalog 发布同一结构。
+
+多行原始字符串的完整契约见 [设计与实现说明](gdl-multiline-raw-strings-spec.md)：不转义、不插值、不去缩进，保留正文空白。
 
 ## 4. 词法与语法
 
@@ -158,11 +160,11 @@ node       := IDENT "{" NEWLINE members "}" NEWLINE?
 members    := (assignment | node | NEWLINE)*
 assignment := key "=" value NEWLINE
 key        := IDENT | STRING
-value      := STRING | NUMBER | BOOLEAN | array
+value      := STRING | RAW_MULTILINE_STRING | NUMBER | BOOLEAN | array
 array      := "[" (value ("," value)* ","?)? "]"
 ```
 
-空白和注释由词法层处理。数组内部允许换行。上述仅描述普通配置；variable.value 的递归结构字面量见变量契约。事件指令、{{...}} 与原始 code 块见事件契约。核心解析器遇到语法错误即返回诊断；编辑器另有不完整文档补全，不代表完整的容错 AST。
+空白和注释由词法层处理。数组内部允许换行。上述仅描述普通配置；variable.value 的递归结构字面量见变量契约。事件指令、{{...}} 与原始 code 字符串见事件契约。核心解析器遇到语法错误即返回诊断；编辑器另有不完整文档补全，不代表完整的容错 AST。
 
 ## 5. 根节点与上下文
 
@@ -198,13 +200,13 @@ array      := "[" (value ("," value)* ","?)? "]"
 
 路径中具名所有者的具体分配保持当前目录契约；表格中的 behavior 路径只表示所属作用域，不要求重构已有目录。全局、场景、Prefab 和 Variant 对象共用 object 根，所属目录决定解析作用域。生命周期函数及扩展/行为/Prefab 函数共用 function 根。
 
-project formatVersion 固定为 13；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
+project formatVersion 固定为 14；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
 
 ### 5.2 Project 与资源清单示例
 
 ```text
 project {
-  formatVersion = 13
+  formatVersion = 14
   name = "Adventure"
 }
 ```
@@ -852,7 +854,7 @@ Dirty 保存只更新发生变化的组件文件。改变场景布局不重写�
 11. 旧 TOML 输入有拒绝用例，不要求旧格式成功解析或迁移。
 12. 真实大型项目测量解析耗时、文件体积、诊断耗时和 AI 局部修改效果。
 
-当前 Syntax.js 限制源码长度为 16 × 1024 × 1024 个 JavaScript 字符、token 为 2,000,000、嵌套深度为 100；code 块扫描限制为 2 × 1024 × 1024 个字符。文件系统读取器另有字节和项目总量预算，不能将字符数当作 UTF-8 字节数。
+当前 Syntax.js 限制源码长度为 16 × 1024 × 1024 个 JavaScript 字符、token 为 2,000,000、嵌套深度为 100；JavaScript code 字符串校验限制为 2 × 1024 × 1024 个字符。文件系统读取器另有字节和项目总量预算，不能将字符数当作 UTF-8 字节数。
 
 ## 18. 官方模板导入边界与回归（2026-10-26）
 

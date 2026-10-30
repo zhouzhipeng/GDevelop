@@ -36,7 +36,7 @@ const SCENE_LIFECYCLE_SOURCES = Object.freeze([
 ]);
 
 export const PROJECT_GDL_CATALOG_RELATIVE_PATH = '.gdevelop/gdl-catalog.json';
-export const PROJECT_GDL_CATALOG_FORMAT_VERSION = 12;
+export const PROJECT_GDL_CATALOG_FORMAT_VERSION = 13;
 
 export class ProjectSourceCatalogError extends Error {
   code: string;

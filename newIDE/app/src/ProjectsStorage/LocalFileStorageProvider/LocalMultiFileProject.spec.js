@@ -952,7 +952,7 @@ describe('Local multi-file project storage', () => {
     ).toContainEqual({ serializedKey: 'useLegacyTrajectory', type: 'boolean' });
     expect(rebuiltGdlCatalog).toMatchObject({
       format: 'gdevelop-gdl-catalog',
-      formatVersion: 12,
+      formatVersion: 13,
       layoutAuthoring: {
         storage: 'component-root',
         syntax: 'GDevelop Language (GDL)',
@@ -1979,7 +1979,7 @@ describe('Local multi-file project storage', () => {
     );
     expect(moduleMap).toMatchObject({
       format: 'gdevelop-project-module-map',
-      sourceFormatVersion: 13,
+      sourceFormatVersion: 14,
       project: { name: 'Generated compatibility project' },
     });
     const generatedProject = JSON.parse(fs.readFileSync(generatedPath, 'utf8'));

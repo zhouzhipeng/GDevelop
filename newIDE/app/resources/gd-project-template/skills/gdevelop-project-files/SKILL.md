@@ -207,7 +207,7 @@ All `.gdl` and `project.gdl` use **GDevelop Language (GDL)**, not TOML. Read
 - Every document has exactly one typed root: project, resources, tests,
   scene, prefab, variant, layout, fragment, object, function,
   extension or behavior. The physical path supplies the owning scope.
-- Only project.gdl has `formatVersion = 13`. Do not write kind,
+- Only project.gdl has `formatVersion = 14`. Do not write kind,
   settingsFormatVersion, TOML headers, per-document format versions, or
   settings/layout wrapper nodes. Extension metadata can still have a semantic
   version string when its schema defines one.
@@ -414,10 +414,10 @@ implementation is materially simpler. Record that decision in the task result.
 ## Event authoring
 
 Read [the unified event syntax](references/gdl-usage.md) before editing function
-or fragment bodies. Only GDevelop Language (GDL) format 13 is supported. Function signatures
+or fragment bodies. Only GDevelop Language (GDL) format 14 is supported. Function signatures
 and events share one .gdl file; .events files are rejected. Use explicit
 conditions/actions blocks containing bare catalog instructions, typed event
-nodes, independent group/comment/link nodes, and raw multiline code blocks.
+nodes, independent group/comment/link nodes, and raw multiline raw string properties.
 
 For comment nodes, keep the text readable against its background. Omit
 `background` and `color` to use the defaults when possible. If specifying

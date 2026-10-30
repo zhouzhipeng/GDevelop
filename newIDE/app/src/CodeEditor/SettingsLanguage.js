@@ -19,11 +19,16 @@ import {
   getSettingsSchemas,
 } from '../ProjectsStorage/SettingsDsl';
 
+import { maskSettingsRawStrings } from '../ProjectsStorage/SettingsDsl/Syntax';
+
 // Completion uses a small lexical stack so incomplete documents are supported.
 // Braces following '=' (and array elements) are data, never component scopes.
 export const getSettingsVariableCompletions = (
   source: string
 ): Array<Object> => {
+  const masked = maskSettingsRawStrings(source);
+  if (masked.inRawString) return [];
+  source = masked.source;
   const currentLine = source.slice(source.lastIndexOf('\n') + 1);
   if (!/^\s*[A-Za-z_0-9]*$/.test(currentLine)) return [];
   const stack: Array<{
@@ -140,7 +145,7 @@ export const getSettingsVariableCompletions = (
     if (!['events', 'group', 'comment', 'link'].includes(frame.name)) {
       if (leaf) {
         if (!frame.fields.has('strict')) snippet('strict', 'strict = true');
-        if (!frame.fields.has('@code')) snippet('code', 'code {\n  $0\n}');
+        if (!frame.fields.has('code')) snippet('code', 'code = """\n$0\n"""');
       } else {
         if (!frame.fields.has('@conditions'))
           snippet('conditions', 'conditions {\n  $0\n}');
@@ -191,8 +196,21 @@ export const registerSettingsLanguage = (monaco: any) => {
   });
   monaco.languages.setMonarchTokensProvider(language, {
     tokenizer: {
+      raw: [
+        [
+          /^[ \t]*("{3,})[ \t]*$/,
+          {
+            cases: {
+              '$1==$S2': { token: 'string', next: '@pop' },
+              '@default': 'string',
+            },
+          },
+        ],
+        [/.*$/, 'string'],
+      ],
       root: [
         [/\/\/.*$/, 'comment'],
+        [/("{3,})[ \t]*$/, { token: 'string', next: '@raw.$1' }],
         [/"(?:[^"\\]|\\.)*"/, 'string'],
         [/\b(?:true|false)\b/, 'keyword'],
         [/-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/, 'number'],
@@ -313,7 +331,10 @@ export const registerSettingsLanguage = (monaco: any) => {
           ...suggestion,
           kind: monaco.languages.CompletionItemKind.Snippet,
           insertTextRules:
-            monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet |
+            (suggestion.label === 'code'
+              ? monaco.languages.CompletionItemInsertTextRule.KeepWhitespace
+              : 0),
           range: {
             startLineNumber: position.lineNumber,
             endLineNumber: position.lineNumber,
@@ -382,6 +403,13 @@ export const registerSettingsLanguage = (monaco: any) => {
               start: node.location.line,
               end: node.location.endLine,
             });
+          Object.values(node.properties).forEach(property => {
+            if (property.raw)
+              ranges.push({
+                start: property.location.line,
+                end: property.location.endLine,
+              });
+          });
           node.children.forEach(visit);
         };
         const root = parseOutline(model);

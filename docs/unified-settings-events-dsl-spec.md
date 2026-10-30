@@ -1,12 +1,12 @@
 # 统一 GDevelop Language (GDL)：函数、事件与 JavaScript 作者格式规范
 
-- 状态：已实施。当前作者格式 13；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
+- 状态：已实施。当前作者格式 14；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
 - 日期：2026-10-26。
 - 决策依据：函数声明和事件正文合入同一个 `.gdl` 文件；只保留 GDevelop Language (GDL)，不考虑任何作者格式兼容性。
-- 当前作者格式：12。GDL catalog 版本：12；instruction catalog 版本：7，发布本文的新指令结构契约。
+- 当前作者格式：14。GDL catalog 版本：13；instruction catalog 版本：7，发布本文的新指令结构契约。
 - 运行时边界：仍投影到 GDevelop 原生事件模型与代码生成器；不重新定义对象 picking、事件调度或表达式求值。
 
-文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdl`，`constants.toml` 和 JavaScript 测试文件保持各自格式。格式 13 不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
+文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdl`，`constants.toml` 和 JavaScript 测试文件保持各自格式。格式 14 不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
 
 系统 action/condition 由引擎固定映射发布作者短名。instruction catalog 7 的
 action/condition 的 `dslName` 与 `type` 相同时省略。GDL 和 AI 优先使用
@@ -26,12 +26,12 @@ GDevelop Language (GDL) 成为唯一的项目配置及事件作者语言。函�
 2. `node { ... }` 表达明确的结构、归属和边界。
 3. `conditions {}` 和 `actions {}` 明确区分指令种类；内部直接写 `Type { name = value }`，不使用 if/do。
 4. 普通事件使用 `event {}`，其他事件分别使用 `else {}`、`repeat {}`、`while {}`、`for_each {}`、`for_each_child {}`、`javascript {}`；所有事件节点禁止 type 字段；分组使用独立的 `group {}`，持久化注释使用独立的 `comment {}`，外部片段引用使用独立的 `link {}`。
-5. JavaScript 使用 `javascript {... }` 中唯一的原始多行 `code { ... }` 写法。
+5. JavaScript 使用 `javascript {... }` 中的 `code = """` 多行原始字符串。
 6. 同一 lexer、parser、AST、source range、formatter 和诊断系统处理全部作者源码。不得将 events 内容截成字符串交给旧 IfDo parser。
 7. 缩进帮助阅读，花括号决定结构；空行没有事件边界含义。
 8. 不再存在 `.events` 作者文件、IfDo 语言模式或独立 IfDo 版本。
 
-指令调用统一使用花括号块，是统一语法中受上下文限制的节点类型，和 variable.value 的结构字面量一样由同一个解析器处理。code 块是受 JavaScript 语法控制的嵌入区域，不按普通 Settings 节点递归解析，也不经过字符串转义。
+指令调用统一使用花括号块，是统一语法中受上下文限制的节点类型，和 variable.value 的结构字面量一样由同一个解析器处理。code 是通用原始字符串值，GDL 仅识别字符串定界符；JS 解析器独立校验其正文。
 
 ## 2. 目标与非目标
 
@@ -132,13 +132,14 @@ function {
         javascript {
           strict = true
 
-          code {
+          code = """
             const score = runtimeScene.getVariables().get("Score").getAsNumber();
             console.log("Current score:", score);
             if (score >= 100) {
               console.log("Score target reached!");
             }
-          }
+
+"""
         }
       }
     }
@@ -172,10 +173,10 @@ namedArgument    := IDENT '=' operand
 operand          := STRING | NUMBER | BOOLEAN | expression
 expression       := '{{' expressionSource '}}'
 flagsBlock       := 'flags' '{' NEWLINE assignment* '}'
-codeBlock        := 'code' '{' NEWLINE javascriptBody closingCodeBrace
+codeProperty     := 'code' '=' rawMultilineString
 ```
 
-以上为说明性语法；instructionList/codeBlock 是普通节点语法的上下文特化，必须由同一个 Settings parser 管理范围、预算和诊断。条件列表只查条件 catalog，动作列表只查动作 catalog；子指令继承父指令种类。同名条件/动作无歧义。指令不能直接出现在 event、group 或其他配置节点中。
+以上为说明性语法；instructionList 是普通节点语法的上下文特化；rawMultilineString 是通用字符串值，必须由同一个 Settings parser 管理范围、预算和诊断。条件列表只查条件 catalog，动作列表只查动作 catalog；子指令继承父指令种类。同名条件/动作无歧义。指令不能直接出现在 event、group 或其他配置节点中。
 
 指令优先使用 catalog 精确 dslName；也接受精确原生 type，包含空格时使用 JSON 字符串。列表内部 `Name = value` 是非法赋值，不可当作指令；指令调用使用 `Type { arg = value }`，花括号不可省略，包括无参数调用。指令块内赋值表示具名参数；执行标记放在嵌套 `flags {}` 中，避免与参数重名。
 
@@ -503,7 +504,7 @@ link 可出现在顶层 events、group 及允许子事件的 event 内，和 eve
 
 Link 继承调用者生命周期、条件选择和可见作用域。外部片段没有自己的生命周期。空、注释-only、未被引用的片段仍合法。模块地图只返回一个 settingsPath，取消 eventsPath。
 
-## 13. JavaScript 事件与原始 code 块
+## 13. JavaScript 事件与原始 code 字符串
 
 ### 13.1 唯一作者写法
 
@@ -513,7 +514,7 @@ javascript {
   objects = "Enemy"
   expanded = false
 
-  code {
+  code = """
     const score = runtimeScene.getVariables().get("Score").getAsNumber();
     const label = `Score: ${score}`;
     // 字符串、注释中的括号不结束 code 块。
@@ -521,39 +522,28 @@ javascript {
     if (score >= 100) {
       console.log(label, brace);
     }
-  }
+
+"""
 }
 ```
 
-JavaScript 是叶事件，允许公共事件标记及 strict、objects、expanded、code。code 是唯一必需的特殊子块，不是属性、字符串或普通 settings 节点。禁止独立 javascript 节点、code = "..."、三引号、tagged raw 和单行 code { statement }。空代码写成两行 code { 与 }，不允许 code {}。code 内允许空行，不要求至少一条 JS 语句。
+JavaScript 是叶事件，允许公共事件标记及 strict、objects、expanded、code。code 是必需的 string 属性，作者必须使用多行原始字符串。禁止旧 code 子节点和普通转义字符串代码。空代码用独占行的开始与结束标记表示，不要求 JS 语句。
 
 strict/objects/expanded 分别映射 useStrict/parameterObjects/eventsSheetExpanded。strict 缺省按原生 false 映射，新建模板显式写 true。objects 保持原生字符串契约。对象、局部变量不自动成为 JS 同名变量，实际绑定与 picking 桥接来自真实 JS 事件 API 和生成声明。脚本能力、引用和作用域仍须项目校验。
 
-### 13.2 JavaScript 边界解析
+### 13.2 多行原始字符串边界
 
-code 的开启花括号后必须换行。随后解析器切换到 JavaScript 词法/语法上下文，解析一个 JS StatementList，直到其所属外层代码块的匹配右括号。关闭括号必须独占一行，可带外层缩进，不允许同一行追加语句或注释。
+`code = """` 后必须换行；开始/结束标记使用相同数量 N >= 3 的双引号。结束标记独占一行，前后可有空格或 Tab，不允许注释。正文不按 JavaScript 词法寻找边界；定界符冲突时增加引号数量。writer 选择 max(3, 正文最长连续双引号数 + 1)。
 
-- 对象字面量、函数、类、解构等 JS 内部花括号正常配对。
-- 单双引号字符串、行/块注释、正则表达式、模板字符串文本和 ${...} 插值均按 JavaScript 规则处理。
-- 特别处理正则中的 /、转义和字符类，以及除法与正则的上下文区别；禁止简单数括号或仅用正则找结束行。
-- 模板文本中的 }、字符串中的 code/event、注释中的外层伪结束行都不结束 code。
-- 使用与项目 JS 校验一致的解析器和 ECMAScript 版本，按函数体上下文解析 StatementList，不额外开放模块 import/export。return、await 等是否合法由真实原生 JS 事件执行包装及其异步能力决定；不能虚构一层 async 包装使源码通过。
-- 嵌入代码未闭合或有语法错误时给出 JS 诊断及所属 code 范围；错误恢复不能跳过未闭合字符串/模板去猜下一个 event/function。
-- Settings parser 负责外层 AST；JS parser 只负责代码内容与边界，绝不调用旧 IfDo parser，也不执行代码。
+### 13.3 内容、空白与往返
 
-### 13.3 原始内容、缩进与往返
+正文不转义、不插值、不去缩进、不 trim。空格、Tab、空白行和行尾空格全部保留。首尾分隔换行不进入值；其余正文行以 LF 连接，CRLF 输入解码为 LF。单独 CR 报错。不自动补末尾 LF，需要末尾 LF 时保留额外空正文行。
 
-code 是原始多行区域，不解码反斜杠、不做字符串插值、不自动去缩进。开启行后的换行和关闭行的缩进属于外层框架：代码内容从下一行起点开始，到关闭行起点结束。已有内容的空格、注释、引号、模板文本及末尾换行按原始切片保存。
-
-新建代码可按示例缩进，但 formatter 和事件块移动不得机械缩进 code 内容，尤其不能改变模板字符串文本。只调整 code 开启行、关闭行和外层 event 的缩进；代码内容的格式化必须是独立且显式的 JS 编辑操作。
-
-作者多行区域统一使用 LF；非空代码内容以换行结束。原生 inlineCode 无末尾换行时，writer 在生成作者格式时仅规范化一个末尾 LF；CRLF 规范化为 LF，不改动其他代码内容。此规范化属于格式 13 的明确等价规则，比较前对两侧应用同一规则，不允许整个字符串 trim。不会因不存在字符串备用写法而偷偷回退。
-
-原生字符串若包含会受换行规范化影响的特殊 JavaScript 字面量，应经同版本 JS parser 确认语义保持；无法证明或发现不合法源码时保存失败并给出范围和原因，不输出转义字符串绕过规则。代码原始内容仍计入共享文件大小和 JS 解析预算。
+结束标记缩进不影响正文；formatter 统一把结束标记放在第 1 列。GDL formatter 不改正文缩进，JS 格式化为独立操作。原生 inlineCode 的末尾换行精确保留，不再强制添加。普通配置字段也可以使用相同的多行字符串字面量，值类型仍为 string。
 
 ### 13.4 诊断与编辑器
 
-CodeBlock AST 保存开启/关闭符号、整个区域和内容切片的范围、原生投影后的行列映射。JS 类型检查器基于真实执行上下文构造虚拟文档，诊断映射回 settings 内代码行；不得把外层缩进算成字符串转义偏移。
+raw string AST 保存定界符长度、整个值与内容范围、每行原始偏移，用于 CRLF 到 LF 的准确定位。JS 类型检查器基于真实执行上下文构造虚拟文档，诊断映射回 settings 内代码行；不得把外层缩进算成字符串转义偏移。
 
 编辑器在 code 内提供 JS 高亮、补全和括号匹配，退出后恢复 Settings；大纲显示为 JavaScript event。单纯打开、解析、格式化和校验均不执行代码。
 
@@ -611,7 +601,7 @@ GDL catalog 必须发布：
 - function/fragment 的 events 唯一容器及允许的子事件种类。
 - 各独立事件节点 schema、各容器基数、规范输出顺序、递归规则和 Else 相邻约束。
 - 裸指令从 conditions/actions/while_conditions 继承的种类、标记和子树能力。
-- 表达式的合法字段位置、JavaScript 原始 code 块及其版本/边界规则。
+- 表达式的合法字段位置、JavaScript 原始 code 字符串及其版本/边界规则。
 - variable schema 的递归引用，明确没有 metadata/path。
 
 instruction catalog 继续独立描述精确 type、dslName、valueKind、默认/可选/code-only 参数、异步及子指令能力和 owner 限制。不是第二种作者语言，也不应复制整套 Settings grammar。
@@ -620,7 +610,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 ## 17. 项目读取、写入与事务
 
-读取顺序：入口格式 13 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
+读取顺序：入口格式 14 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
 
 签名注册先于事件调用解析，支持跨文件函数和现有合法递归调用；不能通过文件枚举顺序决定可见性。
 
@@ -668,7 +658,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 - 拒绝重复 conditions/actions、嵌套 events、事件节点的非法 type 字段、类型专属字段混用、坏 Else、旧前缀和旧 .events 文件。
 - 容器成员换序不改变归属；各列表内部和混排子 event/group/comment/link 的相对顺序必须保留；所有事件节点拒绝 type 字段。
 - code 中嵌套花括号、对象、类、解构、字符串、注释、正则/除法、模板及嵌套插值均正确识别边界；伪关闭行不误结束。
-- code 必须为原始多行块；拒绝 code={}、code="..."、三引号和单行正文等替代形式。
+- code 必须为多行原始字符串属性；拒绝旧 code 子块、普通转义字符串和单行正文。
 - 未闭合代码准确定位；尾换行规范化和 CRLF 处理按明确等价规则验证；不能保真时拒绝而非转义回退。
 - formatter/块移动保持模板字符串、注释和代码正文空白，不自动重排 JS。
 
@@ -697,7 +687,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 picking 可视化、行为相关 diff 和按 AST 的安全块移动是推荐编辑器能力，可独立迭代；不能将它们未完成视为可改变基础语法的理由。实现基础格式时至少保留精确 AST 和语义位置，使后续工具无需重新解析另一套正文语言。
 
-本文只采用显式 conditions/actions 块中的指令调用块、独立的 event/else/repeat/while/for_each/for_each_child/javascript/group/comment/link 节点 和原始多行 code 块。禁止并行支持 if/do、event 的 type 字段、嵌套 events 包装及字符串代码等备用写法，也不增加所有者名称简写。若未来改变，应重新评审整个作者契约，而不是逐步累积别名。
+本文只采用显式 conditions/actions 块中的指令调用块、独立的 event/else/repeat/while/for_each/for_each_child/javascript/group/comment/link 节点 和原始多行 code 字符串。禁止并行支持 if/do、event 的 type 字段、嵌套 events 包装及旧 code 子块等备用写法，也不增加所有者名称简写。若未来改变，应重新评审整个作者契约，而不是逐步累积别名。
 
 ## Behavior property syntax aliases
 

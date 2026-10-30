@@ -42,24 +42,19 @@ export const buildEventSourceMap = (root, file) => {
   };
   const dataNode = (node, eventPath, nodePath = []) => {
     add(node, eventPath, { kind: node.type, nodePath });
-    if (node.type === 'code')
-      entries.push({
-        eventPath,
-        kind: 'code-content',
-        source: {
-          file,
-          ...node.contentLocation,
-          endOffset: node.contentLocation.offset + node.code.length,
-          endLine: node.location.endLine,
-          endColumn: 1,
-        },
-      });
     node.children.forEach((child, index) =>
       dataNode(child, eventPath, [...nodePath, index])
     );
   };
   const visit = (node, eventPath) => {
     add(node, eventPath, { kind: node.type });
+    const code = node.type === 'javascript' && node.properties.code;
+    if (code && code.contentLocation)
+      entries.push({
+        eventPath,
+        kind: 'code-content',
+        source: { file, ...code.contentLocation },
+      });
     node.children
       .filter(child => !eventTypes.has(child.type))
       .forEach((child, index) => {

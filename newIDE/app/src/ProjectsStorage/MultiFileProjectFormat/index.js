@@ -1511,6 +1511,35 @@ const putEmbeddedEvents = (files, uri, events, options) => {
   );
 };
 
+// Persist the effective signature so GDL declares every parameter used by events.
+// The native engine derives this same signature in GetParametersForEvents.
+const materializeActionWithOperatorParameters = project => {
+  const materialize = (functions, implicitParametersCount) => {
+    (functions || []).forEach(func => {
+      if (func.functionType !== 'ActionWithOperator') return;
+      const getter = (functions || []).find(
+        candidate => candidate.name === func.getterName
+      );
+      if (!getter) return;
+      const parameters = getter.parameters || [];
+      func.parameters = [
+        ...parameters.slice(0, implicitParametersCount),
+        { name: 'Value', ...(getter.expressionType || { type: 'expression' }) },
+        ...parameters.slice(implicitParametersCount),
+      ];
+    });
+  };
+  (project.eventsFunctionsExtensions || []).forEach(extension => {
+    materialize(extension.eventsFunctions, 0);
+    (extension.eventsBasedObjects || []).forEach(object =>
+      materialize(object.eventsFunctions, 1)
+    );
+    (extension.eventsBasedBehaviors || []).forEach(behavior =>
+      materialize(behavior.eventsFunctions, 2)
+    );
+  });
+};
+
 const functionSettingsPayload = (extensionName, functionObject, order) => ({
   kind: 'function',
 
@@ -1896,6 +1925,7 @@ const decomposeGameplayTests = (project, files) => {
 export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
   registerLocalSettingsDefinitions(legacyProject.eventsFunctionsExtensions);
   const project = clone(asObject(legacyProject, 'Project'));
+  materializeActionWithOperatorParameters(project);
   const files = {};
   const projectPayload = omitFields(project, PROJECT_SPLIT_FIELDS);
   const sceneNames = new Set();
@@ -4582,6 +4612,7 @@ export const normalizeLegacyProjectForMultiFile = (
   options = {}
 ) => {
   const project = removeLegacyFolderStructuresFromProject(legacyProject);
+  materializeActionWithOperatorParameters(project);
   project.layouts = (project.layouts || []).map(removeEmptyBehaviorSharedData);
   project.externalEvents = project.externalEvents || [];
   project.externalLayouts = project.externalLayouts || [];

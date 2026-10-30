@@ -26,7 +26,7 @@ describe('GDevelop Language (GDL) authoring catalogs', () => {
     });
   test('publishes the same strict node schemas used by the current parser', () => {
     const catalog = catalogFor(project);
-    expect(catalog.formatVersion).toBe(12);
+    expect(catalog.formatVersion).toBe(13);
     expect(catalog.layoutNodes.map(entry => entry.node)).toEqual(
       expect.arrayContaining([
         'editor',

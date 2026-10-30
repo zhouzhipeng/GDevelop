@@ -69,7 +69,9 @@ test('keeps explicit sibling and child event boundaries; list context determines
 test('parses raw JS with nested templates, regex, comments and braces without escapes', () => {
   const code =
     'const re = /[}]/;\nconst x = `outer ${`inner ${ { x: "}" }.x }`}`;\n// }\n/* } */\nif (re.test(x)) { console.log(x); }\n';
-  const source = wrap(`javascript {\n strict = true\n code {\n${code}}\n}`);
+  const source = wrap(
+    `javascript {\n strict = true\n code = """\n${code}\n"""\n}`
+  );
   expect(compileSettingsEvents(source, options)[0].inlineCode).toBe(code);
   expect(extractSettingsJavaScriptBlocks(source)[0].code).toBe(code);
   const formatted = printSettingsSyntax(parseSettingsSyntax(source).root);
@@ -86,7 +88,7 @@ test.each([
   'event {\n events {}\n}',
   'event {\n do A\n}',
   'else {\n}',
-  'javascript {\n code = "x"\n}',
+
   'javascript {\n code {}\n}',
   'javascript {\n code { foo(); }\n}',
   'link {\n target = "A"\n event {}\n}',
@@ -216,9 +218,9 @@ disabled = true
   expect(again).toEqual(events);
 });
 
-test('empty code, final newline normalization and syntax errors have explicit behavior', () => {
+test('empty code, exact final newlines and syntax errors have explicit behavior', () => {
   const empty = compileSettingsEvents(
-    wrap('javascript {\n code {\n }\n}'),
+    wrap('javascript {\n code = """\n"""\n}'),
     options
   );
   expect(empty[0].inlineCode).toBe('');
@@ -233,10 +235,10 @@ test('empty code, final newline normalization and syntax errors have explicit be
       appendSettingsEvents('function {}\n', events, options),
       options
     )[0].inlineCode
-  ).toBe('const text = `line1\nline2`;\n');
+  ).toBe('const text = `line1\nline2`;');
   expect(() =>
     compileSettingsEvents(
-      wrap('javascript {\n code {\nconst broken = ;\n }\n}'),
+      wrap('javascript {\n code = """\nconst broken = ;\n\n"""\n}'),
       options
     )
   ).toThrow('Invalid JavaScript');
@@ -292,9 +294,11 @@ test('handles thousands of explicit events and rejects excessive event/code budg
     )
   ).toThrow('nesting budget');
   expect(() =>
-    parseSettingsSyntax(
+    compileSettingsEvents(
       wrap(
-        'javascript {\n code {\n//' + 'x'.repeat(2 * 1024 * 1024) + '\n }\n}'
+        'javascript {\n code = """\n//' +
+          'x'.repeat(2 * 1024 * 1024) +
+          '\n"""\n}'
       )
     )
   ).toThrow('code size budget');
@@ -409,9 +413,10 @@ for_each_child {
   iterable = "Inventory"
 }
 javascript {
-  code {
+  code = """
 const value = 1;
-  }
+
+"""
 }
 group {
   name = "Group"
