@@ -687,7 +687,7 @@ export const createCatalogInstructionFormatter = (
       ? authoringName
       : stringifyJsonValue(authoringName, `${kind} instruction type`);
     return `${formattedType} {${
-      operands.length ? ` ${operands.join(' ')} ` : ''
+      operands.length ? `\n${operands.join('\n')}\n` : ''
     }}`;
   };
   format.formatPropertyExpression = propertySyntax.formatExpression;

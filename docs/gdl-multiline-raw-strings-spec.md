@@ -1,10 +1,10 @@
-# GDL 多行原始字符串设计提案
+# GDL 通用多行原始字符串规范
 
 状态：已实施；按用户确认不去缩进。日期：2026-10-30。
 
 ## 问题与目标
 
-GDL 主要供 AI 阅读和修改，人类进行 review。当前 javascript.code 是原始代码子节点，内部不遵循普通属性/子节点语法；Syntax.js 使用 JavaScript tokenizer 寻找匹配花括号。建议将其改为字符串属性，保持 `node { key = value }` 结构，并使 GDL 字符串边界独立于嵌入语言的语法正确性。
+GDL 主要供 AI 阅读和修改，人类进行 review。多行原始字符串属于通用值语法：任何接收字符串的属性都支持普通 JSON 字符串或多行原始字符串，包括 comment.text、description、变量及指令字符串参数。javascript.code 同样使用字符串属性；GDL 字符串边界独立于嵌入语言的语法正确性。
 
 目标：无需转义 JS 正文、确定的缩进和换行、任意定界符碰撞可表达、稳定局部修改、准确源码映射。非目标：GDL 插值、JS API/执行语义变更、字节级文件容器、自动 JS 格式化、其他字符串简写。
 
@@ -27,7 +27,7 @@ GDL 主要供 AI 阅读和修改，人类进行 review。当前 javascript.code 
 
 这些来源证明设计有成熟先例，不证明对 AI 的效率优于其他形式；仍需任务实验。
 
-## 拟议语法
+## 通用字符串语法
 
 ```text
 javascript {
@@ -45,7 +45,7 @@ for (const object of objects) {
 }
 ```
 
-这是通用 string 字面量，解码后仍为 string，不新增运行时值类型。javascript.code 要求 raw 字面量，其他 schema 决定字段是否接收字符串，不在 lexer 中按字段名启用。不新增语言标签、插值、单行 raw、尾换行开关或单引号变体。现有普通 JSON 字符串及表达式 `{{ ... }}` 含义不变。javascript.code 的规范输出始终为多行原始字符串，其他字符串字段先保持普通 JSON 输出，以限制无关 diff。
+这是通用 string 字面量，解码后仍为 string，不新增运行时值类型。所有字符串类型的 value 均接受普通 JSON 字符串或多行原始字符串，包括 javascript.code；schema 决定字段是否接收字符串，不在 lexer 中按字段名启用。不新增语言标签、插值、单行 raw、尾换行开关或单引号变体。现有普通 JSON 字符串及表达式 `{{ ... }}` 含义不变。所有字符串值包含 LF 时规范输出为多行原始字符串，其他值默认使用普通 JSON 字符串；AST 格式化保留已有 raw 形式。javascript.code 的模型输出仍优先 raw，但读取同时接受两种形式。含不能直接写入 raw 的控制字符时保留 JSON 转义，以保证值不变。
 
 ### 定界符
 
@@ -127,3 +127,10 @@ GDL formatter 不调用 JS formatter，不删除行尾空白，不改变解码�
 - 所有本次修改的 JS（不含用户原有 MultiFileProjectFormat/index.js）及新增测试通过 ESLint 和 Prettier；`git diff --check` 通过。
 - `npm run flow -- check --max-workers 2`：全项目 659 项错误，未通过。JSON 检查显示涉及修改文件的报告主要位于原有未标注函数、WeakMap 和既有类型错误处；未宣称全项目类型检查成功。
 - 本次未开展模型效率对照实验，不宣称生成准确率提升。
+
+
+## 通用字符串契约补充
+
+用户确认所有 `key = value` 中 string 类型的值均支持普通单行 JSON 字符串和多行 raw 字符串；不保留 code-only 限制。适用于组件文本、事件 comment.text/secondaryText、变量结构/数组、指令具名参数等所有合法字符串位置。字段已有枚举、引用和名称约束仍生效；多行语法不会绕过这些语义约束。
+
+模型序列化将含 LF 的普通字符串输出为 raw；不能直接表示的控制字符继续使用 JSON 转义，保证值无损。code 支持两种输入，JS 解析、类型诊断及编辑补全需将解码后的偏移映射回单行转义文本或多行正文。该补充放宽格式 14 的输入约束，不增加值类型或修改事件执行语义。

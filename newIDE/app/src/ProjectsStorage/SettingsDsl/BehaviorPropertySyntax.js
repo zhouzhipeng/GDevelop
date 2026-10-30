@@ -133,9 +133,9 @@ export const createBehaviorPropertySyntax = (catalog, fail) => {
     );
     return `${
       kind === 'action' ? 'setProperty' : 'getProperty'
-    } { name=${JSON.stringify(name)}${
-      concise.length ? ` ${concise.join(' ')}` : ''
-    } }`;
+    } {\nname=${JSON.stringify(name)}${
+      concise.length ? `\n${concise.join('\n')}` : ''
+    }\n}`;
   };
   const lowerExpression = (source, fileUri) => {
     let output = '';

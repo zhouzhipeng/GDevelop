@@ -2,6 +2,7 @@
 
 import { sha256 } from 'js-sha256';
 import optionalRequire from '../Utils/OptionalRequire';
+import { getSettingsStringLocation } from './SettingsDsl/Syntax';
 import { extractSettingsJavaScriptBlocks } from './SettingsDsl/Events';
 import { encodeManagedName } from './MultiFileProjectFormat';
 
@@ -1452,24 +1453,36 @@ const makeDiagnostic = ({
   line,
   column,
   severity,
-}: Object): Object => ({
-  severity,
-  phase: 'javascript-authoring-api',
-  code,
-  message,
-  fileUri: block.fileUri,
-  line: (() => {
-    const relativeLine = Math.max(
-      1,
-      Number(line || 1) - Number(block.validationLineOffset || 0)
-    );
-    const boundedRelativeLine = block.validationBodyLineCount
-      ? Math.min(relativeLine, Number(block.validationBodyLineCount))
-      : relativeLine;
-    return Number(block.bodyLine || 1) + boundedRelativeLine - 1;
-  })(),
-  column: Number(column || 1),
-});
+}: Object): Object => {
+  const relativeLine = Math.max(
+    1,
+    Number(line || 1) - Number(block.validationLineOffset || 0)
+  );
+  const boundedRelativeLine = block.validationBodyLineCount
+    ? Math.min(relativeLine, Number(block.validationBodyLineCount))
+    : relativeLine;
+  let location = {
+    line: Number(block.bodyLine || 1) + boundedRelativeLine - 1,
+    column: Number(column || 1),
+  };
+  if (block.stringLiteral) {
+    const lines = block.inlineCode.split('\n');
+    const row = Math.min(boundedRelativeLine - 1, lines.length - 1);
+    const decodedOffset =
+      lines.slice(0, row).reduce((sum, text) => sum + text.length + 1, 0) +
+      Math.min(Number(column || 1) - 1, lines[row].length);
+    location = getSettingsStringLocation(block.stringLiteral, decodedOffset);
+  }
+  return {
+    severity,
+    phase: 'javascript-authoring-api',
+    code,
+    message,
+    fileUri: block.fileUri,
+    line: location.line,
+    column: location.column,
+  };
+};
 
 const FORBIDDEN_GLOBALS = new Set([
   'eval',

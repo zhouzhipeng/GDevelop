@@ -48,12 +48,20 @@ test('real engine generates identical picking, OR, child-JS and loop code after 
       event {
         conditions {
           ${orType} {
-            CollisionNP { first_object="Player" second_object="Enemy" }
-            CollisionNP { first_object="Player" second_object="Coin" }
+            CollisionNP {
+  first_object = "Player"
+  second_object = "Enemy"
+}
+            CollisionNP {
+  first_object = "Player"
+  second_object = "Coin"
+}
           }
         }
         actions {
-          Delete { object="Coin" }
+          Delete {
+  object = "Coin"
+}
         }
         javascript {
           strict = true
@@ -69,36 +77,68 @@ if (pickedCount > 0) { objects[0].setX(42); }
         count = 2
         index = "i"
         actions {
-          SetNumberVariable { variable="Score" modification_sign="+" value=1 }
+          SetNumberVariable {
+  variable = "Score"
+  modification_sign = "+"
+  value = 1
+}
         }
       }
       event {
         conditions {
-          NumberVariable { variable="Score" comparison_sign=">=" value=100 }
+          NumberVariable {
+  variable = "Score"
+  comparison_sign = ">="
+  value = 100
+}
         }
         actions {
-          SetNumberVariable { variable="Score" modification_sign="+" value=100 }
+          SetNumberVariable {
+  variable = "Score"
+  modification_sign = "+"
+  value = 100
+}
         }
       }
       else {
         actions {
-          SetNumberVariable { variable="Score" modification_sign="+" value=3 }
+          SetNumberVariable {
+  variable = "Score"
+  modification_sign = "+"
+  value = 3
+}
         }
       }
       while {
         infiniteLoopWarning = true
         while_conditions {
-          NumberVariable { variable="QueueSize" comparison_sign=">" value=0 }
+          NumberVariable {
+  variable = "QueueSize"
+  comparison_sign = ">"
+  value = 0
+}
         }
         actions {
-          SetNumberVariable { variable="QueueSize" modification_sign="-" value=1 }
-          SetNumberVariable { variable="Score" modification_sign="+" value=1 }
+          SetNumberVariable {
+  variable = "QueueSize"
+  modification_sign = "-"
+  value = 1
+}
+          SetNumberVariable {
+  variable = "Score"
+  modification_sign = "+"
+  value = 1
+}
         }
       }
       for_each {
         object = "Enemy"
         actions {
-          SetNumberVariable { variable="Score" modification_sign="+" value=1 }
+          SetNumberVariable {
+  variable = "Score"
+  modification_sign = "+"
+  value = 1
+}
         }
       }
       for_each_child {
@@ -107,7 +147,11 @@ if (pickedCount > 0) { objects[0].setX(42); }
         value = "item"
         key = "itemKey"
         actions {
-          SetNumberVariable { variable="Score" modification_sign="+" value=1 }
+          SetNumberVariable {
+  variable = "Score"
+  modification_sign = "+"
+  value = 1
+}
         }
       }
     }
@@ -208,14 +252,18 @@ test('generates native cardinality fixtures and checks their static contracts', 
         .find(entry => entry.type === type)
         .parameters.find(parameter => parameter.valueKind === 'object').dslName;
     const collision =
-      'CollisionNP { first_object="Player" second_object="Coin" }';
+      'CollisionNP {\n  first_object = "Player"\n  second_object = "Coin"\n}';
     const score =
-      'SetNumberVariable { variable="Score" modification_sign="+" value=1 }';
+      'SetNumberVariable {\n  variable = "Score"\n  modification_sign = "+"\n  value = 1\n}';
     const picked = 'conditions {\n' + collision + '\n}\n';
     const cases = [
       {
         name: 'multi-delete-single-score',
-        body: `event {\n${picked}actions {\nDelete { object="Coin" }\n${score}\n}\n}`,
+        body: `event {\n${picked}actions {
+Delete {
+  object = "Coin"
+}
+${score}\n}\n}`,
         coins: 1,
         score: 1,
         advisory: true,
@@ -226,7 +274,9 @@ test('generates native cardinality fixtures and checks their static contracts', 
 ${picked}for_each {
 object = "Coin"
 actions {
-Delete { object="Coin" }
+Delete {
+  object = "Coin"
+}
 ${score}
 }
 }
@@ -237,25 +287,40 @@ ${score}
       },
       {
         name: 'repick-all-after-filter',
-        body: `event {\n${picked}actions {\nPickAllInstances { ${objectArgument(
+        body: `event {\n${picked}actions {\nPickAllInstances {\n ${objectArgument(
           'PickAllInstances'
-        )}="Coin" }\nDelete { object="Coin" }\n${score}\n}\n}`,
+        )}="Coin"\n }
+Delete {
+  object = "Coin"
+}
+${score}\n}\n}`,
         coins: 0,
         score: 1,
         advisory: true,
       },
       {
         name: 'random-current-selection',
-        body: `event {\n${picked}actions {\nPickRandomInstance { ${objectArgument(
+        body: `event {\n${picked}actions {\nPickRandomInstance {\n ${objectArgument(
           'PickRandomInstance'
-        )}="Coin" }\nDelete { object="Coin" }\n${score}\n}\n}`,
+        )}="Coin"\n }
+Delete {
+  object = "Coin"
+}
+${score}\n}\n}`,
         coins: 2,
         score: 1,
         advisory: false,
       },
       {
         name: 'sibling-selection-reset',
-        body: `event {\n${picked}}\nevent {\nactions {\nDelete { object="Coin" }\n}\n}`,
+        body: `event {\n${picked}}
+event {
+actions {
+Delete {
+  object = "Coin"
+}
+}
+}`,
         coins: 0,
         score: 0,
         advisory: false,
@@ -382,7 +447,7 @@ test('behavior property aliases use native metadata and generate identical execu
     const uri =
       'game://extensions/PropertyAliasTest/behaviors/Follow/functions/doStepPreEvents.gdl';
     const source =
-      'function {\n      events {\n        event {\n          conditions {\n            getProperty { name="Fresh" }\n          }\n          actions {\n            setProperty { name="Fresh" value=false }\n            setProperty { name="Height" value={{getProperty(name="Height") + 2}} }\n            setProperty { name="Title" value={{getProperty(name="Title") + "!"}} }\n          }\n        }\n      }\n    }';
+      'function {\n      events {\n        event {\n          conditions {\n            getProperty {\n  name = "Fresh"\n}\n          }\n          actions {\n            setProperty {\n  name = "Fresh"\n  value = false\n}\n            setProperty {\n  name = "Height"\n  value = {{ getProperty(name="Height") + 2 }}\n}\n            setProperty {\n  name = "Title"\n  value = {{ getProperty(name="Title") + "!" }}\n}\n          }\n        }\n      }\n    }';
     const events = compileSettingsEvents(source, options, uri);
     expect(events[0].actions[0].parameters).toEqual([
       'Object',
@@ -391,20 +456,20 @@ test('behavior property aliases use native metadata and generate identical execu
     ]);
     const legacy = source
       .replace(
-        'getProperty { name="Fresh" }',
-        'PropertyAliasTest::Follow::PropertyFresh { object="Object" behavior="Behavior" }'
+        'getProperty {\n  name = "Fresh"\n}',
+        'PropertyAliasTest::Follow::PropertyFresh {\n  object = "Object"\n  behavior = "Behavior"\n}'
       )
       .replace(
-        'setProperty { name="Fresh" value=false }',
-        'PropertyAliasTest::Follow::SetPropertyFresh { object="Object" behavior="Behavior" new_value_to_set=false }'
+        'setProperty {\n  name = "Fresh"\n  value = false\n}',
+        'PropertyAliasTest::Follow::SetPropertyFresh {\n  object = "Object"\n  behavior = "Behavior"\n  new_value_to_set = false\n}'
       )
       .replace(
-        'setProperty { name="Height" }',
-        'PropertyAliasTest::Follow::SetPropertyHeight { object="Object" behavior="Behavior" modification_sign="=" }'
+        'setProperty {\n  name = "Height"\n}',
+        'PropertyAliasTest::Follow::SetPropertyHeight {\n  object = "Object"\n  behavior = "Behavior"\n  modification_sign = "="\n}'
       )
       .replace(
-        'setProperty { name="Title" }',
-        'PropertyAliasTest::Follow::SetPropertyTitle { object="Object" behavior="Behavior" modification_sign="=" }'
+        'setProperty {\n  name = "Title"\n}',
+        'PropertyAliasTest::Follow::SetPropertyTitle {\n  object = "Object"\n  behavior = "Behavior"\n  modification_sign = "="\n}'
       )
       .replace(
         'getProperty(name="Height")',

@@ -253,7 +253,12 @@ export const registerSettingsLanguage = (monaco: any) => {
     const index = blocks.findIndex(
       block =>
         position.lineNumber >= block.bodyLine &&
-        position.lineNumber <= block.endLine
+        position.lineNumber <= block.endLine &&
+        (block.stringLiteral.raw ||
+          (model.getOffsetAt(position) >=
+            block.stringLiteral.contentLocation.offset &&
+            model.getOffsetAt(position) <=
+              block.stringLiteral.contentLocation.endOffset))
     );
     if (index < 0) return null;
     const block = blocks[index];
@@ -286,9 +291,19 @@ export const registerSettingsLanguage = (monaco: any) => {
       lineNumber: block.bodyLine,
       column: 1,
     });
+    const literal = block.stringLiteral;
+    const originalOffset = model.getOffsetAt(position);
+    const decodedOffset = literal.valueOffsets
+      ? literal.valueOffsets.findIndex(offset => offset >= originalOffset)
+      : block.inlineCode
+          .split('\n')
+          .slice(0, position.lineNumber - block.bodyLine)
+          .reduce((sum, text) => sum + text.length + 1, 0) +
+        position.column -
+        1;
     return {
       model: embedded,
-      offset: prefix.length + model.getOffsetAt(position) - originalStart,
+      offset: prefix.length + decodedOffset,
       prefixLength: prefix.length,
       originalStart,
     };

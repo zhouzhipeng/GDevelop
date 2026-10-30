@@ -792,3 +792,21 @@ harness.getRenderer();
     );
   });
 });
+
+test('single-line code strings receive project-aware checks with escaped source columns', () => {
+  const code = 'const label = "中文😀";\nruntimeScene._instances.length;';
+  const source = `function {\n events {\n javascript {\n strict = true\n code = ${JSON.stringify(
+    code
+  )}\n }\n }\n}\n`;
+  const validation = validateProjectJavaScriptAuthoring({
+    serializedProject,
+    sourceFiles: { 'game://scenes/Main/Main.gdl': source },
+  });
+  expect(validation.blocks).toBe(1);
+  const diagnostic = validation.errors.find(
+    error => error.code === 'JS_API_PRIVATE_MEMBER'
+  );
+  expect(diagnostic.line).toBe(5);
+  const line = source.split('\n')[4];
+  expect(diagnostic.column).toBe(line.indexOf('_instances') + 1);
+});

@@ -5,6 +5,7 @@ import {
   parseSettingsSyntax,
   printSettingsSyntax,
   MAX_SETTINGS_DEPTH,
+  getSettingsStringLocation,
 } from './Syntax';
 import { decodeVariableNode, encodeVariableNode } from './Variables';
 
@@ -394,13 +395,6 @@ export const decodeEventList = (
           'SETTINGS_CODE_BLOCK'
         );
       const code = n.properties.code;
-      if (!code.raw)
-        error(
-          'code requires a multiline raw string.',
-          code,
-          uri,
-          'SETTINGS_CODE_BLOCK'
-        );
       if (code.value.length > 2 * 1024 * 1024)
         error(
           'JavaScript code size budget exceeded.',
@@ -415,18 +409,11 @@ export const decodeEventList = (
           allowAwaitOutsideFunction: true,
         });
       } catch (cause) {
-        const content = code.contentLocation;
         error(
           `Invalid JavaScript: ${cause.message}`,
           {
             type: 'code',
-            location: {
-              line: content.line + cause.loc.line - 1,
-              column: cause.loc.column + 1,
-              offset:
-                (code.lineOffsets[cause.loc.line - 1] ?? content.offset) +
-                cause.loc.column,
-            },
+            location: getSettingsStringLocation(code, cause.pos),
           },
           uri,
           'SETTINGS_JAVASCRIPT'
@@ -635,13 +622,14 @@ export const extractSettingsJavaScriptBlocks = (source, fileUri) => {
   const visit = n => {
     if (n.type === 'javascript') {
       const code = n.properties.code;
-      if (code && code.raw)
+      if (code && typeof code.value === 'string')
         blocks.push({
           code: code.value,
           source: code.value,
           line: code.contentLocation.line,
           startLine: code.contentLocation.line,
-          endLine: code.location.endLine - 1,
+          endLine: code.raw ? code.location.endLine - 1 : code.location.endLine,
+          stringLiteral: code,
           inlineCode: code.value,
           bodyLine: code.contentLocation.line,
           headerLine: n.location.line,
@@ -722,7 +710,7 @@ export const EVENT_SCHEMAS = Object.fromEntries(
                 : {}),
               ...(kind === 'javascript' && name === 'code'
                 ? {
-                    syntax: 'multiline raw string',
+                    syntax: 'JSON string or multiline raw string',
                     ecmaVersion: 2022,
                     preservesIndentation: true,
                   }

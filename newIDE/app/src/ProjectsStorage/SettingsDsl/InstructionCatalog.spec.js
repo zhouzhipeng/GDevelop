@@ -218,7 +218,7 @@ describe('project Settings instruction catalog', () => {
 
   test('compiles named catalog instructions with semantic operands', () => {
     const source =
-      'function {\n events {\n event {\n conditions {\n Network::Succeeded { request_id="RequestId" }\n }\n actions {\n Network::Send { url="https://example.com" body={{VariableString(Payload)}} }\n }\n }\n }\n }\n';
+      'function {\n events {\n event {\n conditions {\n Network::Succeeded {\n  request_id = "RequestId"\n}\n }\n actions {\n Network::Send {\n  url = "https://example.com"\n  body = {{ VariableString(Payload) }}\n}\n }\n }\n }\n }\n';
     const output = compileSettingsEvents(source, {
       resolveInstruction: createCatalogInstructionResolver(catalogFixture),
     });
@@ -410,17 +410,17 @@ describe('project Settings instruction catalog', () => {
 
     expect(() =>
       compile(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action { count="1" object="Enemy" }\n      }\n    }\n  }\n}\n'
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action {\n  count = "1"\n  object = "Enemy"\n}\n      }\n    }\n  }\n}\n'
       )
     ).toThrow('expects a semantic number');
     expect(() =>
       compile(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action { count=1 object={{"Enemy"}} }\n      }\n    }\n  }\n}\n'
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action {\n  count = 1\n  object = {{ "Enemy" }}\n}\n      }\n    }\n  }\n}\n'
       )
     ).toThrow('does not accept {{...}}');
     expect(() =>
       compile(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action { count=1 object="Enemy" runtime="scene" }\n      }\n    }\n  }\n}\n'
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action {\n  count = 1\n  object = "Enemy"\n  runtime = "scene"\n}\n      }\n    }\n  }\n}\n'
       )
     ).toThrow('code-only and must be omitted');
   });
@@ -428,7 +428,7 @@ describe('project Settings instruction catalog', () => {
   test('scans nested calculated expressions without exposing raw operands', () => {
     const output = JSON.parse(
       compileSettingsJson(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body={{ToString(Max(Variable(A), Variable(B)))}} }\n      }\n    }\n  }\n}\n',
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send {\n  url = "https://example.com"\n  body = {{ ToString(Max(Variable(A), Variable(B))) }}\n}\n      }\n    }\n  }\n}\n',
         { resolveInstruction: createCatalogInstructionResolver(catalogFixture) }
       )
     );
@@ -437,14 +437,14 @@ describe('project Settings instruction catalog', () => {
     );
     expect(() =>
       compileSettingsJson(
-        'function {\n events {\n event {\n actions {\n Network::Send { url="https://example.com" body={{}} }\n}\n}\n}\n}\n',
+        'function {\n events {\n event {\n actions {\n Network::Send {\n url="https://example.com"\n body={{}}\n }\n}\n}\n}\n}\n',
         { resolveInstruction: createCatalogInstructionResolver(catalogFixture) }
       )
     ).toThrow('cannot be empty');
     expect(
       JSON.parse(
         compileSettingsJson(
-          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body={{ToString(\nMax(Variable(A), Variable(B))\n)}} }\n      }\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send {\n  url = "https://example.com"\n  body = {{ ToString(\nMax(Variable(A), Variable(B))\n) }}\n}\n      }\n    }\n  }\n}\n',
           {
             resolveInstruction: createCatalogInstructionResolver(
               catalogFixture
@@ -456,7 +456,7 @@ describe('project Settings instruction catalog', () => {
     expect(
       JSON.parse(
         compileSettingsJson(
-          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send { url="https://example.com" body={{"first line\nsecond line"}} }\n      }\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send {\n  url = "https://example.com"\n  body = {{ "first line\nsecond line" }}\n}\n      }\n    }\n  }\n}\n',
           {
             resolveInstruction: createCatalogInstructionResolver(
               catalogFixture
@@ -906,9 +906,11 @@ describe('project Settings instruction catalog', () => {
 
       conditions {
 
-        CollisionNP { first_object="Player" second_object="Platform" ${
-          optionalCollisionParameter.dslName
-        }=false }
+        CollisionNP {
+          first_object="Player"
+          second_object="Platform"
+          ${optionalCollisionParameter.dslName}=false
+        }
       }
     }
   }
@@ -1004,7 +1006,7 @@ describe('project Settings instruction catalog', () => {
 
 test('unified operand diagnostics identify the exact argument value in the owning settings source', () => {
   const source =
-    'function {\n events {\n event {\n actions {\n Network::Send { url=42 body="payload" }\n }\n }\n }\n}\n';
+    'function {\n events {\n event {\n actions {\n Network::Send {\n  url = 42\n  body = "payload"\n}\n }\n }\n }\n}\n';
   try {
     compileSettingsEvents(
       source,
@@ -1137,3 +1139,37 @@ describe('instruction catalog files', () => {
     }
   );
 });
+
+test.each(['short text', '第一行\n第二行', '  keep spaces\n\ttabs  \n'])(
+  'catalog text parameters accept JSON and multiline raw strings equivalently: %j',
+  value => {
+    const options = {
+      resolveInstruction: createCatalogInstructionResolver(catalogFixture),
+      formatInstruction: createCatalogInstructionFormatter(catalogFixture),
+    };
+    for (const literal of [JSON.stringify(value), `"""\n${value}\n"""`]) {
+      const source = `function {
+  events {
+    event {
+      actions {
+        Network::Send {
+          url = "https://example.com"
+          body = ${literal}
+        }
+      }
+    }
+  }
+}
+`;
+      const compiled = compileSettingsJson(source, options);
+      expect(JSON.parse(compiled)[0].actions[0].parameters[1]).toBe(
+        JSON.stringify(value)
+      );
+      const saved = serializeEventDocument(compiled, options);
+      expect(
+        areLegacyEventsEquivalent(compiled, compileSettingsJson(saved, options))
+      ).toBe(true);
+      if (value.includes('\n')) expect(saved).toContain('body = """\n');
+    }
+  }
+);

@@ -46,7 +46,10 @@ test('keeps comments anchored to arguments across a model rewrite', () => {
   const current = previous
     .replace(/ *\/\/[^\n]*\n/g, '')
     .replace('first = 1', 'first = 3')
-    .replace(/A \{\s+first = 3\s+second = 2\s+\}/, 'A { first = 3 second = 2 }')
+    .replace(
+      /A \{\s+first = 3\s+second = 2\s+\}/,
+      'A {\n  first = 3\n  second = 2\n}'
+    )
     .replace(/B \{\s+\}/, 'B {}');
   const result = preserveSettingsSourceComments(current, previous);
   expect(result).toMatch(/\/\/ explain the first operand\n\s+first = 3/);

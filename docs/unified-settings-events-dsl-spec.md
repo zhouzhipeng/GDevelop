@@ -24,7 +24,7 @@ GDevelop Language (GDL) 成为唯一的项目配置及事件作者语言。函�
 
 1. `key = value` 声明属性。
 2. `node { ... }` 表达明确的结构、归属和边界。
-3. `conditions {}` 和 `actions {}` 明确区分指令种类；内部直接写 `Type { name = value }`，不使用 if/do。
+3. `conditions {}` 和 `actions {}` 明确区分指令种类；内部使用多行 `Type` 节点块声明具名参数，不使用 if/do。
 4. 普通事件使用 `event {}`，其他事件分别使用 `else {}`、`repeat {}`、`while {}`、`for_each {}`、`for_each_child {}`、`javascript {}`；所有事件节点禁止 type 字段；分组使用独立的 `group {}`，持久化注释使用独立的 `comment {}`，外部片段引用使用独立的 `link {}`。
 5. JavaScript 使用 `javascript {... }` 中的 `code = """` 多行原始字符串。
 6. 同一 lexer、parser、AST、source range、formatter 和诊断系统处理全部作者源码。不得将 events 内容截成字符串交给旧 IfDo parser。
@@ -119,19 +119,27 @@ function {
 
         conditions {
 
-          collision { first_object = "Player" second_object = "Coin" }
+          collision {
+            first_object = "Player"
+            second_object = "Coin"
+          }
         }
 
         actions {
 
-          deleteObject { object = "Coin" }
+          deleteObject {
+            object = "Coin"
+          }
 
-          setNumberVariable { variable = "Score" modification_sign = "+" value = 1 }
+          setNumberVariable {
+            variable = "Score"
+            modification_sign = "+"
+            value = 1
+          }
         }
 
         javascript {
           strict = true
-
           code = """
             const score = runtimeScene.getVariables().get("Score").getAsNumber();
             console.log("Current score:", score);
@@ -167,20 +175,22 @@ function {
 document         := node EOF
 member           := assignment | node
 instructionList  := ('conditions' | 'actions' | 'while_conditions') '{' NEWLINE instruction* '}'
-instruction      := instructionType '{' (namedArgument | flagsBlock | instruction)* '}' NEWLINE
+instruction      := instructionType '{' NEWLINE (namedArgument NEWLINE | flagsBlock NEWLINE | instruction)* '}' NEWLINE
+                  | instructionType '{' '}' NEWLINE
 instructionType  := IDENT_OR_NAMESPACED_TYPE | STRING
 namedArgument    := IDENT '=' operand
-operand          := STRING | NUMBER | BOOLEAN | expression
+operand          := stringLiteral | NUMBER | BOOLEAN | expression
+stringLiteral    := STRING | rawMultilineString
 expression       := '{{' expressionSource '}}'
 flagsBlock       := 'flags' '{' NEWLINE assignment* '}'
-codeProperty     := 'code' '=' rawMultilineString
+codeProperty     := 'code' '=' stringLiteral
 ```
 
 以上为说明性语法；instructionList 是普通节点语法的上下文特化；rawMultilineString 是通用字符串值，必须由同一个 Settings parser 管理范围、预算和诊断。条件列表只查条件 catalog，动作列表只查动作 catalog；子指令继承父指令种类。同名条件/动作无歧义。指令不能直接出现在 event、group 或其他配置节点中。
 
-指令优先使用 catalog 精确 dslName；也接受精确原生 type，包含空格时使用 JSON 字符串。列表内部 `Name = value` 是非法赋值，不可当作指令；指令调用使用 `Type { arg = value }`，花括号不可省略，包括无参数调用。指令块内赋值表示具名参数；执行标记放在嵌套 `flags {}` 中，避免与参数重名。
+指令优先使用 catalog 精确 dslName；也接受精确原生 type，包含空格时使用 JSON 字符串。列表内部 `Name = value` 是非法赋值，不可当作指令；指令调用使用多行 `Type` 节点块，花括号不可省略，包括无参数调用。指令块内赋值表示具名参数；执行标记放在嵌套 `flags {}` 中，避免与参数重名。
 
-`{{...}}` 专用于 catalog 允许表达式的参数与循环字段，不能出现在普通 settings 属性中。扫描识别表达式中的嵌套花括号、字符串和转义；只有字符串外且嵌套深度为零的 `}}` 才结束表达式。参数不得重复、不得使用位置参数。指令参数可以逐行书写，也可以在同一行书写。{{...}} 内容可跨行，保留原生表达式的精确源码。官方模板包含此类表达式，不能折叠空白或截断。格式化器将不超过 80 列、无标记、无子指令和内部注释的简单调用输出为单行，其余展开。
+`{{...}}` 专用于 catalog 允许表达式的参数与循环字段，不能出现在普通 settings 属性中。扫描识别表达式中的嵌套花括号、字符串和转义；只有字符串外且嵌套深度为零的 `}}` 才结束表达式。参数不得重复、不得使用位置参数。所有非空节点（包括指令和 flags）必须多行书写，属性与子节点之间必须换行；禁止 `node { a=1 b=2 }` 和同行单属性形式。空节点允许 `node {}`。{{...}} 内容可跨行，保留原生表达式的精确源码。官方模板包含此类表达式，不能折叠空白或截断。格式化器始终将非空指令输出为多行，每个参数独占一行。
 
 例如，`angle_in_degrees = {{ MousePointerLock::MovementX() * HorizontalSpeed / SceneWindowWidth() }}`。规范输出在双花括号内两侧各使用一个空格。双花括号内使用 GDevelop 表达式语言，不是 JavaScript 或 GDL 结构块。`message = "Hello"` 是文本字面量，`message = {{ "Score: " + ToString(Score) }}` 是表达式。旧的 `expr(...)` 写法不受支持。
 
@@ -207,12 +217,17 @@ function {
 
       conditions {
 
-        collision { first_object = "Player" second_object = "Enemy" }
+        collision {
+          first_object = "Player"
+          second_object = "Enemy"
+        }
       }
 
       actions {
 
-        deleteObject { object = "Enemy" }
+        deleteObject {
+          object = "Enemy"
+        }
       }
 
       event {
@@ -259,8 +274,12 @@ conditions {
     }
   }
   or {
-    SomeCondition { target = "Enemy" }
-    AnotherCondition { target = "Enemy" }
+    SomeCondition {
+  target = "Enemy"
+}
+    AnotherCondition {
+  target = "Enemy"
+}
   }
 }
 
@@ -292,25 +311,35 @@ Else 使用独立 else 节点：
 ```text
 event {
   conditions {
-    SomeCondition { target="Player" }
+    SomeCondition {
+  target = "Player"
+}
   }
   actions {
-    SomeAction { target="Player" }
+    SomeAction {
+  target = "Player"
+}
   }
 }
 
 else {
   conditions {
-    AnotherCondition { target="Player" }
+    AnotherCondition {
+  target = "Player"
+}
   }
   actions {
-    AnotherAction { target="Player" }
+    AnotherAction {
+  target = "Player"
+}
   }
 }
 
 else {
   actions {
-    FallbackAction { target="Player" }
+    FallbackAction {
+  target = "Player"
+}
   }
 }
 ```
@@ -336,7 +365,9 @@ repeat {
 
   actions {
 
-    SomeAction { amount = 1 }
+    SomeAction {
+      amount = 1
+    }
   }
 }
 ```
@@ -355,12 +386,16 @@ for_each {
 
   conditions {
 
-    SomeCondition { target = "Enemy" }
+    SomeCondition {
+      target = "Enemy"
+    }
   }
 
   actions {
 
-    SomeAction { target = "Enemy" }
+    SomeAction {
+      target = "Enemy"
+    }
   }
 }
 ```
@@ -377,7 +412,9 @@ for_each_child {
 
   actions {
 
-    SomeAction { text = "Inspect item" }
+    SomeAction {
+      text = "Inspect item"
+    }
   }
 }
 ```
@@ -393,17 +430,27 @@ while {
 
   while_conditions {
 
-    numberVariable { variable = "QueueSize" comparison_sign = ">" value = 0 }
+    numberVariable {
+      variable = "QueueSize"
+      comparison_sign = ">"
+      value = 0
+    }
   }
 
   conditions {
 
-    SomeCondition { target = "Player" }
+    SomeCondition {
+      target = "Player"
+    }
   }
 
   actions {
 
-    setNumberVariable { variable = "QueueSize" modification_sign = "-" value = 1 }
+    setNumberVariable {
+      variable = "QueueSize"
+      modification_sign = "-"
+      value = 1
+    }
   }
 }
 ```
@@ -433,7 +480,9 @@ event {
 
   actions {
 
-    SomeAction { text = "Use local variables" }
+    SomeAction {
+      text = "Use local variables"
+    }
   }
 }
 ```
@@ -459,7 +508,8 @@ group {
     color = [0, 0, 0]
   }
 
-  event {}
+  event {
+  }
 }
 ```
 
@@ -483,7 +533,9 @@ fragment {
 
       actions {
 
-        log { message_to_log = "Shared combat" }
+        log {
+          message_to_log = "Shared combat"
+        }
       }
     }
   }
@@ -513,7 +565,6 @@ javascript {
   strict = true
   objects = "Enemy"
   expanded = false
-
   code = """
     const score = runtimeScene.getVariables().get("Score").getAsNumber();
     const label = `Score: ${score}`;
@@ -527,7 +578,7 @@ javascript {
 }
 ```
 
-JavaScript 是叶事件，允许公共事件标记及 strict、objects、expanded、code。code 是必需的 string 属性，作者必须使用多行原始字符串。禁止旧 code 子节点和普通转义字符串代码。空代码用独占行的开始与结束标记表示，不要求 JS 语句。
+JavaScript 是叶事件，允许公共事件标记及 strict、objects、expanded、code。code 是必需的 string 属性，与 comment.text、description 等所有字符串字段一样，同时接受普通 JSON 字符串和多行原始字符串。禁止旧 code 子节点。空代码用独占行的开始与结束标记表示，不要求 JS 语句。
 
 strict/objects/expanded 分别映射 useStrict/parameterObjects/eventsSheetExpanded。strict 缺省按原生 false 映射，新建模板显式写 true。objects 保持原生字符串契约。对象、局部变量不自动成为 JS 同名变量，实际绑定与 picking 桥接来自真实 JS 事件 API 和生成声明。脚本能力、引用和作用域仍须项目校验。
 
@@ -640,7 +691,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 | SETTINGS_INSTRUCTION_FLAGS | 标记与指令能力不符 |
 | SETTINGS_INSTRUCTION_CHILDREN | 子指令类型或能力不符 |
 | SETTINGS_EXPRESSION | 表达式语法或 owner 语义不合法 |
-| SETTINGS_CODE_BLOCK | code 非多行、缺失、重复或边界未闭合 |
+| SETTINGS_CODE_BLOCK | code 非字符串、缺失、重复或边界未闭合 |
 | SETTINGS_JAVASCRIPT | JS 解析/类型/作用域错误 |
 | SETTINGS_LINK_TARGET | Link 未解析或有环 |
 
@@ -658,7 +709,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 - 拒绝重复 conditions/actions、嵌套 events、事件节点的非法 type 字段、类型专属字段混用、坏 Else、旧前缀和旧 .events 文件。
 - 容器成员换序不改变归属；各列表内部和混排子 event/group/comment/link 的相对顺序必须保留；所有事件节点拒绝 type 字段。
 - code 中嵌套花括号、对象、类、解构、字符串、注释、正则/除法、模板及嵌套插值均正确识别边界；伪关闭行不误结束。
-- code 必须为多行原始字符串属性；拒绝旧 code 子块、普通转义字符串和单行正文。
+- code 必须为字符串属性，同时接受普通 JSON 字符串与多行原始字符串；拒绝旧 code 子块。
 - 未闭合代码准确定位；尾换行规范化和 CRLF 处理按明确等价规则验证；不能保真时拒绝而非转义回退。
 - formatter/块移动保持模板字符串、注释和代码正文空白，不自动重排 JS。
 
@@ -707,14 +758,22 @@ function {
 
       conditions {
 
-        getProperty { name = "HasJustBeenCreated" }
+        getProperty {
+          name = "HasJustBeenCreated"
+        }
       }
 
       actions {
 
-        setProperty { name = "HasJustBeenCreated" value = false }
+        setProperty {
+          name = "HasJustBeenCreated"
+          value = false
+        }
 
-        setProperty { name = "CameraZ" value = 100 }
+        setProperty {
+          name = "CameraZ"
+          value = 100
+        }
 
         setProperty {
           name = "CameraZ"
@@ -727,15 +786,17 @@ function {
 }
 ```
 
-- Action: `setProperty { name = "Name" value = ... }`. `object="Object"` and
-  `behavior="Behavior"` are implicit; either may be supplied explicitly.
-  Numeric/text values use their actual semantic type, with `{{...}}` for
-  calculations. `modification_sign` defaults to `"="` for numeric/text setters;
-  supported operators come from the underlying property catalog. Boolean setters
-  require `value=true` or `value=false` and do not accept modification operators.
-- Condition: `getProperty { name = "Flag" }` checks a boolean property for true;
-  `flags { inverted = true }` checks for false. Numeric/text comparisons use
-  `getProperty { name = "Name" value = ... comparison_sign = ">" }` (default `"="`).
+- Action: use a multiline `setProperty` node with `name` and `value` properties.
+  `object="Object"` and `behavior="Behavior"` are implicit; either may be supplied
+  explicitly on its own line. Numeric/text values use their actual semantic type,
+  with `{{...}}` for calculations. `modification_sign` defaults to `"="` for
+  numeric/text setters; supported operators come from the underlying property
+  catalog. Boolean setters require `value=true` or `value=false` and do not accept
+  modification operators.
+- Condition: use a multiline `getProperty` node with `name = "Flag"` to check a
+  boolean property for true. A nested multiline `flags` node with `inverted = true`
+  checks for false. Numeric/text comparisons use `name`, `value`, and optionally
+  `comparison_sign` (default `"="`), each on its own line.
 - Expression: `getProperty(name="Name")` inside any event expression reads a
   numeric/text property of `Object.Behavior`. It lowers to
   `Object.Behavior::PropertyName()`. Boolean reads use conditions because the

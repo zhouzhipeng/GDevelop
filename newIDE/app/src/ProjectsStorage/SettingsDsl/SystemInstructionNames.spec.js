@@ -212,7 +212,7 @@ test('uses concise, meaningful names for verbose system parameters', () => {
   const format = createCatalogInstructionFormatter(catalog);
   const instruction = resolve({
     kind: 'action',
-    source: 'setReturnBoolean { value = true }',
+    source: 'setReturnBoolean {\n  value = true\n}',
     line: 1,
   });
   expect(format({ kind: 'action', instruction })).toContain('value=true');

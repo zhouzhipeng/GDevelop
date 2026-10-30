@@ -24,6 +24,28 @@ const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 export const MAX_SETTINGS_DEPTH = 100;
 const MAX_TOKENS = 2000000;
 
+// Map decoded string offsets back to raw GDL, including JSON escapes and CRLF.
+export const getSettingsStringLocation = (item, decodedOffset = 0) => {
+  const offset = Math.max(0, Math.min(decodedOffset, item.value.length));
+  if (item.valueOffsets) {
+    const originalOffset = item.valueOffsets[offset];
+    return {
+      line: item.location.line,
+      column: item.location.column + originalOffset - item.location.offset,
+      offset: originalOffset,
+    };
+  }
+  const before = item.value.slice(0, offset).split('\n');
+  const lineIndex = before.length - 1;
+  const column = before[lineIndex].length + 1;
+  return {
+    line: item.contentLocation.line + lineIndex,
+    column,
+    offset:
+      (item.lineOffsets[lineIndex] ?? item.contentLocation.offset) + column - 1,
+  };
+};
+
 // Tolerant lexical masking for completion in unfinished documents. Preserve
 // offsets and newlines while hiding raw contents from the GDL scope scanners.
 export const maskSettingsRawStrings = source => {
@@ -222,6 +244,28 @@ export const parseSettingsSyntax = (source, fileUri) => {
         return {
           type: 'string',
           value: JSON.parse(source.slice(start, offset)),
+          valueOffsets: (() => {
+            const offsets = [];
+            for (let cursor = start + 1; cursor < offset - 1; ) {
+              offsets.push(cursor);
+              cursor +=
+                source[cursor] === '\\'
+                  ? source[cursor + 1] === 'u'
+                    ? 6
+                    : 2
+                  : 1;
+            }
+            offsets.push(offset - 1);
+            return offsets;
+          })(),
+          contentLocation: {
+            line,
+            column: location.column + 1,
+            offset: start + 1,
+            endLine: line,
+            endColumn: column - 1,
+            endOffset: offset - 1,
+          },
           location,
         };
       } catch (_) {
@@ -288,6 +332,12 @@ export const parseSettingsSyntax = (source, fileUri) => {
       return {
         value: result.value,
         ...(result.type === 'expression' ? { expression: true } : {}),
+        ...(result.valueOffsets
+          ? {
+              valueOffsets: result.valueOffsets,
+              contentLocation: result.contentLocation,
+            }
+          : {}),
         ...(result.raw
           ? {
               raw: true,
@@ -378,7 +428,10 @@ export const parseSettingsSyntax = (source, fileUri) => {
       location: head.location,
     };
     const operands = [];
-    newlines();
+    if (token.type !== '}') {
+      consume('newline');
+      newlines();
+    }
     let hasFlags = false;
     while (token.type !== '}') {
       if (!['ident', 'string'].includes(token.type))
@@ -406,7 +459,10 @@ export const parseSettingsSyntax = (source, fileUri) => {
         if (hasFlags) error('Duplicate instruction flags.', key.location);
         hasFlags = true;
         consume('{');
-        newlines();
+        if (token.type !== '}') {
+          consume('newline');
+          newlines();
+        }
         while (token.type !== '}') {
           const flag = consume('ident');
           consume('=');
@@ -416,13 +472,13 @@ export const parseSettingsSyntax = (source, fileUri) => {
             ...value(depth + 1),
             keyLocation: flag.location,
           };
-          newlines();
+          boundary();
         }
         consume('}');
       } else {
         result.children.push(instruction(key, depth + 1));
       }
-      newlines();
+      boundary();
     }
     const end = consume('}').location;
     result.location = {
@@ -435,9 +491,9 @@ export const parseSettingsSyntax = (source, fileUri) => {
     // and child instructions, which are decoded separately.
     const type =
       head.type === 'string' ? JSON.stringify(head.value) : head.value;
-    result.source = Object.values(result.arguments).some(item => item.raw)
+    result.source = operands.length
       ? `${type} {\n${operands.join('\n')}\n}`
-      : `${type} { ${operands.join(' ')} }`;
+      : `${type} {}`;
     return result;
   };
   const node = (nameToken, depth) => {
@@ -472,7 +528,7 @@ export const parseSettingsSyntax = (source, fileUri) => {
           const child = instruction(key, depth + 1);
           result.children.push(child);
           result.members.push({ child });
-          if (token.type !== '}') boundary();
+          boundary();
         } else if (token.type === '{') {
           if (key.type !== 'ident')
             error('Node types must be identifiers.', key.location);
@@ -535,9 +591,21 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
       next.line < item.location.endLine
     );
   };
+  const canPrintRawString = value => {
+    for (let index = 0; index < value.length; index++) {
+      const code = value.charCodeAt(index);
+      if ((code < 32 && code !== 9 && code !== 10) || code === 127)
+        return false;
+    }
+    return true;
+  };
   const emitLiteral = (prefix, item, depth, suffix = '') => {
     const indent = '  '.repeat(depth);
-    if (item.raw && typeof item.value === 'string') {
+    if (
+      typeof item.value === 'string' &&
+      (item.raw || item.value.includes('\n')) &&
+      canPrintRawString(item.value)
+    ) {
       // No indentation, escapes, interpolation, or whitespace trimming.
       if (suffix) {
         // Container punctuation belongs on a separate line after the delimiter.
@@ -587,7 +655,10 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
       const items = item.items || item.value.map(value => ({ value }));
       const multiline =
         items.some(
-          entry => entry.raw || (entry.value && typeof entry.value === 'object')
+          entry =>
+            entry.raw ||
+            (typeof entry.value === 'string' && entry.value.includes('\n')) ||
+            (entry.value && typeof entry.value === 'object')
         ) || hasLiteralComment(item);
       if (!multiline) {
         lines.push(
@@ -634,28 +705,6 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
         !hasComments
       ) {
         lines.push(`${indent}${type} {}`);
-        return;
-      }
-      const compact = `${indent}${type} { ${args
-        .map(
-          ([key, item]) =>
-            `${keyText(key)} = ${
-              item.expression
-                ? `{{ ${item.value.expression} }}`
-                : JSON.stringify(item.value)
-            }`
-        )
-        .join(' ')} }`;
-      if (
-        !flags.length &&
-        !args.some(([, item]) => item.raw) &&
-        !node.children.length &&
-        !options.expandInstructions &&
-        !hasComments &&
-        compact.length <= 80 &&
-        !compact.includes('\n')
-      ) {
-        lines.push(compact);
         return;
       }
       lines.push(`${indent}${type} {`);
@@ -753,8 +802,8 @@ export const preserveSettingsSourceComments = (
 ) => {
   const previous = parseSettingsSyntax(previousSource, fileUri);
   if (!previous.comments.length) return source;
-  // Give each operand its own anchor even when the model writer used a
-  // compact call. Restored comments then keep the call expanded.
+  // Give each operand its own anchor and expand empty instructions so
+  // restored comments remain inside their instruction blocks.
   const incoming = parseSettingsSyntax(source, fileUri);
   const current = parseSettingsSyntax(
     printSettingsSyntax(incoming.root, incoming.comments, {

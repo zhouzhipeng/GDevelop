@@ -78,7 +78,8 @@ for (const enemy of objects) {
 }
 ```
 
-The code property uses a multiline raw string with N >= 3 double quotes.
+Every string property, including code, accepts JSON quoted strings or multiline
+raw strings with N >= 3 double quotes. Multiline text is normally written raw.
 Markers occupy separate lines; increase N for delimiter collisions. Content
 is not escaped, interpolated or dedented. Separator newlines are excluded;
 an extra empty body line preserves a final LF. GDL formatting leaves all JS

@@ -20,7 +20,7 @@ const formatInstruction = ({ instruction }) => `${instruction.type.value} {}`;
 const options = { resolveInstruction, formatInstruction };
 test('double-brace expressions retain quoted delimiters and nested braces', () => {
   const source = wrap(
-    'event {\n actions {\n A { value={{Func("}}", { nested: 1 })}} other=2 }\n }\n}'
+    'event {\n actions {\n A {\n  value = {{ Func("}}", { nested: 1 }) }}\n  other = 2\n}\n }\n}'
   );
   const syntax = parseSettingsSyntax(source);
   const printed = printSettingsSyntax(syntax.root, syntax.comments);
@@ -30,7 +30,7 @@ test('double-brace expressions retain quoted delimiters and nested braces', () =
 
 test('formats inline and block expressions with one space inside delimiters', () => {
   const source = wrap(
-    'repeat {\n count = {{  MouseButton  }}\n actions {\n A { value={{MouseButton}} }\n }\n}'
+    'repeat {\n count = {{  MouseButton  }}\n actions {\n A {\n  value = {{ MouseButton }}\n}\n }\n}'
   );
   const formatted = printSettingsSyntax(parseSettingsSyntax(source).root);
   expect(formatted).toContain('count = {{ MouseButton }}');
@@ -134,7 +134,7 @@ test('omits default group fields while preserving non-default values', () => {
 });
 test('expression operands and type-specific while lists stay separate', () => {
   const source = wrap(
-    'while {\n while_conditions {\n C { value={{Func("(", (1 + 2))}} }\n }\n conditions {\n D {}\n }\n actions {\n A {}\n }\n}'
+    'while {\n while_conditions {\n C {\n  value = {{ Func("(", (1 + 2)) }}\n}\n }\n conditions {\n D {}\n }\n actions {\n A {}\n }\n}'
   );
   const events = compileSettingsEvents(source, options);
   expect(events[0].whileConditions[0].type.value).toBe('C');
@@ -306,7 +306,7 @@ test('handles thousands of explicit events and rejects excessive event/code budg
 
 test('instruction trailing comments are preserved once without truncating quoted URLs', () => {
   const source = wrap(
-    'event {\n actions {\n A { url="https://example.com" } // explain action\n }\n}'
+    'event {\n actions {\n A {\n  url = "https://example.com"\n} // explain action\n }\n}'
   );
   const syntax = parseSettingsSyntax(source);
   const printed = printSettingsSyntax(syntax.root, syntax.comments);
@@ -339,7 +339,10 @@ test('argument blocks preserve operand locations, comments, and flags with colli
       disabled = "parameter"
       value = {{Max(1,
         2)}}
-      flags { disabled = true awaited = true }
+      flags {
+  disabled = true
+  awaited = true
+}
       B {}
     }
   }
@@ -362,12 +365,12 @@ test('argument blocks preserve operand locations, comments, and flags with colli
 });
 
 test.each([
-  'A { value=1 value=2 }',
-  'A { flags {} flags {} }',
-  'A { flags { disabled=true disabled=false } }',
-  'A { value={} }',
-  'A { value=[] }',
-  'A { B }',
+  'A {\n value=1\n value=2\n}',
+  'A {\n flags {}\n flags {}\n}',
+  'A {\n flags {\n disabled=true\n disabled=false\n }\n}',
+  'A {\n value={}\n}',
+  'A {\n value=[]\n}',
+  'A {\n B\n}',
   'A { value=1',
 ])('rejects malformed instruction blocks: %s', call => {
   expect(() =>
@@ -375,12 +378,16 @@ test.each([
   ).toThrow();
 });
 
-test('formats short calls on one line and expands long or annotated calls', () => {
+test('formats every non-empty call on multiple lines', () => {
   const source = wrap(`event {
   actions {
-    A { value=1 }
+    A {
+  value = 1
+}
     B {}
-    C { value="${'x'.repeat(90)}" }
+    C {
+      value="${'x'.repeat(90)}"
+    }
     D {
       // keep this comment inside the argument block
       value=2
@@ -389,7 +396,7 @@ test('formats short calls on one line and expands long or annotated calls', () =
 }`);
   const syntax = parseSettingsSyntax(source);
   const printed = printSettingsSyntax(syntax.root, syntax.comments);
-  expect(printed).toContain('A { value = 1 }');
+  expect(printed).toMatch(/A \{\n\s+value = 1\n\s+\}/);
   expect(printed).toContain('B {}');
   expect(printed).toMatch(/C \{\n\s+value =/);
   expect(printed).toMatch(/D \{\n\s+\/\/ keep this comment/);

@@ -127,67 +127,74 @@ test('offers unified event structure without old keywords or redundant child wra
   );
 });
 
-test('routes embedded JavaScript completions through a JS worker and disposes its virtual model', async () => {
-  const source =
-    'function {\n events {\n javascript {\n code = """\nconsole.\n\n"""\n }\n }\n}\n';
-  const getCompletionsAtPosition = jest.fn(async () => ({
-    entries: [{ name: 'log' }],
-  }));
-  const dispose = jest.fn();
-  const languages = {
-    register: jest.fn(),
-    setMonarchTokensProvider: jest.fn(),
-    setLanguageConfiguration: jest.fn(),
-    registerDocumentFormattingEditProvider: jest.fn(),
-    registerCompletionItemProvider: jest.fn(),
-    CompletionItemKind: { Variable: 1, Snippet: 2 },
-    CompletionItemInsertTextRule: { InsertAsSnippet: 4 },
-    typescript: {
-      getJavaScriptWorker: async () => async () => ({
-        getCompletionsAtPosition,
-      }),
-    },
-  };
-  const monaco = {
-    languages,
-    Uri: { parse: value => ({ toString: () => value }) },
-    editor: {
-      onDidCreateModel: jest.fn(),
-      onDidChangeModelLanguage: jest.fn(),
-      getModels: () => [],
-      setModelMarkers: jest.fn(),
-      createModel: (value, language, uri) => ({
-        getValue: () => value,
-        uri,
-        dispose,
-      }),
-    },
-  };
-  registerSettingsLanguage(monaco);
-  const onWillDispose = jest.fn();
-  const model = {
-    getValue: () => source,
-    uri: { toString: () => 'file:///Test.gdl' },
-    onWillDispose,
-    getOffsetAt: ({ lineNumber, column }) =>
-      source
-        .split('\n')
-        .slice(0, lineNumber - 1)
-        .reduce((sum, line) => sum + line.length + 1, 0) +
-      column -
-      1,
-    getWordUntilPosition: () => ({ startColumn: 9, endColumn: 9 }),
-  };
-  const provider = languages.registerCompletionItemProvider.mock.calls[0][1];
-  const result = await provider.provideCompletionItems(model, {
-    lineNumber: 6,
-    column: 9,
-  });
-  expect(result.suggestions[0].label).toBe('log');
-  expect(getCompletionsAtPosition).toHaveBeenCalledTimes(1);
-  onWillDispose.mock.calls[0][0]();
-  expect(dispose).toHaveBeenCalledTimes(1);
-});
+test.each(['raw', 'json'])(
+  'routes %s JavaScript string completions through a JS worker and disposes its virtual model',
+  async kind => {
+    const source =
+      kind === 'raw'
+        ? 'function {\n events {\n javascript {\n code = """\nconsole.\n\n"""\n }\n }\n}\n'
+        : 'function {\n events {\n javascript {\n code = "console."\n }\n }\n}\n';
+    const getCompletionsAtPosition = jest.fn(async () => ({
+      entries: [{ name: 'log' }],
+    }));
+    const dispose = jest.fn();
+    const languages = {
+      register: jest.fn(),
+      setMonarchTokensProvider: jest.fn(),
+      setLanguageConfiguration: jest.fn(),
+      registerDocumentFormattingEditProvider: jest.fn(),
+      registerCompletionItemProvider: jest.fn(),
+      CompletionItemKind: { Variable: 1, Snippet: 2 },
+      CompletionItemInsertTextRule: { InsertAsSnippet: 4 },
+      typescript: {
+        getJavaScriptWorker: async () => async () => ({
+          getCompletionsAtPosition,
+        }),
+      },
+    };
+    const monaco = {
+      languages,
+      Uri: { parse: value => ({ toString: () => value }) },
+      editor: {
+        onDidCreateModel: jest.fn(),
+        onDidChangeModelLanguage: jest.fn(),
+        getModels: () => [],
+        setModelMarkers: jest.fn(),
+        createModel: (value, language, uri) => ({
+          getValue: () => value,
+          uri,
+          dispose,
+        }),
+      },
+    };
+    registerSettingsLanguage(monaco);
+    const onWillDispose = jest.fn();
+    const model = {
+      getValue: () => source,
+      uri: { toString: () => 'file:///Test.gdl' },
+      onWillDispose,
+      getOffsetAt: ({ lineNumber, column }) =>
+        source
+          .split('\n')
+          .slice(0, lineNumber - 1)
+          .reduce((sum, line) => sum + line.length + 1, 0) +
+        column -
+        1,
+      getWordUntilPosition: () => ({ startColumn: 9, endColumn: 9 }),
+    };
+    const provider = languages.registerCompletionItemProvider.mock.calls[0][1];
+    const sourceLines = source.split('\n');
+    const row = sourceLines.findIndex(line => line.includes('console.'));
+    const result = await provider.provideCompletionItems(model, {
+      lineNumber: row + 1,
+      column: sourceLines[row].indexOf('console.') + 9,
+    });
+    expect(result.suggestions[0].label).toBe('log');
+    expect(getCompletionsAtPosition).toHaveBeenCalledTimes(1);
+    onWillDispose.mock.calls[0][0]();
+    expect(dispose).toHaveBeenCalledTimes(1);
+  }
+);
 
 test('raw code completion preserves body layout and resumes GDL scopes after a literal', () => {
   const prefix = 'function {\n events {\n javascript {\n ';

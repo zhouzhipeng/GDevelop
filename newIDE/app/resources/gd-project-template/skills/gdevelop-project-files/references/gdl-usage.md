@@ -108,9 +108,11 @@ and scalar shorthand are rejected.
 ```settings
 scene {
   name = "Main"
+
   variable {
     name = "State"
     type = "structure"
+
     variable {
       name = "Mode"
       type = "enum"
@@ -177,19 +179,27 @@ function {
 
         conditions {
 
-          collision { first_object = "Player" second_object = "Coin" }
+          collision {
+            first_object = "Player"
+            second_object = "Coin"
+          }
         }
 
         actions {
 
-          deleteObject { object = "Coin" }
+          deleteObject {
+            object = "Coin"
+          }
 
-          setNumberVariable { variable = "Score" modification_sign = "+" value = 1 }
+          setNumberVariable {
+            variable = "Score"
+            modification_sign = "+"
+            value = 1
+          }
         }
 
         javascript {
           strict = true
-
           code = """
             const score = runtimeScene.getVariables().get("Score").getAsNumber();
             console.log("Current score:", score);
@@ -231,8 +241,10 @@ that a scene-variable action adds once per coin. Use for_each when required.
   A plain string such as `message = "Hello"` is a literal, while
   `message = {{ "Score: " + ToString(Score) }}` is an expression. The old
   `expr(...)` wrapper is not supported.
-- Every instruction uses `Instruction { parameter = value }`, including empty
-  calls (`Instruction {}`). Parameters belong inside the braces. Execution
+- Every non-empty node, instruction, and flags block must use multiple lines,
+  with each property or child node on its own line. Single-line calls with
+  arguments are rejected. Empty calls (`Instruction {}`) remain valid.
+  Namespaced node names such as `Extension::Action` are supported. Execution
   flags belong in a nested `flags {}` block: disabled/inverted for conditions,
   disabled/awaited for actions. Catalog-supported child instructions stay
   directly inside the parent instruction block.
@@ -246,7 +258,9 @@ that a scene-variable action adds once per coin. Use for_each when required.
 conditions {
 
   or {
-    SomeCondition { target = "Enemy" }
+    SomeCondition {
+      target = "Enemy"
+    }
     AnotherCondition {
       target = "Enemy"
       flags {
@@ -266,7 +280,9 @@ repeat {
   count = 5
   index = "i"
   actions {
-    SomeAction { amount=1 }
+    SomeAction {
+  amount = 1
+}
   }
 }
 
@@ -286,10 +302,18 @@ for_each_child {
 while {
   infiniteLoopWarning = true
   while_conditions {
-    numberVariable { variable="QueueSize" comparison_sign=">" value=0 }
+    numberVariable {
+  variable = "QueueSize"
+  comparison_sign = ">"
+  value = 0
+}
   }
   actions {
-    setNumberVariable { variable="QueueSize" modification_sign="-" value=1 }
+    setNumberVariable {
+  variable = "QueueSize"
+  modification_sign = "-"
+  value = 1
+}
   }
 }
 
@@ -307,15 +331,24 @@ Declare event locals using variable nodes, with the same value/enum/identity
 rules as settings variables. Nested declarations replace metadata/path.
 Groups do not create a new runtime local-variable scope.
 
-### JavaScript
+### String values
 
-Use javascript nodes with a required code = """ multiline raw string.
+Every string-valued assignment accepts a JSON quoted string or a multiline raw
+string, including comment.text, descriptions, variables, instruction text
+parameters and javascript.code. This is a general value rule, not a code-only
+feature. Field constraints still apply to the decoded string.
+Multiline values serialize as raw strings; single-line values normally use JSON
+quotes. JavaScript code output prefers raw strings but accepts either form.
 Use N >= 3 matching double quotes, with opening/closing markers on separate
 lines. Increase N when the content collides. No escapes, interpolation or
 indentation stripping. Preserve every body space and Tab. The first and last
 separator newlines are excluded; add an empty body line for a final LF.
-Canonical closing markers start in column 1. JS syntax errors do not change
-GDL string boundaries. Old code child blocks are rejected.
+Canonical closing markers start in column 1.
+
+### JavaScript
+
+JS syntax errors do not change GDL string boundaries. Old code child blocks are
+rejected.
 
 Preserve code whitespace and template text during Settings formatting and
 block moves. JavaScript formatting is an explicit separate operation. Use
@@ -385,14 +418,29 @@ property aliases instead of constructing `SetPropertyX` / `PropertyX` names:
 ```settings
 function {
   name = "Initialize"
+
   events {
+
     event {
+
       conditions {
-        getProperty { name = "HasJustBeenCreated" }
+
+        getProperty {
+          name = "HasJustBeenCreated"
+        }
       }
+
       actions {
-        setProperty { name = "HasJustBeenCreated" value = false }
-        setProperty { name = "CameraZ" value = {{ getProperty(name="CameraZ") + 10 }} }
+
+        setProperty {
+          name = "HasJustBeenCreated"
+          value = false
+        }
+
+        setProperty {
+          name = "CameraZ"
+          value = {{ getProperty(name="CameraZ") + 10 }}
+        }
       }
     }
   }
@@ -406,7 +454,9 @@ strings, booleans as `true`/`false`, calculations inside `{{...}}`.
 `modification_sign` on numeric/text setters defaults to `"="`; boolean setters
 require an explicit value. Numeric/text conditions accept `value` and
 `comparison_sign` (default `"="`). A boolean condition tests true; use
-`flags { inverted = true }` to test false. Expression `getProperty(name="CameraZ")`
+`flags {
+  inverted = true
+}` to test false. Expression `getProperty(name="CameraZ")`
 reads a numeric/text property of the current `Object.Behavior`, including in loop
 expressions. Boolean properties use conditions, not expressions.
 
