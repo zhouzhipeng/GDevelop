@@ -1,8 +1,8 @@
 # GDevelop Language (GDL) 当前规范与文档入口
 
-- 状态：已实施；当前作者格式 14，GDL catalog 13，instruction catalog 7。
+- 状态：已实施；当前作者格式 16，GDL catalog 15，instruction catalog 7。
 - 统一事件契约：[统一 GDevelop Language (GDL)：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。作者格式 14 将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
-- 变量契约：[直接 variable 声明与值字面量](settings-dsl-variable-values-spec.md)。第 8.2 节仅作摘要，完整规则由该文档维护。
+- 变量契约：[统一变量描述块与 JSON 复杂值](settings-dsl-variable-values-spec.md)。第 8.2 节仅作摘要，完整规则由该文档维护。
 - 更新日期：2026-10-27
 - 范围：全部现有 `.gdl` 作者文件；项目入口 `project.gdl` 同时使用本语法
 - 工作名称：GDevelop Language (GDL)
@@ -15,7 +15,7 @@
 
 本页是当前 GDL 作者文档的唯一入口，各专题只维护自己的契约：
 
-- [变量](settings-dsl-variable-values-spec.md)：值字面量、嵌套声明、身份与作用域。
+- [变量](settings-dsl-variable-values-spec.md)：显式类型、JSON 复杂值、元数据与作用域。
 - [事件与 JavaScript](unified-settings-events-dsl-spec.md)：指令、表达式、控制流、代码块、Link 和执行顺序。
 - [场景生命周期](scene-event-phases-spec.md)：固定签名、必需文件与执行时机。
 - [Gameplay 测试存储](gameplay-tests-multifile-serialization-spec.md)：tests.gdl、测试脚本和本地结果。
@@ -92,7 +92,7 @@ extensions/Combat/prefabs/Knight/
 - 根不写 `kind`、`settingsFormatVersion` 或每文件 `version`。根节点类型提供组件种类，整个项目只支持当前 schema；`project.gdl` 的 `formatVersion` 是精确匹配的格式标记，不是版本协商入口。
 - 所有 `.gdl` 只由新解析器读取，不探测 TOML。禁止根级 `layout` 包装和独立 `.layout` 布局源；同一组件数据只允许一个所有者。
 - 编辑器状态暂保留在 `editor`，个人视图状态是否迁出另行评估。
-- `project.gdl` 使用相同 DSL，根为 `project`，统一入口后缀为 .gdl。formatVersion 使用当前常量 14。任何不匹配直接拒绝，不尝试旧读取器。
+- `project.gdl` 使用相同 DSL，根为 `project`，统一入口后缀为 .gdl。formatVersion 使用当前常量 17。任何不匹配直接拒绝，不尝试旧读取器。
 - 事件正文合入所属 .gdl；测试 `.js` 正文不变。`constants.toml` 是显式例外，仍为独立的编辑器常量文档；它不是 settings，也不属于本轮替换。生成的 catalog JSON 与运行时 JSON 不改语法。
 - 单文件内配置与布局一起验证、保存；重命名或跨文件引用更新仍须事务保存。
 
@@ -109,7 +109,7 @@ extensions/Combat/prefabs/Knight/
 
 这里的“全部”指所有现有 settings 类别中由对应组件拥有的数据，不包含另一组件拥有的数据。不存在于当前 owner 模型的变量/属性能力不得仅因表格描述而新增。
 
-根级 variable 是组件变量，instance.variable 是实例变量，二者作用域不同。变量 schema 尽可能复用第 8.2 节；owner 现有变量如有额外元数据必须先补齐映射，不能裁剪。
+根级 variables 是组件变量，instance.variables 是实例变量，二者作用域不同。变量 schema 尽可能复用第 8.2 节；owner 现有变量如有额外元数据必须先补齐映射，不能裁剪。
 
 对象组、所需行为、共享数据和其他复杂配置必须逐项登记节点类型、基数、字段和默认值；禁止直接透传任意块。当前运行时模型中需要表达的数据必须显式建模；新语法不提供 rawJson、旧字段透传或兼容包装。未知字段直接报错。
 
@@ -124,7 +124,7 @@ extensions/Combat/prefabs/Knight/
 - 文件为 UTF-8，规范输出 LF，末尾一个换行。
 - 一行一个属性；节点之间用换行分隔，不使用分号。
 - 块起始 `{` 与节点类型同一行，结束 `}` 独占一行。
-- 空块允许写成 `properties {}`。模型中显式存在的空容器可以保留，避免把缺失值与空集合混为一谈。已注册的空记录数组可写为其模型字段名加 `= []`，例如 parameters = []；非空记录集合必须使用重复子节点，禁止混用两种表达。
+- 空块允许写成 `properties {}`。模型中显式存在的空容器可以保留，避免把缺失值与空集合混为一谈。已注册的空记录数组可写为其模型字段名加 `= []`，例如 animations = []；非空记录集合必须使用重复子节点，禁止混用两种表达。parameters、properties 和 shared_properties 具名集合仅使用容器块，空集合也不使用数组赋值。
 - 节点名称允许 `::` 命名空间，例如 `foo::bar`；非空节点必须换行书写，指令及其 `flags` 遵守同一规则。
 - 属性名使用 ASCII 标识符：`[A-Za-z_][A-Za-z0-9_]*`。
 - 用户定义属性名可使用双引号，例如 `"Display Name" = "Knight"`。
@@ -167,7 +167,7 @@ comment {
 
 数字使用 JSON 数字词法，允许负数、小数和科学计数法，不允许 NaN、Infinity、十六进制、日期、前导加号。需要整数的字段必须是安全整数。数组可跨行，允许尾逗号；混合数值精度可接受，但元素类型由字段 schema 限定。
 
-不支持 `null`。只有 variable.value 允许内联对象 `{ key = value }`；其他结构数据使用子节点。字符串中 `"{Player.Health}"` 仍然是普通字符串，不触发绑定。
+不支持 `null`。禁止匿名内联对象 `{ key = value }`；结构数据使用具名子节点。字符串中 `"{Player.Health}"` 仍然是普通字符串，不触发绑定。
 
 ### 4.3 普通配置的简化语法定义
 
@@ -182,7 +182,7 @@ value      := STRING | RAW_MULTILINE_STRING | NUMBER | BOOLEAN | array
 array      := "[" (value ("," value)* ","?)? "]"
 ```
 
-空白和注释由词法层处理。数组内部允许换行。上述仅描述普通配置；variable.value 的递归结构字面量见变量契约。事件指令、{{...}} 与原始 code 字符串见事件契约。核心解析器遇到语法错误即返回诊断；编辑器另有不完整文档补全，不代表完整的容错 AST。
+空白和注释由词法层处理。数组内部允许换行。上述仅描述普通配置；具名变量集合及具名变量描述块见变量契约。事件指令、{{...}} 与原始 code 字符串见事件契约。核心解析器遇到语法错误即返回诊断；编辑器另有不完整文档补全，不代表完整的容错 AST。
 
 ## 5. 根节点与上下文
 
@@ -197,7 +197,7 @@ array      := "[" (value ("," value)* ","?)? "]"
 
 本节表格针对包含空间布局的四种组件；其他根见第 5.1 节。根节点必须与 owner 类型匹配。Variant 表示当前模型中的完整变体布局，不在语法版本 1 引入差量继承或 patch 语义。
 
-布局子块：`bounds`（0/1）、`editor`（0/1）、`layer`（0/N）、`instance`（0/N）。组件配置可另有 `variable`（0/N）及逐项登记的对象组、行为共享数据等节点。允许上下文按现有模型约束为空；不得自动添加缺失图层。
+布局子块：`bounds`（0/1）、`editor`（0/1）、`layer`（0/N）、`instance`（0/N）。组件配置可另有 `variables`（0/1）及逐项登记的对象组、行为共享数据等节点。允许上下文按现有模型约束为空；不得自动添加缺失图层。
 
 ### 5.1 全部文档根类型
 
@@ -218,13 +218,13 @@ array      := "[" (value ("," value)* ","?)? "]"
 
 路径中具名所有者的具体分配保持当前目录契约；表格中的 behavior 路径只表示所属作用域，不要求重构已有目录。全局、场景、Prefab 和 Variant 对象共用 object 根，所属目录决定解析作用域。生命周期函数及扩展/行为/Prefab 函数共用 function 根。
 
-project formatVersion 固定为 14；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
+project formatVersion 固定为 17；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
 
 ### 5.2 Project 与资源清单示例
 
 ```text
 project {
-  formatVersion = 14
+  formatVersion = 17
   name = "Adventure"
 }
 ```
@@ -259,6 +259,7 @@ object {
     name = "Idle"
 
     direction {
+
       frame {
         resource = "player-idle.png"
       }
@@ -274,9 +275,12 @@ object {
     }
   }
 
-  variable {
-    name = "Health"
-    value = 100
+  variables {
+
+    Health {
+      type = "number"
+      value = 100
+    }
   }
 }
 ```
@@ -293,16 +297,17 @@ function {
   functionType = "Action"
   folder = []
 
-  parameter {
-    name = "Target"
-    type = "object"
-    description = "目标对象"
-  }
+  parameters {
 
-  parameter {
-    name = "Amount"
-    type = "expression"
-    description = "伤害数值"
+    Target {
+      type = "object"
+      description = "目标对象"
+    }
+
+    Amount {
+      type = "expression"
+      description = "伤害数值"
+    }
   }
 }
 ```
@@ -332,11 +337,13 @@ behavior {
   order = 0
   description = "生命值管理"
 
-  property {
-    name = "maxHealth"
-    type = "Number"
-    value = "100"
-    label = "最大生命值"
+  properties {
+
+    maxHealth {
+      type = "Number"
+      value = "100"
+      label = "最大生命值"
+    }
   }
 }
 ```
@@ -523,31 +530,43 @@ instance {
 
 最新 schema 不提供 `unresolved` 兼容标记。未知对象直接报错，不通过旧导入状态绕过校验。
 
-### 8.2 变量：直接声明和值字面量
+### 8.2 变量：统一描述块
 
-变量直接放在所属 owner 下，不使用 variables、sceneVariables 或 globalVariables 包装，普通数据使用 value 字面量；后代需要枚举、身份或编辑状态时允许嵌套 variable。
+变量使用唯一 variables 容器，所有成员统一为具名描述块，type 必填。
+标量使用 value；结构和数组使用 json 原始字符串；嵌套枚举和编辑状态使用独立 metadata JSON Pointer 映射。变量 ID 不进入源码。
+Extension 双作用域分别使用 global_variables、scene_variables，不写 scope。
 
 ```text
-variable {
-  name = "CoinPitch"
-  value = 1
-  id = "a9ab811d-91cf-4b76-95a3-81d9cd86156b"
-}
+variables {
 
-variable {
-  name = "Controllers"
-  value = [
-    {
-      Buttons = [{ State = "Idle" }]
-      Joystick = {}
-    }
-  ]
+  CoinPitch {
+    type = "number"
+    value = 1
+  }
+
+  Position {
+    type = "structure"
+    json = """
+{
+  "X": 10,
+  "Y": 20
+}
+"""
+  }
+
+  Inventory {
+    type = "array"
+    json = """
+[
+  "Sword",
+  "Shield"
+]
+"""
+  }
 }
 ```
 
-字符串、数字、布尔、结构和数组按 value 推导类型；enum 显式声明 type 和非空 values。空结构与空数组分别是 {} 和 []。普通 owner 的作用域由位置决定；Extension 同时拥有 global、scene 默认变量时，variable 必须声明 scope。
-
-原生 UUID、折叠状态和 enum 约束直接放在所属 variable 声明；后代有附加信息时使用嵌套 variable，容器显式声明 structure/array 且不写 value。禁止 metadata 节点和路径注解。结构字段和数组元素均保留顺序。完整规则、例子和错误要求见 [变量语法规范](settings-dsl-variable-values-spec.md)。
+匿名结构字面量和旧直接 variable 声明均不支持。完整规则见[变量规范](settings-dsl-variable-values-spec.md)。
 
 ### 8.3 行为覆盖
 
@@ -621,13 +640,17 @@ scene {
   resourcesPreloading = "inherit"
   resourcesUnloading = "inherit"
 
-  variable {
-    name = "Score"
-    value = 0
-  }
-  variable {
-    name = "Paused"
-    value = false
+  variables {
+
+    Score {
+      type = "number"
+      value = 0
+    }
+
+    Paused {
+      type = "boolean"
+      value = false
+    }
   }
 
   editor {
@@ -669,13 +692,17 @@ scene {
       animation = 1
     }
 
-    variable {
-      name = "Health"
-      value = 100
+    variables {
+
+      Health {
+        type = "number"
+        value = 100
+      }
     }
 
     behavior {
       name = "PlatformerObject"
+
       properties {
         maxSpeed = 500
       }
@@ -715,9 +742,12 @@ prefab {
     position = [0, 0]
     size = [128, 96]
 
-    variable {
-      name = "Health"
-      value = 100
+    variables {
+
+      Health {
+        type = "number"
+        value = 100
+      }
     }
   }
 }
@@ -745,9 +775,12 @@ variant {
     position = [0, 0]
     size = [160, 112]
 
-    variable {
-      name = "Health"
-      value = 200
+    variables {
+
+      Health {
+        type = "number"
+        value = 200
+      }
     }
   }
 }
@@ -773,9 +806,12 @@ layout {
     layer = "world"
     position = [12, 0, 8]
 
-    variable {
-      name = "Gold"
-      value = 100
+    variables {
+
+      Gold {
+        type = "number"
+        value = 100
+      }
     }
   }
 }
@@ -832,8 +868,8 @@ Did you mean "Player"?
 
 - 两空格缩进，`=` 两侧一个空格。
 - 属性先于子节点；按 schema 固定字段顺序输出。
-- 根顺序：入口 formatVersion（仅 project）、name、order、其他根属性、组件 variable、其他已注册配置子块、bounds、editor、layers、instances。
-- 实例顺序：id、object、layer、变换与外观、properties、variable、behaviors。
+- 根顺序：入口 formatVersion（仅 project）、name、order、其他根属性、组件 variables、其他已注册配置子块、bounds、editor、layers、instances。
+- 实例顺序：id、object、layer、变换与外观、properties、variables、behaviors。
 - 不按 UUID 或对象名重排实例，不按名称重排图层。
 - 可省略的默认字段不输出；非活动值、有效状态标记和 UUID 必须保留。
 - 格式化与模型保存保留可匹配的源码注释。当前实现优先按身份或名称匹配节点，无身份时使用父节点内同类节点的出现次序；不保证匿名节点重排后的稳定身份。JavaScript 原始内容按事件契约保留，注释不得承载必需运行语义。

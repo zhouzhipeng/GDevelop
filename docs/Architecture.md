@@ -186,7 +186,11 @@ runtime object; its children live in an internal instance container.
 
 `gd::VariablesContainer::SourceType` distinguishes global, scene, object,
 local, extension-global, extension-scene, parameter, and property scopes.
-`gd::Variable` is recursive: primitive, structure, or array.
+`gd::Variable` is recursive: primitive, structure, or array. GDL format 17
+represents every variable as a named descriptor with an explicit type. Scalar
+values use `value`; structures and arrays use strict JSON strings in `json`.
+Nested enum and editing state travel separately in `metadata` JSON Pointer
+records. This authoring syntax does not change native variable scopes or types.
 
 Function parameters and events-based properties are projected into synthetic
 variable/resource/object containers. This allows the same expression parser,
@@ -698,9 +702,9 @@ requested.
 | Representation            | Entry                                           | Status in this checkout                                                                                            |
 | ------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Native JSON model | Internal serialization and template-service snapshots | Engine/editor interchange; URL template import produces the current GDL model. |
-| Multi-file source project | `project.gdl` | Primary local authoring format: GDL 14 configuration and embedded events, with separate gameplay-test JavaScript sources. |
+| Multi-file source project | `project.gdl` | Primary local authoring format: GDL 16 configuration and embedded events, with separate gameplay-test JavaScript sources. |
 
-The current authoring reader accepts GDL 14 only. It does not detect or migrate
+The current authoring reader accepts GDL 16 only. It does not detect or migrate
 older authoring formats. Native JSON template import is a separate boundary,
 not a fallback GDL reader. See the [current GDL contract](settings-dsl-spec.md).
 

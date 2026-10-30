@@ -1,12 +1,12 @@
 # 统一 GDevelop Language (GDL)：函数、事件与 JavaScript 作者格式规范
 
-- 状态：已实施。当前作者格式 14；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
+- 状态：已实施。当前作者格式 16；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
 - 日期：2026-10-26。
 - 决策依据：函数声明和事件正文合入同一个 `.gdl` 文件；只保留 GDevelop Language (GDL)，不考虑任何作者格式兼容性。
-- 当前作者格式：14。GDL catalog 版本：13；instruction catalog 版本：7，发布本文的新指令结构契约。
+- 当前作者格式：14。GDL catalog 版本：15；instruction catalog 版本：7，发布本文的新指令结构契约。
 - 运行时边界：仍投影到 GDevelop 原生事件模型与代码生成器；不重新定义对象 picking、事件调度或表达式求值。
 
-文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdl`，`constants.toml` 和 JavaScript 测试文件保持各自格式。格式 14 不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
+文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdl`，`constants.toml` 和 JavaScript 测试文件保持各自格式。格式 16 不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
 
 系统 action/condition 由引擎固定映射发布作者短名。instruction catalog 7 的
 action/condition 的 `dslName` 与 `type` 相同时省略。GDL 和 AI 优先使用
@@ -31,7 +31,7 @@ GDevelop Language (GDL) 成为唯一的项目配置及事件作者语言。函�
 7. 缩进帮助阅读，花括号决定结构；空行没有事件边界含义。
 8. 不再存在 `.events` 作者文件、IfDo 语言模式或独立 IfDo 版本。
 
-指令调用统一使用花括号块，是统一语法中受上下文限制的节点类型，和 variable.value 的结构字面量一样由同一个解析器处理。code 是通用原始字符串值，GDL 仅识别字符串定界符；JS 解析器独立校验其正文。
+指令调用统一使用花括号块，是统一语法中受上下文限制的节点类型，由同一个解析器处理。code 是通用原始字符串值，GDL 仅识别字符串定界符；JS 解析器独立校验其正文。
 
 ## 2. 目标与非目标
 
@@ -97,16 +97,17 @@ function {
   order = 0
   folder = ["Gameplay"]
 
-  parameter {
-    name = "Player"
-    type = "object"
-    description = "拾取金币的玩家"
-  }
+  parameters {
 
-  parameter {
-    name = "Coin"
-    type = "object"
-    description = "被拾取的金币"
+    Player {
+      type = "object"
+      description = "拾取金币的玩家"
+    }
+
+    Coin {
+      type = "object"
+      description = "被拾取的金币"
+    }
   }
 
   events {
@@ -162,7 +163,7 @@ function {
 ### 5.1 沿用 Settings 规则
 
 - UTF-8；规范输出 LF、末尾一个换行。
-- JSON 双引号字符串、有限 JSON 数字、布尔、数组和受 schema 约束的结构字面量。
+- JSON 双引号字符串、有限 JSON 数字、布尔、数组和具名结构节点。
 - `//` 是外层注释。禁止 `#`、分号和外层块注释。
 - 同一节点属性不得重复；节点类型和属性名不得冲突。
 - 名称、ID 等普通节点数据全部放块内，不支持 `group "Combat" {}` 等节点头参数。
@@ -210,9 +211,12 @@ function {
       folded = false
       aiGeneratedEventId = "handle-contact"
 
-      variable {
-        name = "Damage"
-        value = 10
+      variables {
+
+        Damage {
+          type = "number"
+          value = 10
+        }
       }
 
       conditions {
@@ -231,12 +235,10 @@ function {
       }
 
       event {
-        // 子事件条件、动作继续写在这里。
       }
     }
 
     event {
-      // 独立的下一个兄弟事件，即使只包含动作也不合并。
     }
   }
 }
@@ -461,21 +463,28 @@ while_conditions 是唯一可选条件列表，保存原生 whileConditions。co
 
 ## 10. 局部变量
 
-局部变量使用最新 Settings variable 声明，与场景变量共用值类型、enum、身份和容器规则：
+局部变量使用最新 Settings variable 声明，与场景变量共用显式类型、JSON 值、enum 和元数据规则：
 
 ```text
 event {
 
-  variable {
-    name = "Mode"
-    type = "enum"
-    value = "Idle"
-    values = ["Idle", "Run"]
-  }
+  variables {
 
-  variable {
-    name = "Inventory"
-    value = ["Sword", "Shield"]
+    Mode {
+      type = "enum"
+      value = "Idle"
+      values = ["Idle", "Run"]
+    }
+
+    Inventory {
+      type = "array"
+      json = """
+[
+  "Sword",
+  "Shield"
+]
+"""
+    }
   }
 
   actions {
@@ -489,7 +498,7 @@ event {
 
 声明归属于包含它的原生事件 variables，不是独立事件。子事件继承局部作用域；同作用域重复名报错，跨作用域遮蔽按现有引擎规则校验。循环局部变量初始化时机沿用原生模型，不按普通语言直觉改成每次迭代或循环外初始化。
 
-禁止 local、var(...)、递归 metadata 路径和 scope 属性。嵌套变量有附加信息时直接使用嵌套 variable 声明；结构子变量具名，数组子变量无名且保持顺序。
+禁止 local、var(...) 和 scope 属性。局部变量位于 variables 容器中，所有成员使用显式 type 的具名描述块；标量用 value，结构和数组用 json 字符串，后代枚举及编辑状态用 metadata JSON Pointer 映射。禁止赋值简写、嵌套 variables 和 items/item。
 
 ## 11. Group、持久化注释与源码注释
 
@@ -661,7 +670,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 ## 17. 项目读取、写入与事务
 
-读取顺序：入口格式 14 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
+读取顺序：入口格式 16 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
 
 签名注册先于事件调用解析，支持跨文件函数和现有合法递归调用；不能通过文件枚举顺序决定可见性。
 
@@ -719,7 +728,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 - 参数语义字面量、表达式、空文本、可选槽、代码参数和异步标记正确投影。
 - OR picking、父子继承、兄弟选择恢复、Else、循环及 Link 用真实引擎代码生成与运行测试验证。
 - 多金币例子验证删除范围与计分次数，不能只检查文本相似或编译通过。
-- 变量 enum/身份/false 编辑标记、结构字段顺序和数组顺序无损保留；无 metadata/path。
+- 变量 enum/false 编辑标记、结构字段顺序和数组顺序无损保留；嵌套元数据使用独立 metadata JSON Pointer 映射，变量 ID 不写入作者源码。
 - JS 的实际作用域、对象传参、strict 和展开状态往返，语法/类型错误定位回 settings。
 
 ### 19.3 存储与工具
@@ -733,7 +742,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 ## 20. 后续优化的边界
 
-事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 7；GDL 作者格式仍为 12，GDL catalog 仍为 10。静态摘要不改变原生执行行为，也不代替运行验证。
+事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 7；GDL 作者格式为 15，GDL catalog 为 15。静态摘要不改变原生执行行为，也不代替运行验证。
 
 
 picking 可视化、行为相关 diff 和按 AST 的安全块移动是推荐编辑器能力，可独立迭代；不能将它们未完成视为可改变基础语法的理由。实现基础格式时至少保留精确 AST 和语义位置，使后续工具无需重新解析另一套正文语言。
@@ -778,7 +787,7 @@ function {
         setProperty {
           name = "CameraZ"
           modification_sign = "+"
-          value = {{ getProperty(name="CameraZ") * 0.1 }}
+          value = {{ CameraZ * 0.1 }}
         }
       }
     }
@@ -797,19 +806,21 @@ function {
   boolean property for true. A nested multiline `flags` node with `inverted = true`
   checks for false. Numeric/text comparisons use `name`, `value`, and optionally
   `comparison_sign` (default `"="`), each on its own line.
-- Expression: `getProperty(name="Name")` inside any event expression reads a
-  numeric/text property of `Object.Behavior`. It lowers to
-  `Object.Behavior::PropertyName()`. Boolean reads use conditions because the
-  native expression system does not expose boolean property getters. This form
-  accepts only `name`, and works in instruction expressions and repeat/for-each
-  expression fields. Quoted text and member functions named `getProperty` are
-  untouched. Existing bare property expressions remain valid.
+- Expression: use the bare property name, for example `{{ CameraZ + 1 }}`.
+  Native expression AST binding resolves visible properties before variables,
+  including event-local variables. A property type error never falls back to a
+  same-named variable. Function names, explicit variable access, members and text
+  literals retain their existing meaning. The old getProperty(name=...) alias is rejected.
 - Unknown properties, dynamic property names, wrong value types, unsupported
   parameters and use outside a behavior function are rejected. The complete
   generated catalogs must be available; aliases do not bypass catalog validation.
-- Saving uses the uniform instruction aliases for the current behavior and the
-  expression alias for explicit `Object.Behavior::PropertyName()` reads. Original
+- Saving uses the uniform instruction aliases for the current behavior and retains native expression source without string rewriting. Original
   fully qualified instruction names remain accepted. Legacy instructions with
   empty target/value/operator slots retain their original spelling for lossless
   round trips. Other behavior targets and shared properties retain their existing
   expression syntax. Settings properties and embedded JavaScript are unaffected.
+
+
+## 格式 16 具名集合与属性引用
+
+参数和属性描述符分别使用 parameters/properties/shared_properties 容器，成员名作为节点名，不重复 name 字段。变量使用 variables 具名集合；详见[变量规范](settings-dsl-variable-values-spec.md)。表达式直接引用属性名，例如 `{{ Height + 1 }}`；可见属性优先于同名变量，包括事件局部变量。找到属性后类型错误不回退到变量。显式变量访问、函数调用、成员访问和字符串仍遵循原生表达式 AST 语义；旧 getProperty(name=...) 表达式别名拒绝。

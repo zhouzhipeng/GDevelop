@@ -92,13 +92,13 @@ test('behavior context supports canonical, encoded, and absolute paths', () => {
 test.each([
   ['name="Height" value=12', ['Object', 'Behavior', '=', '12']],
   [
-    'name="Height" modification_sign="+" value={{2 + getProperty(name="Height")}}',
-    ['Object', 'Behavior', '+', '2 + Object.Behavior::PropertyHeight()'],
+    'name="Height" modification_sign="+" value={{2 + Height}}',
+    ['Object', 'Behavior', '+', '2 + Height'],
   ],
   ['name="Title" value="Hello"', ['Object', 'Behavior', '=', '"Hello"']],
   [
-    'name="Title" value={{getProperty(name="Title") + "!"}}',
-    ['Object', 'Behavior', '=', 'Object.Behavior::PropertyTitle() + "!"'],
+    'name="Title" value={{Title + "!"}}',
+    ['Object', 'Behavior', '=', 'Title + "!"'],
   ],
   ['name="Fresh" value=false', ['Object', 'Behavior', 'no']],
   ['name="Fresh" value=true', ['Object', 'Behavior', 'yes']],
@@ -112,7 +112,7 @@ test.each([
 
 test('conditions, flags, nested events and loop expressions round trip', () => {
   const events = compile(`repeat {
-    count = {{max(1, getProperty(name="Height"))}}
+    count = {{max(1, Height)}}
     conditions {
       getProperty { name="Fresh"
  flags {
@@ -130,19 +130,17 @@ disabled = true
 } } }
     event { actions { setProperty {
   name = "Height"
-  value = {{ getProperty(name="Height") + 1 }}
+  value = {{ Height + 1 }}
 } } }
   }`);
-  expect(events[0].repeatExpression).toBe(
-    'max(1, Object.Behavior::PropertyHeight())'
-  );
+  expect(events[0].repeatExpression).toBe('max(1, Height)');
   expect(events[0].conditions[0].type).toMatchObject({
     value: 'Camera::Follow::PropertyFresh',
     inverted: true,
   });
   const written = appendSettingsEvents('function {}', events, options, uri);
   expect(written).toMatch(/setProperty \{\s+name = "Fresh"/);
-  expect(written).toContain('getProperty(name="Height")');
+  expect(written).toContain('Height');
   expect(compileSettingsEvents(written, options, uri)).toEqual(events);
   expect(
     appendSettingsEvents(
@@ -176,15 +174,15 @@ test.each([
   ],
   [
     'setProperty {\n  name = "Height"\n  value = {{ getProperty(name="Fresh") }}\n}',
-    'Boolean properties',
+    'no longer supported',
   ],
   [
     'setProperty {\n  name = "Height"\n  value = {{ getProperty(name="Missing") }}\n}',
-    'Unknown action property',
+    'no longer supported',
   ],
   [
     'setProperty {\n  name = "Height"\n  value = {{ getProperty(name="Height" extra=1) }}\n}',
-    'newline after the declaration',
+    'no longer supported',
   ],
 ])('rejects invalid property access %s', (source, message) => {
   expect(() => action(source)).toThrow(message);
@@ -206,13 +204,10 @@ test('rejects aliases outside behavior scope and reports source location', () =>
 });
 
 test('does not rewrite quoted text or similarly named member calls', () => {
-  const expression =
-    '"getProperty(name=\\"Missing\\")" + getProperty(name="Title")';
+  const expression = '"getProperty(name=\\"Missing\\")" + Title';
   expect(
     action(`setProperty { name="Title" value={{${expression}}} }`).parameters[3]
-  ).toBe(
-    '"getProperty(name=\\"Missing\\")" + Object.Behavior::PropertyTitle()'
-  );
+  ).toBe('"getProperty(name=\\"Missing\\")" + Title');
   expect(
     options.resolveInstruction.resolvePropertyExpression(
       'Other.getProperty("Missing") + Other . getProperty("Missing") + forgetProperty()',
@@ -221,11 +216,10 @@ test('does not rewrite quoted text or similarly named member calls', () => {
   ).toBe(
     'Other.getProperty("Missing") + Other . getProperty("Missing") + forgetProperty()'
   );
-  const nativeText =
-    '"Object.Behavior::PropertyTitle()" + Object.Behavior::PropertyTitle()';
+  const nativeText = '"Object.Behavior::PropertyTitle()" + Title';
   expect(
     options.formatInstruction.formatPropertyExpression(nativeText, uri)
-  ).toBe('"Object.Behavior::PropertyTitle()" + getProperty(name="Title")');
+  ).toBe(nativeText);
 });
 
 test('native instruction names remain accepted; missing legacy slots remain lossless', () => {
@@ -315,7 +309,7 @@ test('resolves and formats property aliases from generated behavior parameter me
     ['action', 'setProperty {\n  name = "Fresh"\n  value = false\n}'],
     [
       'action',
-      'setProperty {\n  name = "Height"\n  value = {{ getProperty(name="Height") + 2 }}\n}',
+      'setProperty {\n  name = "Height"\n  value = {{ Height + 2 }}\n}',
     ],
   ]) {
     const instruction = resolver({ kind, source, fileUri: uri });
@@ -327,4 +321,13 @@ test('resolves and formats property aliases from generated behavior parameter me
       instruction
     );
   }
+});
+
+test('ordinary user function calls are not mistaken for the removed named-argument alias', () => {
+  expect(
+    options.resolveInstruction.resolvePropertyExpression(
+      'getProperty(Height) + MyExtension::getProperty(Title)',
+      uri
+    )
+  ).toBe('getProperty(Height) + MyExtension::getProperty(Title)');
 });

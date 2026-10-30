@@ -6,6 +6,7 @@
 #include "GDCore/Events/Parsers/ExpressionParser2.h"
 
 #include "DummyPlatform.h"
+#include "GDCore/Events/Builtin/StandardEvent.h"
 #include "GDCore/Extensions/Platform.h"
 #include "GDCore/Extensions/PlatformExtension.h"
 #include "GDCore/IDE/Events/ExpressionValidator.h"
@@ -3485,6 +3486,43 @@ TEST_CASE("ExpressionParser2", "[common][events]") {
       REQUIRE(validator.GetFatalErrors()[0]->GetMessage() ==
               "A name should be entered after the dot.");
     }
+  }
+
+  SECTION("Properties shadow even event-local variables in expressions and completion") {
+    gd::PropertiesContainer properties(gd::EventsFunctionsContainer::Extension);
+    properties.InsertNew("Height").SetType("Number");
+    properties.InsertNew("Title").SetType("Behavior");
+    layout1.GetVariables().InsertNew("Height").SetString("scene variable");
+    auto scoped = gd::ProjectScopedContainers::MakeNewProjectScopedContainersForProjectAndLayout(project, layout1);
+    scoped.AddPropertiesContainer(properties);
+    gd::StandardEvent event;
+    event.GetVariables().InsertNew("Height").SetString("local variable");
+    event.GetVariables().InsertNew("Title").SetValue(42);
+    auto localScope = gd::ProjectScopedContainers::MakeNewProjectScopedContainersWithLocalVariables(scoped, event);
+
+    REQUIRE(localScope.MatchIdentifierWithName<int>(
+        "Height", []() { return 0; }, []() { return 1; },
+        []() { return 2; }, []() { return 3; }, []() { return 4; }) == 2);
+    auto expression = parser.ParseExpression("Height + 1");
+    gd::ExpressionValidator validator(platform, localScope, "number");
+    expression->Visit(validator);
+    RequireNoError(validator);
+
+    // An unsupported property wins over a numeric local; there is no type-based fallback.
+    auto title = parser.ParseExpression("Title");
+    gd::ExpressionValidator invalid(platform, localScope, "number");
+    title->Visit(invalid);
+    REQUIRE_FALSE(invalid.GetFatalErrors().empty());
+
+    int variableCompletions = 0;
+    int propertyCompletions = 0;
+    localScope.ForEachIdentifierMatchingSearch(
+        "Height", [](const gd::String&, const gd::ObjectConfiguration*) {},
+        [&](const gd::String&, const gd::Variable&) { variableCompletions++; },
+        [&](const gd::NamedPropertyDescriptor&) { propertyCompletions++; },
+        [](const gd::ParameterMetadata&) {});
+    REQUIRE(propertyCompletions == 1);
+    REQUIRE(variableCompletions == 0);
   }
 
   SECTION("Valid property") {

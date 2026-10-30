@@ -4678,6 +4678,10 @@ export const normalizeLegacyProjectForMultiFile = (
   // Normalize absence and [] only on actual native variable-owning components,
   // never inside user values or arbitrary object configuration records.
   const normalizeVariable = variable => {
+    if (variable && typeof variable === 'object') {
+      delete variable.id;
+      delete variable.persistentUuid;
+    }
     if (
       !variable ||
       typeof variable !== 'object' ||
@@ -4700,13 +4704,32 @@ export const normalizeLegacyProjectForMultiFile = (
       }
     });
   };
+  const normalizeEventVariables = events =>
+    (events || []).forEach(event => {
+      normalizeVariables(event);
+      normalizeEventVariables(event.events);
+    });
   const normalizeOwner = owner => {
     normalizeVariables(owner);
+    (owner.instances || []).forEach(instance =>
+      (instance.initialVariables || []).forEach(normalizeVariable)
+    );
+    [
+      'events',
+      'sceneLoadEvents',
+      'sceneSignalEvents',
+      'sceneUnloadEvents',
+    ].forEach(field => normalizeEventVariables(owner[field]));
+    (owner.eventsFunctions || []).forEach(fn =>
+      normalizeEventVariables(fn.events)
+    );
     (owner.objects || []).forEach(normalizeVariables);
     (owner.eventsFunctions || []).forEach(normalizeVariables);
   };
   normalizeOwner(project);
   project.layouts.forEach(normalizeOwner);
+  project.externalLayouts.forEach(normalizeOwner);
+  project.externalEvents.forEach(normalizeOwner);
   project.eventsFunctionsExtensions.forEach(extension => {
     normalizeOwner(extension);
     extension.eventsBasedBehaviors.forEach(normalizeOwner);

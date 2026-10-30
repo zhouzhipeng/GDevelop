@@ -1,6 +1,6 @@
 // @noflow
 import { EVENT_SCHEMAS, EVENTS_CONTAINER_SCHEMA } from './Events';
-import { decodeVariableNode, encodeVariableNode } from './Variables';
+import { decodeVariableContainer, encodeVariableContainer } from './Variables';
 
 import {
   SettingsDslError,
@@ -77,58 +77,52 @@ const record = (fields = {}, children = {}, dynamic) => ({
 });
 const scalar = type => ({ type });
 const leafName = path => path.split('.').pop();
-const variableSchema = record(
-  {
-    name: { type: 'non-empty string', required: true },
-    value: {
-      type: 'variable literal',
-      valueKinds: ['string', 'number', 'boolean', 'structure', 'array'],
-      requiredUnless: 'explicit structure/array type with child declarations',
-    },
-    type: {
-      type: 'enum',
-      values: ['string', 'number', 'boolean', 'structure', 'array', 'enum'],
-    },
-    values: scalar('unique string array'),
-    id: scalar('empty string or UUIDv4'),
-    folded: scalar('boolean'),
-    hasMixedValues: scalar('boolean'),
+const variableSchema = record({
+  type: {
+    type: 'enum',
+    required: true,
+    values: ['string', 'number', 'boolean', 'structure', 'array', 'enum'],
   },
-  {}
-);
-// Recursive child declarations follow the same fields; array elements omit name.
-variableSchema.children.variable = {
-  key: 'children',
-  repeated: true,
-  recursive: true,
-  schemaRef: 'variableSchemas.variable',
-  rules: [
-    'Structure children require unique names; array children forbid name and use source order. Nested scope is forbidden. Value and child declarations are mutually exclusive.',
-  ],
-  schema: record({
-    ...variableSchema.fields,
-    name: { type: 'non-empty string', requiredFor: 'structure' },
-  }),
-};
-const variableEntry = keys => ({
-  key: keys.length === 1 ? keys[0] : '$variables',
-  repeated: true,
-  variableKeys: keys,
-  schema:
-    keys.length === 1
-      ? variableSchema
-      : {
-          ...variableSchema,
-          fields: {
-            ...variableSchema.fields,
-            scope: {
-              type: 'enum',
-              required: true,
-              values: ['global', 'scene'],
-            },
-          },
-        },
+  value: {
+    type: 'scalar variable value',
+    valueKinds: ['string', 'number', 'boolean'],
+    requiredUnless: 'structure/array type using json',
+  },
+  json: {
+    type: 'string',
+    requiredWhen: 'structure/array',
+    format: 'strict variable JSON',
+  },
+  metadata: { type: 'string', format: 'JSON Pointer metadata records' },
+  values: scalar('unique string array'),
+  folded: scalar('boolean'),
+  hasMixedValues: scalar('boolean'),
 });
+const variableContainerSchema = record();
+variableContainerSchema.namedEntries = {
+  kind: 'variable descriptor',
+  schemaRef: 'variableSchemas.variable',
+  declarationSchemaRef: 'variableSchemas.variable',
+  schema: variableSchema,
+};
+const variableEntry = key => ({
+  key,
+  variableKeys: [key],
+  maximum: 1,
+  schema: variableContainerSchema,
+});
+const variableContainerName = key =>
+  key === 'globalVariables'
+    ? 'global_variables'
+    : key === 'sceneVariables'
+    ? 'scene_variables'
+    : 'variables';
+const namedCollections = {
+  parameters: 'parameters',
+  properties: 'properties',
+  propertyDescriptors: 'properties',
+  sharedPropertyDescriptors: 'shared_properties',
+};
 const inventorySchema = descriptor => {
   const fields = Object.create(null);
   (descriptor.rootFields || descriptor.fields || []).forEach(field => {
@@ -152,8 +146,18 @@ const inventorySchema = descriptor => {
       return;
     const key = leafName(child.serializedKey);
     if (['variables', 'globalVariables', 'sceneVariables'].includes(key)) {
-      const keys = children.variable ? children.variable.variableKeys : [];
-      children.variable = variableEntry([...keys, key]);
+      children[variableContainerName(key)] = variableEntry(key);
+      return;
+    }
+    if (child.repeated && namedCollections[key]) {
+      const schema = inventorySchema(child);
+      delete schema.fields.name;
+      children[namedCollections[key]] = {
+        key,
+        named: true,
+        maximum: 1,
+        schema: { ...record(), namedEntries: { nameField: 'name', schema } },
+      };
       return;
     }
     children[child.repeated ? SINGULAR[key] || key : key] = {
@@ -488,7 +492,7 @@ const checkValue = (value, field, n, fileUri, path) => {
       : value !== null && typeof value === 'object';
   if (containsObject(value))
     fail(
-      'Structure literals are only allowed in variable values.',
+      'Anonymous structure literals are not supported.',
       n,
       fileUri,
       path,
@@ -617,7 +621,7 @@ const decodeRecord = (n, schema, fileUri, path, locations) => {
   Object.entries(n.properties).forEach(([key, item]) => {
     const field = own(schema.fields, key) ? schema.fields[key] : null;
     const emptyCollection = Object.values(schema.children).find(
-      c => c.repeated && !c.variableKeys && c.key === key
+      c => c.repeated && !c.variableKeys && !c.named && c.key === key
     );
     if (
       emptyCollection &&
@@ -651,45 +655,6 @@ const decodeRecord = (n, schema, fileUri, path, locations) => {
   });
   const seen = new Set();
   n.children.forEach(child => {
-    if (
-      child.type === 'variable' &&
-      schema.children.variable &&
-      schema.children.variable.variableKeys
-    ) {
-      const keys = schema.children.variable.variableKeys;
-      const scope = values(child).scope;
-      const key =
-        keys.length > 1
-          ? scope === 'global'
-            ? 'globalVariables'
-            : scope === 'scene'
-            ? 'sceneVariables'
-            : null
-          : keys[0];
-      if (
-        !key ||
-        !keys.includes(key) ||
-        (keys.length === 1 && scope !== undefined)
-      )
-        fail(
-          'Variable scope is required only on an owner with global and scene defaults.',
-          child.properties.scope || child,
-          fileUri,
-          path
-        );
-      const variable = decodeVariableNode(
-        child,
-        fileUri,
-        path,
-        path.startsWith('instance')
-      );
-      const list = out[key] || (out[key] = []);
-      if (list.some(entry => entry.name === variable.name))
-        fail('Duplicate variable name.', child.properties.name, fileUri, path);
-      list.push(variable);
-      locations.set(variable, { ...child.location, path });
-      return;
-    }
     const entry = own(schema.children, child.type)
       ? schema.children[child.type]
       : null;
@@ -708,6 +673,47 @@ const decodeRecord = (n, schema, fileUri, path, locations) => {
         path,
         'SETTINGS_UNKNOWN_NODE'
       );
+    if (entry.variableKeys || entry.named) {
+      if (seen.has(child.type))
+        fail(`Duplicate ${child.type} node.`, child, fileUri, path);
+      seen.add(child.type);
+      if (entry.variableKeys) {
+        out[entry.key] = decodeVariableContainer(
+          child,
+          fileUri,
+          path,
+          path.startsWith('instance')
+        );
+        out[entry.key].forEach(variable =>
+          locations.set(variable, { ...child.location, path })
+        );
+      } else {
+        if (Object.keys(child.properties).length)
+          fail(`${child.type} only accepts named nodes.`, child, fileUri, path);
+        const names = new Set();
+        out[entry.key] = child.children.map(item => {
+          if (!item.type || names.has(item.type))
+            fail(
+              'Duplicate or empty collection member name.',
+              item,
+              fileUri,
+              path
+            );
+          names.add(item.type);
+          return {
+            name: item.type,
+            ...decodeRecord(
+              item,
+              entry.schema.namedEntries.schema,
+              fileUri,
+              `${path}.${child.type}.${item.type}`,
+              locations
+            ),
+          };
+        });
+      }
+      return;
+    }
     if (entry.configurations) {
       const configurations = Object.create(null);
       child.children.forEach(configuration => {
@@ -845,34 +851,46 @@ const encodeRecord = (type, data, schema, fileUri) => {
   });
   keys.forEach(key => {
     const value = data[key];
-    const variables = schema.children.variable;
-    if (
-      variables &&
-      variables.variableKeys &&
-      variables.variableKeys.includes(key)
-    ) {
-      if (!Array.isArray(value))
-        fail('Variables must be an array.', out, fileUri, type);
-      value.forEach(variable =>
-        out.children.push(
-          encodeVariableNode(
-            variable,
-            variables.variableKeys.length > 1
-              ? key === 'globalVariables'
-                ? 'global'
-                : 'scene'
-              : null,
-            fileUri
-          )
-        )
-      );
-      return;
-    }
     const childEntry = Object.entries(schema.children).find(
       ([, c]) => c.key === key
     );
     if (childEntry) {
       const [childType, entry] = childEntry;
+      if (entry.variableKeys || entry.named) {
+        if (!Array.isArray(value))
+          fail(`${childType} must be a collection.`, out, fileUri, type);
+        if (entry.variableKeys)
+          out.children.push(encodeVariableContainer(value, childType, fileUri));
+        else {
+          const container = node(childType);
+          const names = new Set();
+          value.forEach(item => {
+            if (
+              typeof item.name !== 'string' ||
+              !item.name ||
+              names.has(item.name)
+            )
+              fail(
+                'Duplicate or empty collection member name.',
+                out,
+                fileUri,
+                type
+              );
+            names.add(item.name);
+            container.children.push({
+              ...encodeRecord(
+                item.name,
+                omit(item, ['name']),
+                entry.schema.namedEntries.schema,
+                fileUri
+              ),
+              named: true,
+            });
+          });
+          out.children.push(container);
+        }
+        return;
+      }
       if (
         childType === 'objectGroups' &&
         value &&
@@ -1103,7 +1121,7 @@ layoutNodeSchema.instance = record(
   },
   {
     properties: { key: 'properties', schema: record({}, {}, 'value') },
-    variable: variableEntry(['variables']),
+    variables: variableEntry('variables'),
     behavior: {
       key: 'behaviors',
       repeated: true,
@@ -1384,7 +1402,10 @@ export const getSettingsSchemas = () => ({
   roots: ROOTS,
   components: schemas,
   layout: layoutNodeSchema,
-  variableSchemas: { variable: variableSchema },
+  variableSchemas: {
+    variable: variableSchema,
+    variables: variableContainerSchema,
+  },
   eventSchemas: EVENT_SCHEMAS,
 });
 

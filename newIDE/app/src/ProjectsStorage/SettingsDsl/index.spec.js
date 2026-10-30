@@ -15,7 +15,7 @@ describe('GDevelop Language (GDL)', () => {
     'omits empty objectGroups when saving %s and retains declared groups',
     kind => {
       const source = serializeSettingsDocument(kind, {
-        ...(kind === 'project' ? { formatVersion: 14 } : {}),
+        ...(kind === 'project' ? { formatVersion: 17 } : {}),
         name: 'Example',
         objectGroups: {},
       });
@@ -23,7 +23,7 @@ describe('GDevelop Language (GDL)', () => {
       expect(decodeSettingsDocument(source).payload.objectGroups).toEqual({});
       const populated = { Empty: [], Actors: ['Player'] };
       const populatedSource = serializeSettingsDocument(kind, {
-        ...(kind === 'project' ? { formatVersion: 14 } : {}),
+        ...(kind === 'project' ? { formatVersion: 17 } : {}),
         name: 'Example',
         objectGroups: populated,
       });
@@ -154,9 +154,11 @@ describe('GDevelop Language (GDL)', () => {
     const source = `scene {
  name = "Main"
  background = "#101820"
- variable {
-  name = "Score"
-  value = 0
+ variables {
+  Score {
+ type = "number"
+ value = 0
+ }
  }
  layer {
   id = "base"
@@ -167,9 +169,11 @@ describe('GDevelop Language (GDL)', () => {
   object = "Player"
   layer = "base"
   position = [10, 20, 3]
-  variable {
-   name = "Health"
-   value = 100
+  variables {
+   Health {
+ type = "number"
+ value = 100
+ }
   }
  }
 }
@@ -204,7 +208,7 @@ describe('GDevelop Language (GDL)', () => {
   });
   test('quotes user-defined names safely and rejects prototype-shaped unknown fields', () => {
     const parsed = decodeSettingsDocument(
-      'scene {\n name = "Main"\n variable {\n  name = "__proto__"\n  value = 3\n }\n variable {\n  name = "Display Name"\n  value = "Knight"\n }\n}\n'
+      'scene {\n name = "Main"\n variables {\n  __proto__ {\n type = "number"\n value = 3\n }\n  "Display Name" {\n type = "string"\n value = "Knight"\n }\n }\n}\n'
     );
     expect(parsed.payload.variables.map(v => v.name)).toEqual([
       '__proto__',

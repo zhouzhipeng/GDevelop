@@ -1,4 +1,9 @@
 // @noflow
+import {
+  parseVariableJson,
+  variableJsonLocation,
+  jsonPointerSegment,
+} from '../ProjectsStorage/SettingsDsl/VariableJson';
 import { EVENT_NODE_TYPES } from '../ProjectsStorage/SettingsDsl/Events';
 const eventTypes = new Set(EVENT_NODE_TYPES);
 export const eventChildren = node =>
@@ -40,10 +45,59 @@ export const buildEventSourceMap = (root, file) => {
       instructions(node, eventPath, listKind, instructionPath);
     });
   };
-  const dataNode = (node, eventPath, nodePath = []) => {
-    add(node, eventPath, { kind: node.type, nodePath });
+  const dataNode = (
+    node,
+    eventPath,
+    nodePath = [],
+    variableMembers = false
+  ) => {
+    const collection = !node.named && node.type === 'variables';
+    add(node, eventPath, {
+      kind: variableMembers ? 'variable' : node.type,
+      nodePath,
+      ...(variableMembers ? { variableName: node.type } : {}),
+    });
+    if (variableMembers && node.properties.json) {
+      const item = node.properties.json;
+      const visitJson = (value, pointer) => {
+        if (pointer)
+          entries.push({
+            eventPath,
+            kind: 'variable',
+            nodePath,
+            property: 'value',
+            variableName: node.type,
+            jsonPointer: pointer,
+            source: {
+              file,
+              ...variableJsonLocation(item, value.offset, value.endOffset),
+            },
+            ...(value.keyOffset !== undefined
+              ? {
+                  keySource: {
+                    file,
+                    ...variableJsonLocation(
+                      item,
+                      value.keyOffset,
+                      value.offset
+                    ),
+                  },
+                }
+              : {}),
+          });
+        (value.children || []).forEach((child, index) =>
+          visitJson(
+            child,
+            pointer +
+              '/' +
+              jsonPointerSegment(value.type === 'array' ? index : child.name)
+          )
+        );
+      };
+      visitJson(parseVariableJson(item, file), '');
+    }
     node.children.forEach((child, index) =>
-      dataNode(child, eventPath, [...nodePath, index])
+      dataNode(child, eventPath, [...nodePath, index], collection)
     );
   };
   const visit = (node, eventPath) => {

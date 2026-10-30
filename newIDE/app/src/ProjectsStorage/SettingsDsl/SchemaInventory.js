@@ -1,7 +1,7 @@
 // @noflow
 // Shared authoring field inventory. SettingsDsl converts these descriptors to
 // strict node schemas; catalogs publish the same schemas used by the parser.
-export const SETTINGS_FORMAT_VERSION = 14;
+export const SETTINGS_FORMAT_VERSION = 17;
 const MULTI_FILE_FORMAT_VERSION = SETTINGS_FORMAT_VERSION;
 const MULTI_FILE_ENTRY_URI = 'game://project.gdl';
 const SCENE_LIFECYCLE_SOURCES = [
@@ -45,25 +45,32 @@ const formatFields = ({
 ];
 
 const variableRecordFields = [
-  settingsField('name', 'non-empty string', { required: true }),
-  settingsField('value', 'variable literal', {
-    requiredUnless: 'explicit structure/array type with child declarations',
-  }),
   settingsField('type', 'enum', {
+    required: true,
     values: ['string', 'number', 'boolean', 'structure', 'array', 'enum'],
+  }),
+  settingsField('value', 'scalar variable value', {
+    requiredUnless: 'structure/array type using json',
+  }),
+  settingsField('json', 'string', {
+    requiredWhen: 'structure/array',
+    format: 'strict variable JSON',
+  }),
+  settingsField('metadata', 'string', {
+    format: 'JSON Pointer metadata records',
   }),
   settingsField('values', 'unique string array'),
   settingsField('folded', 'boolean'),
-  settingsField('id', 'empty string or lowercase UUIDv4 string'),
   settingsField('hasMixedValues', 'boolean'),
 ];
+
 const variableNode = (name: string): Object => ({
   serializedKey: name,
   variableCollection: true,
   repeated: true,
   fields: variableRecordFields,
   additionalFields:
-    'Direct variable nodes with literal values or explicit structure/array type and nested variable declarations. Array children have no names; structure children require unique names. Never mix value with children; metadata nodes are forbidden.',
+    'Named variable descriptor blocks with mandatory type. Scalars use value; structures/arrays use strict JSON in json. Optional metadata contains JSON Pointer records for nested enum/editing state. No direct assignments, nested declarations, name, scope or IDs.',
 });
 
 const objectGroupsNode = (prefix: string = ''): Object => ({

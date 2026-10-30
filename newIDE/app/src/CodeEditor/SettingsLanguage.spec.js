@@ -55,37 +55,40 @@ test('registers GDL, formatting and live syntax diagnostics once', () => {
   });
 });
 
-test('offers direct variable declarations and nested children without suggesting nodes inside literal values', () => {
-  const suggestions = source =>
+test('offers named containers, typed variable descriptors and metadata without old scope syntax', () => {
+  const labels = source =>
     getSettingsVariableCompletions(source).map(item => item.label);
-  expect(suggestions('scene {\n ')).toEqual(['variable']);
-  expect(
-    getSettingsVariableCompletions('scene {\n ')[0].insertText
-  ).not.toContain('variables {');
-  expect(suggestions('scene {\n variable {\n name = "A"\n ')).toContain(
-    'value'
+  expect(labels('scene {\n ')).toContain('variables');
+  expect(labels('scene {\n ')).not.toContain('variable');
+  expect(labels('extension {\n ')).toEqual(
+    expect.arrayContaining(['global_variables', 'scene_variables'])
   );
-  expect(suggestions('scene {\n variable {\n name = "A"\n ')).not.toContain(
+  expect(labels('function {\n ')).toContain('parameters');
+  expect(labels('behavior {\n ')).toEqual(
+    expect.arrayContaining(['properties', 'shared_properties'])
+  );
+  expect(labels('scene {\n variables {\n ')).toEqual([
+    'declaration',
+    'structure',
+    'array',
+  ]);
+  expect(labels('scene {\n variables {\n Position {\n ')).toContain('value');
+  expect(labels('scene {\n variables {\n A {\n ')).not.toContain('name');
+  expect(labels('scene {\n variables {\n A {\n ')).not.toContain('scope');
+  expect(labels('scene {\n variables {\n A {\n type = "array"\n ')).toContain(
+    'json'
+  );
+  expect(
+    labels('scene {\n variables {\n A {\n type = "structure"\n ')
+  ).toContain('json');
+  expect(
+    labels('scene {\n variables {\n A {\n items {\n item {\n ')
+  ).not.toContain('name');
+  expect(labels('function {\n parameters {\n Target {\n ')).toContain('type');
+  expect(labels('function {\n parameters {\n Target {\n ')).not.toContain(
     'name'
   );
-  expect(suggestions('scene {\n variable {\n ')).not.toContain('scope');
-  expect(suggestions('extension {\n variable {\n ')).toContain('scope');
-  expect(suggestions('scene {\n variable {\n value = [{\n ')).toEqual([]);
-  expect(suggestions('scene {\n variable {\n metadata {\n ')).toEqual([]);
-  expect(suggestions('scene {\n variable {\n ')).not.toContain('metadata');
-  expect(suggestions('scene {\n variable {\n type = "array"\n ')).toContain(
-    'variable'
-  );
-  expect(
-    suggestions('scene {\n variable {\n type = "array"\n variable {\n ')
-  ).not.toContain('name');
-  expect(
-    suggestions('scene {\n variable {\n type = "structure"\n variable {\n ')
-  ).toContain('name');
-  expect(suggestions('scene {\n variable {\n value = []\n ')).not.toContain(
-    'variable'
-  );
-  expect(suggestions('scene {\n variable {\n value = ')).toEqual([]);
+  expect(labels('scene {\n variables {\n A = [\n ')).toEqual([]);
 });
 
 test('offers unified event structure without old keywords or redundant child wrappers', () => {
@@ -208,4 +211,55 @@ test('raw code completion preserves body layout and resumes GDL scopes after a l
   );
   expect(after.map(item => item.label)).not.toContain('code');
   expect(after.map(item => item.label)).toContain('strict');
+});
+
+test('scene JSON diagnostics map to raw contents and do not suggest GDL inside JSON', () => {
+  const languages = Object.fromEntries(
+    [
+      'register',
+      'setMonarchTokensProvider',
+      'setLanguageConfiguration',
+      'registerDocumentFormattingEditProvider',
+      'registerCompletionItemProvider',
+    ].map(name => [name, jest.fn()])
+  );
+  const monaco = {
+    languages,
+    editor: {
+      onDidCreateModel: jest.fn(),
+      onDidChangeModelLanguage: jest.fn(),
+      getModels: () => [],
+      setModelMarkers: jest.fn(),
+    },
+    MarkerSeverity: { Error: 8 },
+  };
+  registerSettingsLanguage(monaco);
+  const source =
+    'scene {\n variables {\n Data {\n type = "structure"\n json = """\n{\n "X": 1,\n "X": 2\n}\n"""\n }\n }\n}';
+  monaco.editor.onDidCreateModel.mock.calls[0][0]({
+    getValue: () => source,
+    uri: { toString: () => 'game://scene.gdl' },
+    getModeId: () => 'gdevelop-gdl',
+    isDisposed: () => false,
+    onDidChangeContent: jest.fn(() => ({ dispose: jest.fn() })),
+    onWillDispose: jest.fn(),
+  });
+  expect(monaco.editor.setModelMarkers.mock.calls[0][2][0]).toMatchObject({
+    code: 'SETTINGS_INVALID_VARIABLE_JSON',
+    startLineNumber: 8,
+    startColumn: 2,
+  });
+  expect(
+    getSettingsVariableCompletions(source.slice(0, source.indexOf(' "X": 2')))
+  ).toEqual([]);
+  const snippets = getSettingsVariableCompletions('scene {\n variables {\n ');
+  expect(snippets.every(item => item.insertText.includes('type ='))).toBe(true);
+  const descriptor = getSettingsVariableCompletions(
+    'scene {\n variables {\n Data {\n type = "structure"\n '
+  );
+  expect(descriptor.map(item => item.label)).toEqual(
+    expect.arrayContaining(['json', 'metadata'])
+  );
+  for (const name of ['value', 'variables', 'items'])
+    expect(descriptor.map(item => item.label)).not.toContain(name);
 });

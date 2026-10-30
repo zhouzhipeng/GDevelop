@@ -447,7 +447,7 @@ test('behavior property aliases use native metadata and generate identical execu
     const uri =
       'game://extensions/PropertyAliasTest/behaviors/Follow/functions/doStepPreEvents.gdl';
     const source =
-      'function {\n      events {\n        event {\n          conditions {\n            getProperty {\n  name = "Fresh"\n}\n          }\n          actions {\n            setProperty {\n  name = "Fresh"\n  value = false\n}\n            setProperty {\n  name = "Height"\n  value = {{ getProperty(name="Height") + 2 }}\n}\n            setProperty {\n  name = "Title"\n  value = {{ getProperty(name="Title") + "!" }}\n}\n          }\n        }\n      }\n    }';
+      'function {\n      events {\n        event {\n          variables {\n            Height {\n type = "string"\n value = "local variable"\n }\n            Title {\n type = "number"\n value = 123\n }\n          }\n          conditions {\n            getProperty {\n  name = "Fresh"\n}\n          }\n          actions {\n            setProperty {\n  name = "Fresh"\n  value = false\n}\n            setProperty {\n  name = "Height"\n  value = {{ Height + 2 }}\n}\n            setProperty {\n  name = "Title"\n  value = {{ Title + "!" }}\n}\n          }\n        }\n      }\n    }';
     const events = compileSettingsEvents(source, options, uri);
     expect(events[0].actions[0].parameters).toEqual([
       'Object',
@@ -472,11 +472,17 @@ test('behavior property aliases use native metadata and generate identical execu
         'PropertyAliasTest::Follow::SetPropertyTitle {\n  object = "Object"\n  behavior = "Behavior"\n  modification_sign = "="\n}'
       )
       .replace(
-        'getProperty(name="Height")',
-        'Object.Behavior::PropertyHeight()'
+        '{{ Height + 2 }}',
+        '{{ Object.Behavior::PropertyHeight() + 2 }}'
       )
-      .replace('getProperty(name="Title")', 'Object.Behavior::PropertyTitle()');
-    expect(events).toEqual(compileSettingsEvents(legacy, options, uri));
+      .replace(
+        '{{ Title + "!" }}',
+        '{{ Object.Behavior::PropertyTitle() + "!" }}'
+      );
+    const nativeEvents = compileSettingsEvents(legacy, options, uri);
+    expect(nativeEvents[0].actions[1].parameters[3]).toBe(
+      'Object.Behavior::PropertyHeight() + 2'
+    );
     const fn = behavior
       .getEventsFunctions()
       .getEventsFunction('doStepPreEvents');
@@ -487,6 +493,7 @@ test('behavior property aliases use native metadata and generate identical execu
     });
     expect(before.error).toBeNull();
     expect(before.code).toContain('_getHeight()');
+    expect(before.code).toContain('_getTitle()');
     expect(before.code).toContain('_setHeight(');
     expect(before.code).not.toContain('getProperty(name=');
     expect(() =>
@@ -505,6 +512,47 @@ test('behavior property aliases use native metadata and generate identical execu
     gd.JsPlatform.get().removeExtension('PropertyAliasTest');
     if (names) names.delete();
     if (extension) extension.delete();
+    project.delete();
+  }
+});
+
+test('typed JSON locals and nested enum metadata round trip through the native event model and generator', () => {
+  const project = global.gd.ProjectHelper.createNewGDJSProject();
+  try {
+    project.insertNewLayout('JsonLocals', 0);
+    const source = `function {
+  events {
+    event {
+      variables {
+        State {
+          type = "structure"
+          json = """
+{"Mode":"Idle","Entries":[{"HP":10},false]}
+"""
+          metadata = """
+{"/Mode":{"type":"enum","values":["Idle","Run"]},"/Entries/0/HP":{"folded":false}}
+"""
+        }
+      }
+    }
+  }
+}`;
+    const model = serializeToJSObject(project);
+    model.layouts[0].events = compileSettingsEvents(source, {});
+    unserializeFromJSObject(project, model);
+    const nativeEvents = serializeToJSObject(project).layouts[0].events;
+    const written = appendSettingsEvents('function {}\n', nativeEvents, {});
+    expect(written).toContain('json = """');
+    expect(written).toContain('metadata = """');
+    expect(
+      parseLegacyEventsJson(JSON.stringify(compileSettingsEvents(written, {})))
+    ).toEqual(parseLegacyEventsJson(JSON.stringify(nativeEvents)));
+    const generated = generateEventsCodeForScope(project, {
+      layout: project.getLayoutAt(0),
+    });
+    expect(generated.error).toBeNull();
+    expect(generated.code).toContain('Idle');
+  } finally {
     project.delete();
   }
 });

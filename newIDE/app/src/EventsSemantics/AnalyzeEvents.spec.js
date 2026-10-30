@@ -319,7 +319,7 @@ test('project declaration fingerprints ignore event edits and detect changed own
   const files = {
     'game://project.gdl': 'project {\n name = "Test"\n}\n',
     'game://scenes/Main/scene.gdl':
-      'scene {\n name = "Main"\n variable {\n name = "Score"\n value = 0\n }\n}\n',
+      'scene {\n name = "Main"\n variables {\n Score {\n type = "number"\n value = 0\n }\n }\n}\n',
     'game://scenes/Main/objects/Coin.gdl':
       'object {\n name = "Coin"\n type = "Sprite"\n}\n',
     [file]: wrap('event {}'),
@@ -403,7 +403,7 @@ test('large documents retain bounded summaries while analyzing the full owning c
 
 test('child events inherit parent local-variable scope without inventing scene bindings', () => {
   const result = analyze(
-    `event {\n variable {\n name = "Score"\n value = 0\n }\n event {\n actions {\n ${score}\n }\n }\n}`,
+    `event {\n variables {\n Score {\n type = "number"\n value = 0\n }\n }\n event {\n actions {\n ${score}\n }\n }\n}`,
     { owner: { ...owner, variables: {} } }
   );
   expect(result.status).toBe('complete');
@@ -412,7 +412,7 @@ test('child events inherit parent local-variable scope without inventing scene b
 
 test('step maps retain recursive local variables and exact raw JS content slices', () => {
   const source = wrap(
-    'event {\n variable {\n name = "Data"\n type = "structure"\n variable {\n name = "Label"\n value = "中文😀"\n }\n }\n javascript {\n code = """\nconst label = `原始😀`;\n\n"""\n }\n}'
+    'event {\n variables {\n Data {\n type = "structure"\n json = """\n{"Label": "中文😀"}\n"""\n }\n }\n javascript {\n code = """\nconst label = `原始😀`;\n\n"""\n }\n}'
   );
   const result = analyze('', { source, detail: 'steps' });
   expect(result.success).toBe(true);
@@ -442,4 +442,16 @@ test('short instruction names retain reviewed picking semantics and native diagn
     instructionType: 'CollisionNP',
     dslName: 'collision',
   });
+});
+
+test('named parameter nodes bind object symbols without a redundant name field', () => {
+  const file = 'game://extensions/Combat/functions/Hit.gdl';
+  const source =
+    'function {\n name = "Hit"\n parameters {\n Target {\n type = "object"\n }\n Amount {\n type = "expression"\n }\n }\n events {}\n}';
+  const context = buildProjectContexts({ [file]: source })(file);
+  expect(context.symbols.Target).toEqual({
+    id: `${file}:parameter:Target`,
+    origin: 'parameter',
+  });
+  expect(context.symbols.Amount).toBeUndefined();
 });

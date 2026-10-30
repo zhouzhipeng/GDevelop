@@ -1,6 +1,6 @@
 # GDevelop Language (GDL) usage
 
-Only format 14 is accepted. `.gdl` and `project.gdl` use the same
+Only format 17 is accepted. `.gdl` and `project.gdl` use the same
 parser. constants.toml remains TOML; event bodies are embedded in function/fragment settings. .events files are forbidden.
 
 ## Syntax
@@ -11,9 +11,12 @@ scene {
   order = 0
   background = "#101820"
 
-  variable {
-    name = "Score"
-    value = 0
+  variables {
+
+    Score {
+      type = "number"
+      value = 0
+    }
   }
 
   layer {
@@ -27,9 +30,12 @@ scene {
     layer = "base"
     position = [100, 200]
 
-    variable {
-      name = "Health"
-      value = 100
+    variables {
+
+      Health {
+        type = "number"
+        value = 100
+      }
     }
   }
 }
@@ -43,10 +49,10 @@ screen/row/column layout nodes are not implemented.
 ## Rules
 
 - Properties use `key = value`; child nodes use `type { ... }`. No named node
-  arguments, semicolons, inline objects outside variable.value, TOML headers or settings/layout wrapper.
+  arguments, semicolons, anonymous inline objects, TOML headers or settings/layout wrapper.
 - One declaration per line. Strings use JSON escapes. Arrays can span lines
   and have a trailing comma. `//` starts a comment outside a string.
-- Values are strings, finite numbers, booleans and arrays; variable.value also accepts structure literals. Null, dates and includes are forbidden. Ordinary configuration fields do not
+- Values are strings, finite numbers, booleans and arrays; structures use named nodes. Null, dates and includes are forbidden. Ordinary configuration fields do not
   accept expressions; event instruction operands and supported loop fields use
   {{...}} as described in [Events](#events). Integers must be safe integers.
 - Unknown fields/nodes and duplicate properties/singleton nodes are errors.
@@ -79,10 +85,12 @@ function {
   folder = []
   functionType = "Action"
 
-  parameter {
-    name = "Amount"
-    type = "expression"
-    description = "Damage amount"
+  parameters {
+
+    Amount {
+      type = "expression"
+      description = "Damage amount"
+    }
   }
 }
 ```
@@ -94,30 +102,40 @@ and name, resolving existing layers in the owning scene.
 
 ## Variables and behaviors
 
-Declare repeated variable nodes directly on the owner. Each has name and value.
-Types are inferred from scalar, array and structure literals; enum requires type
-and a nonempty values array. Nested data uses key = value inside {} and values
-inside []. Extension defaults require scope = "scene" or "global". Descendant
-UUID, enum and editor fields belong directly to nested variable declarations.
-Containers with child declarations require type = "structure" or "array" and
-must omit value. Structure children require unique names; array children forbid
-name and use source order. Descendant scope is forbidden. Ordinary branches
-continue to use value literals. Collection wrappers, metadata/path annotations
-and scalar shorthand are rejected.
+Use one variables container per owner. Every variable is a named descriptor block with mandatory type.
+Scalars use value; structures and arrays use json strings (canonical multiline raw strings).
+Nested enums and editing state use a separate metadata JSON object keyed by JSON Pointer.
+JSON rejects duplicate keys, null, unsafe integers, nonfinite numbers, comments and trailing commas.
+No direct variable assignments, implicit structures, nested variables or items/item declarations.
+Extension defaults use global_variables and scene_variables; scope is forbidden.
+Parameters and property descriptors use parameters/properties/shared_properties with named
+member nodes, without a repeated name field. Preserve member order and reject duplicates.
+Anonymous structure literals and direct owner-level variable declarations are rejected.
 
 ```settings
 scene {
   name = "Main"
 
-  variable {
-    name = "State"
-    type = "structure"
+  variables {
 
-    variable {
-      name = "Mode"
-      type = "enum"
-      value = "Idle"
-      values = ["Idle", "Run"]
+    State {
+      type = "structure"
+      json = """
+{
+  "Mode": "Idle"
+}
+"""
+      metadata = """
+{
+  "/Mode": {
+    "type": "enum",
+    "values": [
+      "Idle",
+      "Run"
+    ]
+  }
+}
+"""
     }
   }
 }
@@ -138,7 +156,7 @@ edits, reload, and verify behavior using the project workflow in SKILL.md.
 
 ## Events
 
-Events are part of GDevelop Language (GDL) format 14, not a separate language. Each
+Events are part of GDevelop Language (GDL) format 17, not a separate language. Each
 function's signature and body live in one functions/<Name>.gdl file.
 External fragments use external-events/<Name>.gdl. Never create .events
 files or write IfDo syntax. Read the current settings and instruction catalogs.
@@ -327,8 +345,7 @@ No group, comment or other event may intervene. Keep original engine picking
 and Else semantics. While's while_conditions is distinct from conditions;
 there is no source-only while limit. Bound loops and ensure progress.
 
-Declare event locals using variable nodes, with the same value/enum/identity
-rules as settings variables. Nested declarations replace metadata/path.
+Declare event locals inside variables {}, using the same typed descriptor, json and metadata rules as settings variables.
 Groups do not create a new runtime local-variable scope.
 
 ### String values
@@ -439,7 +456,7 @@ function {
 
         setProperty {
           name = "CameraZ"
-          value = {{ getProperty(name="CameraZ") + 10 }}
+          value = {{ CameraZ + 10 }}
         }
       }
     }
@@ -456,8 +473,8 @@ require an explicit value. Numeric/text conditions accept `value` and
 `comparison_sign` (default `"="`). A boolean condition tests true; use
 `flags {
   inverted = true
-}` to test false. Expression `getProperty(name="CameraZ")`
-reads a numeric/text property of the current `Object.Behavior`, including in loop
+}` to test false. Expression `CameraZ`
+reads the current owner property before any same-named variable, including event locals and loop
 expressions. Boolean properties use conditions, not expressions.
 
 These are syntax mappings to existing private behavior instructions. Hidden
@@ -466,3 +483,5 @@ to behavior function files; they do not grant scene events direct access. Old
 fully qualified instruction names and bare property expressions remain accepted.
 Saving canonicalizes supported accesses to the aliases while preserving legacy
 empty parameter slots. Embedded JavaScript continues to use its own API.
+
+Bare property references are resolved by the native expression AST. Property type errors never fall back to same-named variables. The old getProperty(name=...) expression alias is rejected.

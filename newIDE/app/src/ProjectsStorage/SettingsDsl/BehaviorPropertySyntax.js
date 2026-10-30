@@ -1,5 +1,4 @@
 // @noflow
-import { parseCatalogInstructionArguments } from './InstructionOperands';
 
 // These are authoring aliases, not new runtime instructions. Property accessors
 // remain private to their behavior and use the existing catalog type checking.
@@ -137,79 +136,29 @@ export const createBehaviorPropertySyntax = (catalog, fail) => {
       concise.length ? `\n${concise.join('\n')}` : ''
     }\n}`;
   };
-  const lowerExpression = (source, fileUri) => {
-    let output = '';
-    let index = 0;
-    while (index < source.length) {
-      const start = index;
-      if (source[index] === '"' || source[index] === "'") {
-        const quote = source[index++];
-        while (index < source.length) {
-          if (source[index] === '\\') index += 2;
-          else if (source[index++] === quote) break;
-        }
-      } else if (
-        source.startsWith('getProperty', index) &&
-        (index === 0 || !/[A-Za-z0-9_.:]/.test(source[index - 1])) &&
-        !/[.:]\s*$/.test(source.slice(0, index)) &&
-        /^getProperty\s*\(/.test(source.slice(index))
-      ) {
-        index += /^getProperty\s*\(/.exec(source.slice(index))[0].length;
-        const argumentStart = index;
-        let depth = 1;
-        let quote = null;
-        while (index < source.length && depth) {
-          const c = source[index++];
-          if (quote) {
-            if (c === '\\') index++;
-            else if (c === quote) quote = null;
-          } else if (c === '"' || c === "'") quote = c;
-          else if (c === '(') depth++;
-          else if (c === ')') depth--;
-        }
-        if (depth)
-          fail('GDL_PROPERTY_EXPRESSION', 'Unclosed getProperty expression.');
-        const args = parseCatalogInstructionArguments(
-          source.slice(argumentStart, index - 1)
+  // Native expression AST binding is shared with validation and refactoring.
+  const lowerExpression = source => {
+    const tokens =
+      source.match(
+        /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[A-Za-z_][A-Za-z0-9_]*|[^\s]/g
+      ) || [];
+    for (let i = 0; i < tokens.length; i++) {
+      if (
+        tokens[i] === 'getProperty' &&
+        tokens[i + 1] === '(' &&
+        tokens[i + 2] === 'name' &&
+        tokens[i + 3] === '=' &&
+        tokens[i - 1] !== '.' &&
+        tokens[i - 1] !== ':'
+      )
+        fail(
+          'GDL_PROPERTY_EXPRESSION',
+          'getProperty(name=...) is no longer supported; reference the property name directly.'
         );
-        if (Object.keys(args).some(key => key !== 'name'))
-          fail(
-            'GDL_PROPERTY_EXPRESSION',
-            'getProperty expression accepts only name.'
-          );
-        const setter = find('action', args.name, fileUri);
-        if (
-          !setter.parameters.some(
-            p => p.valueKind === 'number' || p.valueKind === 'text'
-          )
-        )
-          fail(
-            'GDL_PROPERTY_EXPRESSION',
-            'Boolean properties use getProperty conditions, not expressions.',
-            'name'
-          );
-        output += `Object.Behavior::Property${args.name}()`;
-        continue;
-      } else index++;
-      output += source.slice(start, index);
     }
-    return output;
+    return source;
   };
-  const formatExpression = (source, fileUri) => {
-    const owner = behaviorTypeFromFileUri(fileUri);
-    if (!owner) return source;
-    // Match only unquoted native calls on this behavior. Leave text literals,
-    // other objects/behaviors, and ordinary user functions untouched.
-    return source.replace(
-      /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[A-Za-z0-9_.:]*Object\.Behavior::Property([A-Za-z_][A-Za-z0-9_]*)\(\)/g,
-      (match, name) =>
-        name &&
-        match === `Object.Behavior::Property${name}()` &&
-        entries.action.has(`${owner}\0${name}`)
-          ? `getProperty(name=${JSON.stringify(name)})`
-          : match
-    );
-  };
+  const formatExpression = source => source;
   return {
     lowerInstruction,
     formatInstruction,

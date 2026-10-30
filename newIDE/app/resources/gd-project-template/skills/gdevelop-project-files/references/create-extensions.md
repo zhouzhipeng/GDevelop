@@ -41,7 +41,7 @@ composition, and executable logic in `.gdl`.
 6. Keep each function signature and its events in one `.gdl` document.
    Do not derive, create or read a sibling body file. The events examples below
    are blocks to insert inside that same function root.
-7. Write variables blocks with scalar shorthand or typed variable children, following gdl-usage.md.
+7. Write every variable as a named descriptor with mandatory type; scalars use value and structures/arrays use json raw strings, following gdl-usage.md.
 8. Use catalog instruction `dslName` (or `type` if absent) and parameter `dslName` from
    `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json` in event bodies; behavior property aliases below are the supported exception.
 9. Call `generate-catalogs` after the declaration/files exist. If the extension
@@ -116,7 +116,9 @@ function {
   helpUrl = ""
   deprecated = false
   deprecationMessage = ""
-  parameters = []
+
+  parameters {
+  }
 
   objectGroups {
   }
@@ -163,7 +165,7 @@ prefab {
   isTextContainer = false
   isInnerAreaFollowingParentSize = false
   isUsingLegacyInstancesRenderer = false
-  propertyDescriptors = []
+  properties {}
 
   objectGroups {
   }
@@ -191,11 +193,13 @@ function {
   private = false
   async = false
 
-  parameter {
-    name = "Object"
-    description = "Object"
-    type = "object"
-    supplementaryInformation = "CombatKit::Enemy"
+  parameters {
+
+    Object {
+      description = "Object"
+      type = "object"
+      supplementaryInformation = "CombatKit::Enemy"
+    }
   }
 
   objectGroups {
@@ -288,23 +292,23 @@ function {
   private = false
   async = false
 
-  parameter {
-    name = "Object"
-    description = "Object"
-    type = "object"
-  }
+  parameters {
 
-  parameter {
-    name = "Behavior"
-    description = "Behavior"
-    type = "behavior"
-    supplementaryInformation = "CombatKit::Health"
-  }
+    Object {
+      description = "Object"
+      type = "object"
+    }
 
-  parameter {
-    name = "Amount"
-    description = "Damage amount"
-    type = "expression"
+    Behavior {
+      description = "Behavior"
+      type = "behavior"
+      supplementaryInformation = "CombatKit::Health"
+    }
+
+    Amount {
+      description = "Damage amount"
+      type = "expression"
+    }
   }
 
   objectGroups {
@@ -385,9 +389,9 @@ selection through child events and nested private behavior-function calls.
 ### Accessing a behavior's properties
 
 In a behavior's `functions/*.gdl`, use `setProperty { name = "Speed" value = 100 }` and
-`{{ getProperty(name="Speed") }}`. The owner is inferred from the file path and
+`{{ Speed }}`. The owner is inferred from the file path and
 instruction targets default to `Object` / `Behavior`. Boolean properties use
 `setProperty { name = "Initialized" value = true }` and the condition
 `getProperty { name = "Initialized" }`. See `gdl-usage.md` for operators, comparisons,
-boolean inversion and compatibility rules. These aliases use the existing
+boolean inversion and property-before-variable name resolution. These aliases use the existing
 private property metadata; do not create same-named function files for them.

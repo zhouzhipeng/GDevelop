@@ -1,5 +1,6 @@
 // @noflow
 import { sha256 } from 'js-sha256';
+import { getDeclaredVariableNames } from '../ProjectsStorage/SettingsDsl/Variables';
 import { compileSettingsEventsWithSyntax } from '../ProjectsStorage/SettingsDsl/Events';
 import {
   createCatalogInstructionResolver,
@@ -422,9 +423,7 @@ export const analyzeGdlEvents = ({
       }
       const locals = new Set([
         ...inheritedLocals,
-        ...node.children
-          .filter(child => child.type === 'variable')
-          .map(child => nodeValue(child, 'name', '')),
+        ...getDeclaredVariableNames(node),
       ]);
       const process = (instruction, listKind, instructionPath = []) => {
         if (++instructionBudget.visited > instructionLimit) {

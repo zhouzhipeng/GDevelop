@@ -19,6 +19,8 @@ import {
   getSettingsSchemas,
 } from '../ProjectsStorage/SettingsDsl';
 
+import { decodeVariableContainer } from '../ProjectsStorage/SettingsDsl/Variables';
+
 import { maskSettingsRawStrings } from '../ProjectsStorage/SettingsDsl/Syntax';
 
 // Completion uses a small lexical stack so incomplete documents are supported.
@@ -69,65 +71,90 @@ export const getSettingsVariableCompletions = (
     insertText: string,
     detail: string = ''
   ): Object => ({ label, insertText, detail });
-  if (frame.name === 'variable') {
+  if (
+    parent &&
+    ['parameters', 'properties', 'shared_properties'].includes(parent.name)
+  ) {
+    const schemas = getSettingsSchemas();
+    const owner = stack[stack.length - 3];
+    const kind =
+      owner &&
+      Object.keys(schemas.roots).find(key => schemas.roots[key] === owner.name);
+    const entry = kind ? schemas.components[kind]?.children[parent.name] : null;
+    if (entry?.named)
+      return Object.keys(entry.schema.namedEntries.schema.fields)
+        .filter(name => !frame.fields.has(name))
+        .map(name => field(name, `${name} = "\${1:Value}"`));
+  }
+  if (
+    parent &&
+    ['variables', 'global_variables', 'scene_variables'].includes(parent.name)
+  ) {
+    const complex = ['"structure"', '"array"'].includes(
+      frame.containerType || ''
+    );
     const fields = [
       field(
         'type',
-        'type = "${1|number,string,boolean,structure,array,enum|}"',
-        'Optional; inferred from value except enum.'
-      ),
-      field(
-        'values',
-        'values = ["${1:Idle}"]',
-        'Nonempty choices for enum variables.'
-      ),
-      field(
-        'id',
-        'id = "$1"',
-        'Optional persistent identity; not required to read a variable.'
+        'type = "${1|number,string,boolean,structure,array,enum|}"'
       ),
       field('folded', 'folded = ${1|true,false|}'),
       field('hasMixedValues', 'hasMixedValues = ${1|false,true|}'),
     ];
-    if (
-      !(
-        parent &&
-        parent.name === 'variable' &&
-        parent.containerType === '"array"'
-      )
-    )
-      fields.unshift(field('name', 'name = "${1:Name}"'));
-    if (!frame.fields.has('$children'))
-      fields.unshift(
-        field(
-          'value',
-          'value = ${1:0}',
-          'Scalar, [] array or {} structure literal.'
-        )
-      );
-    if (parent && parent.name === 'extension')
-      fields.unshift(field('scope', 'scope = "${1|global,scene|}"'));
-    if (
-      !frame.fields.has('value') &&
-      (frame.containerType === '"structure"' ||
-        frame.containerType === '"array"')
-    )
+    if (complex) {
+      const value = frame.containerType === '"array"' ? '[]' : '{}';
+      if (!frame.fields.has('value'))
+        fields.push(
+          field(
+            'json',
+            'json = """\n' + value + '\n"""',
+            'Strict JSON variable data.'
+          )
+        );
       fields.push(
         field(
-          'variable',
-          frame.containerType === '"array"'
-            ? 'variable {\n  value = ${1:0}\n}'
-            : 'variable {\n  name = "${1:Name}"\n  value = ${2:0}\n}',
-          'Declare a child with its identity and constraints beside its value.'
+          'metadata',
+          'metadata = """\n{}\n"""',
+          'Nested metadata keyed by JSON Pointer.'
         )
       );
-    return fields.filter(
-      entry => entry.label === 'variable' || !frame.fields.has(entry.label)
-    );
+    } else if (!frame.fields.has('json')) {
+      const value =
+        frame.containerType === '"string"' || frame.containerType === '"enum"'
+          ? '"${1:Text}"'
+          : frame.containerType === '"boolean"'
+          ? '${1|true,false|}'
+          : '${1:0}';
+      fields.push(field('value', 'value = ' + value));
+      if (frame.containerType === '"enum"')
+        fields.push(field('values', 'values = ["${1:Idle}"]'));
+    }
+    return fields.filter(entry => !frame.fields.has(entry.label));
   }
+  if (['variables', 'global_variables', 'scene_variables'].includes(frame.name))
+    return [
+      field(
+        'declaration',
+        '${1:Name} {\n  type = "number"\n  value = ${2:0}\n}',
+        'Declare a typed scalar variable.'
+      ),
+      field(
+        'structure',
+        '${1:Name} {\n  type = "structure"\n  json = """\n{}\n"""\n}',
+        'Declare a JSON structure variable.'
+      ),
+      field(
+        'array',
+        '${1:Name} {\n  type = "array"\n  json = """\n[]\n"""\n}',
+        'Declare a JSON array variable.'
+      ),
+    ];
+  if (['parameters', 'properties', 'shared_properties'].includes(frame.name))
+    return [field('member', '${1:Name} {\n  type = "${2:Type}"\n  $0\n}')];
   if (stack.some(entry => entry.name === 'code')) return [];
-  const eventSuggestions = [];
-  const snippet = (label, text) => eventSuggestions.push(field(label, text));
+  const eventSuggestions: Array<Object> = [];
+  const snippet = (label: string, text: string) =>
+    eventSuggestions.push(field(label, text));
   if (['function', 'fragment'].includes(frame.name)) {
     if (!frame.fields.has('@events'))
       snippet('events', 'events {\n  event {\n    $0\n  }\n}');
@@ -152,8 +179,8 @@ export const getSettingsVariableCompletions = (
         if (!frame.fields.has('@actions'))
           snippet('actions', 'actions {\n  $0\n}');
         snippet(
-          'variable',
-          'variable {\n  name = "${1:Name}"\n  value = ${2:0}\n}'
+          'variables',
+          'variables {\n  ${1:Name} {\n    type = "number"\n    value = ${2:0}\n  }\n}'
         );
         if (frame.name === 'while' && !frame.fields.has('@while_conditions'))
           snippet('while_conditions', 'while_conditions {\n  $0\n}');
@@ -171,15 +198,21 @@ export const getSettingsVariableCompletions = (
       : kind
       ? schemas.components[kind]
       : null;
-  if (!schema || !schema.children.variable) return eventSuggestions;
+  if (!schema) return eventSuggestions;
   return [
-    field(
-      'variable',
-      frame.name === 'extension'
-        ? 'variable {\n  scope = "${1|global,scene|}"\n  name = "${2:Name}"\n  value = ${3:0}\n}'
-        : 'variable {\n  name = "${1:Name}"\n  value = ${2:0}\n}',
-      'Declare a variable directly on its owner; no collection wrapper.'
-    ),
+    ...Object.keys(schema.children)
+      .filter(
+        name =>
+          [
+            'variables',
+            'global_variables',
+            'scene_variables',
+            'parameters',
+            'properties',
+            'shared_properties',
+          ].includes(name) && !frame.fields.has(`@${name}`)
+      )
+      .map(name => field(name, `${name} {\n  $0\n}`)),
     ...eventSuggestions,
   ];
 };
@@ -480,6 +513,19 @@ export const registerSettingsLanguage = (monaco: any) => {
           model.getValue(),
           model.uri.toString()
         );
+        const validateVariables = (node: any): void => {
+          if (
+            !node.named &&
+            ['variables', 'global_variables', 'scene_variables'].includes(
+              node.type
+            )
+          ) {
+            decodeVariableContainer(node, model.uri.toString(), node.type);
+            return;
+          }
+          node.children.forEach(validateVariables);
+        };
+        validateVariables(syntax.root);
         if (['function', 'fragment'].includes(syntax.root.type))
           compileSettingsEvents(
             model.getValue(),

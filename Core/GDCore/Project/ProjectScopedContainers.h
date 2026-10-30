@@ -135,6 +135,8 @@ class ProjectScopedContainers {
       std::function<ReturnType()> notFoundCallback) const {
     if (objectsContainersList.HasObjectOrGroupNamed(name))
       return objectCallback();
+    else if (propertiesContainersList.Has(name))
+      return propertyCallback();
     else if (variablesContainersList.Has(name)) {
       const auto &variablesContainer =
           variablesContainersList.GetVariablesContainerFromVariableOrPropertyOrParameterName(name);
@@ -147,8 +149,6 @@ class ProjectScopedContainers {
       return variableCallback();
     } else if (ParameterMetadataTools::Has(parametersVectorsList, name))
       return parameterCallback();
-    else if (propertiesContainersList.Has(name))
-      return propertyCallback();
 
     return notFoundCallback();
   };
@@ -175,6 +175,13 @@ class ProjectScopedContainers {
             objectCallback(name, objectConfiguration);
           }
         });
+    propertiesContainersList.ForEachPropertyMatchingSearch(
+        search, [&](const gd::NamedPropertyDescriptor &property) {
+          if (namesAlreadySeen.count(property.GetName()) == 0) {
+            namesAlreadySeen.insert(property.GetName());
+            propertyCallback(property);
+          }
+        });
     variablesContainersList.ForEachVariableMatchingSearch(
         search, [&](const gd::String &name, const gd::Variable &variable) {
           if (namesAlreadySeen.count(name) == 0) {
@@ -191,13 +198,7 @@ class ProjectScopedContainers {
             parameterCallback(parameter);
           }
         });
-    propertiesContainersList.ForEachPropertyMatchingSearch(
-        search, [&](const gd::NamedPropertyDescriptor &property) {
-          if (namesAlreadySeen.count(property.GetName()) == 0) {
-            namesAlreadySeen.insert(property.GetName());
-            propertyCallback(property);
-          }
-        });
+
   };
 
   const gd::ObjectsContainersList &GetObjectsContainersList() const {

@@ -7,7 +7,7 @@ import {
   MAX_SETTINGS_DEPTH,
   getSettingsStringLocation,
 } from './Syntax';
-import { decodeVariableNode, encodeVariableNode } from './Variables';
+import { decodeVariableContainer, encodeVariableContainer } from './Variables';
 
 const native = name => `BuiltinCommonInstructions::${name}`;
 export const EVENT_TYPES = {
@@ -298,7 +298,6 @@ export const decodeEventList = (
     }
     const body = bodyTypes.includes(kind);
     const children = [];
-    const names = new Set();
     const singleton = new Set();
     if (body)
       Object.assign(result, {
@@ -337,12 +336,15 @@ export const decodeEventList = (
             depth + 1
           )
         );
-      } else if (body && child.type === 'variable') {
-        const variable = decodeVariableNode(child, uri, 'event.variable');
-        if (names.has(variable.name))
-          error('Duplicate local variable.', child, uri);
-        names.add(variable.name);
-        result.variables.push(variable);
+      } else if (body && child.type === 'variables') {
+        if (singleton.has('variables'))
+          error('Duplicate variables container.', child, uri);
+        singleton.add('variables');
+        result.variables = decodeVariableContainer(
+          child,
+          uri,
+          'event.variables'
+        );
       } else if (
         (body || kind === 'group') &&
         EVENT_NODE_TYPES.includes(child.type)
@@ -581,9 +583,10 @@ export const encodeEventList = (events, options = {}, uri, depth = 0) => {
         error('Link supports only entire fragments.', {}, uri);
       if (kind === 'javascript') data.code = normCode(event.inlineCode || '');
       if (bodyTypes.includes(kind)) {
-        (event.variables || []).forEach(v =>
-          children.push(encodeVariableNode(v, null, uri))
-        );
+        if (event.variables && event.variables.length)
+          children.push(
+            encodeVariableContainer(event.variables, 'variables', uri)
+          );
         [
           ['whileConditions', 'while_conditions'],
           ['conditions', 'conditions'],
@@ -732,7 +735,7 @@ export const EVENT_SCHEMAS = Object.fromEntries(
       },
       containers: bodyTypes.includes(kind)
         ? {
-            variable: { repeated: true, schemaRef: 'variableSchemas.variable' },
+            variables: { maximum: 1, schemaRef: 'variableSchemas.variables' },
             conditions: { kind: 'condition', maximum: 1 },
             actions: { kind: 'action', maximum: 1 },
             ...(kind === 'while'

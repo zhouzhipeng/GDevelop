@@ -195,8 +195,8 @@ describe('GDevelop Language (GDL) multi-file project format', () => {
     for (const source of [
       'kind = "project"\nsettingsFormatVersion = 7\n',
       files[MULTI_FILE_ENTRY_URI].replace(
-        'formatVersion = 14',
-        'formatVersion = 11'
+        'formatVersion = 17',
+        'formatVersion = 16'
       ),
     ]) {
       expect(() =>
@@ -982,7 +982,7 @@ describe('ActionWithOperator parameter declarations', () => {
       const uri = Object.keys(files).find(uri =>
         uri.endsWith('/SetIdleAnimationName.gdl')
       );
-      expect(files[uri]).toContain('name = "Value"');
+      expect(files[uri]).toContain('Value {');
       const restored = composeLegacyProjectFromFiles(files);
       expect(getOwner(restored).eventsFunctions[1].parameters).toEqual([
         ...parameters,
@@ -994,4 +994,42 @@ describe('ActionWithOperator parameter declarations', () => {
       expect(owner.eventsFunctions[1].parameters).toEqual(parameters);
     });
   });
+});
+
+test('variable identities do not affect source equivalence in lifecycle events or external layouts', () => {
+  const left = JSON.parse(JSON.stringify(projectFixture));
+  left.layouts[0].sceneLoadEvents = [
+    {
+      ...standardEvent(),
+      variables: [
+        { name: 'Temp', type: 'number', value: 1, persistentUuid: 'ignored' },
+      ],
+    },
+  ];
+  left.externalLayouts = [
+    {
+      name: 'Room',
+      associatedLayout: 'Main',
+      instances: [
+        {
+          persistentUuid: 'instance-id',
+          initialVariables: [
+            {
+              name: 'Value',
+              type: 'number',
+              value: 2,
+              persistentUuid: 'ignored',
+            },
+          ],
+        },
+      ],
+    },
+  ];
+  const right = JSON.parse(JSON.stringify(left));
+  delete right.layouts[0].sceneLoadEvents[0].variables[0].persistentUuid;
+  delete right.externalLayouts[0].instances[0].initialVariables[0]
+    .persistentUuid;
+  expect(areLegacyProjectsEquivalent(left, right)).toBe(true);
+  right.externalLayouts[0].instances[0].persistentUuid = 'different-instance';
+  expect(areLegacyProjectsEquivalent(left, right)).toBe(false);
 });

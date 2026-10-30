@@ -1,6 +1,6 @@
 ---
 name: gdevelop-project-files
-description: Create, inspect, modify, refactor, and verify GDevelop games through the version 13 multi-file project sources (`project.gdl`, `constants.toml`, `.gdl`, `tests.gdl`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
+description: Create, inspect, modify, refactor, and verify GDevelop games through the version 16 multi-file project sources (`project.gdl`, `constants.toml`, `.gdl`, `tests.gdl`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
 ---
 
 # GDevelop Project Files
@@ -207,26 +207,28 @@ All `.gdl` and `project.gdl` use **GDevelop Language (GDL)**, not TOML. Read
 - Every document has exactly one typed root: project, resources, tests,
   scene, prefab, variant, layout, fragment, object, function,
   extension or behavior. The physical path supplies the owning scope.
-- Only project.gdl has `formatVersion = 14`. Do not write kind,
+- Only project.gdl has `formatVersion = 17`. Do not write kind,
   settingsFormatVersion, TOML headers, per-document format versions, or
   settings/layout wrapper nodes. Extension metadata can still have a semantic
   version string when its schema defines one.
 - Scene, prefab, variant and layout settings contain their own configuration
   and layout. Put layer and instance directly below that root. Layer contains
-  camera/effect; instance contains properties/variable/behavior overrides.
+  camera/effect; instance contains properties/variables/behavior overrides.
   Root instance order is global serialized order; preserve UUIDs.
 - Object definitions remain flat `objects/<Object>.gdl` files. An
   object.behavior defines an attachment; instance.behavior only overrides an
   existing attachment. Dynamic fields must be registered in the catalog.
-- Declare repeated `variable {}` nodes directly on the owner, with `name` and
-  `value`. Use `{ Key = value }` structures and `[]` arrays inside value; infer
-  ordinary types and declare enum explicitly. Extension defaults require scope.
-  Descendant UUID/enum/editor fields live directly on nested variable declarations.
-  Expanded containers require explicit structure/array type and omit value.
-  Structure children require unique names; array children forbid names and use source order.
-  UUID id is optional; preserve existing ids for editor variable refactoring.
-  Collection wrappers, metadata/path annotations and shorthand are rejected.
-  Root variables and instance variables have different scopes.
+- Declare variables inside one `variables {}` container. Every member is a named
+  descriptor with explicit type. Scalars use value; structure/array values use json
+  raw strings. Nested enum/editing state uses metadata JSON Pointer records.
+  Direct assignments and nested variable declarations are rejected. Variable ids are not serialized.
+  Extension defaults use global_variables/scene_variables, without scope.
+  Parameters and property descriptors use parameters/properties/shared_properties
+  with named member nodes. Do not repeat name inside these members.
+  Preserve order, identities and explicit false flags. Anonymous structure
+  literals and old direct variable/parameter/property nodes are rejected.
+  Bare property references in expressions take priority over same-named variables;
+  do not use getProperty(name=...) expression calls.
 - Object groups use `objectGroups { Group = ["Player"] }`, expanded across
   lines. Required behaviors use objectGroupRequiredBehaviors. Empty repeated
   collections may use an empty array assignment; nonempty record collections
@@ -414,7 +416,7 @@ implementation is materially simpler. Record that decision in the task result.
 ## Event authoring
 
 Read [the unified event syntax](references/gdl-usage.md) before editing function
-or fragment bodies. Only GDevelop Language (GDL) format 14 is supported. Function signatures
+or fragment bodies. Only GDevelop Language (GDL) format 17 is supported. Function signatures
 and events share one .gdl file; .events files are rejected. Use explicit
 conditions/actions blocks containing bare catalog instructions, typed event
 nodes, independent group/comment/link nodes, and raw multiline raw string properties.

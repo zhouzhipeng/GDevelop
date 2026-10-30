@@ -174,23 +174,23 @@ function {
   private = false
   async = false
 
-  parameter {
-    name = "Object"
-    description = "Object"
-    type = "object"
-    supplementaryInformation = "Cards::CardSlot"
-  }
+  parameters {
 
-  parameter {
-    name = "SignalName"
-    description = "Signal name"
-    type = "string"
-  }
+    Object {
+      description = "Object"
+      type = "object"
+      supplementaryInformation = "Cards::CardSlot"
+    }
 
-  parameter {
-    name = "Payload"
-    description = "Payload"
-    type = "string"
+    SignalName {
+      description = "Signal name"
+      type = "string"
+    }
+
+    Payload {
+      description = "Payload"
+      type = "string"
+    }
   }
 
   objectGroups {

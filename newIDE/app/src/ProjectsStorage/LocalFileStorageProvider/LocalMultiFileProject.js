@@ -1402,7 +1402,7 @@ export const writeLegacyProjectAsMultiFile = async (
     if (
       previousFiles[uri] &&
       files[uri] !== previousFiles[uri] &&
-      /\b(?:value\s*=\s*[[{]|type\s*=\s*"(?:structure|array)")/.test(files[uri])
+      /\b(?:variables|global_variables|scene_variables)\s*\{/.test(files[uri])
     ) {
       files[uri] = preserveVariableStructureOrder(
         files[uri],

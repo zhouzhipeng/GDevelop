@@ -203,16 +203,13 @@ test('decoded single-line JS source maps escaped characters and virtual newlines
 
 test('string arrays, nested variable values and instruction operands use generic multiline output', () => {
   const text =
-    'scene {\n name = "Test"\n variable {\n name = "Data"\n value = { label = "first\\nsecond", lines = ["a\\nb", "short"] }\n }\n}\n';
+    'scene {\n name = "Test"\n variables {\n Label {\n type = "string"\n value = "first\\nsecond"\n }\n Data {\n type = "structure"\n json = "{\\"lines\\":[\\"a\\\\nb\\",\\"short\\"]}"\n }\n }\n}\n';
   const syntax = parseSettingsSyntax(text);
   const formatted = printSettingsSyntax(syntax.root);
-  expect(formatted).toContain('label = """\nfirst\nsecond\n"""');
-  expect(
-    parseSettingsSyntax(formatted).root.children[0].properties.value.value
-  ).toEqual(syntax.root.children[0].properties.value.value);
-  expect(
-    decodeSettingsDocument(formatted).payload.variables[0].children[0].value
-  ).toBe('first\nsecond');
+  expect(formatted).toContain('value = """\nfirst\nsecond\n"""');
+  const decoded = decodeSettingsDocument(formatted).payload.variables;
+  expect(decoded[0].value).toBe('first\nsecond');
+  expect(decoded[1].children[0].children[0].value).toBe('a\nb');
   const instructions =
     'function {\n events {\n event {\n actions {\n A {\n text="first\\nsecond"\n }\n }\n }\n }\n}\n';
   const result = printSettingsSyntax(parseSettingsSyntax(instructions).root);

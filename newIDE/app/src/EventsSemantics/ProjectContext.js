@@ -1,6 +1,7 @@
 // @noflow
 import { sha256 } from 'js-sha256';
 import { parseSettingsSyntax } from '../ProjectsStorage/SettingsDsl/Syntax';
+import { getDeclaredVariableNames } from '../ProjectsStorage/SettingsDsl/Variables';
 import { nodeValue } from './SourceMap';
 
 // Catalog signatures depend on declarations, not on event bodies or source comments.
@@ -79,15 +80,9 @@ export const buildProjectContexts = files => {
     );
     [globalRoot, ownerRoot].forEach((node, index) => {
       if (!node) return;
-      node.children
-        .filter(child => child.type === 'variable')
-        .forEach(variable => {
-          owner.variables[nodeValue(variable, 'name', '')] = index
-            ? scene
-              ? 'scene'
-              : 'owner'
-            : 'global';
-        });
+      getDeclaredVariableNames(node).forEach(name => {
+        owner.variables[name] = index ? (scene ? 'scene' : 'owner') : 'global';
+      });
       const group = node.children.find(child => child.type === 'objectGroups');
       if (group)
         Object.entries(group.properties).forEach(([name, item]) => {
@@ -100,17 +95,17 @@ export const buildProjectContexts = files => {
             symbols[name] = { id: `${owner.identity}:group:${name}`, members };
         });
     });
-    root.children
-      .filter(child => child.type === 'parameter')
-      .forEach(parameter => {
-        if (nodeValue(parameter, 'type', '') === 'object') {
-          const name = nodeValue(parameter, 'name', '');
-          symbols[name] = {
-            id: `${file}:parameter:${name}`,
-            origin: 'parameter',
-          };
-        }
-      });
+    (
+      root.children.find(child => child.type === 'parameters')?.children || []
+    ).forEach(parameter => {
+      if (nodeValue(parameter, 'type', '') === 'object') {
+        const name = parameter.type;
+        symbols[name] = {
+          id: `${file}:parameter:${name}`,
+          origin: 'parameter',
+        };
+      }
+    });
     return { owner, symbols };
   };
 };

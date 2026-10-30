@@ -26,7 +26,7 @@ describe('GDevelop Language (GDL) authoring catalogs', () => {
     });
   test('publishes the same strict node schemas used by the current parser', () => {
     const catalog = catalogFor(project);
-    expect(catalog.formatVersion).toBe(13);
+    expect(catalog.formatVersion).toBe(16);
     expect(catalog.layoutNodes.map(entry => entry.node)).toEqual(
       expect.arrayContaining([
         'editor',
@@ -54,11 +54,12 @@ describe('GDevelop Language (GDL) authoring catalogs', () => {
     assertCurrentSchema(catalog);
     const variableSchema = catalog.variableSchemas.variable;
     expect(variableSchema.children.metadata).toBeUndefined();
-    expect(variableSchema.children.variable).toMatchObject({
-      repeated: true,
-      recursive: true,
-      schemaRef: 'variableSchemas.variable',
-    });
+    expect(variableSchema.children).toEqual({});
+    expect(variableSchema.fields.type.required).toBe(true);
+    expect(variableSchema.fields.json.format).toBe('strict variable JSON');
+    expect(variableSchema.fields.metadata.format).toBe(
+      'JSON Pointer metadata records'
+    );
     expect(JSON.parse(JSON.stringify(catalog)).variableSchemas).toEqual(
       catalog.variableSchemas
     );

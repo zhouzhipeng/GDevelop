@@ -24,6 +24,8 @@ const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 export const MAX_SETTINGS_DEPTH = 100;
 const MAX_TOKENS = 2000000;
 
+const decodedStringLines = new WeakMap();
+
 // Map decoded string offsets back to raw GDL, including JSON escapes and CRLF.
 export const getSettingsStringLocation = (item, decodedOffset = 0) => {
   const offset = Math.max(0, Math.min(decodedOffset, item.value.length));
@@ -35,9 +37,23 @@ export const getSettingsStringLocation = (item, decodedOffset = 0) => {
       offset: originalOffset,
     };
   }
-  const before = item.value.slice(0, offset).split('\n');
-  const lineIndex = before.length - 1;
-  const column = before[lineIndex].length + 1;
+  let cached = decodedStringLines.get(item);
+  if (!cached || cached.value !== item.value) {
+    const starts = [0];
+    for (let index = 0; index < item.value.length; index++)
+      if (item.value[index] === '\n') starts.push(index + 1);
+    cached = { value: item.value, starts };
+    decodedStringLines.set(item, cached);
+  }
+  let low = 0;
+  let high = cached.starts.length;
+  while (low + 1 < high) {
+    const middle = (low + high) >>> 1;
+    if (cached.starts[middle] <= offset) low = middle;
+    else high = middle;
+  }
+  const lineIndex = low;
+  const column = offset - cached.starts[lineIndex] + 1;
   return {
     line: item.contentLocation.line + lineIndex,
     column,
@@ -349,50 +365,11 @@ export const parseSettingsSyntax = (source, fileUri) => {
         location: result.location,
       };
     }
-    if (token.type === '{') {
-      const start = consume('{').location;
-      const entries = [];
-      const result = Object.create(null);
-      newlines();
-      while (token.type !== '}') {
-        if (!['ident', 'string'].includes(token.type))
-          error('Expected a structure key.', token.location);
-        const key = token;
-        token = next();
-        consume('=');
-        if (own(result, key.value))
-          error(`Duplicate structure key ${key.value}.`, key.location);
-        const item = value(depth + 1);
-        result[key.value] = item.value;
-        entries.push({ key: key.value, keyLocation: key.location, ...item });
-        if (token.type === '}') break;
-        if (token.type === ',') {
-          consume(',');
-          newlines();
-        } else if (token.type === 'newline') {
-          newlines();
-          if (token.type === ',') {
-            consume(',');
-            newlines();
-          }
-        } else
-          error(
-            'Expected a comma or newline between structure fields.',
-            token.location
-          );
-      }
-      const end = consume('}').location;
-      return {
-        value: result,
-        entries,
-        location: {
-          ...start,
-          endLine: end.endLine,
-          endColumn: end.endColumn,
-          endOffset: end.endOffset,
-        },
-      };
-    }
+    if (token.type === '{')
+      error(
+        'Anonymous structure literals are not supported; use a named node.',
+        token.location
+      );
     const start = consume('[').location;
     const items = [];
     newlines();
@@ -496,10 +473,10 @@ export const parseSettingsSyntax = (source, fileUri) => {
       : `${type} {}`;
     return result;
   };
-  const node = (nameToken, depth) => {
+  const node = (nameToken, depth, named = false) => {
     if (depth > MAX_SETTINGS_DEPTH)
       error('Settings nesting budget exceeded.', nameToken.location);
-    if (nameToken.value === 'code')
+    if (!named && nameToken.value === 'code')
       error(
         'Use code = """ followed by a multiline raw string; code {} is no longer supported.',
         nameToken.location
@@ -507,6 +484,7 @@ export const parseSettingsSyntax = (source, fileUri) => {
     consume('{');
     const result = {
       type: nameToken.value,
+      ...(named ? { named: true } : {}),
       properties: Object.create(null),
       children: [],
       location: nameToken.location,
@@ -522,6 +500,7 @@ export const parseSettingsSyntax = (source, fileUri) => {
         const key = token;
         token = next();
         if (
+          !result.named &&
           ['conditions', 'actions', 'while_conditions'].includes(result.type) &&
           token.type !== '='
         ) {
@@ -530,12 +509,24 @@ export const parseSettingsSyntax = (source, fileUri) => {
           result.members.push({ child });
           boundary();
         } else if (token.type === '{') {
-          if (key.type !== 'ident')
-            error('Node types must be identifiers.', key.location);
+          const namedChild =
+            [
+              'parameters',
+              'properties',
+              'shared_properties',
+              'variables',
+              'global_variables',
+              'scene_variables',
+            ].includes(result.type) || result.named;
+          if (key.type !== 'ident' && !namedChild)
+            error(
+              'Node types must be identifiers outside named collections.',
+              key.location
+            );
           if (own(result.properties, key.value))
             error(`Property/node collision: ${key.value}.`, key.location);
           childNames.add(key.value);
-          const child = node(key, depth + 1);
+          const child = node(key, depth + 1, namedChild);
           result.children.push(child);
           result.members.push({ child });
         } else {
@@ -581,7 +572,11 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
       lines.push(`${indent}${comments[commentIndex++].text}`);
   };
   const keyText = key =>
-    IDENT.test(key) && key.match(IDENT)[0] === key ? key : JSON.stringify(key);
+    IDENT.test(key) &&
+    key.match(IDENT)[0] === key &&
+    !['true', 'false'].includes(key)
+      ? key
+      : JSON.stringify(key);
   const hasLiteralComment = item => {
     const next = comments[commentIndex];
     return !!(
@@ -684,11 +679,12 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
     const indent = '  '.repeat(depth);
     emitComments(node.location ? node.location.line : 0, indent);
     if (node.instruction) {
-      const type = /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$/.test(
-        node.type
-      )
-        ? node.type
-        : JSON.stringify(node.type);
+      const type =
+        !['true', 'false'].includes(node.type) &&
+        !['true', 'false'].includes(node.type) &&
+        /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$/.test(node.type)
+          ? node.type
+          : JSON.stringify(node.type);
       const args = Object.entries(node.arguments);
       const flags = Object.entries(node.properties);
       const nextComment = comments[commentIndex];
@@ -734,7 +730,14 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
       lines.push(`${indent}}`);
       return;
     }
-    lines.push(`${indent}${node.type} {`);
+    lines.push(
+      `${indent}${
+        !['true', 'false'].includes(node.type) &&
+        /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$/.test(node.type)
+          ? node.type
+          : JSON.stringify(node.type)
+      } {`
+    );
     const emitProperty = key => {
       const property = node.properties[key];
       emitComments(
@@ -744,19 +747,7 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
       emitLiteral(`${indent}  ${keyText(key)} = `, property, depth + 1);
     };
     // Event ownership is explicit, so formatting preserves category placement.
-    const preserveMembers =
-      node.members &&
-      (node.instruction ||
-        [
-          'event',
-          'else',
-          'repeat',
-          'while',
-          'for_each',
-          'for_each_child',
-          'javascript',
-          'group',
-        ].includes(node.type));
+    const preserveMembers = !!node.members;
     if (preserveMembers) {
       node.members.forEach(member => {
         if (member.key) emitProperty(member.key);

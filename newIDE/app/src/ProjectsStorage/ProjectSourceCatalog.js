@@ -36,7 +36,7 @@ const SCENE_LIFECYCLE_SOURCES = Object.freeze([
 ]);
 
 export const PROJECT_GDL_CATALOG_RELATIVE_PATH = '.gdevelop/gdl-catalog.json';
-export const PROJECT_GDL_CATALOG_FORMAT_VERSION = 13;
+export const PROJECT_GDL_CATALOG_FORMAT_VERSION = 16;
 
 export class ProjectSourceCatalogError extends Error {
   code: string;
@@ -1349,7 +1349,7 @@ export const buildProjectGdlCatalog = ({
       rules: [
         'Use one typed component root. Names and properties belong inside the root; never use TOML headers, named node arguments, kind, settingsFormatVersion, settings or layout wrappers.',
         'Read fileKinds[].schema and objectTypes[type].schema. Unknown fields are errors. Dynamic fields require registered type metadata.',
-        'Declare repeated variable nodes directly on the owner. Infer types from value literals; extension defaults require scope. Descendant identity, enum and editor fields belong on nested variable declarations. Expanded containers require explicit structure/array type, omit value, and use named structure children or unnamed ordered array children. metadata/path annotations are forbidden. Never write variables, sceneVariables or globalVariables wrappers.',
+        'Use one variables container with named descriptor blocks and mandatory type. Scalars use value; structures/arrays use json raw strings. Nested enum/editing state uses metadata JSON Pointer records. Direct assignments and nested declarations are forbidden. Extension defaults use global_variables and scene_variables. Anonymous structure literals and scope fields are forbidden. Parameters and property descriptors use parameters/properties/shared_properties containers with named member nodes and no name field. Bare expression names resolve properties before variables.',
         'Instances are root children in global serialized order. Each instance owns variables and behavior overrides. Layers own camera and effect nodes.',
         'Object definitions and functions remain independent .gdl components; event bodies are embedded in the same function.gdl document.',
         'Only project.gdl declares formatVersion. Paths determine ownership. constants.toml is separate and generated JSON is not author input.',
@@ -1604,7 +1604,7 @@ const buildEmbeddedLayoutCatalog = ({
       storage: 'component-root',
       syntax: 'GDevelop Language (GDL)',
       rules: [
-        'Place layer and instance directly below scene/prefab/variant/external. Nest camera/effect below layer, variable/behavior below instance. Preserve instance order and UUIDs.',
+        'Place layer and instance directly below scene/prefab/variant/external. Nest camera/effect below layer, variables/behavior below instance. Preserve instance order and UUIDs.',
       ],
     },
     nodes: Object.entries(getSettingsSchemas().layout).map(

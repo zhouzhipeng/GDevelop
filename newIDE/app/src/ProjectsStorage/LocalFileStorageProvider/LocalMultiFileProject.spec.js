@@ -626,14 +626,14 @@ describe('Local multi-file project storage', () => {
 
     const projectSource = fs
       .readFileSync(entryPath, 'utf8')
-      .replace('variable {', 'invalidVariables {');
+      .replace('variables {', 'invalidVariables {');
     const sceneSettingsPath = path.join(
       temporaryDirectory,
       'scenes/Main/scene.gdl'
     );
     const sceneSource = fs
       .readFileSync(sceneSettingsPath, 'utf8')
-      .replace('variable {', 'invalidVariables {');
+      .replace('variables {', 'invalidVariables {');
     fs.writeFileSync(entryPath, projectSource, 'utf8');
     fs.writeFileSync(sceneSettingsPath, sceneSource, 'utf8');
     const untouchedEventsPath = path.join(
@@ -952,7 +952,7 @@ describe('Local multi-file project storage', () => {
     ).toContainEqual({ serializedKey: 'useLegacyTrajectory', type: 'boolean' });
     expect(rebuiltGdlCatalog).toMatchObject({
       format: 'gdevelop-gdl-catalog',
-      formatVersion: 13,
+      formatVersion: 16,
       layoutAuthoring: {
         storage: 'component-root',
         syntax: 'GDevelop Language (GDL)',
@@ -1979,7 +1979,7 @@ describe('Local multi-file project storage', () => {
     );
     expect(moduleMap).toMatchObject({
       format: 'gdevelop-project-module-map',
-      sourceFormatVersion: 14,
+      sourceFormatVersion: 17,
       project: { name: 'Generated compatibility project' },
     });
     const generatedProject = JSON.parse(fs.readFileSync(generatedPath, 'utf8'));

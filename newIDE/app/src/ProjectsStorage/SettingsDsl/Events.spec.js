@@ -169,47 +169,9 @@ test('explicit containers determine semantics independently of category placemen
 });
 
 test('all loop kinds retain fields, locals, flags and children through the unified grammar', () => {
-  const source = wrap(`repeat {
-  count = {{Variable(Count) + 1}}
-  index = "i"
-  variable {
-    name = "State"
-    type = "enum"
-    value = "Idle"
-    values = ["Idle", "Run"]
-  }
-  for_each {
-    object = "Enemy"
-    index = "j"
-    order_by = {{Enemy.X()}}
-    order = "desc"
-    limit = 10
-  }
-  for_each_child {
-    iterable = "Inventory"
-    index = "childIndex"
-    value = "item"
-    key = "itemKey"
-  }
-  while {
-    infiniteLoopWarning = true
-    while_conditions {
-      C {
-        flags {
-inverted = true
-}
-      }
-    }
-    actions {
-      A {
-        flags {
-disabled = true
-        awaited = true
-}
-      }
-    }
-  }
-}`);
+  const source = wrap(
+    'repeat {\n  count = {{ Variable(Count) + 1 }}\n  index = "i"\n\n  variables {\n\n    State {\n      type = "enum"\n      value = "Idle"\n      values = ["Idle", "Run"]\n    }\n  }\n\n  for_each {\n    object = "Enemy"\n    index = "j"\n    order_by = {{ Enemy.X() }}\n    order = "desc"\n    limit = 10\n  }\n\n  for_each_child {\n    iterable = "Inventory"\n    index = "childIndex"\n    value = "item"\n    key = "itemKey"\n  }\n\n  while {\n    infiniteLoopWarning = true\n\n    while_conditions {\n\n      C {\n        flags {\n          inverted = true\n        }\n      }\n    }\n\n    actions {\n\n      A {\n        flags {\n          disabled = true\n          awaited = true\n        }\n      }\n    }\n  }\n}\n'
+  );
   const events = compileSettingsEvents(source, options);
   const again = compileSettingsEvents(
     appendSettingsEvents('function {}\n', events, options),
@@ -250,7 +212,7 @@ test('rejects object literals masquerading as loop expressions and unsupported i
       wrap('repeat {\n count = { expression = "5" }\n}'),
       options
     )
-  ).toThrow('requires a number or {{');
+  ).toThrow('Anonymous structure literals');
   expect(() =>
     compileSettingsEvents(
       wrap(
