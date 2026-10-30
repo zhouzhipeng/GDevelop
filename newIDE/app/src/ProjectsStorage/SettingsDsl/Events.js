@@ -21,6 +21,9 @@ export const EVENT_TYPES = {
   comment: native('Comment'),
   link: native('Link'),
 };
+export const EVENT_NODE_TYPES = Object.keys(EVENT_TYPES).map(kind =>
+  kind === 'standard' ? 'event' : kind
+);
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const fields = n =>
   Object.fromEntries(
@@ -218,30 +221,13 @@ export const decodeEventList = (
   let previous;
   return container.children.map(n => {
     const data = fields(n);
-    const kind =
-      n.type === 'event'
-        ? own(data, 'type')
-          ? data.type
-          : 'standard'
-        : n.type;
-    if (
-      typeof kind !== 'string' ||
-      !own(EVENT_TYPES, kind) ||
-      (n.type === 'event'
-        ? ['group', 'comment', 'link'].includes(kind)
-        : !['group', 'comment', 'link'].includes(kind))
-    )
-      error(
-        `Unsupported event node/type ${n.type}/${kind}.`,
-        n,
-        uri,
-        'SETTINGS_EVENT_TYPE'
-      );
+    const kind = n.type === 'event' ? 'standard' : n.type;
+    if (!EVENT_NODE_TYPES.includes(n.type))
+      error(`Unsupported event node ${n.type}.`, n, uri, 'SETTINGS_EVENT_TYPE');
     check(
       n,
       [
         ...common,
-        ...(n.type === 'event' ? ['type'] : []),
         ...Object.keys(extra[kind]),
         ...(kind === 'comment'
           ? ['background', 'color']
@@ -359,7 +345,7 @@ export const decodeEventList = (
         result.variables.push(variable);
       } else if (
         (body || kind === 'group') &&
-        ['event', 'group', 'comment', 'link'].includes(child.type)
+        EVENT_NODE_TYPES.includes(child.type)
       )
         children.push(child);
       else if (
@@ -533,8 +519,6 @@ export const encodeEventList = (events, options = {}, uri, depth = 0) => {
       if (!kind) error(`Unsupported native event ${event.type}.`, {}, uri);
       const data = {},
         children = [];
-      if (!['standard', 'group', 'comment', 'link'].includes(kind))
-        data.type = kind;
       common.forEach(key => {
         if (event[key]) data[key] = event[key];
       });
@@ -635,11 +619,7 @@ export const encodeEventList = (events, options = {}, uri, depth = 0) => {
           ...encodeEventList(event.events || [], options, uri, depth + 1)
             .children
         );
-      return make(
-        ['group', 'comment', 'link'].includes(kind) ? kind : 'event',
-        data,
-        children
-      );
+      return make(kind === 'standard' ? 'event' : kind, data, children);
     })
   );
 };
@@ -647,7 +627,7 @@ export const extractSettingsJavaScriptBlocks = (source, fileUri) => {
   const syntax = parseSettingsSyntax(source, fileUri),
     blocks = [];
   const visit = n => {
-    if (n.type === 'event' && fields(n).type === 'javascript') {
+    if (n.type === 'javascript') {
       const code = n.children.find(c => c.type === 'code');
       if (code)
         blocks.push({
@@ -714,20 +694,9 @@ export const EVENT_SCHEMAS = Object.fromEntries(
   Object.keys(EVENT_TYPES).map(kind => [
     kind,
     {
-      node: ['group', 'comment', 'link'].includes(kind) ? kind : 'event',
+      node: kind === 'standard' ? 'event' : kind,
       nativeType: EVENT_TYPES[kind],
       fields: {
-        ...(!['group', 'comment', 'link'].includes(kind)
-          ? {
-              type: {
-                type: 'enum',
-                values: [kind],
-                ...(kind === 'standard'
-                  ? { default: 'standard' }
-                  : { required: true }),
-              },
-            }
-          : {}),
         ...Object.fromEntries(
           [
             ...common,
@@ -779,29 +748,18 @@ export const EVENT_SCHEMAS = Object.fromEntries(
           }
         : {},
       children:
-        bodyTypes.includes(kind) || kind === 'group'
-          ? ['event', 'group', 'comment', 'link']
-          : [],
+        bodyTypes.includes(kind) || kind === 'group' ? EVENT_NODE_TYPES : [],
     },
   ])
 );
 export const EVENTS_CONTAINER_SCHEMA = {
   fields: {},
   children: Object.fromEntries(
-    ['event', 'group', 'comment', 'link'].map(type => [
+    EVENT_NODE_TYPES.map(type => [
       type,
       {
         repeated: true,
-        schemaRef: type === 'event' ? 'eventSchemas' : `eventSchemas.${type}`,
-        ...(type === 'event'
-          ? {
-              discriminator: 'type',
-              defaultType: 'standard',
-              variants: Object.keys(EVENT_TYPES).filter(
-                kind => !['group', 'comment', 'link'].includes(kind)
-              ),
-            }
-          : {}),
+        schemaRef: `eventSchemas.${type === 'event' ? 'standard' : type}`,
       },
     ])
   ),

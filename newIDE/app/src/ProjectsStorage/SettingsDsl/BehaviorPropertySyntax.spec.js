@@ -107,8 +107,7 @@ test.each([
 });
 
 test('conditions, flags, nested events and loop expressions round trip', () => {
-  const events = compile(`event {
-    type = "repeat"
+  const events = compile(`repeat {
     count = {{max(1, getProperty(name="Height"))}}
     conditions {
       getProperty { name="Fresh"
@@ -267,4 +266,45 @@ test.each([
     fileUri: uri,
   });
   expect(action(written)).toEqual(original);
+});
+
+test('resolves and formats property aliases from generated behavior parameter metadata without owner', () => {
+  const generatedCatalog = {
+    ...catalog,
+    actions: catalog.actions.map(({ owner: ignored, ...entry }) => ({
+      ...entry,
+      parameters: entry.parameters.map(parameter =>
+        parameter.valueKind === 'behavior'
+          ? { ...parameter, extraInfo: 'Camera::Follow' }
+          : parameter
+      ),
+    })),
+    conditions: catalog.conditions.map(({ owner: ignored, ...entry }) => ({
+      ...entry,
+      parameters: entry.parameters.map(parameter =>
+        parameter.valueKind === 'behavior'
+          ? { ...parameter, extraInfo: 'Camera::Follow' }
+          : parameter
+      ),
+    })),
+  };
+  const resolver = createCatalogInstructionResolver(generatedCatalog);
+  const formatter = createCatalogInstructionFormatter(generatedCatalog);
+  for (const [kind, source] of [
+    ['condition', 'getProperty { name="Fresh" }'],
+    ['action', 'setProperty { name="Fresh" value=false }'],
+    [
+      'action',
+      'setProperty { name="Height" value={{getProperty(name="Height") + 2}} }',
+    ],
+  ]) {
+    const instruction = resolver({ kind, source, fileUri: uri });
+    const formatted = formatter({ kind, instruction, fileUri: uri });
+    expect(formatted).toContain(
+      kind === 'condition' ? 'getProperty {' : 'setProperty {'
+    );
+    expect(resolver({ kind, source: formatted, fileUri: uri })).toEqual(
+      instruction
+    );
+  }
 });

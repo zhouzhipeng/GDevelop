@@ -5,6 +5,23 @@ description: Create, inspect, modify, refactor, and verify GDevelop games throug
 
 # GDevelop Project Files
 
+## Configure GDevelop MCP first
+
+Before starting project work, check that the AI client's GDevelop MCP server is
+configured and its tools are available. If it is not configured, first add a
+server named `gdevelop` to the client's MCP configuration using the HTTP endpoint
+`http://127.0.0.1:32110/mcp`. Use the client's supported HTTP MCP transport and
+configuration format. Reconnect or reload the client's MCP connection as needed,
+then confirm that GDevelop tools are discoverable before continuing.
+
+GDevelop must be running on the same machine. In Preferences > MCP server,
+ensure **Enable local MCP server**, **Allow MCP write tools**, and
+**Allow MCP command tools** are enabled (all three default to enabled), with port
+`32110`. If the client configuration cannot be changed from the current session,
+provide the endpoint and the required setup steps to the user, and wait until
+the MCP tools become available before performing work that requires them.
+Enabling the tools does not change the direct-file authoring rules below.
+
 ## Catalog instruction names
 
 For a catalog parameter, `valueKind` defaults to `type` when omitted.
@@ -342,7 +359,7 @@ Load only the references required by the task:
   structures and the instruction `dslName` and parameter `dslName` found in the
   generated project instruction catalog.
 - Also read [references/javascript-api.md](references/javascript-api.md) in
-  full before creating or changing any event with type = "javascript". Use only the generated
+  full before creating or changing any javascript event node. Use only the generated
   public declarations, author new blocks with `strict=true`, and preserve
   compatibility mode only for existing legacy JavaScript.
 - Read

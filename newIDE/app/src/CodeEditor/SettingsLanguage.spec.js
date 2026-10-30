@@ -94,6 +94,12 @@ test('offers unified event structure without old keywords or redundant child wra
   expect(labels('function {\n ')).toContain('events');
   expect(labels('function {\n events {\n ')).toEqual([
     'event',
+    'else',
+    'repeat',
+    'while',
+    'for_each',
+    'for_each_child',
+    'javascript',
     'group',
     'comment',
     'link',
@@ -109,20 +115,21 @@ test('offers unified event structure without old keywords or redundant child wra
       'link',
     ])
   );
+  expect(body).not.toContain('type');
   expect(body).not.toContain('events');
   expect(body).not.toContain('if');
   expect(body).not.toContain('do');
-  expect(
-    labels('function {\n events {\n event {\n type = "javascript"\n ')
-  ).toEqual(expect.arrayContaining(['code', 'strict']));
-  expect(
-    labels('function {\n events {\n event {\n type = "javascript"\n ')
-  ).not.toContain('actions');
+  expect(labels('function {\n events {\n javascript {\n ')).toEqual(
+    expect.arrayContaining(['code', 'strict'])
+  );
+  expect(labels('function {\n events {\n javascript {\n ')).not.toContain(
+    'actions'
+  );
 });
 
 test('routes embedded JavaScript completions through a JS worker and disposes its virtual model', async () => {
   const source =
-    'function {\n events {\n event {\n type = "javascript"\n code {\nconsole.\n }\n }\n }\n}\n';
+    'function {\n events {\n javascript {\n code {\nconsole.\n }\n }\n }\n}\n';
   const getCompletionsAtPosition = jest.fn(async () => ({
     entries: [{ name: 'log' }],
   }));

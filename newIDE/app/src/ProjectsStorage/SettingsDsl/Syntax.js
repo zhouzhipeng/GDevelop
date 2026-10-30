@@ -647,7 +647,17 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
     // Event ownership is explicit, so formatting preserves category placement.
     const preserveMembers =
       node.members &&
-      (node.instruction || ['event', 'group'].includes(node.type));
+      (node.instruction ||
+        [
+          'event',
+          'else',
+          'repeat',
+          'while',
+          'for_each',
+          'for_each_child',
+          'javascript',
+          'group',
+        ].includes(node.type));
     if (preserveMembers) {
       node.members.forEach(member => {
         if (member.key) emitProperty(member.key);

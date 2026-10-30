@@ -1,5 +1,6 @@
 // @noflow
-const eventTypes = new Set(['event', 'group', 'comment', 'link']);
+import { EVENT_NODE_TYPES } from '../ProjectsStorage/SettingsDsl/Events';
+const eventTypes = new Set(EVENT_NODE_TYPES);
 export const eventChildren = node =>
   node.children.filter(child => eventTypes.has(child.type));
 export const nodeValue = (node, name, fallback) =>

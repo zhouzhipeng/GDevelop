@@ -6,6 +6,8 @@ import {
   compileSettingsEvents,
   extractSettingsJavaScriptBlocks,
   EVENT_TYPES,
+  EVENT_SCHEMAS,
+  EVENTS_CONTAINER_SCHEMA,
 } from './Events';
 const wrap = body => `function {\n name = "Test"\n events {\n${body}\n}\n}\n`;
 const resolveInstruction = ({ kind, source }) => ({
@@ -28,7 +30,7 @@ test('double-brace expressions retain quoted delimiters and nested braces', () =
 
 test('formats inline and block expressions with one space inside delimiters', () => {
   const source = wrap(
-    'event {\n type = "repeat"\n count = {{  MouseButton  }}\n actions {\n A { value={{MouseButton}} }\n }\n}'
+    'repeat {\n count = {{  MouseButton  }}\n actions {\n A { value={{MouseButton}} }\n }\n}'
   );
   const formatted = printSettingsSyntax(parseSettingsSyntax(source).root);
   expect(formatted).toContain('count = {{ MouseButton }}');
@@ -67,9 +69,7 @@ test('keeps explicit sibling and child event boundaries; list context determines
 test('parses raw JS with nested templates, regex, comments and braces without escapes', () => {
   const code =
     'const re = /[}]/;\nconst x = `outer ${`inner ${ { x: "}" }.x }`}`;\n// }\n/* } */\nif (re.test(x)) { console.log(x); }\n';
-  const source = wrap(
-    `event {\n type = "javascript"\n strict = true\n code {\n${code}}\n}`
-  );
+  const source = wrap(`javascript {\n strict = true\n code {\n${code}}\n}`);
   expect(compileSettingsEvents(source, options)[0].inlineCode).toBe(code);
   expect(extractSettingsJavaScriptBlocks(source)[0].code).toBe(code);
   const formatted = printSettingsSyntax(parseSettingsSyntax(source).root);
@@ -85,10 +85,10 @@ test.each([
   'event {\n actions {}\n actions {}\n}',
   'event {\n events {}\n}',
   'event {\n do A\n}',
-  'event {\n type = "else"\n}',
-  'event {\n type = "javascript"\n code = "x"\n}',
-  'event {\n type = "javascript"\n code {}\n}',
-  'event {\n type = "javascript"\n code { foo(); }\n}',
+  'else {\n}',
+  'javascript {\n code = "x"\n}',
+  'javascript {\n code {}\n}',
+  'javascript {\n code { foo(); }\n}',
   'link {\n target = "A"\n event {}\n}',
 ])('rejects retired and structurally invalid syntax: %s', body => {
   expect(() => compileSettingsEvents(wrap(body), options)).toThrow();
@@ -132,7 +132,7 @@ test('omits default group fields while preserving non-default values', () => {
 });
 test('expression operands and type-specific while lists stay separate', () => {
   const source = wrap(
-    'event {\n type = "while"\n while_conditions {\n C { value={{Func("(", (1 + 2))}} }\n }\n conditions {\n D {}\n }\n actions {\n A {}\n }\n}'
+    'while {\n while_conditions {\n C { value={{Func("(", (1 + 2))}} }\n }\n conditions {\n D {}\n }\n actions {\n A {}\n }\n}'
   );
   const events = compileSettingsEvents(source, options);
   expect(events[0].whileConditions[0].type.value).toBe('C');
@@ -167,8 +167,7 @@ test('explicit containers determine semantics independently of category placemen
 });
 
 test('all loop kinds retain fields, locals, flags and children through the unified grammar', () => {
-  const source = wrap(`event {
-  type = "repeat"
+  const source = wrap(`repeat {
   count = {{Variable(Count) + 1}}
   index = "i"
   variable {
@@ -177,23 +176,20 @@ test('all loop kinds retain fields, locals, flags and children through the unifi
     value = "Idle"
     values = ["Idle", "Run"]
   }
-  event {
-    type = "for_each"
+  for_each {
     object = "Enemy"
     index = "j"
     order_by = {{Enemy.X()}}
     order = "desc"
     limit = 10
   }
-  event {
-    type = "for_each_child"
+  for_each_child {
     iterable = "Inventory"
     index = "childIndex"
     value = "item"
     key = "itemKey"
   }
-  event {
-    type = "while"
+  while {
     infiniteLoopWarning = true
     while_conditions {
       C {
@@ -222,7 +218,7 @@ disabled = true
 
 test('empty code, final newline normalization and syntax errors have explicit behavior', () => {
   const empty = compileSettingsEvents(
-    wrap('event {\n type = "javascript"\n code {\n }\n}'),
+    wrap('javascript {\n code {\n }\n}'),
     options
   );
   expect(empty[0].inlineCode).toBe('');
@@ -240,7 +236,7 @@ test('empty code, final newline normalization and syntax errors have explicit be
   ).toBe('const text = `line1\nline2`;\n');
   expect(() =>
     compileSettingsEvents(
-      wrap('event {\n type = "javascript"\n code {\nconst broken = ;\n }\n}'),
+      wrap('javascript {\n code {\nconst broken = ;\n }\n}'),
       options
     )
   ).toThrow('Invalid JavaScript');
@@ -249,7 +245,7 @@ test('empty code, final newline normalization and syntax errors have explicit be
 test('rejects object literals masquerading as loop expressions and unsupported instruction flags', () => {
   expect(() =>
     compileSettingsEvents(
-      wrap('event {\n type = "repeat"\n count = { expression = "5" }\n}'),
+      wrap('repeat {\n count = { expression = "5" }\n}'),
       options
     )
   ).toThrow('requires a number or {{');
@@ -298,9 +294,7 @@ test('handles thousands of explicit events and rejects excessive event/code budg
   expect(() =>
     parseSettingsSyntax(
       wrap(
-        'event {\n type = "javascript"\n code {\n//' +
-          'x'.repeat(2 * 1024 * 1024) +
-          '\n }\n}'
+        'javascript {\n code {\n//' + 'x'.repeat(2 * 1024 * 1024) + '\n }\n}'
       )
     )
   ).toThrow('code size budget');
@@ -395,4 +389,52 @@ test('formats short calls on one line and expands long or annotated calls', () =
   expect(printed).toContain('B {}');
   expect(printed).toMatch(/C \{\n\s+value =/);
   expect(printed).toMatch(/D \{\n\s+\/\/ keep this comment/);
+});
+
+test('dedicated event schemas have no type discriminator and round trip every node', () => {
+  const source = wrap(`event {
+  conditions {
+    C {}
+  }
+}
+else {}
+repeat {
+  count = 2
+}
+while {}
+for_each {
+  object = "Enemy"
+}
+for_each_child {
+  iterable = "Inventory"
+}
+javascript {
+  code {
+const value = 1;
+  }
+}
+group {
+  name = "Group"
+}
+comment {
+  text = "Comment"
+}
+link {
+  target = "Fragment"
+}`);
+  for (const schema of Object.values(EVENT_SCHEMAS)) {
+    expect(schema.fields).not.toHaveProperty('type');
+    expect(EVENTS_CONTAINER_SCHEMA.children[schema.node].schemaRef).toBe(
+      `eventSchemas.${schema.node === 'event' ? 'standard' : schema.node}`
+    );
+  }
+  const events = compileSettingsEvents(source, options);
+  const output = appendSettingsEvents('function {}', events, options);
+  expect(output).not.toMatch(/\btype\s*=/);
+  expect(compileSettingsEvents(output, options)).toEqual(events);
+  for (const kind of Object.keys(EVENT_TYPES)) {
+    expect(() =>
+      compileSettingsEvents(wrap(`event {\n type = "${kind}"\n}`), options)
+    ).toThrow(/Unknown event field type/);
+  }
 });

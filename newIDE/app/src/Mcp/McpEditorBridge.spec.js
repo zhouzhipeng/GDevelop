@@ -1535,7 +1535,7 @@ describe('McpEditorBridge', () => {
       'game://scenes/Scene/functions/sceneUpdate.gdl'
     ] = replaceEmbeddedEventBody(
       files['game://scenes/Scene/functions/sceneUpdate.gdl'],
-      'function {\n\n  events {\n\n    event {\n      type = "javascript"\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nruntimeScene._instances.length;\n      }\n    }\n  }\n}\n'
+      'function {\n\n  events {\n\n    javascript {\n      strict = true\n      objects = ""\n      expanded = false\n\n      code {\nruntimeScene._instances.length;\n      }\n    }\n  }\n}\n'
     );
     await writeMultiFileSourceTree({ entryPath: projectFile, files });
     const bridge = makeBridge({ getProject: () => project });

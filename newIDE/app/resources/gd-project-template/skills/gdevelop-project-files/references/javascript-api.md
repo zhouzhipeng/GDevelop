@@ -1,6 +1,6 @@
 # Author JavaScript Events
 
-Use JavaScript only inside a Settings event with type = "javascript" and a raw multiline code block. Prefer current
+Use JavaScript only inside a Settings javascript node and a raw multiline code block. Prefer current
 instructions from `.gdevelop/conditions-catalog.json`, `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`; JavaScript is for
 logic that is materially clearer or not expressible with those instructions.
 It is not a replacement file format and it does not create standalone `.js`
@@ -44,8 +44,7 @@ New or changed AI-authored JavaScript must opt into strict checking:
 ```text
 events {
 
-  event {
-    type = "javascript"
+  javascript {
     strict = true
     objects = ""
     expanded = false
@@ -63,8 +62,7 @@ instances:
 ```text
 events {
 
-  event {
-    type = "javascript"
+  javascript {
     strict = true
     objects = "Enemy"
     expanded = false
@@ -231,8 +229,7 @@ events {
       collision first_object="Player" second_object="Enemy"
     }
 
-    event {
-      type = "javascript"
+    javascript {
       strict = true
       objects = "Enemy"
       expanded = false
@@ -260,8 +257,7 @@ events {
       keyPressed key="Space"
     }
 
-    event {
-      type = "javascript"
+    javascript {
       strict = true
       objects = ""
       expanded = false
@@ -290,8 +286,7 @@ events {
       sceneBegins
     }
 
-    event {
-      type = "javascript"
+    javascript {
       strict = true
       objects = ""
       expanded = false

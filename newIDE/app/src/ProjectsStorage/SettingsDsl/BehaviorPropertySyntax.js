@@ -16,7 +16,9 @@ export const createBehaviorPropertySyntax = (catalog, fail) => {
   const entries = { action: new Map(), condition: new Map() };
   for (const kind of ['action', 'condition']) {
     for (const entry of catalog[`${kind}s`]) {
-      const owner = entry.owner && entry.owner.behaviorType;
+      // Generated catalogs identify the behavior on the behavior parameter;
+      // older in-memory catalogs may still carry an explicit owner.
+      const owner = entry.owner?.behaviorType || entry.parameters[1]?.extraInfo;
       const prefix =
         owner && `${owner}::${kind === 'action' ? 'SetProperty' : 'Property'}`;
       if (!prefix || !entry.type.startsWith(prefix)) continue;

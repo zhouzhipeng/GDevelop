@@ -8,6 +8,7 @@ import {
   getSettingsInstructionCompletions,
 } from './SettingsInstructionCompletions';
 import {
+  EVENT_NODE_TYPES,
   compileSettingsEvents,
   extractSettingsJavaScriptBlocks,
 } from '../ProjectsStorage/SettingsDsl/Events';
@@ -126,21 +127,17 @@ export const getSettingsVariableCompletions = (
     if (!frame.fields.has('@events'))
       snippet('events', 'events {\n  event {\n    $0\n  }\n}');
   }
-  if (['events', 'group', 'event'].includes(frame.name)) {
-    const eventType = frame.containerType || '"standard"';
-    const leaf = ['"javascript"'].includes(eventType);
+  if (['events', ...EVENT_NODE_TYPES].includes(frame.name)) {
+    const leaf = ['javascript', 'comment', 'link'].includes(frame.name);
     if (!leaf) {
-      snippet('event', 'event {\n  $0\n}');
+      EVENT_NODE_TYPES.filter(
+        name => !['group', 'comment', 'link'].includes(name)
+      ).forEach(name => snippet(name, `${name} {\n  $0\n}`));
       snippet('group', 'group {\n  name = "${1:Group}"\n  $0\n}');
       snippet('comment', 'comment {\n  text = "${1:Comment}"\n}');
       snippet('link', 'link {\n  target = "${1:Fragment}"\n}');
     }
-    if (frame.name === 'event') {
-      if (!frame.fields.has('type'))
-        snippet(
-          'type',
-          'type = "${1|standard,else,repeat,while,for_each,for_each_child,javascript|}"'
-        );
+    if (!['events', 'group', 'comment', 'link'].includes(frame.name)) {
       if (leaf) {
         if (!frame.fields.has('strict')) snippet('strict', 'strict = true');
         if (!frame.fields.has('@code')) snippet('code', 'code {\n  $0\n}');
@@ -153,7 +150,7 @@ export const getSettingsVariableCompletions = (
           'variable',
           'variable {\n  name = "${1:Name}"\n  value = ${2:0}\n}'
         );
-        if (eventType === '"while"' && !frame.fields.has('@while_conditions'))
+        if (frame.name === 'while' && !frame.fields.has('@while_conditions'))
           snippet('while_conditions', 'while_conditions {\n  $0\n}');
       }
     }

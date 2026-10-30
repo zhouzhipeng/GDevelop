@@ -87,8 +87,7 @@ function {
         collision { first_object = "Player" second_object = "Coin" }
       }
 
-      event {
-        type = "for_each"
+      for_each {
         object = "Coin"
 
         actions {

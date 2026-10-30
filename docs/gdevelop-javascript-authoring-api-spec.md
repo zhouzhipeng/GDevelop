@@ -10,7 +10,7 @@ automatic JavaScript rename refactoring are future additions
 **Generated artifacts:** `.gdevelop/runtime-api.d.ts` and
 `.gdevelop/project-api.d.ts`
 
-**JavaScript source location:** raw `code` blocks in GDL `event` nodes with `type = "javascript"`
+**JavaScript source location:** raw `code` blocks in GDL `javascript` nodes
 
 **Target:** AI-authored and human-authored JavaScript events in GDevelop
 
@@ -76,8 +76,7 @@ project-specific names without inventing another schema.
 JavaScript is embedded in the current GDL event form:
 
 ```text
-event {
-  type = "javascript"
+javascript {
   strict = true
   objects = "Enemy"
   code {
@@ -553,8 +552,7 @@ They are never exposed as `_behaviorData`.
 For:
 
 ```text
-event {
-  type = "javascript"
+javascript {
   objects = "Enemy"
   code {
   }
@@ -925,8 +923,7 @@ event {
   conditions {
     collision first_object="Player" second_object="Enemy"
   }
-  event {
-    type = "javascript"
+  javascript {
     strict = true
     objects = "Enemy"
     code {
@@ -948,8 +945,7 @@ Place this child under the intended input condition; an unguarded update event
 would create an object every frame.
 
 ```text
-event {
-  type = "javascript"
+javascript {
   strict = true
   code {
     const bullet = runtimeScene.createObject("Bullet");
@@ -971,8 +967,7 @@ Place this event in `sceneLoad.gdl` for once-per-load initialization, preserving
 the generated lifecycle signature:
 
 ```text
-event {
-  type = "javascript"
+javascript {
   strict = true
   code {
     const score = runtimeScene.getVariables().get("Score");

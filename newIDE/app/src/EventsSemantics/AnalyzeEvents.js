@@ -298,8 +298,7 @@ export const analyzeGdlEvents = ({
         if (state[id])
           invalidate({ [id]: state[id] }, 'preceding-create-or-delete');
       });
-      const type =
-        node.type === 'event' ? nodeValue(node, 'type', 'standard') : node.type;
+      const type = node.type === 'event' ? 'standard' : node.type;
       const disabled = inactive || nodeValue(node, 'disabled', false);
       const requested = pathMatches(path, eventPath);
       if (path.length === eventPath.length && requested) foundPath = true;

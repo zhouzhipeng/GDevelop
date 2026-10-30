@@ -25,8 +25,8 @@ GDevelop Language (GDL) 成为唯一的项目配置及事件作者语言。函�
 1. `key = value` 声明属性。
 2. `node { ... }` 表达明确的结构、归属和边界。
 3. `conditions {}` 和 `actions {}` 明确区分指令种类；内部直接写 `Type { name = value }`，不使用 if/do。
-4. 执行事件统一使用 `event {}`，type 缺省为 standard；分组使用独立的 `group {}`，持久化注释使用独立的 `comment {}`，外部片段引用使用独立的 `link {}`。
-5. JavaScript 使用 `event { type = "javascript" ... }` 中唯一的原始多行 `code { ... }` 写法。
+4. 普通事件使用 `event {}`，其他事件分别使用 `else {}`、`repeat {}`、`while {}`、`for_each {}`、`for_each_child {}`、`javascript {}`；所有事件节点禁止 type 字段；分组使用独立的 `group {}`，持久化注释使用独立的 `comment {}`，外部片段引用使用独立的 `link {}`。
+5. JavaScript 使用 `javascript {... }` 中唯一的原始多行 `code { ... }` 写法。
 6. 同一 lexer、parser、AST、source range、formatter 和诊断系统处理全部作者源码。不得将 events 内容截成字符串交给旧 IfDo parser。
 7. 缩进帮助阅读，花括号决定结构；空行没有事件边界含义。
 8. 不再存在 `.events` 作者文件、IfDo 语言模式或独立 IfDo 版本。
@@ -129,8 +129,7 @@ function {
           setNumberVariable { variable = "Score" modification_sign = "+" value = 1 }
         }
 
-        event {
-          type = "javascript"
+        javascript {
           strict = true
 
           code {
@@ -147,7 +146,7 @@ function {
 }
 ```
 
-注意：碰撞条件可能选中多个 Coin，Delete 会删除全部被选金币，而加分动作仍按原生事件语义执行；不能从这个例子推断“每个金币加一次分”。需要逐金币处理时使用 `type = "for_each"` 的事件。这也是必须保留 picking 校验和预览证据的原因。
+注意：碰撞条件可能选中多个 Coin，Delete 会删除全部被选金币，而加分动作仍按原生事件语义执行；不能从这个例子推断“每个金币加一次分”。需要逐金币处理时使用 `for_each {}` 事件。这也是必须保留 picking 校验和预览证据的原因。
 
 ## 5. 统一词法与语法
 
@@ -227,21 +226,21 @@ function {
 }
 ```
 
-每个 event 的 type 缺省为 "standard"；显式写 type = "standard" 与省略等价，规范输出省略。其他类型必须显式写 type。group、comment 和 link 不使用 event/type 包装；type = "group"、type = "comment" 和 type = "link" 均明确报错。
+所有事件类型使用独立节点。event 仅表示 Standard；else、repeat、while、for_each、for_each_child、javascript、group、comment、link 分别表示对应原生事件。所有事件节点均禁止 type 字段，不兼容旧写法。
 
 | type | 原生事件 | 允许的主要内容 |
 | --- | --- | --- |
-| standard（默认） | Standard | variable、conditions、actions、子 event/group/comment/link |
-| event.type = else | Else | 同 standard，另校验前支 |
+| event | Standard | variable、conditions、actions、子 event/group/comment/link |
+| else | Else | 同 standard，另校验前支 |
 | repeat | Repeat | count、index，以及标准事件内容 |
 | while | While | while_conditions、循环属性，以及标准事件内容 |
-| event.type = for_each | ForEach | 对象/排序/上限属性，以及标准事件内容 |
-| event.type = for_each_child | ForEachChildVariable | 迭代变量属性，以及标准事件内容 |
-| event.type = javascript / code | JsCode / inlineCode | strict、objects、expanded、code；叶事件 |
+| for_each | ForEach | 对象/排序/上限属性，以及标准事件内容 |
+| for_each_child | ForEachChildVariable | 迭代变量属性，以及标准事件内容 |
+| javascript / code | JsCode / inlineCode | strict、objects、expanded、code；叶事件 |
 
 conditions、actions、while_conditions 各最多一个，缺失与空块等价。while_conditions 仅 while 可用。子 event/group/comment/link 直接嵌套，不写 events 包装。嵌套 events 无论是否为空都报上下文错误。
 
-解析不依赖“属性 → 条件 → 动作 → 子事件”的阶段状态机：合法成员块可换序，仍由节点名/type 决定归属。运行时始终初始化原生局部变量、检查条件、执行动作、再执行子事件，而非按这些类别在源码中的交错位置执行。模型规范输出固定为属性、variable、while_conditions、conditions、actions、子 event/group/comment/link；AST 格式化保留作者成员顺序。各条件、各动作、各局部变量和混排子 event/group/comment/link 自身的出现顺序必须保留，不能排序。补全优先插入规范位置，并提示非规范排列。
+解析不依赖“属性 → 条件 → 动作 → 子事件”的阶段状态机：合法成员块可换序，仍由节点名决定归属。运行时始终初始化原生局部变量、检查条件、执行动作、再执行子事件，而非按这些类别在源码中的交错位置执行。模型规范输出固定为属性、variable、while_conditions、conditions、actions、子 event/group/comment/link；AST 格式化保留作者成员顺序。各条件、各动作、各局部变量和混排子 event/group/comment/link 自身的出现顺序必须保留，不能排序。补全优先插入规范位置，并提示非规范排列。
 
 条件列表按顺序 AND；动作列表按顺序执行。先执行父动作，再执行子事件。允许空、仅条件、仅动作、仅局部变量或仅子事件的标准事件。
 
@@ -287,7 +286,7 @@ SomeCondition/SomeAction 为示意 catalog 类型，不是新增别名。简单�
 
 ## 8. Else 分支
 
-Else 也使用 event，通过 type 区分：
+Else 使用独立 else 节点：
 
 ```text
 event {
@@ -299,8 +298,7 @@ event {
   }
 }
 
-event {
-  type = "else"
+else {
   conditions {
     AnotherCondition { target="Player" }
   }
@@ -309,8 +307,7 @@ event {
   }
 }
 
-event {
-  type = "else"
+else {
   actions {
     FallbackAction { target="Player" }
   }
@@ -327,13 +324,12 @@ event {
 
 ## 9. 循环
 
-循环统一使用 event 并显式声明 type，内部使用属性、局部变量、conditions、actions 和直接嵌套的子事件。循环相关表达式按 catalog/GDevelop 表达式规则校验。
+循环使用 repeat、while、for_each、for_each_child 独立节点，内部使用属性、局部变量、conditions、actions 和直接嵌套的子事件。循环相关表达式按 catalog/GDevelop 表达式规则校验。
 
 ### 9.1 Repeat
 
 ```text
-event {
-  type = "repeat"
+repeat {
   count = 5
   index = "i"
 
@@ -349,8 +345,7 @@ count 必需，接受有限数字或 {{...}}；投影原生 repeatExpression。�
 ### 9.2 For each object
 
 ```text
-event {
-  type = "for_each"
+for_each {
   object = "Enemy"
   index = "i"
   order_by = {{ Enemy.Variable(HP) }}
@@ -374,8 +369,7 @@ object 必需且解析到当前 owner 的对象或合法组；order_by 为数值
 ### 9.3 For each child variable
 
 ```text
-event {
-  type = "for_each_child"
+for_each_child {
   iterable = "Inventory"
   value = "item"
   key = "itemKey"
@@ -392,8 +386,7 @@ iterable 映射 iterableVariableName，避免与局部 variable 子节点同名�
 ### 9.4 While
 
 ```text
-event {
-  type = "while"
+while {
   infiniteLoopWarning = true
   index = "i"
 
@@ -471,7 +464,7 @@ group {
 
 group 的 children 是同一分组的原生事件列表；不建立额外可执行条件或局部变量作用域。name/source/creationTime/color/parameters 映射原生 Group 已有有效字段，parameters 的非空结构必须登记严格字段清单，不允许任意 JSON。
 
-comment 是独立的持久化注释节点，投影为原生 Comment 事件，text/secondaryText/background/color 分别映射原生 comment/comment2/背景色/文字色；叶节点，无指令、局部变量或子事件。颜色为三项 0..255 整数。comment 可出现在顶层 events、group 和允许子事件的 event 内，和 event/group/link 共享有序列表；禁止 conditions、actions、code、variable 或子事件。只接受 comment 节点这一种作者写法，禁止 event.type = "comment"。
+comment 是独立的持久化注释节点，投影为原生 Comment 事件，text/secondaryText/background/color 分别映射原生 comment/comment2/背景色/文字色；叶节点，无指令、局部变量或子事件。颜色为三项 0..255 整数。comment 可出现在顶层 events、group 和允许子事件的 event 内，和 event/group/link 共享有序列表；禁止 conditions、actions、code、variable 或子事件。只接受 comment 节点这一种作者写法，禁止 event 的 type 字段。
 
 `//` 仅为源码注释，不生成原生事件，不能替代需要在事件表显示的 comment。AST 与局部编辑必须保留其所属位置；模型保存时依据已有源码节点锚点保留可匹配注释。无法确定归属的注释保留在最近未删除的容器尾部并给出编辑提示，不能无声丢弃。JavaScript code 内的注释属于原始代码内容，不作为外层注释重定位。
 
@@ -506,7 +499,7 @@ link {
 
 link 是独立的外部片段引用节点，仅引用整个片段；禁止 scene、range、group 或 includeConfig 作者属性。片段身份、命名空间、NFC/大小写唯一性按现有项目规则；循环引用、未解析目标报项目错误。
 
-link 可出现在顶层 events、group 及允许子事件的 event 内，和 event/group/comment 共享有序列表。它不是执行事件的 type，作者层禁止 event.type = "link"；投影到原生模型时仍使用 Link 记录。link 禁止 conditions、actions、variable、code 和子节点；现有原生 Link 的公共标记须按其注册 schema 保留。
+link 可出现在顶层 events、group 及允许子事件的 event 内，和 event/group/comment 共享有序列表。它不是执行事件的 type，作者层禁止 event 的 type 字段；投影到原生模型时仍使用 Link 记录。link 禁止 conditions、actions、variable、code 和子节点；现有原生 Link 的公共标记须按其注册 schema 保留。
 
 Link 继承调用者生命周期、条件选择和可见作用域。外部片段没有自己的生命周期。空、注释-only、未被引用的片段仍合法。模块地图只返回一个 settingsPath，取消 eventsPath。
 
@@ -515,8 +508,7 @@ Link 继承调用者生命周期、条件选择和可见作用域。外部片段
 ### 13.1 唯一作者写法
 
 ```text
-event {
-  type = "javascript"
+javascript {
   strict = true
   objects = "Enemy"
   expanded = false
@@ -593,16 +585,16 @@ CodeBlock AST 保存开启/关闭符号、整个区域和内容切片的范围�
 | --- | --- |
 | function.events | 函数 events 列表 |
 | fragment.events | 外部片段 events 列表 |
-| event（省略 type 或 standard） | Standard |
-| event.type = else | Else |
-| event.type = repeat / count | Repeat / repeatExpression |
-| event.type = while / while_conditions | While / whileConditions |
-| event.type = for_each | ForEach |
-| event.type = for_each_child | ForEachChildVariable |
+| event | Standard |
+| else | Else |
+| repeat / count | Repeat / repeatExpression |
+| while / while_conditions | While / whileConditions |
+| for_each | ForEach |
+| for_each_child | ForEachChildVariable |
 | group | Group |
 | comment | Comment |
 | link | Link，includeConfig 固定全片段 |
-| event.type = javascript / code | JsCode / inlineCode |
+| javascript / code | JsCode / inlineCode |
 | conditions / actions 内的指令调用块 | conditions / actions |
 | 指令块内的子指令调用块 | subInstructions，继承父指令种类 |
 | event.variable | variables |
@@ -617,7 +609,7 @@ CodeBlock AST 保存开启/关闭符号、整个区域和内容切片的范围�
 GDL catalog 必须发布：
 
 - function/fragment 的 events 唯一容器及允许的子事件种类。
-- event.type 判别 schema、独立 group/comment/link schema、各容器基数、规范输出顺序、递归规则和 Else 相邻约束。
+- 各独立事件节点 schema、各容器基数、规范输出顺序、递归规则和 Else 相邻约束。
 - 裸指令从 conditions/actions/while_conditions 继承的种类、标记和子树能力。
 - 表达式的合法字段位置、JavaScript 原始 code 块及其版本/边界规则。
 - variable schema 的递归引用，明确没有 metadata/path。
@@ -673,8 +665,8 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 - 相邻 action-only / condition-only / empty 事件不合并。
 - 删除或增加空行不改变事件树；移动块仅改变显式源顺序/父级。
 - 支持全部事件种类、嵌套事件、子指令、精确类型及具名参数。
-- 拒绝重复 conditions/actions、嵌套 events、非法 event.type、类型专属字段混用、坏 Else、旧前缀和旧 .events 文件。
-- 容器成员换序不改变归属；各列表内部和混排子 event/group/comment/link 的相对顺序必须保留；缺失 standard type 与显式 standard 等价。
+- 拒绝重复 conditions/actions、嵌套 events、事件节点的非法 type 字段、类型专属字段混用、坏 Else、旧前缀和旧 .events 文件。
+- 容器成员换序不改变归属；各列表内部和混排子 event/group/comment/link 的相对顺序必须保留；所有事件节点拒绝 type 字段。
 - code 中嵌套花括号、对象、类、解构、字符串、注释、正则/除法、模板及嵌套插值均正确识别边界；伪关闭行不误结束。
 - code 必须为原始多行块；拒绝 code={}、code="..."、三引号和单行正文等替代形式。
 - 未闭合代码准确定位；尾换行规范化和 CRLF 处理按明确等价规则验证；不能保真时拒绝而非转义回退。
@@ -705,7 +697,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 picking 可视化、行为相关 diff 和按 AST 的安全块移动是推荐编辑器能力，可独立迭代；不能将它们未完成视为可改变基础语法的理由。实现基础格式时至少保留精确 AST 和语义位置，使后续工具无需重新解析另一套正文语言。
 
-本文只采用显式 conditions/actions 块中的指令调用块、带 type 的 event、独立 group/comment/link 和原始多行 code 块。禁止并行支持 if/do、其他独立执行事件节点、嵌套 events 包装及字符串代码等备用写法，也不增加所有者名称简写。若未来改变，应重新评审整个作者契约，而不是逐步累积别名。
+本文只采用显式 conditions/actions 块中的指令调用块、独立的 event/else/repeat/while/for_each/for_each_child/javascript/group/comment/link 节点 和原始多行 code 块。禁止并行支持 if/do、event 的 type 字段、嵌套 events 包装及字符串代码等备用写法，也不增加所有者名称简写。若未来改变，应重新评审整个作者契约，而不是逐步累积别名。
 
 ## Behavior property syntax aliases
 

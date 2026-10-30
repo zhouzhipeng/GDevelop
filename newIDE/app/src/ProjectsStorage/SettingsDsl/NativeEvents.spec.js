@@ -55,8 +55,7 @@ test('real engine generates identical picking, OR, child-JS and loop code after 
         actions {
           Delete { object="Coin" }
         }
-        event {
-          type = "javascript"
+        javascript {
           strict = true
           objects = "Player"
           code {
@@ -65,8 +64,7 @@ if (pickedCount > 0) { objects[0].setX(42); }
           }
         }
       }
-      event {
-        type = "repeat"
+      repeat {
         count = 2
         index = "i"
         actions {
@@ -81,14 +79,12 @@ if (pickedCount > 0) { objects[0].setX(42); }
           SetNumberVariable { variable="Score" modification_sign="+" value=100 }
         }
       }
-      event {
-        type = "else"
+      else {
         actions {
           SetNumberVariable { variable="Score" modification_sign="+" value=3 }
         }
       }
-      event {
-        type = "while"
+      while {
         infiniteLoopWarning = true
         while_conditions {
           NumberVariable { variable="QueueSize" comparison_sign=">" value=0 }
@@ -98,15 +94,13 @@ if (pickedCount > 0) { objects[0].setX(42); }
           SetNumberVariable { variable="Score" modification_sign="+" value=1 }
         }
       }
-      event {
-        type = "for_each"
+      for_each {
         object = "Enemy"
         actions {
           SetNumberVariable { variable="Score" modification_sign="+" value=1 }
         }
       }
-      event {
-        type = "for_each_child"
+      for_each_child {
         iterable = "Inventory"
         index = "childIndex"
         value = "item"
@@ -228,8 +222,7 @@ test('generates native cardinality fixtures and checks their static contracts', 
       {
         name: 'post-filter-for-each',
         body: `event {
-${picked}event {
-type = "for_each"
+${picked}for_each {
 object = "Coin"
 actions {
 Delete { object="Coin" }
@@ -268,7 +261,7 @@ ${score}
       },
       {
         name: 'selected-js-versus-container',
-        body: `event {\n${picked}event {\ntype = "javascript"\nobjects = "Coin"\ncode {\nruntimeScene.getVariables().get("Score").setNumber(objects.length);\nruntimeScene.getVariables().get("AllCoins").setNumber(runtimeScene.getObjects("Coin").length);\n}\n}\n}`,
+        body: `event {\n${picked}javascript {\nobjects = "Coin"\ncode {\nruntimeScene.getVariables().get("Score").setNumber(objects.length);\nruntimeScene.getVariables().get("AllCoins").setNumber(runtimeScene.getObjects("Coin").length);\n}\n}\n}`,
         coins: 3,
         score: 2,
         allCoins: 3,

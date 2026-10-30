@@ -129,7 +129,7 @@ properties without a type declaration; the object already owns that behavior.
 
 Each component has one settings document. Objects and functions remain separate
 components. Scene configuration, background, layers and instances are one scene
-root. Prefab/variant require bounds with min/max arrays. Function declarations and event bodies share one .gdl file. JavaScript uses raw multiline code blocks inside event { type = "javascript" ... }. No .layout file or layout URI exists.
+root. Prefab/variant require bounds with min/max arrays. Function declarations and event bodies share one .gdl file. JavaScript uses raw multiline code blocks inside javascript {... }. No .layout file or layout URI exists.
 
 Never edit generated catalogs or .gdevelop/game.json. Validate direct source
 edits, reload, and verify behavior using the project workflow in SKILL.md.
@@ -187,8 +187,7 @@ function {
           setNumberVariable { variable = "Score" modification_sign = "+" value = 1 }
         }
 
-        event {
-          type = "javascript"
+        javascript {
           strict = true
 
           code {
@@ -210,11 +209,12 @@ that a scene-variable action adds once per coin. Use for_each when required.
 
 - Only function and fragment roots own one optional top-level events
   container. Canonical output includes an empty events container when needed.
-- Executable events use event. Its type defaults to standard. Other types:
+- Standard events use event. Other events use dedicated nodes:
   else, repeat, while, for_each, for_each_child and javascript.
+  No event node accepts a type field.
 - Grouping, persistent comments and external references use group, comment,
   and link nodes directly, never event.type = group/comment/link.
-- Child event/group/comment/link nodes are nested directly in their parent.
+- Child event nodes (including loops, group, comment and link) are nested directly in their parent.
   Do not add a nested events wrapper. Mixed child source order is significant.
 - Standard and loop events have at most one conditions and one actions block.
   Missing or empty blocks represent empty lists. No if/do keywords.
@@ -261,8 +261,7 @@ SomeCondition/AnotherCondition stand for real catalog entries, not aliases.
 ### Event variants
 
 ```text
-event {
-  type = "repeat"
+repeat {
   count = 5
   index = "i"
   actions {
@@ -270,23 +269,20 @@ event {
   }
 }
 
-event {
-  type = "for_each"
+for_each {
   object = "Enemy"
   order_by = {{ Enemy.Variable(HP) }}
   order = "desc"
   limit = 10
 }
 
-event {
-  type = "for_each_child"
+for_each_child {
   iterable = "Inventory"
   value = "item"
   key = "itemKey"
 }
 
-event {
-  type = "while"
+while {
   infiniteLoopWarning = true
   while_conditions {
     numberVariable { variable="QueueSize" comparison_sign=">" value=0 }
@@ -301,7 +297,7 @@ link {
 }
 ```
 
-Else uses event { type = "else" ... } directly after its conditional sibling.
+Else uses else {... } directly after its conditional sibling.
 No group, comment or other event may intervene. Keep original engine picking
 and Else semantics. While's while_conditions is distinct from conditions;
 there is no source-only while limit. Bound loops and ensure progress.
@@ -312,7 +308,7 @@ Groups do not create a new runtime local-variable scope.
 
 ### JavaScript
 
-Use only event { type = "javascript" ... code { ... } }. Code must be a raw
+Use only javascript {... code { ... } }. Code must be a raw
 multiline block, never a quoted string, triple-quoted string or tagged literal.
 Strings, regexes, comments and template interpolations follow JavaScript
 syntax; braces inside them do not end the outer block. The code closing brace
