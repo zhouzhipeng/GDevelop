@@ -88,10 +88,10 @@ export const callGdlSemanticsTool = async (projectFile, toolName, args) => {
           kind,
           instruction,
           evidence: Object.fromEntries(
-            (instruction.semantics.evidenceIds || []).map(id => [
-              id,
-              SEMANTICS_RULE_EVIDENCE[id],
-            ])
+            (
+              (instruction.semantics && instruction.semantics.evidenceIds) ||
+              []
+            ).map(id => [id, SEMANTICS_RULE_EVIDENCE[id]])
           ),
         }
       : {
