@@ -62,23 +62,90 @@ describe("GDL reviewed cardinality rules", function() {
       (0, eval)(fixture.code);
       const runtimeScene = new gdjs.TestRuntimeScene(gdjs.getPixiRuntimeGame());
       try {
-        ["Player", "Coin", "Enemy"].forEach(name => runtimeScene.registerObject({ name, type: "TestObject::TestObject", variables: [], behaviors: [], effects: [] }));
+        ["Player", "Coin", "Enemy"].forEach(name =>
+          runtimeScene.registerObject({
+            name,
+            type: "TestObject::TestObject",
+            variables: [],
+            behaviors: [],
+            effects: []
+          })
+        );
         const create = (name, x) => {
           const object = runtimeScene.createObject(name);
-          object.setWidth(32); object.setHeight(32); object.setPosition(x, 0);
+          object.setWidth(32);
+          object.setHeight(32);
+          object.setPosition(x, 0);
           return object;
         };
-        create("Player", 0); create("Player", 5000);
-        create("Coin", 0); create("Coin", 16);
+        create("Player", 0);
+        create("Player", 5000);
+        create("Coin", 0);
+        create("Coin", 16);
         const distantCoin = create("Coin", 10000);
-        runtimeScene.getVariables().initFrom([{ name: "Score", type: "number", value: 0 }]);
+        runtimeScene
+          .getVariables()
+          .initFrom([{ name: "Score", type: "number", value: 0 }]);
         const update = gdjs.MainCode.sceneUpdate || gdjs.MainCode.func;
-        runtimeScene.renderAndStepWithEventsFunction(16, () => update(runtimeScene));
+        runtimeScene.renderAndStepWithEventsFunction(16, () =>
+          update(runtimeScene)
+        );
         expect(runtimeScene.getObjects("Coin").length).to.be(fixture.coins);
-        expect(runtimeScene.getVariables().get("Score").getAsNumber()).to.be(fixture.score);
-        if (fixture.allCoins !== undefined) expect(runtimeScene.getVariables().get("AllCoins").getAsNumber()).to.be(fixture.allCoins);
-        if (fixture.name === "random-current-selection") expect(runtimeScene.getObjects("Coin").indexOf(distantCoin)).not.to.be(-1);
-      } finally { runtimeScene.unloadScene(); }
+        expect(
+          runtimeScene
+            .getVariables()
+            .get("Score")
+            .getAsNumber()
+        ).to.be(fixture.score);
+        if (fixture.allCoins !== undefined)
+          expect(
+            runtimeScene
+              .getVariables()
+              .get("AllCoins")
+              .getAsNumber()
+          ).to.be(fixture.allCoins);
+        if (fixture.name === "random-current-selection")
+          expect(
+            runtimeScene.getObjects("Coin").indexOf(distantCoin)
+          ).not.to.be(-1);
+      } finally {
+        runtimeScene.unloadScene();
+      }
     });
+  });
+});
+
+describe("GDL recursive variable descriptors", function() {
+  it("initializes nested array/structure locals and enum values in generated events", function() {
+    // eslint-disable-next-line no-eval
+    (0, eval)(window.__gdlRecursiveVariableCode);
+    const runtimeScene = new gdjs.TestRuntimeScene(gdjs.getPixiRuntimeGame());
+    try {
+      runtimeScene
+        .getVariables()
+        .initFrom([
+          { name: "Score", type: "number", value: 0 },
+          { name: "ModeResult", type: "string", value: "" }
+        ]);
+      const update =
+        gdjs.JsonLocalsCode.sceneUpdate || gdjs.JsonLocalsCode.func;
+      runtimeScene.renderAndStepWithEventsFunction(16, () =>
+        update(runtimeScene)
+      );
+      expect(
+        runtimeScene
+          .getVariables()
+          .get("Score")
+          .getAsNumber()
+      ).to.be(10);
+      expect(
+        runtimeScene
+          .getVariables()
+          .get("ModeResult")
+          .getAsString()
+      ).to.be("Idle");
+    } finally {
+      runtimeScene.unloadScene();
+    }
   });
 });

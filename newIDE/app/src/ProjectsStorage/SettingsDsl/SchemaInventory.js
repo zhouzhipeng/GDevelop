@@ -1,7 +1,7 @@
 // @noflow
 // Shared authoring field inventory. SettingsDsl converts these descriptors to
 // strict node schemas; catalogs publish the same schemas used by the parser.
-export const SETTINGS_FORMAT_VERSION = 17;
+export const SETTINGS_FORMAT_VERSION = 18;
 const MULTI_FILE_FORMAT_VERSION = SETTINGS_FORMAT_VERSION;
 const MULTI_FILE_ENTRY_URI = 'game://project.gdl';
 const SCENE_LIFECYCLE_SOURCES = [
@@ -50,14 +50,7 @@ const variableRecordFields = [
     values: ['string', 'number', 'boolean', 'structure', 'array', 'enum'],
   }),
   settingsField('value', 'scalar variable value', {
-    requiredUnless: 'structure/array type using json',
-  }),
-  settingsField('json', 'string', {
-    requiredWhen: 'structure/array',
-    format: 'strict variable JSON',
-  }),
-  settingsField('metadata', 'string', {
-    format: 'JSON Pointer metadata records',
+    requiredUnless: 'structure/array type using members/elements',
   }),
   settingsField('values', 'unique string array'),
   settingsField('folded', 'boolean'),
@@ -70,7 +63,7 @@ const variableNode = (name: string): Object => ({
   repeated: true,
   fields: variableRecordFields,
   additionalFields:
-    'Named variable descriptor blocks with mandatory type. Scalars use value; structures/arrays use strict JSON in json. Optional metadata contains JSON Pointer records for nested enum/editing state. No direct assignments, nested declarations, name, scope or IDs.',
+    'Recursive typed descriptors: scalars use value, structures require members with named descriptors, arrays require elements with repeated item descriptors. Enum/editing metadata belongs on each descriptor. No json, metadata, direct assignments, name, scope or IDs.',
 });
 
 const objectGroupsNode = (prefix: string = ''): Object => ({

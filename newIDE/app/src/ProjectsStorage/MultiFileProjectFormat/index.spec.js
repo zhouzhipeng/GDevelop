@@ -195,8 +195,8 @@ describe('GDevelop Language (GDL) multi-file project format', () => {
     for (const source of [
       'kind = "project"\nsettingsFormatVersion = 7\n',
       files[MULTI_FILE_ENTRY_URI].replace(
-        'formatVersion = 17',
-        'formatVersion = 16'
+        'formatVersion = 18',
+        'formatVersion = 17'
       ),
     ]) {
       expect(() =>

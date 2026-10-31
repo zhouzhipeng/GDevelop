@@ -86,14 +86,8 @@ const variableSchema = record({
   value: {
     type: 'scalar variable value',
     valueKinds: ['string', 'number', 'boolean'],
-    requiredUnless: 'structure/array type using json',
+    requiredUnless: 'structure/array type using members/elements',
   },
-  json: {
-    type: 'string',
-    requiredWhen: 'structure/array',
-    format: 'strict variable JSON',
-  },
-  metadata: { type: 'string', format: 'JSON Pointer metadata records' },
   values: scalar('unique string array'),
   folded: scalar('boolean'),
   hasMixedValues: scalar('boolean'),
@@ -105,6 +99,22 @@ variableContainerSchema.namedEntries = {
   declarationSchemaRef: 'variableSchemas.variable',
   schema: variableSchema,
 };
+variableSchema.children.members = {
+  maximum: 1,
+  requiredWhen: 'structure',
+  schemaRef: 'variableSchemas.variables',
+};
+variableSchema.children.elements = {
+  maximum: 1,
+  requiredWhen: 'array',
+  schemaRef: 'variableSchemas.elements',
+};
+const variableElementsSchema = record(
+  {},
+  {
+    item: { repeated: true, schemaRef: 'variableSchemas.variable' },
+  }
+);
 const variableEntry = key => ({
   key,
   variableKeys: [key],
@@ -1405,6 +1415,7 @@ export const getSettingsSchemas = () => ({
   variableSchemas: {
     variable: variableSchema,
     variables: variableContainerSchema,
+    elements: variableElementsSchema,
   },
   eventSchemas: EVENT_SCHEMAS,
 });

@@ -1,5 +1,7 @@
 # 系统指令固定短名与 project.gdl 项目入口
 
+版本说明：本文版本号记录该次变更的历史基线与升级过程，不代表当前版本。当前作者格式为 18，GDL catalog 为 17，instruction catalog 为 7；以 [GDL 当前规范](settings-dsl-spec.md) 及其列出的代码常量为准。
+
 - 状态：用户已批准，代码与作者文档已实施；桌面构建/启动由后台脚本单独执行。
 - 日期：2026-10-27。
 - 用户范围：系统指令固定短名映射；第三方与用户指令暂不处理；项目入口改为 project.gdl；代码、catalog、补全和 AI 作者文档统一使用 catalog 中的作者名称。
@@ -74,7 +76,7 @@ resolver 建立原生 type 和作者 dslName 的独立索引，先统一校验�
 
 唯一受管理项目入口改为 project.gdl，URI 为 game://project.gdl；内部仍为 project 根，其他组件所有权不变。入口名称及 URI 从统一常量导出，避免各消费者继续硬编码。
 
-作者格式升级至 13；GDL catalog 升级至 11；instruction catalog 升级至 5。各自在现有权威常量位置更新，不把独立版本域合并。semanticsVersion、semanticsRulesRevision 和模块地图版本在其结构/语义未变时保持不变。
+作者格式升级至 13；GDL catalog 升级至 11；instruction catalog 实施版本为 6（包含同期按种类拆分变更）。各自在现有权威常量位置更新，不把独立版本域合并。semanticsVersion、semanticsRulesRevision 和模块地图版本在其结构/语义未变时保持不变。
 
 遵循现有项目的最新格式策略：不增加 project.gdevelop 双读、双写、自动重命名或旧格式迁移器。旧入口和旧格式给出明确不支持诊断，不能退化为普通 JSON 项目导入。已有原生模型导入功能保留其现有边界，不成为旧 GDL fallback。
 

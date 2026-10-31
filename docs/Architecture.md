@@ -186,11 +186,11 @@ runtime object; its children live in an internal instance container.
 
 `gd::VariablesContainer::SourceType` distinguishes global, scene, object,
 local, extension-global, extension-scene, parameter, and property scopes.
-`gd::Variable` is recursive: primitive, structure, or array. GDL format 17
-represents every variable as a named descriptor with an explicit type. Scalar
-values use `value`; structures and arrays use strict JSON strings in `json`.
-Nested enum and editing state travel separately in `metadata` JSON Pointer
-records. This authoring syntax does not change native variable scopes or types.
+`gd::Variable` is recursive: primitive, structure, or array. GDL format 18
+represents every variable and descendant with an explicit type. Scalars use
+`value`, structures use named descriptors in `members`, and arrays use repeated
+`item` descriptors in `elements`. Enum and editing metadata live directly on
+their owning descriptor. This does not change native variable scopes or types.
 
 Function parameters and events-based properties are projected into synthetic
 variable/resource/object containers. This allows the same expression parser,

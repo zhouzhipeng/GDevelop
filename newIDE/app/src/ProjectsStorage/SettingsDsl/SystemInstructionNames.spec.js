@@ -40,16 +40,23 @@ test('every registered system instruction has a fixed, unambiguous author name a
     ['condition', catalog.conditions],
   ]) {
     for (const entry of entries) {
-      expect(
-        Object.entries(SYSTEM_INSTRUCTION_NAMES).some(
-          ([key, value]) =>
-            key.startsWith(`${kind}|`) &&
-            key.endsWith(`|${entry.type}`) &&
-            value === entry.dslName
+      const authorName = entry.dslName || entry.type;
+      const registeredNames = Object.entries(SYSTEM_INSTRUCTION_NAMES)
+        .filter(
+          ([key]) =>
+            key.startsWith(`${kind}|`) && key.endsWith(`|${entry.type}`)
         )
-      ).toBe(true);
-      expect(entry.dslName).toMatch(/^[a-z][A-Za-z0-9_]*$/);
-      const short = resolve({ kind, source: `${entry.dslName} {}`, line: 1 });
+        .map(([, value]) => value);
+      expect({ kind, type: entry.type, registeredNames }).toEqual({
+        kind,
+        type: entry.type,
+        registeredNames: expect.arrayContaining([authorName]),
+      });
+      if (entry.dslName !== undefined) {
+        expect(entry.dslName).toMatch(/^[a-z][A-Za-z0-9_]*$/);
+        expect(entry.dslName).not.toBe(entry.type);
+      }
+      const short = resolve({ kind, source: `${authorName} {}`, line: 1 });
       const native = resolve({
         kind,
         source: `${JSON.stringify(entry.type)} {}`,
@@ -57,7 +64,7 @@ test('every registered system instruction has a fixed, unambiguous author name a
       });
       expect(short).toEqual(native);
       expect(short.type.value).toBe(entry.type);
-      expect(format({ kind, instruction: native })).toBe(`${entry.dslName} {}`);
+      expect(format({ kind, instruction: native })).toBe(`${authorName} {}`);
     }
   }
   expect(
@@ -97,6 +104,8 @@ test('every registered system instruction has a fixed, unambiguous author name a
     ['action', 'Video::SetTime', 'setVideoTime'],
     ['condition', 'Video::Play', 'isVideoPlaying'],
     ['condition', 'SvgUI::SvgUIObject::Loaded', 'svgLoaded'],
+    ['condition', 'Distance3D', 'distance3D'],
+    ['condition', 'IsTurnedTowardObject3D', 'isTurnedTowardObject3D'],
   ]) {
     const entries = kind === 'action' ? catalog.actions : catalog.conditions;
     expect(entries.find(e => e.type === type).dslName).toBe(dslName);

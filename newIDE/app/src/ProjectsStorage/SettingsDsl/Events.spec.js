@@ -155,17 +155,67 @@ test('type discriminants reject empty, non-string and prototype names', () => {
     ).toThrow();
 });
 
-test('explicit containers determine semantics independently of category placement', () => {
+test.each(['event', 'else', 'repeat', 'while', 'for_each', 'for_each_child'])(
+  '%s rejects event categories out of execution order',
+  type => {
+    for (const body of [
+      'actions {}\n conditions {}',
+      'conditions {}\n variables {}',
+      'conditions {}\n while_conditions {}',
+      'actions {}\n variables {}',
+      'event {}\n actions {}',
+      'event {}\n conditions {}',
+      'actions {}\n disabled = false',
+      'variables {}\n folded = false',
+    ]) {
+      const source = wrap(`${type} {\n ${body}\n}`);
+      for (const parse of [parseSettingsSyntax, compileSettingsEvents]) {
+        try {
+          parse(source);
+          throw new Error('Expected an event order error.');
+        } catch (error) {
+          expect(error.code).toBe('SETTINGS_EVENT_ORDER');
+          expect(error.line).toBe(6);
+          expect(error.column).toBe(2);
+        }
+      }
+    }
+  }
+);
+
+test('event order validation recurses through groups and nested events', () => {
   const source = wrap(
-    'event {\n actions {\n A {}\n }\n conditions {\n C {}\n }\n}'
+    'group {\n event {\n event {\n actions {}\n conditions {}\n }\n }\n}'
+  );
+  expect(() => parseSettingsSyntax(source)).toThrow(/must appear in order/);
+});
+
+test('fragment groups reject properties after children without restricting named data', () => {
+  expect(() =>
+    parseSettingsSyntax(
+      'fragment {\n events {\n group {\n event {}\n name = "Late"\n }\n }\n}'
+    )
+  ).toThrow(/must appear in order/);
+  expect(() =>
+    parseSettingsSyntax(
+      'function {\n properties {\n event {\n actions {}\n conditions {}\n }\n }\n}'
+    )
+  ).not.toThrow();
+});
+
+test('ordered event phases permit omissions and preserve child order', () => {
+  const source = wrap(
+    'event {\n disabled = false\n variables {}\n conditions {\n C {}\n }\n actions {\n A {}\n }\n comment {\n text = "First"\n }\n event {}\n}'
   );
   const parsed = compileSettingsEvents(source, options);
   expect(parsed[0].conditions[0].type.value).toBe('C');
   expect(parsed[0].actions[0].type.value).toBe('A');
+  expect(parsed[0].events.map(event => event.type)).toEqual([
+    EVENT_TYPES.comment,
+    EVENT_TYPES.standard,
+  ]);
   const formatted = printSettingsSyntax(parseSettingsSyntax(source).root);
-  expect(formatted.indexOf('actions {')).toBeLessThan(
-    formatted.indexOf('conditions {')
-  );
+  expect(compileSettingsEvents(formatted, options)).toEqual(parsed);
 });
 
 test('all loop kinds retain fields, locals, flags and children through the unified grammar', () => {

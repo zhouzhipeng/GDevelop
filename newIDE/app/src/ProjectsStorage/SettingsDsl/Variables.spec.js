@@ -6,14 +6,20 @@ import {
   preserveVariableStructureOrder,
 } from '.';
 import { compileLayoutDocument } from '../LayoutDocument';
+import { decodeVariableContainer, encodeVariableContainer } from './Variables';
+import { parseSettingsSyntax } from './Syntax';
 
 const scene = body =>
   `scene {\n name = "Main"\n background = "#000000"\n${body}\n}\n`;
 const variables = body => `variables {\n${body}\n}`;
-const scalar = (name, type, value) =>
-  `${name} {\n type = "${type}"\n value = ${JSON.stringify(value)}\n}`;
-const complex = (name, type, json, extra = '') =>
-  `${name} {\n type = "${type}"\n json = """\n${json}\n"""\n${extra}\n}`;
+const scalar = (name, type, value, extra = '') =>
+  `${name} {\n type = "${type}"\n value = ${JSON.stringify(
+    value
+  )}\n${extra}\n}`;
+const complex = (name, type, body = '', extra = '') =>
+  `${name} {\n type = "${type}"\n${extra}\n ${
+    type === 'structure' ? 'members' : 'elements'
+  } {\n${body}\n}\n}`;
 const decode = body =>
   decodeSettingsDocument(scene(variables(body))).payload.variables;
 const roundTrip = source => {
@@ -27,119 +33,122 @@ const roundTrip = source => {
   return { parsed, printed };
 };
 
-test('every variable is a typed named descriptor, preserving special and numeric names', () => {
-  const { parsed, printed } = roundTrip(
-    scene(
-      variables(
-        [
-          scalar('Health', 'number', 10),
-          scalar('Name', 'string', 'Player'),
-          scalar('Enabled', 'boolean', true),
-          scalar('"10"', 'number', 10),
-          scalar('"2"', 'boolean', false),
-          scalar('__proto__', 'string', 'safe'),
-          scalar('constructor', 'number', 1),
-          scalar('"true"', 'number', 2),
-          scalar('"Display Name"', 'string', 'Knight'),
-        ].join('\n')
-      )
-    )
-  );
-  expect(parsed.payload.variables.map(v => v.name)).toEqual([
+test('typed descriptors preserve special and numeric names', () => {
+  const names = [
     'Health',
-    'Name',
-    'Enabled',
     '10',
     '2',
     '__proto__',
     'constructor',
     'true',
     'Display Name',
-  ]);
-  expect(printed).toMatch(/Health \{\n\s+type = "number"\n\s+value = 10/);
-  expect(printed).not.toContain('Health =');
-});
-
-test('JSON supports business value/type keys, recursive heterogeneous arrays and empty containers', () => {
-  const { parsed, printed } = roundTrip(
+  ];
+  const { parsed } = roundTrip(
     scene(
       variables(
-        [
-          complex(
-            'Data',
-            'structure',
-            '{"value":1,"type":"string","10":[],"2":{},"__proto__":{"constructor":true}}'
-          ),
-          complex(
-            'Enemies',
-            'array',
-            '[{"Name":"Slime","HP":10},[false,"text",{}],[]]'
-          ),
-          complex('Empty', 'structure', '{}'),
-        ].join('\n')
+        names.map(name => scalar(JSON.stringify(name), 'number', 1)).join('\n')
       )
     )
   );
+  expect(parsed.payload.variables.map(v => v.name)).toEqual(names);
+});
+
+test('recursive structures, heterogeneous arrays and empty containers round trip', () => {
+  const source = complex(
+    'Data',
+    'structure',
+    [
+      scalar('value', 'number', 1),
+      scalar('type', 'string', 'string'),
+      complex('"10"', 'array'),
+      complex('"2"', 'structure'),
+      complex('__proto__', 'structure', scalar('constructor', 'boolean', true)),
+      complex('members', 'structure', scalar('elements', 'number', 2)),
+      complex(
+        'Inventory',
+        'array',
+        [
+          scalar('item', 'string', 'Sword'),
+          complex(
+            'item',
+            'structure',
+            scalar('Name', 'string', 'Shield') +
+              '\n' +
+              scalar('Count', 'number', 1)
+          ),
+          complex('item', 'array', scalar('item', 'boolean', false)),
+          complex('item', 'array'),
+        ].join('\n')
+      ),
+    ].join('\n')
+  );
+  const { parsed, printed } = roundTrip(scene(variables(source)));
   expect(parsed.payload.variables[0].children.map(v => v.name)).toEqual([
     'value',
     'type',
     '10',
     '2',
     '__proto__',
+    'members',
+    'Inventory',
   ]);
-  expect(parsed.payload.variables[1].children[0].children[0].value).toBe(
-    'Slime'
-  );
-  expect(printed).toContain('json = """');
-  expect(printed).not.toMatch(/\bitems\s*\{|\bitem\s*\{/);
+  const items = parsed.payload.variables[0].children[6].children;
+  expect(items[0]).toEqual({ type: 'string', value: 'Sword' });
+  expect(items[1].children[0].value).toBe('Shield');
+  expect(items[2].children[0]).toEqual({ type: 'boolean', value: false });
+  expect(printed).toContain('elements {');
+  expect(printed).not.toMatch(/\b(?:json|metadata)\s*=/);
   expect({}.constructor).toBe(Object);
 });
 
-test('root and descendant enum/editing state survive JSON Pointer metadata round trips', () => {
-  const metadata = JSON.stringify({
-    '/Mode': { type: 'enum', values: ['Idle', 'Run'], hasMixedValues: false },
-    '/a~1b~0c/0/Enabled': { folded: false },
-    '/a~1b~0c': { folded: true },
-  });
-  const { parsed } = roundTrip(
-    scene(
-      variables(
-        complex(
-          'State',
-          'structure',
-          '{"Mode":"Idle","a/b~c":[{"Enabled":true}]}',
-          `folded = false\nhasMixedValues = false\nmetadata = ${JSON.stringify(
-            metadata
-          )}`
-        )
-      )
-    )
+test('root and descendant enum/editing state stay on their own descriptors', () => {
+  const source = complex(
+    'State',
+    'structure',
+    [
+      scalar(
+        'Mode',
+        'enum',
+        'Idle',
+        'values = ["Idle", "Run"]\nhasMixedValues = false'
+      ),
+      complex(
+        '"a/b~c"',
+        'array',
+        [
+          scalar(
+            'item',
+            'enum',
+            'Run',
+            'values = ["Idle", "Run"]\nfolded = false'
+          ),
+          complex(
+            'item',
+            'structure',
+            scalar('Enabled', 'boolean', true, 'folded = false'),
+            'folded = true'
+          ),
+        ].join('\n'),
+        'folded = false'
+      ),
+    ].join('\n'),
+    'folded = false\nhasMixedValues = false'
   );
-  const variable = parsed.payload.variables[0];
-  expect(variable).toMatchObject({ folded: false, hasMixedValues: false });
-  expect(variable.children[0]).toEqual({
-    name: 'Mode',
+  const { parsed } = roundTrip(scene(variables(source)));
+  const root = parsed.payload.variables[0];
+  expect(root).toMatchObject({ folded: false, hasMixedValues: false });
+  expect(root.children[0]).toMatchObject({
     type: 'enum',
-    value: 'Idle',
     values: ['Idle', 'Run'],
     hasMixedValues: false,
   });
-  expect(variable.children[1].children[0].children[0].folded).toBe(false);
-});
-
-test('nested metadata supports array elements, including enums', () => {
-  const source = scene(
-    variables(
-      complex(
-        'Items',
-        'array',
-        '["Idle",[]]',
-        'metadata = "{\\"/0\\":{\\"type\\":\\"enum\\",\\"values\\":[\\"Idle\\"]},\\"/1\\":{\\"folded\\":false}}"'
-      )
-    )
-  );
-  const { parsed } = roundTrip(source);
-  expect(parsed.payload.variables[0].children[0].type).toBe('enum');
+  expect(root.children[1].children[0]).toEqual({
+    type: 'enum',
+    value: 'Run',
+    values: ['Idle', 'Run'],
+    folded: false,
+  });
+  expect(root.children[1].children[1].children[0].folded).toBe(false);
 });
 
 test.each([
@@ -148,132 +157,84 @@ test.each([
   'A {}',
   'A {\n value = 1\n}',
   'A {\n type = "number"\n value = "1"\n}',
-  'A {\n type = "boolean"\n value = 1\n}',
   'A {\n type = "number"\n value = {{ 1 }}\n}',
   'A {\n type = "number"\n value = [1]\n}',
-  'A {\n type = "structure"\n value = "{}"\n}',
-  'A {\n type = "structure"\n variables {}\n}',
+  'A {\n type = "boolean"\n value = 1\n}',
+  'A {\n type = "structure"\n json = "{}"\n}',
+  'A {\n type = "array"\n json = "[]"\n}',
+  'A {\n type = "structure"\n members {}\n metadata = "{}"\n}',
+  'A {\n type = "structure"\n value = "{}"\n members {}\n}',
+  'A {\n type = "structure"\n}',
+  'A {\n type = "array"\n}',
+  'A {\n type = "structure"\n elements {}\n}',
+  'A {\n type = "array"\n members {}\n}',
   'A {\n type = "array"\n items {}\n}',
-  'A {\n type = "array"\n json = "[]"\n value = 1\n}',
-  'A {\n type = "string"\n value = "x"\n json = "{}"\n}',
-  'A {\n type = "string"\n value = "x"\n metadata = "{}"\n}',
+  'A {\n type = "array"\n elements {\n Other {\n type = "number"\n value = 1\n}\n}\n}',
+  'A {\n type = "array"\n elements {\n item = 1\n}\n}',
+  'A {\n type = "structure"\n members {\n X = 1\n}\n}',
+  'A {\n type = "structure"\n members {}\n members {}\n}',
+  'A {\n type = "structure"\n members {\n "" {\n type = "number"\n value = 1\n}\n}\n}',
+  'A {\n type = "string"\n value = "x"\n members {}\n}',
   'A {\n type = "number"\n value = 1\n name = "Other"\n}',
   'A {\n type = "number"\n value = 1\n id = ""\n}',
   'A {\n type = "enum"\n value = "Idle"\n values = []\n}',
   'A {\n type = "enum"\n value = "Idle"\n values = ["Idle","Idle"]\n}',
+  'A {\n type = "enum"\n value = "Idle"\n values = ["Run"]\n}',
   'A {\n type = "number"\n value = 1\n values = ["Idle"]\n}',
   'A {\n type = "number"\n value = 1\n folded = "false"\n}',
   scalar('A', 'number', 1) + '\n' + scalar('A', 'number', 2),
-])('rejects old/invalid variable declarations: %s', source => {
+  complex(
+    'A',
+    'structure',
+    scalar('X', 'number', 1) + '\n' + scalar('X', 'number', 2)
+  ),
+  complex('A', 'array', scalar('item', 'number', 1, 'metadata = "{}"')),
+])('rejects old or invalid declarations: %s', source => {
   expect(() => decode(source)).toThrow();
 });
 
-test.each([
-  ['structure', '[]'],
-  ['array', '{}'],
-  ['structure', '{"X":null}'],
-  ['structure', '{"X":1,"X":2}'],
-  ['structure', '{"":1}'],
-  ['array', '[9007199254740992]'],
-  ['array', '[1e400]'],
-  ['array', '[1,]'],
-  ['structure', '{"X":1,}'],
-  ['structure', '{/*x*/}'],
-  ['array', '[01]'],
-  ['array', '[true false]'],
-  ['array', '[NaN]'],
-  ['array', '["\\q"]'],
-  ['array', '["unterminated]'],
-  ['array', '[]junk'],
-])('rejects invalid %s JSON: %s', (type, json) => {
-  expect(() => decode(complex('Data', type, json))).toThrow();
-});
-
-test.each([
-  { '': { folded: true } },
-  { '/Missing': { folded: true } },
-  { '/a~2': { folded: true } },
-  { '/Values/00': { folded: true } },
-  { '/Values/2': { folded: true } },
-  { '/Mode': { type: 'number' } },
-  { '/Values': { type: 'enum', values: ['Idle'] } },
-  { '/Mode': { values: ['Idle'] } },
-  { '/Mode': { type: 'enum' } },
-  { '/Mode': { type: 'enum', values: ['Run'] } },
-  { '/Mode': { folded: 'true' } },
-  { '/Mode': { name: 'New' } },
-  { '/Mode': [] },
-  { '/Mode': { id: '' } },
-])('rejects invalid nested metadata: %j', metadata => {
-  expect(() =>
-    decode(
-      complex(
-        'State',
-        'structure',
-        '{"Mode":"Idle","Values":[true]}',
-        `metadata = ${JSON.stringify(JSON.stringify(metadata))}`
-      )
-    )
-  ).toThrow();
-});
-
-test('duplicate metadata paths and fields are rejected by the same strict parser', () => {
-  for (const metadata of [
-    '{"/Mode":{},"/Mode":{}}',
-    '{"/Mode":{"folded":true,"folded":false}}',
-  ])
-    expect(() =>
-      decode(
-        complex(
-          'State',
-          'structure',
-          '{"Mode":"Idle"}',
-          `metadata = ${JSON.stringify(metadata)}`
-        )
-      )
-    ).toThrow(/Duplicate JSON key/);
-});
-
-test('JSON errors locate raw CRLF and escaped GDL strings at the original source character', () => {
-  for (const source of [
-    scene(
-      variables(complex('Data', 'structure', '{\n"X": 1,\n"X": 2\n}'))
-    ).replace(/\n/g, '\r\n'),
-    scene(
-      variables(
-        'Data {\n type = "structure"\n json = "{\\"X\\":1,\\"X\\":2}"\n}'
-      )
-    ),
-  ]) {
+test('nested errors point directly to the invalid GDL field, including CRLF', () => {
+  for (const newline of ['\n', '\r\n']) {
+    const source = scene(
+      variables(complex('Data', 'array', scalar('item', 'number', 'invalid')))
+    ).replace(/\n/g, newline);
     try {
       decodeSettingsDocument(source);
       throw new Error('Expected rejection');
     } catch (error) {
-      expect(error.code).toBe('SETTINGS_INVALID_VARIABLE_JSON');
-      expect(source.slice(error.offset, error.offset + 2)).toMatch(/^("X|\\")/);
+      expect(error.code).toBe('SETTINGS_INVALID_VARIABLE');
+      expect(source.slice(error.offset, error.endOffset)).toBe('"invalid"');
       expect(error.line).toBe(source.slice(0, error.offset).split('\n').length);
     }
   }
 });
 
-test('JSON depth and node budgets apply inside a single raw token', () => {
+test('recursive data obeys nesting and node budgets', () => {
+  let body = scalar('item', 'number', 0);
+  for (let index = 0; index < 101; index++)
+    body = complex('item', 'array', body);
+  expect(() => decode(body)).toThrow(/nesting budget/);
+  const item = parseSettingsSyntax(variables(scalar('N', 'number', 0))).root
+    .children[0];
   expect(() =>
-    decode(complex('Data', 'array', '['.repeat(101) + '0' + ']'.repeat(101)))
-  ).toThrow(/nesting budget/);
-  expect(() =>
-    decode(complex('Data', 'array', '[' + '0,'.repeat(200000) + '0]'))
+    decodeVariableContainer({
+      properties: {},
+      children: Array(200001)
+        .fill(null)
+        .map((_, i) => ({ ...item, type: String(i) })),
+    })
   ).toThrow(/node budget/);
 });
 
-test('extensions retain independent global/scene defaults and instance metadata', () => {
-  const source = `extension {\n name = "E"\n global_variables {\n${scalar(
-    'State',
-    'number',
-    1
-  )}\n}\n scene_variables {\n${scalar('State', 'number', 2)}\n}\n}`;
-  const parsed = decodeSettingsDocument(source);
-  expect(parsed.payload.globalVariables[0].value).toBe(1);
-  expect(parsed.payload.sceneVariables[0].value).toBe(2);
+test('extensions and instances use the same recursive variable contract', () => {
+  const parsed = decodeSettingsDocument(
+    `extension {\n name = "E"\n global_variables {\n${complex(
+      'State',
+      'structure'
+    )}\n}\n scene_variables {\n${complex('State', 'array')}\n}\n}`
+  );
+  expect(parsed.payload.globalVariables[0].type).toBe('structure');
+  expect(parsed.payload.sceneVariables[0].type).toBe('array');
   expect(
     decodeSettingsDocument(
       serializeSettingsDocument('extension', parsed.payload)
@@ -282,7 +243,7 @@ test('extensions retain independent global/scene defaults and instance metadata'
   const instance = decodeSettingsDocument(
     scene(
       `layer {\n id = "base"\n name = ""\n}\ninstance {\n id = "ef3ef49d-f20f-4450-b373-0ce43291a002"\n object = "Player"\n layer = "base"\n position = [0,0]\n${variables(
-        complex('Data', 'structure', '{}', 'folded = false')
+        complex('Data', 'structure', '', 'folded = false')
       )}\n}`
     )
   );
@@ -295,13 +256,30 @@ test('extensions retain independent global/scene defaults and instance metadata'
   ).toBe(false);
 });
 
-test('structure order restores numeric keys recursively while current array and root order remain authoritative', () => {
+test('native structure sorting restores source order recursively without changing root or array order', () => {
   const old = scene(
     variables(
       complex(
         'Data',
         'structure',
-        '{"10":1,"2":2,"Nested":{"Z":1,"A":2},"Array":[{"Z":1,"A":2}]}'
+        [
+          scalar('"10"', 'number', 1),
+          scalar('"2"', 'number', 2),
+          complex(
+            'Nested',
+            'structure',
+            scalar('Z', 'number', 1) + '\n' + scalar('A', 'number', 2)
+          ),
+          complex(
+            'Array',
+            'array',
+            complex(
+              'item',
+              'structure',
+              scalar('Z', 'number', 1) + '\n' + scalar('A', 'number', 2)
+            )
+          ),
+        ].join('\n')
       ) +
         '\n' +
         scalar('Last', 'number', 3)
@@ -314,7 +292,27 @@ test('structure order restores numeric keys recursively while current array and 
         complex(
           'Data',
           'structure',
-          '{"2":2,"10":1,"New":3,"Array":[{"A":2,"Z":1},5],"Nested":{"A":2,"Z":1}}'
+          [
+            scalar('"2"', 'number', 2),
+            scalar('"10"', 'number', 1),
+            scalar('New', 'number', 3),
+            complex(
+              'Array',
+              'array',
+              complex(
+                'item',
+                'structure',
+                scalar('A', 'number', 2) + '\n' + scalar('Z', 'number', 1)
+              ) +
+                '\n' +
+                scalar('item', 'number', 5)
+            ),
+            complex(
+              'Nested',
+              'structure',
+              scalar('A', 'number', 2) + '\n' + scalar('Z', 'number', 1)
+            ),
+          ].join('\n')
         )
     )
   );
@@ -330,28 +328,30 @@ test('structure order restores numeric keys recursively while current array and 
     'New',
   ]);
   expect(result[1].children[2].children.map(v => v.name)).toEqual(['Z', 'A']);
+  expect(result[1].children[3].children[0].children.map(v => v.name)).toEqual([
+    'Z',
+    'A',
+  ]);
   expect(result[1].children[3].children[1].value).toBe(5);
 });
 
-test('formatting preserves JSON body, comments, raw delimiters and newline string values', () => {
+test('nested string formatting preserves multiline values and comments', () => {
   const source = scene(
     variables(
       complex(
         'Data',
         'structure',
-        '{"text":"\\n\\"\\"\\" {{}}", "line": "hello"}',
-        '// keep metadata comment\nfolded = false'
+        scalar('Text', 'string', 'first\nsecond', '// keep\nfolded = false')
       )
     )
   );
   const formatted = formatSettingsDsl(source);
-  expect(formatted).toContain('{"text":"\\n\\"\\"\\" {{}}", "line": "hello"}');
-  expect(formatted).toContain('// keep metadata comment');
-  expect(formatSettingsDsl(formatted)).toBe(formatted);
+  expect(formatted).toContain('// keep');
+  expect(formatted).toContain('value = """');
   roundTrip(source);
 });
 
-test('writer rejects invalid native values and ignores identity without losing nested metadata', () => {
+test('writer rejects invalid native data and omits identity at every depth', () => {
   for (const variable of [
     { name: 'N', type: 'number', value: Infinity },
     { name: 'N', type: 'number', value: 9007199254740992 },
@@ -363,34 +363,39 @@ test('writer rejects invalid native values and ignores identity without losing n
         { name: 'X', type: 'number', value: 2 },
       ],
     },
+    {
+      name: 'N',
+      type: 'array',
+      children: [{ name: 'bad', type: 'number', value: 1 }],
+    },
+    {
+      name: 'N',
+      type: 'array',
+      children: [{ type: 'enum', value: 'Idle', values: ['Run'] }],
+    },
   ])
-    expect(() =>
-      serializeSettingsDocument('scene', {
-        name: 'Main',
-        variables: [variable],
-      })
-    ).toThrow();
+    expect(() => encodeVariableContainer([variable])).toThrow();
   const printed = serializeSettingsDocument('scene', {
     name: 'Main',
     variables: [
       {
-        name: 'Health',
-        type: 'number',
-        value: 10,
-        persistentUuid: 'ignored',
+        name: 'Data',
+        type: 'structure',
         id: '',
+        children: [
+          {
+            name: 'Health',
+            type: 'number',
+            value: 10,
+            persistentUuid: 'ignored',
+            folded: false,
+          },
+        ],
       },
     ],
   });
-  expect(printed).not.toMatch(/persistentUuid|\bid\s*=|Health\s*=/);
-  expect(decodeSettingsDocument(printed).payload.variables[0]).toEqual({
-    name: 'Health',
-    type: 'number',
-    value: 10,
-  });
+  expect(printed).not.toMatch(/persistentUuid|\bid\s*=/);
   expect(
-    decodeSettingsDocument(
-      serializeSettingsDocument('scene', { name: 'Main', variables: [] })
-    ).payload.variables
-  ).toEqual([]);
+    decodeSettingsDocument(printed).payload.variables[0].children[0]
+  ).toEqual({ name: 'Health', type: 'number', value: 10, folded: false });
 });

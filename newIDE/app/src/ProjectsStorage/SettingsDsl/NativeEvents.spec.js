@@ -516,42 +516,96 @@ test('behavior property aliases use native metadata and generate identical execu
   }
 });
 
-test('typed JSON locals and nested enum metadata round trip through the native event model and generator', () => {
+test('recursive typed locals and descendant enum metadata round trip through the native event model and generator', () => {
   const project = global.gd.ProjectHelper.createNewGDJSProject();
   try {
     project.insertNewLayout('JsonLocals', 0);
+    const catalog = buildProjectInstructionCatalog(project);
+    const options = {
+      resolveInstruction: createCatalogInstructionResolver(catalog),
+      formatInstruction: createCatalogInstructionFormatter(catalog),
+    };
     const source = `function {
   events {
     event {
       variables {
         State {
           type = "structure"
-          json = """
-{"Mode":"Idle","Entries":[{"HP":10},false]}
-"""
-          metadata = """
-{"/Mode":{"type":"enum","values":["Idle","Run"]},"/Entries/0/HP":{"folded":false}}
-"""
+          members {
+            Mode {
+              type = "enum"
+              value = "Idle"
+              values = ["Idle", "Run"]
+            }
+            Entries {
+              type = "array"
+              elements {
+                item {
+                  type = "structure"
+                  members {
+                    HP {
+                      type = "number"
+                      value = 10
+                      folded = false
+                    }
+                  }
+                }
+                item {
+                  type = "boolean"
+                  value = false
+                }
+              }
+            }
+          }
+        }
+      }
+      actions {
+        SetNumberVariable {
+          variable = "Score"
+          modification_sign = "="
+          value = {{ State.Entries[0].HP }}
+        }
+        SetStringVariable {
+          variable = "ModeResult"
+          modification_sign = "="
+          value = {{ State.Mode }}
         }
       }
     }
   }
 }`;
     const model = serializeToJSObject(project);
-    model.layouts[0].events = compileSettingsEvents(source, {});
+    model.layouts[0].variables = [
+      { name: 'Score', type: 'number', value: 0 },
+      { name: 'ModeResult', type: 'string', value: '' },
+    ];
+    model.layouts[0].events = compileSettingsEvents(source, options);
     unserializeFromJSObject(project, model);
     const nativeEvents = serializeToJSObject(project).layouts[0].events;
-    const written = appendSettingsEvents('function {}\n', nativeEvents, {});
-    expect(written).toContain('json = """');
-    expect(written).toContain('metadata = """');
+    const written = appendSettingsEvents(
+      'function {}\n',
+      nativeEvents,
+      options
+    );
+    expect(written).toContain('members {');
+    expect(written).toContain('elements {');
     expect(
-      parseLegacyEventsJson(JSON.stringify(compileSettingsEvents(written, {})))
+      parseLegacyEventsJson(
+        JSON.stringify(compileSettingsEvents(written, options))
+      )
     ).toEqual(parseLegacyEventsJson(JSON.stringify(nativeEvents)));
     const generated = generateEventsCodeForScope(project, {
       layout: project.getLayoutAt(0),
     });
     expect(generated.error).toBeNull();
     expect(generated.code).toContain('Idle');
+    if (process.env.GDEVELOP_UNIFIED_RUNTIME_FIXTURE)
+      require('fs').appendFileSync(
+        process.env.GDEVELOP_UNIFIED_RUNTIME_FIXTURE,
+        `window.__gdlRecursiveVariableCode = ${JSON.stringify(
+          generated.code
+        )};\n`
+      );
   } finally {
     project.delete();
   }

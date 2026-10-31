@@ -35,6 +35,7 @@ export const getSettingsVariableCompletions = (
   if (!/^\s*[A-Za-z_0-9]*$/.test(currentLine)) return [];
   const stack: Array<{
     literal: boolean,
+    variableRole?: string,
     name: string,
     fields: Set<string>,
     lastField?: string,
@@ -53,7 +54,29 @@ export const getSettingsVariableCompletions = (
       if (!literal && parent) parent.fields.add(`@${previous}`);
       if (!literal && previous === 'variable' && parent)
         parent.fields.add('$children');
-      stack.push({ literal, name: literal ? '' : previous, fields: new Set() });
+      const variableRole = literal
+        ? undefined
+        : parent &&
+          ['collection', 'members', 'elements'].includes(
+            parent.variableRole || ''
+          )
+        ? 'descriptor'
+        : parent &&
+          parent.variableRole === 'descriptor' &&
+          ['members', 'elements'].includes(previous)
+        ? previous
+        : (!parent || !parent.variableRole) &&
+          ['variables', 'global_variables', 'scene_variables'].includes(
+            previous
+          )
+        ? 'collection'
+        : undefined;
+      stack.push({
+        literal,
+        name: literal ? '' : previous,
+        fields: new Set(),
+        variableRole,
+      });
     } else if (token === '}' || token === ']') stack.pop();
     else if (token === '=' && parent && !parent.literal) {
       parent.fields.add(previous);
@@ -72,6 +95,7 @@ export const getSettingsVariableCompletions = (
     detail: string = ''
   ): Object => ({ label, insertText, detail });
   if (
+    !frame.variableRole &&
     parent &&
     ['parameters', 'properties', 'shared_properties'].includes(parent.name)
   ) {
@@ -86,13 +110,7 @@ export const getSettingsVariableCompletions = (
         .filter(name => !frame.fields.has(name))
         .map(name => field(name, `${name} = "\${1:Value}"`));
   }
-  if (
-    parent &&
-    ['variables', 'global_variables', 'scene_variables'].includes(parent.name)
-  ) {
-    const complex = ['"structure"', '"array"'].includes(
-      frame.containerType || ''
-    );
+  if (frame.variableRole === 'descriptor') {
     const fields = [
       field(
         'type',
@@ -101,24 +119,17 @@ export const getSettingsVariableCompletions = (
       field('folded', 'folded = ${1|true,false|}'),
       field('hasMixedValues', 'hasMixedValues = ${1|false,true|}'),
     ];
-    if (complex) {
-      const value = frame.containerType === '"array"' ? '[]' : '{}';
-      if (!frame.fields.has('value'))
-        fields.push(
-          field(
-            'json',
-            'json = """\n' + value + '\n"""',
-            'Strict JSON variable data.'
-          )
-        );
+    if (['"structure"', '"array"'].includes(frame.containerType || '')) {
+      const container =
+        frame.containerType === '"structure"' ? 'members' : 'elements';
       fields.push(
         field(
-          'metadata',
-          'metadata = """\n{}\n"""',
-          'Nested metadata keyed by JSON Pointer.'
+          container,
+          container + ' {\n  $0\n}',
+          'Recursive typed variable descriptors.'
         )
       );
-    } else if (!frame.fields.has('json')) {
+    } else {
       const value =
         frame.containerType === '"string"' || frame.containerType === '"enum"'
           ? '"${1:Text}"'
@@ -129,26 +140,33 @@ export const getSettingsVariableCompletions = (
       if (frame.containerType === '"enum"')
         fields.push(field('values', 'values = ["${1:Idle}"]'));
     }
-    return fields.filter(entry => !frame.fields.has(entry.label));
+    return fields.filter(
+      entry =>
+        !frame.fields.has(entry.label) && !frame.fields.has('@' + entry.label)
+    );
   }
-  if (['variables', 'global_variables', 'scene_variables'].includes(frame.name))
+  if (
+    ['collection', 'members', 'elements'].includes(frame.variableRole || '')
+  ) {
+    const name = frame.variableRole === 'elements' ? 'item' : '${1:Name}';
     return [
       field(
         'declaration',
-        '${1:Name} {\n  type = "number"\n  value = ${2:0}\n}',
+        name + ' {\n  type = "number"\n  value = ${2:0}\n}',
         'Declare a typed scalar variable.'
       ),
       field(
         'structure',
-        '${1:Name} {\n  type = "structure"\n  json = """\n{}\n"""\n}',
-        'Declare a JSON structure variable.'
+        name + ' {\n  type = "structure"\n  members {}\n}',
+        'Declare a structure variable.'
       ),
       field(
         'array',
-        '${1:Name} {\n  type = "array"\n  json = """\n[]\n"""\n}',
-        'Declare a JSON array variable.'
+        name + ' {\n  type = "array"\n  elements {}\n}',
+        'Declare an array variable.'
       ),
     ];
+  }
   if (['parameters', 'properties', 'shared_properties'].includes(frame.name))
     return [field('member', '${1:Name} {\n  type = "${2:Type}"\n  $0\n}')];
   if (stack.some(entry => entry.name === 'code')) return [];

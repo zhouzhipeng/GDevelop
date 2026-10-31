@@ -76,11 +76,11 @@ test('offers named containers, typed variable descriptors and metadata without o
   expect(labels('scene {\n variables {\n A {\n ')).not.toContain('name');
   expect(labels('scene {\n variables {\n A {\n ')).not.toContain('scope');
   expect(labels('scene {\n variables {\n A {\n type = "array"\n ')).toContain(
-    'json'
+    'elements'
   );
   expect(
     labels('scene {\n variables {\n A {\n type = "structure"\n ')
-  ).toContain('json');
+  ).toContain('members');
   expect(
     labels('scene {\n variables {\n A {\n items {\n item {\n ')
   ).not.toContain('name');
@@ -213,7 +213,7 @@ test('raw code completion preserves body layout and resumes GDL scopes after a l
   expect(after.map(item => item.label)).toContain('strict');
 });
 
-test('scene JSON diagnostics map to raw contents and do not suggest GDL inside JSON', () => {
+test('nested variable diagnostics and completions use recursive descriptors', () => {
   const languages = Object.fromEntries(
     [
       'register',
@@ -235,7 +235,7 @@ test('scene JSON diagnostics map to raw contents and do not suggest GDL inside J
   };
   registerSettingsLanguage(monaco);
   const source =
-    'scene {\n variables {\n Data {\n type = "structure"\n json = """\n{\n "X": 1,\n "X": 2\n}\n"""\n }\n }\n}';
+    'scene {\n variables {\n Data {\n type = "structure"\n members {\n X {\n type = "number"\n value = "bad"\n }\n }\n }\n }\n}';
   monaco.editor.onDidCreateModel.mock.calls[0][0]({
     getValue: () => source,
     uri: { toString: () => 'game://scene.gdl' },
@@ -245,21 +245,43 @@ test('scene JSON diagnostics map to raw contents and do not suggest GDL inside J
     onWillDispose: jest.fn(),
   });
   expect(monaco.editor.setModelMarkers.mock.calls[0][2][0]).toMatchObject({
-    code: 'SETTINGS_INVALID_VARIABLE_JSON',
+    code: 'SETTINGS_INVALID_VARIABLE',
     startLineNumber: 8,
-    startColumn: 2,
+    startColumn: 10,
   });
-  expect(
-    getSettingsVariableCompletions(source.slice(0, source.indexOf(' "X": 2')))
-  ).toEqual([]);
   const snippets = getSettingsVariableCompletions('scene {\n variables {\n ');
   expect(snippets.every(item => item.insertText.includes('type ='))).toBe(true);
   const descriptor = getSettingsVariableCompletions(
     'scene {\n variables {\n Data {\n type = "structure"\n '
   );
   expect(descriptor.map(item => item.label)).toEqual(
-    expect.arrayContaining(['json', 'metadata'])
+    expect.arrayContaining(['members', 'folded', 'hasMixedValues'])
   );
-  for (const name of ['value', 'variables', 'items'])
+  for (const name of ['value', 'variables', 'items', 'json', 'metadata'])
     expect(descriptor.map(item => item.label)).not.toContain(name);
+});
+
+test('recursive descriptor completion recognizes array items and business member names', () => {
+  const prefix =
+    'scene {\n variables {\n Data {\n type = "array"\n elements {\n ';
+  expect(
+    getSettingsVariableCompletions(prefix).every(entry =>
+      entry.insertText.startsWith('item {')
+    )
+  ).toBe(true);
+  const item = getSettingsVariableCompletions(
+    prefix + 'item {\n type = "structure"\n '
+  );
+  expect(item.map(entry => entry.label)).toContain('members');
+  const nested = getSettingsVariableCompletions(
+    prefix +
+      'item {\n type = "structure"\n members {\n elements {\n type = "enum"\n '
+  );
+  expect(nested.map(entry => entry.label)).toEqual(
+    expect.arrayContaining(['value', 'values'])
+  );
+  const used = getSettingsVariableCompletions(
+    prefix + 'item {\n type = "structure"\n members {}\n '
+  );
+  expect(used.map(entry => entry.label)).not.toContain('members');
 });

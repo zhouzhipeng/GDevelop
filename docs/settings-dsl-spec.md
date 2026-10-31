@@ -1,9 +1,9 @@
 # GDevelop Language (GDL) 当前规范与文档入口
 
-- 状态：已实施；当前作者格式 16，GDL catalog 15，instruction catalog 7。
-- 统一事件契约：[统一 GDevelop Language (GDL)：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。作者格式 14 将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
-- 变量契约：[统一变量描述块与 JSON 复杂值](settings-dsl-variable-values-spec.md)。第 8.2 节仅作摘要，完整规则由该文档维护。
-- 更新日期：2026-10-27
+- 状态：已实施；当前作者格式 18，GDL catalog 17，instruction catalog 7。
+- 统一事件契约：[统一 GDevelop Language (GDL)：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。当前格式将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
+- 变量契约：[递归变量描述节点](settings-dsl-variable-values-spec.md)。第 8.2 节仅作摘要，完整规则由该文档维护。
+- 更新日期：2026-10-31
 - 范围：全部现有 `.gdl` 作者文件；项目入口 `project.gdl` 同时使用本语法
 - 工作名称：GDevelop Language (GDL)
 - 文件扩展名：统一使用 `.gdl`；不新增 `.layout` 文件或单独的 Layout DSL
@@ -15,7 +15,7 @@
 
 本页是当前 GDL 作者文档的唯一入口，各专题只维护自己的契约：
 
-- [变量](settings-dsl-variable-values-spec.md)：显式类型、JSON 复杂值、元数据与作用域。
+- [变量](settings-dsl-variable-values-spec.md)：递归描述节点、显式类型、元数据与作用域。
 - [事件与 JavaScript](unified-settings-events-dsl-spec.md)：指令、表达式、控制流、代码块、Link 和执行顺序。
 - [场景生命周期](scene-event-phases-spec.md)：固定签名、必需文件与执行时机。
 - [Gameplay 测试存储](gameplay-tests-multifile-serialization-spec.md)：tests.gdl、测试脚本和本地结果。
@@ -56,7 +56,7 @@ GDL 将实例变量和行为覆盖放在所属实例内，减少局部修改时�
 6. 保留 UUID、图层顺序、全局实例顺序和现有序列化数据。
 7. 对格式未知字段报错，不悄悄忽略。
 
-对象定义、行为定义、函数签名、资源清单和测试配置都在本规范范围内。事件作者语法统一由上方格式 14 契约定义。非目标：重写 JavaScript 测试正文、图片模型音频资源或生成的运行时 JSON；支持配置中的任意表达式或完整 CSS。
+对象定义、行为定义、函数签名、资源清单和测试配置都在本规范范围内。事件作者语法统一由上方当前事件契约定义。非目标：重写 JavaScript 测试正文、图片模型音频资源或生成的运行时 JSON；支持配置中的任意表达式或完整 CSS。
 
 ## 3. 文件归属
 
@@ -92,7 +92,7 @@ extensions/Combat/prefabs/Knight/
 - 根不写 `kind`、`settingsFormatVersion` 或每文件 `version`。根节点类型提供组件种类，整个项目只支持当前 schema；`project.gdl` 的 `formatVersion` 是精确匹配的格式标记，不是版本协商入口。
 - 所有 `.gdl` 只由新解析器读取，不探测 TOML。禁止根级 `layout` 包装和独立 `.layout` 布局源；同一组件数据只允许一个所有者。
 - 编辑器状态暂保留在 `editor`，个人视图状态是否迁出另行评估。
-- `project.gdl` 使用相同 DSL，根为 `project`，统一入口后缀为 .gdl。formatVersion 使用当前常量 17。任何不匹配直接拒绝，不尝试旧读取器。
+- `project.gdl` 使用相同 DSL，根为 `project`，统一入口后缀为 .gdl。formatVersion 使用当前常量 18。任何不匹配直接拒绝，不尝试旧读取器。
 - 事件正文合入所属 .gdl；测试 `.js` 正文不变。`constants.toml` 是显式例外，仍为独立的编辑器常量文档；它不是 settings，也不属于本轮替换。生成的 catalog JSON 与运行时 JSON 不改语法。
 - 单文件内配置与布局一起验证、保存；重命名或跨文件引用更新仍须事务保存。
 
@@ -218,13 +218,13 @@ array      := "[" (value ("," value)* ","?)? "]"
 
 路径中具名所有者的具体分配保持当前目录契约；表格中的 behavior 路径只表示所属作用域，不要求重构已有目录。全局、场景、Prefab 和 Variant 对象共用 object 根，所属目录决定解析作用域。生命周期函数及扩展/行为/Prefab 函数共用 function 根。
 
-project formatVersion 固定为 17；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
+project formatVersion 固定为 18；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
 
 ### 5.2 Project 与资源清单示例
 
 ```text
 project {
-  formatVersion = 17
+  formatVersion = 18
   name = "Adventure"
 }
 ```
@@ -533,7 +533,7 @@ instance {
 ### 8.2 变量：统一描述块
 
 变量使用唯一 variables 容器，所有成员统一为具名描述块，type 必填。
-标量使用 value；结构和数组使用 json 原始字符串；嵌套枚举和编辑状态使用独立 metadata JSON Pointer 映射。变量 ID 不进入源码。
+标量使用 value；结构使用 members 中的具名描述节点，数组使用 elements 中的重复 item 描述节点；每个后代显式指定 type，枚举和编辑状态直接放在所属描述节点。变量 ID 不进入源码。
 Extension 双作用域分别使用 global_variables、scene_variables，不写 scope。
 
 ```text
@@ -546,22 +546,30 @@ variables {
 
   Position {
     type = "structure"
-    json = """
-{
-  "X": 10,
-  "Y": 20
-}
-"""
+    members {
+      X {
+        type = "number"
+        value = 10
+      }
+      Y {
+        type = "number"
+        value = 20
+      }
+    }
   }
 
   Inventory {
     type = "array"
-    json = """
-[
-  "Sword",
-  "Shield"
-]
-"""
+    elements {
+      item {
+        type = "string"
+        value = "Sword"
+      }
+      item {
+        type = "string"
+        value = "Shield"
+      }
+    }
   }
 }
 ```

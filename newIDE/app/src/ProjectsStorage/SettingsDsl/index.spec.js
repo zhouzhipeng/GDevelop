@@ -15,7 +15,7 @@ describe('GDevelop Language (GDL)', () => {
     'omits empty objectGroups when saving %s and retains declared groups',
     kind => {
       const source = serializeSettingsDocument(kind, {
-        ...(kind === 'project' ? { formatVersion: 17 } : {}),
+        ...(kind === 'project' ? { formatVersion: 18 } : {}),
         name: 'Example',
         objectGroups: {},
       });
@@ -23,7 +23,7 @@ describe('GDevelop Language (GDL)', () => {
       expect(decodeSettingsDocument(source).payload.objectGroups).toEqual({});
       const populated = { Empty: [], Actors: ['Player'] };
       const populatedSource = serializeSettingsDocument(kind, {
-        ...(kind === 'project' ? { formatVersion: 17 } : {}),
+        ...(kind === 'project' ? { formatVersion: 18 } : {}),
         name: 'Example',
         objectGroups: populated,
       });

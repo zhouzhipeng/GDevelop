@@ -1,58 +1,61 @@
 # GDevelop Language (GDL) 变量语法
 
-作者格式 17。完整实施契约见 [统一变量描述块与 JSON 复杂值](gdl-uniform-variable-descriptors-spec.md)。
+作者格式 18，GDL catalog 17，instruction catalog 7。完整契约见 [递归变量描述节点](gdl-uniform-variable-descriptors-spec.md)。
 
-所有变量统一放在 variables 具名集合，名称作为节点名，type 必填；不重复 name，不输出 ID。
+所有变量放在 variables 具名集合，名称作为节点名，每个描述节点的 type 必填；不重复 name，不输出 ID。
 
 ```text
 variables {
   Health {
     type = "number"
-    value = 10
+    value = 100
   }
-  Position {
+
+  Player {
     type = "structure"
-    json = """
-{
-  "X": 10,
-  "Y": 20
-}
-"""
-  }
-  Inventory {
-    type = "array"
-    json = """
-["Sword", {"Name": "Shield", "Count": 1}]
-"""
+    members {
+      Mode {
+        type = "enum"
+        value = "Idle"
+        values = ["Idle", "Run"]
+        folded = false
+      }
+      Inventory {
+        type = "array"
+        elements {
+          item {
+            type = "string"
+            value = "Sword"
+          }
+          item {
+            type = "structure"
+            members {
+              Name {
+                type = "string"
+                value = "Shield"
+              }
+              Count {
+                type = "number"
+                value = 1
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
 ```
 
-- 标量 type 为 number/string/boolean/enum，必须使用 value；enum 需要包含当前值的非空唯一字符串 values。
-- 复杂 type 为 structure/array，必须使用 json，根值分别是对象/数组；与 value 互斥。
-- json 和 metadata 接受通用 GDL 字符串，规范输出为 raw 多行字符串。不根据普通字符串内容推断类型。
-- JSON 递归支持对象、数组、字符串、布尔、有限数字；拒绝 null、重复键、空成员名、非安全整数、注释和尾逗号。
-- 根 folded/hasMixedValues 使用描述块布尔字段。后代枚举和编辑状态通过 metadata 中的非空 JSON Pointer 路径保存；~0/~1 分别表示 ~ 和 /。
+- 标量 type 为 number/string/boolean/enum，必须使用 value；enum 还需要包含当前值的非空唯一字符串 values。
+- structure 必须有唯一 members 容器，其成员为具名描述节点，名称非空且唯一。
+- array 必须有唯一 elements 容器，其成员只能是重复 item 描述节点，出现顺序即数组顺序；数组元素没有 name。
+- 每个后代都使用同一描述规则，支持任意受预算限制的嵌套和异构数组。
+- 空结构使用 `members {}`，空数组使用 `elements {}`，不能省略容器。
+- folded/hasMixedValues 是所属描述节点的可选布尔属性；显式 false 保留。后代枚举也直接在所属节点写 type/value/values。
+- 字符串支持 JSON 双引号或多行原始字符串。禁止 null、非有限数字和非安全整数。
+- 禁止 json、metadata、JSON Pointer 映射、ID、scope、直接赋值、隐式结构、嵌套 variables 和旧 items 容器；item 仅用于 elements 内。
+- 普通 owner 使用 variables；Extension 双作用域使用 global_variables/scene_variables；实例和事件局部变量使用相同契约。
+- 根变量和数组顺序以当前模型为准；结构成员保留作者顺序，包括数字名称。模型保存时恢复可匹配的结构成员顺序。
 
-```text
-variables {
-  State {
-    type = "structure"
-    json = """
-{"Mode": "Idle"}
-"""
-    metadata = """
-{
-  "/Mode": {"type": "enum", "values": ["Idle", "Run"], "folded": false}
-}
-"""
-  }
-}
-```
-
-metadata 每条记录只接受 type="enum"、values、folded、hasMixedValues；路径必须指向现有后代，不能指向根。enum 只能标注字符串，values 不可单独出现。
-
-保持变量和 JSON 对象成员源码顺序，包括数字键。数组顺序以当前模型为准。JSON 诊断映射到原始 GDL 字符范围，包括 CRLF 和转义字符串。
-
-普通 owner 使用 variables；Extension 双作用域使用 global_variables/scene_variables。实例和事件局部变量使用相同契约。
-不支持直接变量赋值、隐式结构、嵌套 variables、items/item、通用 variable 声明、name/scope/ID 字段和旧作者格式。无兼容读取或迁移。
+只接受作者格式 18，不提供兼容读取、迁移或双写。

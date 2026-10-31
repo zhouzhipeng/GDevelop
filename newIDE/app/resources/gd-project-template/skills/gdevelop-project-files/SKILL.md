@@ -1,6 +1,6 @@
 ---
 name: gdevelop-project-files
-description: Create, inspect, modify, refactor, and verify GDevelop games through the version 16 multi-file project sources (`project.gdl`, `constants.toml`, `.gdl`, `tests.gdl`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
+description: Create, inspect, modify, refactor, and verify GDevelop games through the version 18 multi-file project sources (`project.gdl`, `constants.toml`, `.gdl`, `tests.gdl`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
 ---
 
 # GDevelop Project Files
@@ -207,7 +207,7 @@ All `.gdl` and `project.gdl` use **GDevelop Language (GDL)**, not TOML. Read
 - Every document has exactly one typed root: project, resources, tests,
   scene, prefab, variant, layout, fragment, object, function,
   extension or behavior. The physical path supplies the owning scope.
-- Only project.gdl has `formatVersion = 17`. Do not write kind,
+- Only project.gdl has `formatVersion = 18`. Do not write kind,
   settingsFormatVersion, TOML headers, per-document format versions, or
   settings/layout wrapper nodes. Extension metadata can still have a semantic
   version string when its schema defines one.
@@ -219,9 +219,10 @@ All `.gdl` and `project.gdl` use **GDevelop Language (GDL)**, not TOML. Read
   object.behavior defines an attachment; instance.behavior only overrides an
   existing attachment. Dynamic fields must be registered in the catalog.
 - Declare variables inside one `variables {}` container. Every member is a named
-  descriptor with explicit type. Scalars use value; structure/array values use json
-  raw strings. Nested enum/editing state uses metadata JSON Pointer records.
-  Direct assignments and nested variable declarations are rejected. Variable ids are not serialized.
+  descriptor with explicit type. Scalars use value; structures use named descriptors
+  in members; arrays use repeated item descriptors in elements. Every descendant
+  has explicit type and owns its enum/editing metadata. The old json/metadata
+  fields and direct assignments are rejected. Variable ids are not serialized.
   Extension defaults use global_variables/scene_variables, without scope.
   Parameters and property descriptors use parameters/properties/shared_properties
   with named member nodes. Do not repeat name inside these members.
@@ -416,7 +417,7 @@ implementation is materially simpler. Record that decision in the task result.
 ## Event authoring
 
 Read [the unified event syntax](references/gdl-usage.md) before editing function
-or fragment bodies. Only GDevelop Language (GDL) format 17 is supported. Function signatures
+or fragment bodies. Only GDevelop Language (GDL) format 18 is supported. Function signatures
 and events share one .gdl file; .events files are rejected. Use explicit
 conditions/actions blocks containing bare catalog instructions, typed event
 nodes, independent group/comment/link nodes, and raw multiline raw string properties.

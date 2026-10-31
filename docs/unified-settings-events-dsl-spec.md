@@ -1,12 +1,12 @@
 # 统一 GDevelop Language (GDL)：函数、事件与 JavaScript 作者格式规范
 
-- 状态：已实施。当前作者格式 16；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
-- 日期：2026-10-26。
+- 状态：已实施。当前作者格式 18；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
+- 更新日期：2026-10-31。
 - 决策依据：函数声明和事件正文合入同一个 `.gdl` 文件；只保留 GDevelop Language (GDL)，不考虑任何作者格式兼容性。
-- 当前作者格式：14。GDL catalog 版本：15；instruction catalog 版本：7，发布本文的新指令结构契约。
+- 当前作者格式：18。GDL catalog 版本：17；instruction catalog 版本：7，发布本文的新指令结构契约。
 - 运行时边界：仍投影到 GDevelop 原生事件模型与代码生成器；不重新定义对象 picking、事件调度或表达式求值。
 
-文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdl`，`constants.toml` 和 JavaScript 测试文件保持各自格式。格式 16 不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
+文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdl`，`constants.toml` 和 JavaScript 测试文件保持各自格式。当前格式不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
 
 系统 action/condition 由引擎固定映射发布作者短名。instruction catalog 7 的
 action/condition 的 `dslName` 与 `type` 相同时省略。GDL 和 AI 优先使用
@@ -258,7 +258,7 @@ function {
 
 conditions、actions、while_conditions 各最多一个，缺失与空块等价。while_conditions 仅 while 可用。子 event/group/comment/link 直接嵌套，不写 events 包装。嵌套 events 无论是否为空都报上下文错误。
 
-解析不依赖“属性 → 条件 → 动作 → 子事件”的阶段状态机：合法成员块可换序，仍由节点名决定归属。运行时始终初始化原生局部变量、检查条件、执行动作、再执行子事件，而非按这些类别在源码中的交错位置执行。模型规范输出固定为属性、variable、while_conditions、conditions、actions、子 event/group/comment/link；AST 格式化保留作者成员顺序。各条件、各动作、各局部变量和混排子 event/group/comment/link 自身的出现顺序必须保留，不能排序。补全优先插入规范位置，并提示非规范排列。
+事件成员必须按属性、variables、while_conditions、conditions、actions、子事件的顺序书写；允许省略合法的可选阶段，禁止回到先前阶段。属性之间不要求固定顺序。乱序在解析时以 SETTINGS_EVENT_ORDER 报错，不自动重排。运行时仍按原生阶段执行。各条件、各动作、各局部变量和混排子事件自身的出现顺序必须保留，不能排序。group 的属性也必须位于子事件之前。
 
 条件列表按顺序 AND；动作列表按顺序执行。先执行父动作，再执行子事件。允许空、仅条件、仅动作、仅局部变量或仅子事件的标准事件。
 
@@ -463,7 +463,7 @@ while_conditions 是唯一可选条件列表，保存原生 whileConditions。co
 
 ## 10. 局部变量
 
-局部变量使用最新 Settings variable 声明，与场景变量共用显式类型、JSON 值、enum 和元数据规则：
+局部变量使用最新 Settings variable 声明，与场景变量共用递归描述节点、显式类型、enum 和元数据规则：
 
 ```text
 event {
@@ -478,12 +478,16 @@ event {
 
     Inventory {
       type = "array"
-      json = """
-[
-  "Sword",
-  "Shield"
-]
-"""
+      elements {
+        item {
+          type = "string"
+          value = "Sword"
+        }
+        item {
+          type = "string"
+          value = "Shield"
+        }
+      }
     }
   }
 
@@ -498,7 +502,7 @@ event {
 
 声明归属于包含它的原生事件 variables，不是独立事件。子事件继承局部作用域；同作用域重复名报错，跨作用域遮蔽按现有引擎规则校验。循环局部变量初始化时机沿用原生模型，不按普通语言直觉改成每次迭代或循环外初始化。
 
-禁止 local、var(...) 和 scope 属性。局部变量位于 variables 容器中，所有成员使用显式 type 的具名描述块；标量用 value，结构和数组用 json 字符串，后代枚举及编辑状态用 metadata JSON Pointer 映射。禁止赋值简写、嵌套 variables 和 items/item。
+禁止 local、var(...) 和 scope 属性。局部变量位于 variables 容器中，所有成员使用显式 type 的具名描述块；标量用 value，结构用 members 中的具名描述节点，数组用 elements 中的重复 item 描述节点；后代枚举及编辑状态直接放在所属描述节点。禁止 json/metadata、赋值简写、嵌套 variables 和旧 items 容器。
 
 ## 11. Group、持久化注释与源码注释
 
@@ -670,7 +674,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 ## 17. 项目读取、写入与事务
 
-读取顺序：入口格式 16 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
+读取顺序：入口格式 18 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
 
 签名注册先于事件调用解析，支持跨文件函数和现有合法递归调用；不能通过文件枚举顺序决定可见性。
 
@@ -693,6 +697,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 | SETTINGS_EVENT_CONTEXT | 事件、指令或 events 容器位于非法 owner |
 | SETTINGS_EVENT_TYPE | 未知事件类型或类型专属字段不合法 |
 | SETTINGS_EVENT_ID | 同一事件文档出现重复的非空身份 |
+| SETTINGS_EVENT_ORDER | 事件成员阶段乱序 |
 | SETTINGS_EVENT_CONTAINER | 重复条件/动作块、嵌套 events 或非法子事件 |
 | SETTINGS_ELSE_TARGET | Else 无匹配或跨边界 |
 | SETTINGS_INSTRUCTION_UNKNOWN | 无注册指令或种类不匹配 |
@@ -716,7 +721,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 - 删除或增加空行不改变事件树；移动块仅改变显式源顺序/父级。
 - 支持全部事件种类、嵌套事件、子指令、精确类型及具名参数。
 - 拒绝重复 conditions/actions、嵌套 events、事件节点的非法 type 字段、类型专属字段混用、坏 Else、旧前缀和旧 .events 文件。
-- 容器成员换序不改变归属；各列表内部和混排子 event/group/comment/link 的相对顺序必须保留；所有事件节点拒绝 type 字段。
+- 拒绝事件成员阶段乱序及子事件之后的属性或容器；各列表内部和混排子 event/group/comment/link 的相对顺序必须保留；所有事件节点拒绝 type 字段。
 - code 中嵌套花括号、对象、类、解构、字符串、注释、正则/除法、模板及嵌套插值均正确识别边界；伪关闭行不误结束。
 - code 必须为字符串属性，同时接受普通 JSON 字符串与多行原始字符串；拒绝旧 code 子块。
 - 未闭合代码准确定位；尾换行规范化和 CRLF 处理按明确等价规则验证；不能保真时拒绝而非转义回退。
@@ -728,7 +733,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 - 参数语义字面量、表达式、空文本、可选槽、代码参数和异步标记正确投影。
 - OR picking、父子继承、兄弟选择恢复、Else、循环及 Link 用真实引擎代码生成与运行测试验证。
 - 多金币例子验证删除范围与计分次数，不能只检查文本相似或编译通过。
-- 变量 enum/false 编辑标记、结构字段顺序和数组顺序无损保留；嵌套元数据使用独立 metadata JSON Pointer 映射，变量 ID 不写入作者源码。
+- 变量 enum/false 编辑标记、结构字段顺序和数组顺序无损保留；嵌套元数据保存在所属描述节点，变量 ID 不写入作者源码。
 - JS 的实际作用域、对象传参、strict 和展开状态往返，语法/类型错误定位回 settings。
 
 ### 19.3 存储与工具
@@ -742,7 +747,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 ## 20. 后续优化的边界
 
-事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 7；GDL 作者格式为 15，GDL catalog 为 15。静态摘要不改变原生执行行为，也不代替运行验证。
+事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 7；GDL 作者格式为 18，GDL catalog 为 17。静态摘要不改变原生执行行为，也不代替运行验证。
 
 
 picking 可视化、行为相关 diff 和按 AST 的安全块移动是推荐编辑器能力，可独立迭代；不能将它们未完成视为可改变基础语法的理由。实现基础格式时至少保留精确 AST 和语义位置，使后续工具无需重新解析另一套正文语言。
@@ -821,6 +826,6 @@ function {
   expression syntax. Settings properties and embedded JavaScript are unaffected.
 
 
-## 格式 16 具名集合与属性引用
+## 具名集合与属性引用
 
 参数和属性描述符分别使用 parameters/properties/shared_properties 容器，成员名作为节点名，不重复 name 字段。变量使用 variables 具名集合；详见[变量规范](settings-dsl-variable-values-spec.md)。表达式直接引用属性名，例如 `{{ Height + 1 }}`；可见属性优先于同名变量，包括事件局部变量。找到属性后类型错误不回退到变量。显式变量访问、函数调用、成员访问和字符串仍遵循原生表达式 AST 语义；旧 getProperty(name=...) 表达式别名拒绝。

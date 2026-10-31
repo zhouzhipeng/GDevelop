@@ -3,7 +3,7 @@
 - 状态：已批准；基础分析链路已实施。完整契约仍含未实施阶段，实际覆盖与验证见 [首版实施记录](gdl-event-semantics-implementation-report.md)。本文的设计要求不能直接视为已实现能力。
 - 日期：2026-10-26。
 - 目标使用者：通过 GDL 源码阅读、修改项目的 AI，以及事件编辑器、校验器和后续调试工具。
-- 当前版本：GDL 作者格式 13、GDL catalog 12、instruction catalog 7。
+- 当前版本：GDL 作者格式 18、GDL catalog 17、instruction catalog 7。
 - 范围：执行次数、对象选择（picking）、动作作用范围、父子与兄弟上下文、分析诊断和验证证据。
 - 基础语言契约：[统一 GDL 规范](unified-settings-events-dsl-spec.md)。本文不替代该规范，也不改变原生执行行为。
 
@@ -248,7 +248,7 @@ type SelectionFact = {
 
 ### 6.2 Catalog 版本
 
-instruction catalog 当前为 6，发布结构化 `semantics`；GDL 作者格式为 12，GDL catalog 为 11。后续契约变化需独立评审版本。
+instruction catalog 当前为 7，发布结构化 `semantics`；GDL 作者格式为 18，GDL catalog 为 17。后续契约变化需独立评审版本。
 
 - catalog 生成器、严格校验器、编辑器、deprecated delta 合并和所有消费者同时更新。
 - 本地生成文件重建为新版本，不引入旧 GDL 作者格式兼容入口。
@@ -359,7 +359,7 @@ sourceMap 至少覆盖：owner、事件节点、conditions/actions/while_conditi
 6. 对未知影响进行限定范围的事实失效；范围未知则扩大到当前可见容器。
 7. 生成诊断和有界摘要，报告覆盖率、截断和缓存身份。
 
-不要按照配置块在文本中的交错位置执行。AST formatter 可保留作者顺序，分析解释必须使用真实执行顺序。非规范排列只返回低优先级可读性提示。
+事件成员阶段必须按属性、variables、while_conditions、conditions、actions、子事件顺序书写；乱序由解析器以 SETTINGS_EVENT_ORDER 拒绝。分析解释仍使用原生执行语义，各列表内部的作者顺序必须保留。
 
 ### 8.1.1 路径条件与合并
 

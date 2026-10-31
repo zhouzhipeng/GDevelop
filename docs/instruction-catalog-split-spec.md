@@ -1,5 +1,7 @@
 # Instruction catalog 按指令种类拆分
 
+版本说明：本文版本号记录该次变更的历史基线与升级过程，不代表当前版本。当前作者格式为 18，GDL catalog 为 17，instruction catalog 为 7；以 [GDL 当前规范](settings-dsl-spec.md) 及其列出的代码常量为准。
+
 状态：历史契约，已由 [兼容指令拆分规范](instruction-catalog-compatibility-split-spec.md) 取代。
 
 ## 问题与目标

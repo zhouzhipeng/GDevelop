@@ -412,7 +412,7 @@ test('child events inherit parent local-variable scope without inventing scene b
 
 test('step maps retain recursive local variables and exact raw JS content slices', () => {
   const source = wrap(
-    'event {\n variables {\n Data {\n type = "structure"\n json = """\n{"Label": "中文😀"}\n"""\n }\n }\n javascript {\n code = """\nconst label = `原始😀`;\n\n"""\n }\n}'
+    'event {\n variables {\n Data {\n type = "structure"\n members {\n Label {\n type = "string"\n value = "中文😀"\n }\n States {\n type = "array"\n elements {\n item {\n type = "enum"\n value = "Idle"\n values = ["Idle", "Run"]\n folded = false\n }\n }\n }\n }\n }\n }\n javascript {\n code = """\nconst label = `原始😀`;\n\n"""\n }\n}'
   );
   const result = analyze('', { source, detail: 'steps' });
   expect(result.success).toBe(true);
@@ -421,6 +421,24 @@ test('step maps retain recursive local variables and exact raw JS content slices
   );
   expect(source.slice(variable.source.offset, variable.source.endOffset)).toBe(
     '"中文😀"'
+  );
+  const element = result.sourceMap.find(
+    entry =>
+      entry.kind === 'variable' &&
+      entry.variableName === 'item' &&
+      entry.property === 'value'
+  );
+  expect(source.slice(element.source.offset, element.source.endOffset)).toBe(
+    '"Idle"'
+  );
+  const folded = result.sourceMap.find(
+    entry =>
+      entry.kind === 'variable' &&
+      entry.variableName === 'item' &&
+      entry.property === 'folded'
+  );
+  expect(source.slice(folded.source.offset, folded.source.endOffset)).toBe(
+    'false'
   );
   const code = result.sourceMap.find(entry => entry.kind === 'code-content');
   expect(source.slice(code.source.offset, code.source.endOffset)).toBe(

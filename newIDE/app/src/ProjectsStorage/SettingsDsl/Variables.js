@@ -5,12 +5,6 @@ import {
   parseSettingsSyntax,
   printSettingsSyntax,
 } from './Syntax';
-import {
-  parseVariableJson,
-  printVariableJson,
-  variableJsonLocation,
-  jsonPointerSegment,
-} from './VariableJson';
 
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const types = ['string', 'number', 'boolean', 'structure', 'array', 'enum'];
@@ -66,126 +60,39 @@ const checkMetadata = (variable, data, at, fileUri, path) => {
       path
     );
 };
-const nativeJson = node =>
-  containerType(node.type)
-    ? {
-        type: node.type,
-        ...(own(node, 'name') ? { name: node.name } : {}),
-        children: node.children.map(nativeJson),
-      }
-    : {
-        ...(own(node, 'name') ? { name: node.name } : {}),
-        type: node.type,
-        value: node.value,
-      };
-const jsonValue = node =>
-  node.type === 'array'
-    ? node.children.map(jsonValue)
-    : node.type === 'structure'
-    ? Object.fromEntries(
-        node.children.map(child => [child.name, jsonValue(child)])
-      )
-    : node.value;
-
-const applyNestedMetadata = (variable, item, fileUri, path, depth) => {
-  const tree = parseVariableJson(item, fileUri, path, depth);
-  const at = node => ({
-    location: variableJsonLocation(item, node.offset, node.endOffset),
-  });
-  if (tree.type !== 'structure')
-    fail(
-      'metadata must be a JSON object of JSON Pointer records.',
-      at(tree),
-      fileUri,
-      path
-    );
-  const targets = new Map();
-  const index = (parent, pointer) => {
-    (parent.children || []).forEach((child, position) => {
-      const childPointer =
-        pointer +
-        '/' +
-        jsonPointerSegment(parent.type === 'array' ? position : child.name);
-      targets.set(childPointer, child);
-      index(child, childPointer);
-    });
-  };
-  index(variable, '');
-  for (const record of tree.children) {
-    const pointer = record.name;
-    if (!pointer.startsWith('/') || /~(?:[^01]|$)/.test(pointer))
-      fail(
-        'metadata requires a non-root JSON Pointer with valid ~0/~1 escapes.',
-        at(record),
-        fileUri,
-        path
-      );
-    const target = targets.get(pointer);
-    if (!target)
-      fail(
-        `metadata path does not exist: ${pointer}.`,
-        at(record),
-        fileUri,
-        path
-      );
-    if (record.type !== 'structure')
-      fail('metadata records must be JSON objects.', at(record), fileUri, path);
-    for (const field of record.children)
-      if (!['type', ...metadataKeys].includes(field.name))
-        fail(
-          `Unknown nested variable metadata ${field.name}.`,
-          at(field),
-          fileUri,
-          path
-        );
-    const data = jsonValue(record);
-    if (own(data, 'type')) {
-      if (data.type !== 'enum' || target.type !== 'string')
-        fail(
-          'Nested type metadata can only mark a string as enum.',
-          at(record),
-          fileUri,
-          path
-        );
-      target.type = 'enum';
-    }
-    checkMetadata(target, data, at(record), fileUri, path);
-  }
-};
-
 export const decodeVariableNode = (
   node,
   fileUri,
   path,
   instance = false,
   parentType = null,
-  depth = 0
+  depth = 0,
+  budget = { nodes: 0 }
 ) => {
-  if (depth > MAX_SETTINGS_DEPTH)
-    fail('Settings nesting budget exceeded.', node, fileUri, path);
+  if (depth > MAX_SETTINGS_DEPTH || ++budget.nodes > 200000)
+    fail('Variable nesting/node budget exceeded.', node, fileUri, path);
   const data = Object.fromEntries(
     Object.entries(node.properties).map(([key, item]) => [key, item.value])
   );
   for (const key of Object.keys(data))
-    if (!['type', 'value', 'json', 'metadata', ...metadataKeys].includes(key))
+    if (!['type', 'value', ...metadataKeys].includes(key))
       fail(
-        `Unknown variable field ${key}; the variable name belongs in the node name.`,
+        `Unknown variable field ${key}.`,
         node.properties[key],
         fileUri,
         path
       );
-  if (!node.type) fail('Variable name must be nonempty.', node, fileUri, path);
+  if (!node.type || (parentType === 'array' && node.type !== 'item'))
+    fail(
+      'Variables require names; array elements must use item nodes.',
+      node,
+      fileUri,
+      path
+    );
   if (!types.includes(data.type))
     fail(
       'Variable requires an explicit valid type.',
       node.properties.type || node,
-      fileUri,
-      path
-    );
-  if (node.children.length)
-    fail(
-      'Variables do not accept child nodes; use json for complex values.',
-      node.children[0],
       fileUri,
       path
     );
@@ -199,34 +106,50 @@ export const decodeVariableNode = (
       );
   let result;
   if (containerType(data.type)) {
-    if (!own(data, 'json') || own(data, 'value'))
+    const expected = data.type === 'structure' ? 'members' : 'elements';
+    if (
+      own(data, 'value') ||
+      node.children.length !== 1 ||
+      node.children[0].type !== expected
+    )
       fail(
-        'Structure and array variables require json and forbid value.',
+        `${
+          data.type
+        } variables require exactly one ${expected} container and forbid value.`,
         node,
         fileUri,
         path
       );
-    const tree = parseVariableJson(node.properties.json, fileUri, path, depth);
-    if (tree.type !== data.type)
+    const container = node.children[0];
+    if (Object.keys(container.properties).length)
       fail(
-        'Variable JSON root does not match its declared type.',
-        node.properties.json,
+        `${expected} only accepts descriptor nodes.`,
+        Object.values(container.properties)[0],
         fileUri,
         path
       );
-    result = nativeJson(tree);
-    if (own(data, 'metadata'))
-      applyNestedMetadata(
-        result,
-        node.properties.metadata,
+    const names = new Set();
+    const children = container.children.map((child, index) => {
+      if (data.type === 'structure') {
+        if (names.has(child.type))
+          fail('Duplicate structure member.', child, fileUri, path);
+        names.add(child.type);
+      }
+      return decodeVariableNode(
+        child,
         fileUri,
-        path,
-        depth
+        `${path}.${data.type === 'array' ? index : child.type}`,
+        instance,
+        data.type,
+        depth + 1,
+        budget
       );
+    });
+    result = { type: data.type, children };
   } else {
-    if (!own(data, 'value') || own(data, 'json') || own(data, 'metadata'))
+    if (!own(data, 'value') || node.children.length)
       fail(
-        'Scalar variables require value and forbid json/metadata.',
+        'Scalar variables require value and forbid child nodes.',
         node,
         fileUri,
         path
@@ -245,7 +168,7 @@ export const decodeVariableNode = (
     result = { type: data.type, value: data.value };
   }
   checkMetadata(result, data, node, fileUri, path);
-  return { name: node.type, ...result };
+  return parentType === 'array' ? result : { name: node.type, ...result };
 };
 
 export const decodeVariableContainer = (
@@ -263,18 +186,26 @@ export const decodeVariableContainer = (
       path
     );
   const names = new Set();
+  const budget = { nodes: 0 };
   return container.children.map(child => {
     if (names.has(child.type))
       fail('Duplicate variable name.', child, fileUri, path);
     names.add(child.type);
-    return decodeVariableNode(child, fileUri, path, instance, null, depth + 1);
+    return decodeVariableNode(
+      child,
+      fileUri,
+      path,
+      instance,
+      null,
+      depth + 1,
+      budget
+    );
   });
 };
 
 const encodeVariableNode = (variable, fileUri) => {
-  const nested = [];
   let nodes = 0;
-  const encode = (entry, path, depth, parentType) => {
+  const encode = (entry, depth, parentType) => {
     if (depth > MAX_SETTINGS_DEPTH || ++nodes > 200000)
       fail(
         'Variable nesting/node budget exceeded.',
@@ -313,10 +244,6 @@ const encodeVariableNode = (variable, fileUri) => {
         fileUri,
         variable.name
       );
-    const meta = {};
-    if (entry.type === 'enum') meta.type = 'enum';
-    for (const key of metadataKeys) if (own(entry, key)) meta[key] = entry[key];
-    // Validate enum constraints against the actual value and declared type.
     checkMetadata(
       { type: entry.type, value: entry.value },
       entry,
@@ -324,7 +251,8 @@ const encodeVariableNode = (variable, fileUri) => {
       fileUri,
       variable.name
     );
-    if (path && Object.keys(meta).length) nested.push({ path, data: meta });
+    const properties = { type: { value: entry.type } };
+    const children = [];
     if (containerType(entry.type)) {
       if (
         own(entry, 'value') ||
@@ -332,61 +260,45 @@ const encodeVariableNode = (variable, fileUri) => {
       )
         fail('Invalid container variable.', {}, fileUri, variable.name);
       const names = new Set();
-      return {
-        type: entry.type,
-        children: (entry.children || []).map((child, index) => {
-          if (entry.type === 'structure') {
-            if (names.has(child.name))
-              fail('Duplicate structure member.', {}, fileUri, variable.name);
-            names.add(child.name);
-          }
-          return {
-            ...encode(
-              child,
-              path +
-                '/' +
-                jsonPointerSegment(entry.type === 'array' ? index : child.name),
-              depth + 1,
-              entry.type
-            ),
-            ...(entry.type === 'structure' ? { name: child.name } : {}),
-          };
-        }),
-      };
+      const entries = (entry.children || []).map(child => {
+        if (entry.type === 'structure') {
+          if (names.has(child.name))
+            fail('Duplicate structure member.', {}, fileUri, variable.name);
+          names.add(child.name);
+        }
+        return encode(child, depth + 1, entry.type);
+      });
+      children.push({
+        type: entry.type === 'structure' ? 'members' : 'elements',
+        named: true,
+        properties: {},
+        children: entries,
+      });
+    } else {
+      const expected = entry.type === 'enum' ? 'string' : entry.type;
+      if (
+        typeof entry.value !== expected ||
+        own(entry, 'children') ||
+        (expected === 'number' && !checkNumber(entry.value))
+      )
+        fail(
+          'Variable value does not match its type.',
+          {},
+          fileUri,
+          variable.name
+        );
+      properties.value = { value: entry.value };
     }
-    const expected = entry.type === 'enum' ? 'string' : entry.type;
-    if (
-      typeof entry.value !== expected ||
-      own(entry, 'children') ||
-      (expected === 'number' && !checkNumber(entry.value))
-    )
-      fail(
-        'Variable value does not match its type.',
-        {},
-        fileUri,
-        variable.name
-      );
-    return { type: expected, value: entry.value };
-  };
-  const tree = encode(variable, '', 1, 'structure');
-  const properties = { type: { value: variable.type } };
-  properties[containerType(variable.type) ? 'json' : 'value'] = containerType(
-    variable.type
-  )
-    ? { value: printVariableJson(tree), raw: true }
-    : { value: variable.value };
-  for (const key of metadataKeys)
-    if (own(variable, key)) properties[key] = { value: variable[key] };
-  if (nested.length)
-    properties.metadata = {
-      value: JSON.stringify(
-        Object.fromEntries(nested.map(({ path, data }) => [path, data])),
-        null,
-        2
-      ),
-      raw: true,
+    for (const key of metadataKeys)
+      if (own(entry, key)) properties[key] = { value: entry[key] };
+    return {
+      type: parentType === 'array' ? 'item' : entry.name,
+      named: true,
+      properties,
+      children,
     };
-  return { type: variable.name, named: true, properties, children: [] };
+  };
+  return encode(variable, 1, 'structure');
 };
 
 export const encodeVariableContainer = (
@@ -404,8 +316,7 @@ export const encodeVariableContainer = (
   return { type, properties: {}, children };
 };
 
-// Native structure maps may sort keys. Restore matching source member order,
-// while treating current root variable order and array order as authoritative.
+// Native structure maps may sort keys. Root and array order remain authoritative.
 export const preserveVariableStructureOrder = (
   source,
   previousSource,
@@ -413,21 +324,32 @@ export const preserveVariableStructureOrder = (
 ) => {
   const current = parseSettingsSyntax(source, fileUri);
   const previous = parseSettingsSyntax(previousSource, fileUri);
-  const align = (tree, old) => {
-    if (!old || tree.type !== old.type || !containerType(tree.type)) return;
-    if (tree.type === 'structure') {
+  const align = (node, old) => {
+    const type = node.properties.type?.value;
+    if (!old || type !== old.properties.type?.value || !containerType(type))
+      return;
+    const containerName = type === 'structure' ? 'members' : 'elements';
+    const children = node.children.find(child => child.type === containerName);
+    const oldChildren = old.children.find(
+      child => child.type === containerName
+    );
+    if (!children || !oldChildren) return;
+    if (type === 'structure') {
       const order = new Map(
-        old.children.map((child, index) => [child.name, index])
+        oldChildren.children.map((child, index) => [child.type, index])
       );
-      tree.children.sort(
+      children.children.sort(
         (a, b) =>
-          (order.get(a.name) ?? order.size) - (order.get(b.name) ?? order.size)
+          (order.get(a.type) ?? order.size) - (order.get(b.type) ?? order.size)
       );
-      const byName = new Map(old.children.map(child => [child.name, child]));
-      tree.children.forEach(child => align(child, byName.get(child.name)));
+      children.members = children.children.map(child => ({ child }));
+      const byName = new Map(
+        oldChildren.children.map(child => [child.type, child])
+      );
+      children.children.forEach(child => align(child, byName.get(child.type)));
     } else
-      tree.children.forEach((child, index) =>
-        align(child, old.children[index])
+      children.children.forEach((child, index) =>
+        align(child, oldChildren.children[index])
       );
   };
   const visit = (node, old) => {
@@ -437,15 +359,7 @@ export const preserveVariableStructureOrder = (
       ['variables', 'global_variables', 'scene_variables'].includes(node.type)
     ) {
       const byName = new Map(old.children.map(child => [child.type, child]));
-      node.children.forEach(child => {
-        const item = child.properties.json;
-        const oldItem = byName.get(child.type)?.properties.json;
-        if (item && oldItem) {
-          const tree = parseVariableJson(item, fileUri);
-          align(tree, parseVariableJson(oldItem, fileUri));
-          item.value = printVariableJson(tree);
-        }
-      });
+      node.children.forEach(child => align(child, byName.get(child.type)));
       return;
     }
     const identity = child =>

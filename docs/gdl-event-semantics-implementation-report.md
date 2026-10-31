@@ -1,5 +1,7 @@
 # GDL 事件语义分析：首版实施与验证记录
 
+版本说明：本文版本号记录该次变更的历史基线与升级过程，不代表当前版本。当前作者格式为 18，GDL catalog 为 17，instruction catalog 为 7；以 [GDL 当前规范](settings-dsl-spec.md) 及其列出的代码常量为准。
+
 日期：2026-10-27。基线提交：`6100c9c942550e5e312d73a720fc7414e1e2b758`。结果针对当前工作区，未创建提交、安装包或部署。
 
 对应 [已批准的 spec](gdl-event-semantics-analysis-spec.md)。本次交付是基础静态分析链路，不代表 spec 中所有高级规则和后续阶段均已完成。

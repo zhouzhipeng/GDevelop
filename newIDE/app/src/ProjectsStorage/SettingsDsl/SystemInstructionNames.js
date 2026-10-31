@@ -1988,6 +1988,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'condition|DialogueTree|||DialogueTree::WasBranchVisited': 'wasBranchVisited',
   'condition|Sprite|Sprite||Direction': 'direction',
   'condition|BuiltinObject|||Distance': 'distance',
+  'condition|BuiltinObject|||Distance3D': 'distance3D',
   'condition|BuiltinScene|||DoesSceneExist': 'doesSceneExist',
   'condition|DraggableBehavior||DraggableBehavior::Draggable|DraggableBehavior::Dragged':
     'dragged',
@@ -2041,6 +2042,7 @@ export const SYSTEM_INSTRUCTION_NAMES: { [string]: string } = {
   'condition|BuiltinObject|||IsTotalForceAngleTowardObject':
     'isTotalForceAngleTowardObject',
   'condition|BuiltinObject|||IsTurnedTowardObject': 'isTurnedTowardObject',
+  'condition|BuiltinObject|||IsTurnedTowardObject3D': 'isTurnedTowardObject3D',
   'condition|BuiltinKeyboard|||KeyFromTextJustPressed':
     'keyFromTextJustPressed',
   'condition|BuiltinKeyboard|||KeyFromTextPressed': 'keyFromTextPressed',

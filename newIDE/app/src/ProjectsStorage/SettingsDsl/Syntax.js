@@ -558,6 +558,56 @@ export const parseSettingsSyntax = (source, fileUri) => {
   newlines();
   const root = node(consume('ident'), 0);
   consume('eof');
+  // Event categories follow execution order. Preserve order within each list,
+  // but reject declarations that would visually imply a different phase.
+  const validateEventOrder = event => {
+    if (
+      ![
+        'event',
+        'else',
+        'repeat',
+        'while',
+        'for_each',
+        'for_each_child',
+        'group',
+        'comment',
+        'link',
+        'javascript',
+      ].includes(event.type)
+    )
+      return;
+    const phases = {
+      variables: 1,
+      while_conditions: 2,
+      conditions: 3,
+      actions: 4,
+    };
+    let phase = 0;
+    for (const member of event.members) {
+      const child = member.child;
+      const nextPhase = child
+        ? own(phases, child.type)
+          ? phases[child.type]
+          : 5
+        : 0;
+      if (nextPhase < phase) {
+        const item = child || event.properties[member.key];
+        throw new SettingsDslError(
+          'SETTINGS_EVENT_ORDER',
+          'Event members must appear in order: properties, variables, while_conditions, conditions, actions, child events.',
+          fileUri,
+          item.keyLocation || item.location,
+          event.type
+        );
+      }
+      phase = nextPhase;
+      if (child && nextPhase === 5) validateEventOrder(child);
+    }
+  };
+  if (['function', 'fragment'].includes(root.type))
+    for (const container of root.children)
+      if (container.type === 'events')
+        for (const event of container.children) validateEventOrder(event);
   return { root, comments, source, fileUri };
 };
 

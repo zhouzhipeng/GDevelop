@@ -36,7 +36,7 @@ const SCENE_LIFECYCLE_SOURCES = Object.freeze([
 ]);
 
 export const PROJECT_GDL_CATALOG_RELATIVE_PATH = '.gdevelop/gdl-catalog.json';
-export const PROJECT_GDL_CATALOG_FORMAT_VERSION = 16;
+export const PROJECT_GDL_CATALOG_FORMAT_VERSION = 17;
 
 export class ProjectSourceCatalogError extends Error {
   code: string;
@@ -1349,7 +1349,7 @@ export const buildProjectGdlCatalog = ({
       rules: [
         'Use one typed component root. Names and properties belong inside the root; never use TOML headers, named node arguments, kind, settingsFormatVersion, settings or layout wrappers.',
         'Read fileKinds[].schema and objectTypes[type].schema. Unknown fields are errors. Dynamic fields require registered type metadata.',
-        'Use one variables container with named descriptor blocks and mandatory type. Scalars use value; structures/arrays use json raw strings. Nested enum/editing state uses metadata JSON Pointer records. Direct assignments and nested declarations are forbidden. Extension defaults use global_variables and scene_variables. Anonymous structure literals and scope fields are forbidden. Parameters and property descriptors use parameters/properties/shared_properties containers with named member nodes and no name field. Bare expression names resolve properties before variables.',
+        'Use one variables container with named descriptor blocks and mandatory type. Scalars use value; structures require members with named descriptors; arrays require elements with repeated item descriptors. Each descendant has explicit type and owns its enum/editing metadata. The old json/metadata fields and direct assignments are forbidden. Extension defaults use global_variables and scene_variables. Anonymous structure literals and scope fields are forbidden. Parameters and property descriptors use parameters/properties/shared_properties containers with named member nodes and no name field. Bare expression names resolve properties before variables.',
         'Instances are root children in global serialized order. Each instance owns variables and behavior overrides. Layers own camera and effect nodes.',
         'Object definitions and functions remain independent .gdl components; event bodies are embedded in the same function.gdl document.',
         'Only project.gdl declares formatVersion. Paths determine ownership. constants.toml is separate and generated JSON is not author input.',

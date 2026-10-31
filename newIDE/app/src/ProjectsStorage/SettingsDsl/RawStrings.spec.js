@@ -203,7 +203,7 @@ test('decoded single-line JS source maps escaped characters and virtual newlines
 
 test('string arrays, nested variable values and instruction operands use generic multiline output', () => {
   const text =
-    'scene {\n name = "Test"\n variables {\n Label {\n type = "string"\n value = "first\\nsecond"\n }\n Data {\n type = "structure"\n json = "{\\"lines\\":[\\"a\\\\nb\\",\\"short\\"]}"\n }\n }\n}\n';
+    'scene {\n name = "Test"\n variables {\n Label {\n type = "string"\n value = "first\\nsecond"\n }\n Data {\n type = "structure"\n members {\n lines {\n type = "array"\n elements {\n item {\n type = "string"\n value = "a\\nb"\n }\n item {\n type = "string"\n value = "short"\n }\n }\n }\n }\n }\n }\n}\n';
   const syntax = parseSettingsSyntax(text);
   const formatted = printSettingsSyntax(syntax.root);
   expect(formatted).toContain('value = """\nfirst\nsecond\n"""');

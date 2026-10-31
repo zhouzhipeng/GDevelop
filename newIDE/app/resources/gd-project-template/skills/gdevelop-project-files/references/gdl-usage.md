@@ -1,6 +1,6 @@
 # GDevelop Language (GDL) usage
 
-Only format 17 is accepted. `.gdl` and `project.gdl` use the same
+Only format 18 is accepted. `.gdl` and `project.gdl` use the same
 parser. constants.toml remains TOML; event bodies are embedded in function/fragment settings. .events files are forbidden.
 
 ## Syntax
@@ -103,10 +103,11 @@ and name, resolving existing layers in the owning scene.
 ## Variables and behaviors
 
 Use one variables container per owner. Every variable is a named descriptor block with mandatory type.
-Scalars use value; structures and arrays use json strings (canonical multiline raw strings).
-Nested enums and editing state use a separate metadata JSON object keyed by JSON Pointer.
-JSON rejects duplicate keys, null, unsafe integers, nonfinite numbers, comments and trailing commas.
-No direct variable assignments, implicit structures, nested variables or items/item declarations.
+Scalars use value; structures require a members container with named descriptors;
+arrays require an elements container with repeated item descriptors. Every descendant
+has explicit type. Enums and folded/hasMixedValues belong on their own descriptor.
+Empty containers use members {} / elements {}. Old json/metadata fields, direct
+assignments, implicit structures, nested variables and old items containers are rejected.
 Extension defaults use global_variables and scene_variables; scope is forbidden.
 Parameters and property descriptors use parameters/properties/shared_properties with named
 member nodes, without a repeated name field. Preserve member order and reject duplicates.
@@ -120,22 +121,13 @@ scene {
 
     State {
       type = "structure"
-      json = """
-{
-  "Mode": "Idle"
-}
-"""
-      metadata = """
-{
-  "/Mode": {
-    "type": "enum",
-    "values": [
-      "Idle",
-      "Run"
-    ]
-  }
-}
-"""
+      members {
+        Mode {
+          type = "enum"
+          value = "Idle"
+          values = ["Idle", "Run"]
+        }
+      }
     }
   }
 }
@@ -156,7 +148,7 @@ edits, reload, and verify behavior using the project workflow in SKILL.md.
 
 ## Events
 
-Events are part of GDevelop Language (GDL) format 17, not a separate language. Each
+Events are part of GDevelop Language (GDL) format 18, not a separate language. Each
 function's signature and body live in one functions/<Name>.gdl file.
 External fragments use external-events/<Name>.gdl. Never create .events
 files or write IfDo syntax. Read the current settings and instruction catalogs.
@@ -267,10 +259,11 @@ that a scene-variable action adds once per coin. Use for_each when required.
   disabled/awaited for actions. Catalog-supported child instructions stay
   directly inside the parent instruction block.
   Child instruction kind is inherited; do not add conditions/actions wrappers.
-- Event members have explicit ownership; source placement of entire categories
-  does not change runtime order: conditions, actions, then children. Within
-  each list, source order matters. Canonical order is properties, variables,
-  while_conditions, conditions, actions, then children.
+- Event members must appear in this order: properties, variables,
+  while_conditions, conditions, actions, then child events. Optional phases may
+  be omitted. Returning to an earlier phase is a SETTINGS_EVENT_ORDER error,
+  including properties after containers or children. Group properties must
+  precede child events. Within each list, source order is preserved.
 
 ```text
 conditions {
@@ -345,7 +338,7 @@ No group, comment or other event may intervene. Keep original engine picking
 and Else semantics. While's while_conditions is distinct from conditions;
 there is no source-only while limit. Bound loops and ensure progress.
 
-Declare event locals inside variables {}, using the same typed descriptor, json and metadata rules as settings variables.
+Declare event locals inside variables {}, using the same recursive typed descriptors and per-node metadata as settings variables.
 Groups do not create a new runtime local-variable scope.
 
 ### String values
