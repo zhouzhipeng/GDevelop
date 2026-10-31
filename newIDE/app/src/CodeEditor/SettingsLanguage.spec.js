@@ -1,4 +1,5 @@
 // @noflow
+/* eslint-disable no-template-curly-in-string -- Assert literal Monaco snippet placeholders. */
 import {
   registerSettingsLanguage,
   getSettingsVariableCompletions,
@@ -28,6 +29,12 @@ test('registers GDL, formatting and live syntax diagnostics once', () => {
     id: 'gdevelop-gdl',
     extensions: ['.gdl'],
     aliases: ['GDevelop Language', 'GDL'],
+  });
+  const tokenizer = languages.setMonarchTokensProvider.mock.calls[0][1];
+  // Raw string rules are declared first; normal files must start in root.
+  expect(tokenizer.start).toBe('root');
+  Object.values(tokenizer.tokenizer).forEach(rules => {
+    rules.forEach(rule => expect(typeof rule[0]).toBe('string'));
   });
   const formatting =
     languages.registerDocumentFormattingEditProvider.mock.calls[0][1];
@@ -284,4 +291,26 @@ test('recursive descriptor completion recognizes array items and business member
     prefix + 'item {\n type = "structure"\n members {}\n '
   );
   expect(used.map(entry => entry.label)).not.toContain('members');
+});
+
+test('reference completions use bare symbols in definitions and instance overrides', () => {
+  const snippet = (source, name) =>
+    getSettingsVariableCompletions(source).find(item => item.label === name)
+      ?.insertText;
+  expect(snippet('object {\n ', 'type')).toBe('type = ${1:Symbol}');
+  expect(snippet('scene {\n instance {\n ', 'object')).toBe(
+    'object = ${1:Symbol}'
+  );
+  expect(
+    snippet('scene {\n instance {\n behaviors {\n Move {\n ', 'name')
+  ).toBeUndefined();
+  expect(snippet('object {\n behaviors {\n Move {\n ', 'type')).toBe(
+    'type = ${1:Symbol}'
+  );
+  expect(
+    snippet(
+      'function {\n parameters {\n Target {\n type = "object"\n ',
+      'supplementaryInformation'
+    )
+  ).toBe('supplementaryInformation = ${1:Type}');
 });

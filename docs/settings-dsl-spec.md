@@ -1,6 +1,6 @@
 # GDevelop Language (GDL) 当前规范与文档入口
 
-- 状态：已实施；当前作者格式 18，GDL catalog 17，instruction catalog 7。
+- 状态：已实施；当前作者格式 22，GDL catalog 21，instruction catalog 7。
 - 统一事件契约：[统一 GDevelop Language (GDL)：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。当前格式将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
 - 变量契约：[递归变量描述节点](settings-dsl-variable-values-spec.md)。第 8.2 节仅作摘要，完整规则由该文档维护。
 - 更新日期：2026-10-31
@@ -11,10 +11,13 @@
 - 所有普通属性直接放所属节点内，不增加 `settings` 包装块。
 - 实现：`newIDE/app/src/ProjectsStorage/SettingsDsl`；共享布局数据验证：`LayoutDocument`；组件拆分/组合：`MultiFileProjectFormat`。
 
+对象附着行为和实例覆盖统一使用 `behaviors { 名称 { … } }`，成员内禁止 name；独立行为定义仍以 behavior 为根。详见 [具名行为集合](gdl-named-behaviors-spec.md)。
+
 ## 文档导航与权威来源
 
 本页是当前 GDL 作者文档的唯一入口，各专题只维护自己的契约：
 
+- [符号引用](gdl-symbol-references-spec.md)：对象、行为及其类型的裸引用与字符串边界。
 - [变量](settings-dsl-variable-values-spec.md)：递归描述节点、显式类型、元数据与作用域。
 - [事件与 JavaScript](unified-settings-events-dsl-spec.md)：指令、表达式、控制流、代码块、Link 和执行顺序。
 - [场景生命周期](scene-event-phases-spec.md)：固定签名、必需文件与执行时机。
@@ -38,7 +41,7 @@ node {
 }
 ```
 
-普通节点的名称、ID、对象引用都是块内部属性。不支持 `layer "world" {}`、XML 标签、TOML 表头或行内节点属性。
+普通节点的名称、ID、对象引用通常是块内部属性；具名集合中的图层 ID 由节点名声明。名称声明与 ID 使用字符串，对象及类型引用使用裸符号。不支持 `layer "world" {}`、XML 标签、TOML 表头或行内节点属性。
 
 核心目标是让每种组件都成为可阅读、可验证、可局部修改的文档。Scene、Prefab、Variant、External、Object、Function、Behavior、Extension、Resources、Tests 和 Project 共用词法、AST、格式化和诊断系统，通过根节点及 schema 区分能力。布局是 Scene 等组件内部的语义领域，不是一种独立语言。
 
@@ -92,7 +95,7 @@ extensions/Combat/prefabs/Knight/
 - 根不写 `kind`、`settingsFormatVersion` 或每文件 `version`。根节点类型提供组件种类，整个项目只支持当前 schema；`project.gdl` 的 `formatVersion` 是精确匹配的格式标记，不是版本协商入口。
 - 所有 `.gdl` 只由新解析器读取，不探测 TOML。禁止根级 `layout` 包装和独立 `.layout` 布局源；同一组件数据只允许一个所有者。
 - 编辑器状态暂保留在 `editor`，个人视图状态是否迁出另行评估。
-- `project.gdl` 使用相同 DSL，根为 `project`，统一入口后缀为 .gdl。formatVersion 使用当前常量 18。任何不匹配直接拒绝，不尝试旧读取器。
+- `project.gdl` 使用相同 DSL，根为 `project`，统一入口后缀为 .gdl。formatVersion 使用当前常量 22。任何不匹配直接拒绝，不尝试旧读取器。
 - 事件正文合入所属 .gdl；测试 `.js` 正文不变。`constants.toml` 是显式例外，仍为独立的编辑器常量文档；它不是 settings，也不属于本轮替换。生成的 catalog JSON 与运行时 JSON 不改语法。
 - 单文件内配置与布局一起验证、保存；重命名或跨文件引用更新仍须事务保存。
 
@@ -137,7 +140,11 @@ extensions/Combat/prefabs/Knight/
 
 ### 4.2 值
 
-支持字符串、有限数字、布尔值和数组：
+支持字符串、有限数字、布尔值、符号引用和数组。对象、附着行为、对象类型及行为类型都是符号；引用使用裸字面量（如 `Player`、`Sprite`、`PlatformBehavior::PlatformerObjectBehavior`），不加双引号。普通名称声明、文本、资源路径等仍使用字符串。引用字段拒绝带引号的名称及计算表达式，字符串字段拒绝裸引用。符号按字段要求的类别及所属作用域解析；声明并不等于引用。
+
+符号每段符合 `[\p{L}_][\p{L}\p{N}_]*`（支持中文），段间可用 `::` 限定命名空间；`true`、`false`、`null`、`NaN` 和 `Infinity` 不能作为引用。对象组成员使用 `[Player, Enemy]`，所需行为类型使用 `[PlatformBehavior::PlatformerObjectBehavior]`。行为 `objectType = ""` 仅表示不限制对象类型，不是符号引用。
+
+示例：
 
 ```text
 name = "World"
@@ -178,7 +185,7 @@ node       := IDENT "{" NEWLINE members "}" NEWLINE?
 members    := (assignment | node | NEWLINE)*
 assignment := key "=" value NEWLINE
 key        := IDENT | STRING
-value      := STRING | RAW_MULTILINE_STRING | NUMBER | BOOLEAN | array
+value      := STRING | RAW_MULTILINE_STRING | NUMBER | BOOLEAN | REFERENCE | array
 array      := "[" (value ("," value)* ","?)? "]"
 ```
 
@@ -197,7 +204,7 @@ array      := "[" (value ("," value)* ","?)? "]"
 
 本节表格针对包含空间布局的四种组件；其他根见第 5.1 节。根节点必须与 owner 类型匹配。Variant 表示当前模型中的完整变体布局，不在语法版本 1 引入差量继承或 patch 语义。
 
-布局子块：`bounds`（0/1）、`editor`（0/1）、`layer`（0/N）、`instance`（0/N）。组件配置可另有 `variables`（0/1）及逐项登记的对象组、行为共享数据等节点。允许上下文按现有模型约束为空；不得自动添加缺失图层。
+布局子块：`bounds`（0/1）、`editor`（0/1）、`layers`（0/1）、`instances`（0/1）。组件配置可另有 `variables`（0/1）及逐项登记的对象组、行为共享数据等节点。允许上下文按现有模型约束为空；不得自动添加缺失图层。
 
 ### 5.1 全部文档根类型
 
@@ -218,13 +225,13 @@ array      := "[" (value ("," value)* ","?)? "]"
 
 路径中具名所有者的具体分配保持当前目录契约；表格中的 behavior 路径只表示所属作用域，不要求重构已有目录。全局、场景、Prefab 和 Variant 对象共用 object 根，所属目录决定解析作用域。生命周期函数及扩展/行为/Prefab 函数共用 function 根。
 
-project formatVersion 固定为 18；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
+project formatVersion 固定为 22；入口、模板和读取器共用 SETTINGS_FORMAT_VERSION 常量，只接受这一值。
 
 ### 5.2 Project 与资源清单示例
 
 ```text
 project {
-  formatVersion = 18
+  formatVersion = 22
   name = "Adventure"
 }
 ```
@@ -252,7 +259,7 @@ resources {
 ```text
 object {
   name = "Player"
-  type = "Sprite"
+  type = Sprite
   order = 0
 
   animation {
@@ -266,12 +273,13 @@ object {
     }
   }
 
-  behavior {
-    name = "Movement"
-    type = "PlatformBehavior::PlatformerObjectBehavior"
+  behaviors {
+    "Movement" {
+      type = PlatformBehavior::PlatformerObjectBehavior
 
-    properties {
-      maxSpeed = 500
+      properties {
+        maxSpeed = 500
+      }
     }
   }
 
@@ -285,7 +293,7 @@ object {
 }
 ```
 
-这是对象定义而非实例：object.behavior 可以定义附着行为及其类型；instance.behavior 只能覆盖已附着行为。动画、方向、帧、碰撞遮罩、3D 模型和材质等节点按对象类型 schema 注册，不能把 Sprite 的子节点用于所有对象。实际类型字符串、属性名称与值须由 catalog 验证。
+这是对象定义而非实例：object.behaviors 可以定义附着行为及其类型；instance.behaviors 只能覆盖已附着行为。动画、方向、帧、碰撞遮罩、3D 模型和材质等节点按对象类型 schema 注册，不能把 Sprite 的子节点用于所有对象。实际类型字符串、属性名称与值须由 catalog 验证。
 
 ### 5.4 Function 与 External Events 示例
 
@@ -348,7 +356,7 @@ behavior {
 }
 ```
 
-这里 behavior 根定义一个行为组件；object.behavior 是附着记录；instance.behavior 是覆盖记录。三者词法相同，语义与合法字段由父节点路径区分。扩展的行为、函数和 Prefab 仍是独立组件，不在 extension 文件重复完整定义。
+这里 behavior 根定义一个行为组件；object.behaviors 是附着记录；instance.behaviors 是覆盖记录。三者词法相同，语义与合法字段由父节点路径区分。扩展的行为、函数和 Prefab 仍是独立组件，不在 extension 文件重复完整定义。
 
 ### 5.6 Tests 示例
 
@@ -375,7 +383,7 @@ tests {
 
 ## 6. 图层与实例：顺序决定的组织选择
 
-基础版本将 `layer` 和 `instance` 都放在根节点下：
+图层与实例分别放在根节点的唯一 `layers` 和 `instances` 集合容器内：
 
 ```text
 scene {
@@ -383,16 +391,18 @@ scene {
   order = 0
   background = "#202030"
 
-  layer {
-    id = "world"
-    name = "World"
+  layers {
+    world {
+      name = "World"
+    }
   }
-
-  instance {
-    id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
-    object = Player
-    layer = "world"
-    position = [100, 200]
+  instances {
+    instance {
+      id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
+      object = Player
+      layer = "world"
+      position = [100, 200]
+    }
   }
 }
 ```
@@ -401,42 +411,45 @@ scene {
 
 这里选择保留原始顺序，不增加排序元数据：
 
-- 根下 `layer` 的出现顺序是图层顺序。
-- 根下 `instance` 的出现顺序是全局实例顺序。
+- `layers` 内具名图层节点的出现顺序是图层顺序。
+- `instances` 内 `instance` 的出现顺序是全局实例顺序。
 - `layer.effect`、`layer.camera` 的出现顺序分别是对应数组顺序。
 - 实例通过 `layer` 引用本文件图层 ID。
 - 基础版本禁止 `layer.instance` 和 `instance.instance`，遇到时明确报错。
 
 不得通过嵌套实例或重排图层改变现有全局实例顺序。
 
+图层和实例集合：`layers` 内仅允许以图层 ID 命名的子节点，`instances` 内仅允许 `instance` 子节点；两个容器均不允许属性。空集合写作 `layers {}`、`instances {}`。读取允许省略空集合，规范输出总是写出两个容器。拒绝重复容器、根下裸 `layer` / `instance` 及图层内嵌实例。此规则统一用于 Scene、Prefab、PrefabVariant 与 ExternalLayout，保留各自原有字段限制。
+
 ## 7. 图层、相机与效果
 
 ### 7.1 Layer
 
-必需属性 `id`、`name`。ID 为文件局部引用，匹配 `[a-z0-9][a-z0-9-]*`；名称为运行时图层名称，基础层名称可为空字符串。两者各自唯一。
+图层节点名就是 ID，内部禁止再次声明 `id`；`name` 为必需属性。ID 为文件局部引用，匹配 `[a-z0-9][a-z0-9-]*`；名称为运行时图层名称，基础层名称可为空字符串。两者各自唯一。不符合普通节点标识符规则的 ID 使用带引号的节点名，例如 `"3d-world" {}`。裸名与引号名共享 ID 唯一性检查。
 
 基础版本沿用现有字段名，避免同时大规模改语义词汇：
 
 ```text
-layer {
-  id = "world"
-  name = "World"
-  rendering = "2d+3d"
-  camera_type = "perspective"
-  camera_behavior = "do-nothing"
-  visible = true
-  locked = false
-  lighting = false
-  follow_base_camera = false
-  ambient = "#C8C8C8"
-  near = 3
-  far = 10000
-  fov = 45
-  max_2d_distance = 5000
+layers {
+  world {
+    name = "World"
+    rendering = "2d+3d"
+    camera_type = "perspective"
+    camera_behavior = "do-nothing"
+    visible = true
+    locked = false
+    lighting = false
+    follow_base_camera = false
+    ambient = "#C8C8C8"
+    near = 3
+    far = 10000
+    fov = 45
+    max_2d_distance = 5000
 
-  camera {
-    size = [1920, 1080]
-    viewport = [0, 0, 1, 1]
+    camera {
+      size = [1920, 1080]
+      viewport = [0, 0, 1, 1]
+    }
   }
 }
 ```
@@ -494,25 +507,27 @@ effect {
 ### 8.1 身份与变换
 
 ```text
-instance {
-  id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
-  object = Player
-  layer = "world"
-  position = [100, 50, 20]
-  rotation = [15, 30, 90]
-  z_order = 4
-  size = [64, 32]
-  depth = 24
-  opacity = 220
-  flip = ["x", "y"]
-  locked = true
-  sealed = true
-  hidden = false
-  keep_ratio = true
+instances {
+  instance {
+    id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
+    object = Player
+    layer = "world"
+    position = [100, 50, 20]
+    rotation = [15, 30, 90]
+    z_order = 4
+    size = [64, 32]
+    depth = 24
+    opacity = 220
+    flip = ["x", "y"]
+    locked = true
+    sealed = true
+    hidden = false
+    keep_ratio = true
 
-  properties {
-    animation = 1
-    skin = "red"
+    properties {
+      animation = 1
+      skin = "red"
+    }
   }
 }
 ```
@@ -667,61 +682,62 @@ scene {
     snap = true
     selected_layer = "HUD"
   }
+  layers {
+    base {
+      name = ""
+      rendering = "2d+3d"
+      camera_type = "perspective"
+      near = 3
+      far = 10000
+      fov = 45
 
-  layer {
-    id = "base"
-    name = ""
-    rendering = "2d+3d"
-    camera_type = "perspective"
-    near = 3
-    far = 10000
-    fov = 45
-
-    camera {
-      size = "default"
-      viewport = "default"
-    }
-  }
-
-  layer {
-    id = "hud"
-    name = "HUD"
-    rendering = "2d"
-  }
-
-  instance {
-    id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
-    object = Player
-    layer = "base"
-    position = [92, 552, 20]
-    rotation = [0, 30, 90]
-
-    properties {
-      animation = 1
-    }
-
-    variables {
-
-      Health {
-        type = "number"
-        value = 100
+      camera {
+        size = "default"
+        viewport = "default"
       }
     }
 
-    behavior {
-      name = "PlatformerObject"
+    hud {
+      name = "HUD"
+      rendering = "2d"
+    }
+  }
+  instances {
+    instance {
+      id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
+      object = Player
+      layer = "base"
+      position = [92, 552, 20]
+      rotation = [0, 30, 90]
 
       properties {
-        maxSpeed = 500
+        animation = 1
+      }
+
+      variables {
+
+        Health {
+          type = "number"
+          value = 100
+        }
+      }
+
+      behaviors {
+        PlatformerObject {
+
+          properties {
+            maxSpeed = 500
+          }
+        }
       }
     }
-  }
 
-  instance {
-    id = "4a1e5377-cbe7-4078-9a51-96a1e9956411"
-    object = ScoreText
-    layer = "hud"
-    position = [24, 24]
+    instance {
+      id = "4a1e5377-cbe7-4078-9a51-96a1e9956411"
+      object = ScoreText
+      layer = "hud"
+      position = [24, 24]
+    }
   }
 }
 ```
@@ -737,24 +753,25 @@ prefab {
     min = [0, 0, 0]
     max = [128, 96, 0]
   }
-
-  layer {
-    id = "base"
-    name = ""
+  layers {
+    base {
+      name = ""
+    }
   }
+  instances {
+    instance {
+      id = "01fce651-91cd-4d11-bd56-ef1370807527"
+      object = Body
+      layer = "base"
+      position = [0, 0]
+      size = [128, 96]
 
-  instance {
-    id = "01fce651-91cd-4d11-bd56-ef1370807527"
-    object = Body
-    layer = "base"
-    position = [0, 0]
-    size = [128, 96]
+      variables {
 
-    variables {
-
-      Health {
-        type = "number"
-        value = 100
+        Health {
+          type = "number"
+          value = 100
+        }
       }
     }
   }
@@ -770,24 +787,25 @@ variant {
     min = [0, 0, 0]
     max = [160, 112, 0]
   }
-
-  layer {
-    id = "base"
-    name = ""
+  layers {
+    base {
+      name = ""
+    }
   }
+  instances {
+    instance {
+      id = "01fce651-91cd-4d11-bd56-ef1370807527"
+      object = Body
+      layer = "base"
+      position = [0, 0]
+      size = [160, 112]
 
-  instance {
-    id = "01fce651-91cd-4d11-bd56-ef1370807527"
-    object = Body
-    layer = "base"
-    position = [0, 0]
-    size = [160, 112]
+      variables {
 
-    variables {
-
-      Health {
-        type = "number"
-        value = 200
+        Health {
+          type = "number"
+          value = 200
+        }
       }
     }
   }
@@ -803,29 +821,31 @@ layout {
   name = "BonusRoom"
   order = 0
 
-  layer {
-    id = "world"
-    name = "World"
+  layers {
+    world {
+      name = "World"
+    }
   }
+  instances {
+    instance {
+      id = "4f0234fc-e34d-41b9-88b9-e4a73316f7be"
+      object = TreasureChest
+      layer = "world"
+      position = [12, 0, 8]
 
-  instance {
-    id = "4f0234fc-e34d-41b9-88b9-e4a73316f7be"
-    object = TreasureChest
-    layer = "world"
-    position = [12, 0, 8]
+      variables {
 
-    variables {
-
-      Gold {
-        type = "number"
-        value = 100
+        Gold {
+          type = "number"
+          value = 100
+        }
       }
     }
   }
 }
 ```
 
-所属 Scene 由目录确定。这里 layer 仅声明文件局部 ID 到场景图层名的映射：只允许 id、name，禁止 camera、effect 和图层配置。若目标 Scene 不存在 World 图层，必须报错。外部布局没有背景、边界，也不定义对象资源。
+所属 Scene 由目录确定。这里具名图层仅声明文件局部 ID 到场景图层名的映射：节点名为 ID，内部只允许 name，禁止 camera、effect 和图层配置。若目标 Scene 不存在 World 图层，必须报错。外部布局没有背景、边界，也不定义对象资源。
 
 ## 13. 解析、编译与验证架构
 

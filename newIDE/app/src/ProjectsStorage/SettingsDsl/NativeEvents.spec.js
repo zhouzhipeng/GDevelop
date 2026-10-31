@@ -65,7 +65,7 @@ test('real engine generates identical picking, OR, child-JS and loop code after 
         }
         javascript {
           strict = true
-          objects = "Player"
+          objects = Player
           code = """
 const pickedCount = objects.length;
 if (pickedCount > 0) { objects[0].setX(42); }
@@ -327,7 +327,7 @@ Delete {
       },
       {
         name: 'selected-js-versus-container',
-        body: `event {\n${picked}javascript {\nobjects = "Coin"\ncode = """\nruntimeScene.getVariables().get("Score").setNumber(objects.length);\nruntimeScene.getVariables().get("AllCoins").setNumber(runtimeScene.getObjects("Coin").length);\n\n"""\n}\n}`,
+        body: `event {\n${picked}javascript {\nobjects = Coin\ncode = """\nruntimeScene.getVariables().get("Score").setNumber(objects.length);\nruntimeScene.getVariables().get("AllCoins").setNumber(runtimeScene.getObjects("Coin").length);\n\n"""\n}\n}`,
         coins: 3,
         score: 2,
         allCoins: 3,

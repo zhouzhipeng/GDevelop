@@ -952,7 +952,7 @@ describe('Local multi-file project storage', () => {
     ).toContainEqual({ serializedKey: 'useLegacyTrajectory', type: 'boolean' });
     expect(rebuiltGdlCatalog).toMatchObject({
       format: 'gdevelop-gdl-catalog',
-      formatVersion: 17,
+      formatVersion: 21,
       layoutAuthoring: {
         storage: 'component-root',
         syntax: 'GDevelop Language (GDL)',
@@ -1254,10 +1254,10 @@ describe('Local multi-file project storage', () => {
       await writeLegacyProjectAsMultiFile(serializedProject, entryPath);
       const projectSettings = fs.readFileSync(entryPath, 'utf8');
       expect(projectSettings).toContain('objectGroups {');
-      expect(projectSettings).toContain('"Global Actors" = ["GlobalPlayer"]');
+      expect(projectSettings).toContain('"Global Actors" = [GlobalPlayer]');
       expect(projectSettings).toContain('objectGroupRequiredBehaviors {');
       expect(projectSettings).toContain(
-        '"Global Actors" = ["Tween::TweenBehavior"]'
+        '"Global Actors" = [Tween::TweenBehavior]'
       );
       expect(
         areLegacyProjectsEquivalent(
@@ -1979,7 +1979,7 @@ describe('Local multi-file project storage', () => {
     );
     expect(moduleMap).toMatchObject({
       format: 'gdevelop-project-module-map',
-      sourceFormatVersion: 18,
+      sourceFormatVersion: 22,
       project: { name: 'Generated compatibility project' },
     });
     const generatedProject = JSON.parse(fs.readFileSync(generatedPath, 'utf8'));
@@ -2584,7 +2584,7 @@ column2 = "333"
     expect(fs.existsSync(path.join(sceneDirectory, 'scene.gdl'))).toBe(true);
     expect(
       fs.readFileSync(path.join(sceneDirectory, 'scene.gdl'), 'utf8')
-    ).toContain('layer {');
+    ).toContain('base {');
     expect(
       fs.readFileSync(path.join(sceneDirectory, 'scene.gdl'), 'utf8')
     ).not.toContain('sceneLifecycleFunctions');

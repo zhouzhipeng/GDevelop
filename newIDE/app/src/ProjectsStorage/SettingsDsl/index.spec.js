@@ -15,7 +15,7 @@ describe('GDevelop Language (GDL)', () => {
     'omits empty objectGroups when saving %s and retains declared groups',
     kind => {
       const source = serializeSettingsDocument(kind, {
-        ...(kind === 'project' ? { formatVersion: 18 } : {}),
+        ...(kind === 'project' ? { formatVersion: 22 } : {}),
         name: 'Example',
         objectGroups: {},
       });
@@ -23,7 +23,7 @@ describe('GDevelop Language (GDL)', () => {
       expect(decodeSettingsDocument(source).payload.objectGroups).toEqual({});
       const populated = { Empty: [], Actors: ['Player'] };
       const populatedSource = serializeSettingsDocument(kind, {
-        ...(kind === 'project' ? { formatVersion: 18 } : {}),
+        ...(kind === 'project' ? { formatVersion: 22 } : {}),
         name: 'Example',
         objectGroups: populated,
       });
@@ -128,7 +128,7 @@ describe('GDevelop Language (GDL)', () => {
   });
   test('parses comments, strings and CRLF with source locations', () => {
     const source =
-      '// heading\r\nscene {\r\n name = "中文 // text"\r\n layer {\r\n  id = "world"\r\n  name = "World"\r\n }\r\n}\r\n';
+      '// heading\r\nscene {\r\n name = "中文 // text"\r\n layers {\n   world {\r\n        name = "World"\r\n   }\n }\r\n}\r\n';
     const syntax = parseSettingsSyntax(source);
     expect(syntax.root.properties.name.value).toBe('中文 // text');
     expect(syntax.root.children[0].location.line).toBe(4);
@@ -160,21 +160,24 @@ describe('GDevelop Language (GDL)', () => {
  value = 0
  }
  }
- layer {
-  id = "base"
-  name = ""
+ layers {
+   base {
+     name = ""
+   }
  }
- instance {
-  id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
-  object = "Player"
-  layer = "base"
-  position = [10, 20, 3]
-  variables {
-   Health {
- type = "number"
- value = 100
- }
-  }
+ instances {
+   instance {
+    id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
+    object = Player
+    layer = "base"
+    position = [10, 20, 3]
+    variables {
+     Health {
+   type = "number"
+   value = 100
+   }
+    }
+   }
  }
 }
 `;
@@ -222,7 +225,7 @@ describe('GDevelop Language (GDL)', () => {
   });
   test('formats comments without changing values and is idempotent', () => {
     const source =
-      '// doc\nscene {\n // identity\n name="Main" // label\n layer {\n id="base"\n name=""\n }\n}\n// tail\n';
+      '// doc\nscene {\n // identity\n name="Main" // label\n layers {\n   layer {\n   id="base"\n   name=""\n   }\n }\n}\n// tail\n';
     const formatted = formatSettingsDsl(source);
     expect(formatSettingsDsl(formatted)).toBe(formatted);
     expect(formatted).toContain('// label');

@@ -198,7 +198,7 @@ function {
     Object {
       description = "Object"
       type = "object"
-      supplementaryInformation = "CombatKit::Enemy"
+      supplementaryInformation = CombatKit::Enemy
     }
   }
 
@@ -235,8 +235,8 @@ object {
   order = 0
   folder = []
   name = "Body"
-  type = "Sprite"
-  behaviors = []
+  type = Sprite
+  behaviors {}
   effects = []
 
 
@@ -302,7 +302,7 @@ function {
     Behavior {
       description = "Behavior"
       type = "behavior"
-      supplementaryInformation = "CombatKit::Health"
+      supplementaryInformation = CombatKit::Health
     }
 
     Amount {

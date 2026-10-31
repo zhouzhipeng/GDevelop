@@ -119,7 +119,7 @@ test('conditions, flags, nested events and loop expressions round trip', () => {
 inverted = true
 } }
       getProperty {
-  name = "Height"
+        name = "Height"
   comparison_sign = ">"
   value = 2
 }

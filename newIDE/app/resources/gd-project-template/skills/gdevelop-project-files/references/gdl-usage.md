@@ -1,6 +1,6 @@
 # GDevelop Language (GDL) usage
 
-Only format 18 is accepted. `.gdl` and `project.gdl` use the same
+Only format 22 is accepted. `.gdl` and `project.gdl` use the same
 parser. constants.toml remains TOML; event bodies are embedded in function/fragment settings. .events files are forbidden.
 
 ## Syntax
@@ -18,23 +18,24 @@ scene {
       value = 0
     }
   }
-
-  layer {
-    id = "base"
-    name = ""
+  layers {
+    base {
+      name = ""
+    }
   }
+  instances {
+    instance {
+      id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
+      object = Player
+      layer = "base"
+      position = [100, 200]
 
-  instance {
-    id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
-    object = "Player"
-    layer = "base"
-    position = [100, 200]
+      variables {
 
-    variables {
-
-      Health {
-        type = "number"
-        value = 100
+        Health {
+          type = "number"
+          value = 100
+        }
       }
     }
   }
@@ -42,9 +43,10 @@ scene {
 ```
 
 Player must be defined in the matching objects directory or global scope.
-Layer ids are file-local references; names are runtime layer names. Instances
-remain root children, preserving their global order. Nested instances and
-screen/row/column layout nodes are not implemented.
+Layer node names inside layers are file-local ids; do not repeat id inside a
+layer. The name field is the runtime layer name. Layers and instances belong to
+separate root layers and instances containers, preserving their independent
+orders. Nested instances and screen/row/column layout nodes are not implemented.
 
 ## Rules
 
@@ -52,7 +54,13 @@ screen/row/column layout nodes are not implemented.
   arguments, semicolons, anonymous inline objects, TOML headers or settings/layout wrapper.
 - One declaration per line. Strings use JSON escapes. Arrays can span lines
   and have a trailing comma. `//` starts a comment outside a string.
-- Values are strings, finite numbers, booleans and arrays; structures use named nodes. Null, dates and includes are forbidden. Ordinary configuration fields do not
+- Object and behavior references, including their types, are bare symbols: `object = Player`,
+  `type = Sprite`, `type = PlatformBehavior::PlatformerObjectBehavior`. Instance
+  behavior overrides reference an attachment using `behaviors { Movement {} }`; definitions
+  declare it with `name = "Movement"`. Quoted references and computed references
+  are errors. Symbols support Unicode letters and `::` namespace qualification.
+  Object groups contain `[Player, Enemy]`; required behavior lists contain bare types.
+- Values are strings, finite numbers, booleans, symbol references and arrays; structures use named nodes. Null, dates and includes are forbidden. Ordinary configuration fields do not
   accept expressions; event instruction operands and supported loop fields use
   bare expressions as described in [Events](#events). Integers must be safe integers.
 - Unknown fields/nodes and duplicate properties/singleton nodes are errors.
@@ -96,8 +104,8 @@ function {
 
 Scene/prefab/behavior lifecycle signatures and order have fixed contracts.
 External layouts use `layout`; variants use `variant`. Both retain name
-and applicable order inside the root. External layer nodes only contain id
-and name, resolving existing layers in the owning scene.
+and applicable order inside the root. External layer nodes use the id as their
+node name and only contain name, resolving existing layers in the owning scene.
 
 ## Variables and behaviors
 
@@ -132,8 +140,8 @@ scene {
 }
 ```
 
-Object behavior attachments require name and registered type; their dynamic
-configuration goes inside properties. Instance behavior overrides use name and
+Object behavior attachments use named members inside behaviors and require a registered type; their dynamic
+configuration goes inside properties. Instance behavior overrides use named members and
 properties without a type declaration; the object already owns that behavior.
 
 ## File ownership
@@ -147,7 +155,7 @@ edits, reload, and verify behavior using the project workflow in SKILL.md.
 
 ## Events
 
-Events are part of GDevelop Language (GDL) format 18, not a separate language. Each
+Events are part of GDevelop Language (GDL) format 22, not a separate language. Each
 function's signature and body live in one functions/<Name>.gdl file.
 External fragments use external-events/<Name>.gdl. Never create .events
 files or write IfDo syntax. Read the current settings and instruction catalogs.
@@ -478,3 +486,15 @@ Saving canonicalizes supported accesses to the aliases while preserving legacy
 empty parameter slots. Embedded JavaScript continues to use its own API.
 
 Bare property references are resolved by the native expression AST. Property type errors never fall back to same-named variables. The old getProperty(name=...) expression alias is rejected.
+
+Attached behaviors and instance behavior overrides use a single named collection:
+
+```text
+behaviors {
+  Movement {
+    type = PlatformBehavior::PlatformerObjectBehavior
+  }
+}
+```
+
+Member names carry behavior identity; do not add `name` inside members. Instance overrides cannot declare `type`. Empty collections use `behaviors {}`. Standalone behavior definition files retain the `behavior` root. Repeated `behavior` children and `behaviors = []` are rejected.

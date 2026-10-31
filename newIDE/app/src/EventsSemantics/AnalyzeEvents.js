@@ -471,7 +471,7 @@ export const analyzeGdlEvents = ({
         const async = nodeValue(instruction, 'awaited', false);
         const expressionEffects = Object.entries(instruction.arguments).some(
           ([name, argument]) =>
-            argument.expression &&
+            (argument.expression || argument.reference) &&
             !metadata.parameters.some(
               p =>
                 p.dslName === name &&

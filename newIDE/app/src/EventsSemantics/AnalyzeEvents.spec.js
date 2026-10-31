@@ -228,7 +228,7 @@ test('disabled events and instructions do not execute or taint a sibling', () =>
 });
 test('JS distinguishes passed selection from all container instances and remains unknown', () => {
   const result = analyze(
-    'javascript {\n objects = "Coin"\n code = """\nconst all = runtimeScene.getObjects("Coin");\n\n"""\n}'
+    'javascript {\n objects = Coin\n code = """\nconst all = runtimeScene.getObjects("Coin");\n\n"""\n}'
   );
   expect(result.status).toBe('partial');
   expect(result.events[0].javascript).toEqual(
@@ -321,7 +321,7 @@ test('project declaration fingerprints ignore event edits and detect changed own
     'game://scenes/Main/scene.gdl':
       'scene {\n name = "Main"\n variables {\n Score {\n type = "number"\n value = 0\n }\n }\n}\n',
     'game://scenes/Main/objects/Coin.gdl':
-      'object {\n name = "Coin"\n type = "Sprite"\n}\n',
+      'object {\n name = "Coin"\n type = Sprite\n}\n',
     [file]: wrap('event {}'),
   };
   const context = buildProjectContexts(files)(file);

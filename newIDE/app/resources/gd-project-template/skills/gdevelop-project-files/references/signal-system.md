@@ -185,7 +185,7 @@ function {
     Object {
       description = "Object"
       type = "object"
-      supplementaryInformation = "Cards::CardSlot"
+      supplementaryInformation = Cards::CardSlot
     }
 
     SignalName {

@@ -32,6 +32,7 @@ type Props = {|
   onBlur: () => void,
   /** See `CodeEditor`. */
   suppressedDiagnosticsMessages?: Array<string>,
+  readOnly?: boolean,
   language?: 'javascript' | 'typescript' | 'gdevelop-gdl',
   modelPath?: string,
   extraLibraries?: Array<{| filePath: string, content: string |}>,
@@ -173,6 +174,10 @@ class PoppedOutMonacoEditor extends React.Component<Props, State> {
       });
     }
 
+    if (prevProps.readOnly !== this.props.readOnly) {
+      this._editor.updateOptions({ readOnly: !!this.props.readOnly });
+    }
+
     // Update theme.
     if (prevProps.theme !== this.props.theme && this._monaco) {
       this._monaco.editor.setTheme(this.props.theme);
@@ -304,6 +309,7 @@ class PoppedOutMonacoEditor extends React.Component<Props, State> {
     this._ownedModel = model;
     this._editor = monaco.editor.create(container, {
       ...baseEditorOptions,
+      readOnly: !!this.props.readOnly,
       ...(model
         ? { model }
         : {

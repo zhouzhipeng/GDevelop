@@ -2,6 +2,8 @@
 import { t, Trans } from '@lingui/macro';
 
 import * as React from 'react';
+import { AutoSizer } from 'react-virtualized';
+import { CodeEditor } from '../CodeEditor';
 import Text from '../UI/Text';
 import IconButton from '../UI/IconButton';
 import MiniToolbar, { MiniToolbarText } from '../UI/MiniToolbar';
@@ -1158,6 +1160,39 @@ const WorkingDesk = ({
   const renderTextPreview = () => {
     if (textPreviewError) {
       return renderDeskMessage(<Text noMargin>{textPreviewError}</Text>);
+    }
+    if (selectedNode && selectedNode.name.toLowerCase().endsWith('.gdl')) {
+      if (textPreview === null) return <CircularProgress />;
+      return (
+        <div style={styles.previewColumn}>
+          <AutoSizer>
+            {({ width, height }) => (
+              <CodeEditor
+                key={selectedNode.absolutePath}
+                value={textPreview}
+                language="gdevelop-gdl"
+                readOnly
+                width={width}
+                height={height}
+                initialScrollTop={0}
+                initialCursorColumn={1}
+                initialCursorLine={1}
+                saveEditorState={() => {}}
+                onChange={() => {}}
+                onFocus={() => {}}
+                onBlur={() => {}}
+                onEditorMounted={editor => {
+                  editor.updateOptions({
+                    folding: true,
+                    showFoldingControls: 'always',
+                    lineNumbers: 'on',
+                  });
+                }}
+              />
+            )}
+          </AutoSizer>
+        </div>
+      );
     }
     return (
       <pre

@@ -1123,8 +1123,8 @@ describe('McpEditorBridge', () => {
   name = "UnreferencedCard"
   defaultName = "UnreferencedCard"
   description = "Unreferenced prefab used to verify disk catalog generation."
-  propertyDescriptors = []
-  behaviors = []
+  properties {}
+  behaviors {}
   objectGroups {}
   bounds {
     min = [0, 0, 0]

@@ -6,6 +6,8 @@ import {
   printSettingsSyntax,
   MAX_SETTINGS_DEPTH,
   getSettingsStringLocation,
+  isSettingsReferenceName,
+  hasSettingsReference,
 } from './Syntax';
 import { decodeVariableContainer, encodeVariableContainer } from './Variables';
 
@@ -37,7 +39,12 @@ const make = (type, data = {}, children = []) => ({
       k,
       {
         value,
-        ...((expressionFields.includes(k) || k === 'object') &&
+        ...(['object', 'objects'].includes(k) &&
+        typeof value === 'string' &&
+        value !== ''
+          ? { reference: true }
+          : {}),
+        ...(expressionFields.includes(k) &&
         value &&
         typeof value.expression === 'string'
           ? { expression: true }
@@ -107,6 +114,13 @@ const check = (n, allowed, uri) => {
   for (const [key, property] of Object.entries(n.properties)) {
     if (!allowed.includes(key))
       error(`Unknown ${n.type} field ${key}.`, property, uri);
+    if (
+      hasSettingsReference(property) &&
+      key !== 'object' &&
+      !(n.type === 'javascript' && key === 'objects') &&
+      !expressionFields.includes(key)
+    )
+      error(`${key} does not accept a symbol reference.`, property, uri);
     if (booleans.includes(key) && typeof property.value !== 'boolean')
       error(`${key} must be boolean.`, property, uri);
   }
@@ -257,20 +271,35 @@ export const decodeEventList = (
     }
     for (const [key, nativeKey] of Object.entries(extra[kind])) {
       if (!own(data, key)) continue;
-      const value = data[key];
+      const value =
+        n.properties[key].reference && expressionFields.includes(key)
+          ? { expression: data[key] }
+          : data[key];
       if (kind === 'for_each' && key === 'object') {
-        if (
-          !n.properties[key].expression ||
-          !/^[\p{L}_][\p{L}\p{N}_]*$/u.test(value.expression)
-        )
+        if (!n.properties[key].reference || !isSettingsReferenceName(value))
           error(
             'object requires an unquoted object reference.',
             n.properties[key],
             uri
           );
-        result[nativeKey] = value.expression;
+        result[nativeKey] = value;
+      } else if (kind === 'javascript' && key === 'objects') {
+        if (
+          value !== '' &&
+          (!n.properties[key].reference || !isSettingsReferenceName(value))
+        )
+          error(
+            'objects requires an unquoted object reference, or an empty string for no selection.',
+            n.properties[key],
+            uri
+          );
+        result[nativeKey] = value;
       } else if (expressionFields.includes(key)) {
-        if (typeof value !== 'number' && !n.properties[key].expression)
+        if (
+          typeof value !== 'number' &&
+          !n.properties[key].expression &&
+          !n.properties[key].reference
+        )
           error(`${key} requires a number or expression.`, n, uri);
         result[nativeKey] =
           typeof value === 'number'
@@ -574,11 +603,7 @@ export const encodeEventList = (events, options = {}, uri, depth = 0) => {
                           )
                         : String(value),
                   };
-        } else
-          data[key] =
-            kind === 'for_each' && key === 'object'
-              ? { expression: value }
-              : value;
+        } else data[key] = value;
       });
       if (kind === 'group') {
         const groupColor = [
@@ -736,7 +761,9 @@ export const EVENT_SCHEMAS = Object.fromEntries(
               type: booleans.includes(name)
                 ? 'boolean'
                 : kind === 'for_each' && name === 'object'
-                ? 'unquoted object reference'
+                ? 'object reference'
+                : kind === 'javascript' && name === 'objects'
+                ? 'object reference or empty string'
                 : expressionFields.includes(name)
                 ? 'number or expression'
                 : ['color', 'background'].includes(name)

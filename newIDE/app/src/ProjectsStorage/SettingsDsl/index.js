@@ -6,6 +6,8 @@ import {
   SettingsDslError,
   parseSettingsSyntax,
   printSettingsSyntax,
+  isSettingsReferenceName,
+  hasSettingsReference,
 } from './Syntax';
 import {
   SETTINGS_FILE_SCHEMAS,
@@ -128,6 +130,7 @@ const variableContainerName = key =>
     ? 'scene_variables'
     : 'variables';
 const namedCollections = {
+  behaviors: 'behaviors',
   parameters: 'parameters',
   properties: 'properties',
   propertyDescriptors: 'properties',
@@ -162,6 +165,14 @@ const inventorySchema = descriptor => {
     if (child.repeated && namedCollections[key]) {
       const schema = inventorySchema(child);
       delete schema.fields.name;
+      if (key === 'behaviors') {
+        schema.behaviorConfiguration = true;
+        schema.children.properties = {
+          key: '$properties',
+          source: 'behaviorTypes[type].serializedProperties',
+          schema: record(),
+        };
+      }
       children[namedCollections[key]] = {
         key,
         named: true,
@@ -494,7 +505,38 @@ export const registerLocalSettingsSources = files => {
 const fail = (message, n, fileUri, path, code = 'SETTINGS_INVALID_SCHEMA') => {
   throw new SettingsDslError(code, message, fileUri, n.location || n, path);
 };
-const checkValue = (value, field, n, fileUri, path) => {
+const checkValue = (value, field, n, fileUri, path, sourceValue = false) => {
+  const reference = String(field.type).includes('reference');
+  const array = String(field.type).includes('array');
+  const emptyReference =
+    String(field.type).endsWith('reference or empty string') && value === '';
+  if (reference && !emptyReference) {
+    const items = array ? (Array.isArray(value) ? value : null) : [value];
+    if (
+      !items ||
+      items.some(
+        (v, i) =>
+          !isSettingsReferenceName(v) ||
+          (sourceValue && !(array ? n.items?.[i]?.reference : n.reference))
+      )
+    )
+      fail(
+        `Expected an unquoted ${field.type}.`,
+        n,
+        fileUri,
+        path,
+        'SETTINGS_INVALID_TYPE'
+      );
+    return;
+  }
+  if (sourceValue && hasSettingsReference(n))
+    fail(
+      `Expected ${field.type}, found a symbol reference.`,
+      n,
+      fileUri,
+      path,
+      'SETTINGS_INVALID_TYPE'
+    );
   const type = String(field.type || '').toLowerCase();
   const containsObject = value =>
     Array.isArray(value)
@@ -592,7 +634,7 @@ const checkValue = (value, field, n, fileUri, path) => {
       'MULTIFILE_UNSUPPORTED_VERSION'
     );
 };
-const layoutFields = ['background', 'bounds', 'editor', 'layer', 'instance'];
+const layoutFields = ['background', 'bounds', 'editor', 'layers', 'instances'];
 const isLayout = kind =>
   ['scene', 'prefab', 'prefabVariant', 'externalLayout'].includes(kind);
 const schemaFor = (kind, data) => {
@@ -625,7 +667,47 @@ const effectSchema = (schema, data) => {
   });
   return { ...schema, children };
 };
+// Parameter restrictions refer to types only for object/behavior parameters.
+const contextualReferenceSchema = (schema, data) => {
+  const field = schema.fields.supplementaryInformation;
+  const kind = field?.referenceKindsByType?.[data.type];
+  return kind
+    ? {
+        ...schema,
+        fields: {
+          ...schema.fields,
+          supplementaryInformation: {
+            ...field,
+            type: `${kind} reference or empty string`,
+          },
+        },
+      }
+    : schema;
+};
 const decodeRecord = (n, schema, fileUri, path, locations) => {
+  schema = contextualReferenceSchema(schema, values(n));
+  if (schema.behaviorConfiguration) {
+    const properties = ensureType(registeredBehaviors, values(n).type);
+    if (!properties)
+      fail(
+        `Unknown behavior type ${
+          values(n).type
+        }; register its current schema first.`,
+        n,
+        fileUri,
+        path
+      );
+    schema = {
+      ...schema,
+      children: {
+        ...schema.children,
+        properties: {
+          key: '$properties',
+          schema: behaviorPropertiesSchema(properties),
+        },
+      },
+    };
+  }
   const out = {};
   locations.set(out, { ...n.location, path });
   Object.entries(n.properties).forEach(([key, item]) => {
@@ -654,7 +736,8 @@ const decodeRecord = (n, schema, fileUri, path, locations) => {
       field || scalar(schema.dynamic),
       item,
       fileUri,
-      `${path}.${key}`
+      `${path}.${key}`,
+      true
     );
     Object.defineProperty(out, (field && field.sourceKey) || key, {
       value: item.value,
@@ -710,16 +793,15 @@ const decodeRecord = (n, schema, fileUri, path, locations) => {
               path
             );
           names.add(item.type);
-          return {
-            name: item.type,
-            ...decodeRecord(
-              item,
-              entry.schema.namedEntries.schema,
-              fileUri,
-              `${path}.${child.type}.${item.type}`,
-              locations
-            ),
-          };
+          const decoded = decodeRecord(
+            item,
+            entry.schema.namedEntries.schema,
+            fileUri,
+            `${path}.${child.type}.${item.type}`,
+            locations
+          );
+          decoded[entry.schema.namedEntries.nameField || 'name'] = item.type;
+          return decoded;
         });
       }
       return;
@@ -838,9 +920,45 @@ const decodeRecord = (n, schema, fileUri, path, locations) => {
   });
   if (schema.children.objectGroups && out.objectGroups === undefined)
     out.objectGroups = {};
+  if (schema.behaviorConfiguration && out.$properties) {
+    Object.assign(out, out.$properties);
+    delete out.$properties;
+  }
   return out;
 };
 const encodeRecord = (type, data, schema, fileUri) => {
+  schema = contextualReferenceSchema(schema, data);
+  if (schema.behaviorConfiguration) {
+    const fields = ensureType(registeredBehaviors, data.type);
+    if (!fields)
+      fail(
+        `Unknown behavior type ${
+          data.type
+        }; register its current schema first.`,
+        node(type),
+        fileUri,
+        type
+      );
+    const structural = [
+      ...Object.keys(schema.fields),
+      ...Object.keys(schema.children),
+    ];
+    const properties = omit(data, structural);
+    data = {
+      ...omit(data, Object.keys(properties)),
+      ...(Object.keys(properties).length ? { $properties: properties } : {}),
+    };
+    schema = {
+      ...schema,
+      children: {
+        ...schema.children,
+        properties: {
+          key: '$properties',
+          schema: behaviorPropertiesSchema(fields),
+        },
+      },
+    };
+  }
   const out = node(type);
   const preferred = [
     'formatVersion',
@@ -874,11 +992,12 @@ const encodeRecord = (type, data, schema, fileUri) => {
         else {
           const container = node(childType);
           const names = new Set();
+          const nameField = entry.schema.namedEntries.nameField || 'name';
           value.forEach(item => {
             if (
-              typeof item.name !== 'string' ||
-              !item.name ||
-              names.has(item.name)
+              typeof item[nameField] !== 'string' ||
+              !item[nameField] ||
+              names.has(item[nameField])
             )
               fail(
                 'Duplicate or empty collection member name.',
@@ -886,11 +1005,11 @@ const encodeRecord = (type, data, schema, fileUri) => {
                 fileUri,
                 type
               );
-            names.add(item.name);
+            names.add(item[nameField]);
             container.children.push({
               ...encodeRecord(
-                item.name,
-                omit(item, ['name']),
+                item[nameField],
+                omit(item, [nameField]),
                 entry.schema.namedEntries.schema,
                 fileUri
               ),
@@ -1016,7 +1135,17 @@ const encodeRecord = (type, data, schema, fileUri) => {
         fileUri,
         `${type}.${key}`
       );
-      out.properties[authorKey] = { value };
+      const reference =
+        String(schema.fields[authorKey]?.type || schema.dynamic).includes(
+          'reference'
+        ) && value !== '';
+      out.properties[authorKey] = {
+        value,
+        ...(reference && !Array.isArray(value) ? { reference: true } : {}),
+        ...(reference && Array.isArray(value)
+          ? { items: value.map(value => ({ value, reference: true })) }
+          : {}),
+      };
     }
   });
   return out;
@@ -1069,7 +1198,7 @@ const layoutNodeSchema = {
   ),
   behavior: record(
     {
-      name: scalar('string'),
+      name: scalar('behavior reference'),
       folded: scalar('boolean'),
       muted: scalar('boolean'),
       inherited: scalar('boolean'),
@@ -1110,7 +1239,7 @@ layoutNodeSchema.layer = record(
 layoutNodeSchema.instance = record(
   {
     id: scalar('UUIDv4 string'),
-    object: scalar('string'),
+    object: scalar('object reference'),
     layer: scalar('string'),
     position: vector([2, 3]),
     rotation: {
@@ -1132,10 +1261,20 @@ layoutNodeSchema.instance = record(
   {
     properties: { key: 'properties', schema: record({}, {}, 'value') },
     variables: variableEntry('variables'),
-    behavior: {
+    behaviors: {
       key: 'behaviors',
-      repeated: true,
-      schema: layoutNodeSchema.behavior,
+      named: true,
+      maximum: 1,
+      schema: {
+        ...record(),
+        namedEntries: {
+          nameField: 'name',
+          schema: {
+            ...layoutNodeSchema.behavior,
+            fields: omit(layoutNodeSchema.behavior.fields, ['name']),
+          },
+        },
+      },
     },
   }
 );
@@ -1158,7 +1297,7 @@ export const decodeSettingsDocument = (source, fileUri) => {
     ...root,
     properties: Object.fromEntries(
       Object.entries(root.properties).filter(
-        ([k]) => !isLayout(kind) || !layoutFields.includes(k)
+        ([k]) => !isLayout(kind) || k !== 'background'
       )
     ),
     children: root.children.filter(
@@ -1217,12 +1356,51 @@ export const decodeSettingsDocument = (source, fileUri) => {
     const single = new Set();
     root.children
       .filter(c => layoutFields.includes(c.type))
-      .forEach(c => {
-        if (['bounds', 'editor'].includes(c.type)) {
-          if (single.has(c.type))
-            fail(`Duplicate ${c.type}.`, c, fileUri, root.type);
-          single.add(c.type);
+      .flatMap(c => {
+        if (single.has(c.type))
+          fail(`Duplicate ${c.type}.`, c, fileUri, root.type);
+        single.add(c.type);
+        if (c.type !== 'layers' && c.type !== 'instances') return [c];
+        if (c.type === 'layers') {
+          decodeRecord(
+            { ...c, type: root.type, properties: {}, children: [c] },
+            record(
+              {},
+              { layers: getComponentSettingsSchema(kind).children.layers }
+            ),
+            fileUri,
+            'layers',
+            locations
+          );
+          return c.children.map(child => ({
+            ...child,
+            type: 'layer',
+            properties: {
+              ...child.properties,
+              id: { value: child.type, location: child.location },
+            },
+          }));
         }
+        const entry = 'instance';
+        decodeRecord(
+          c,
+          record(
+            {},
+            {
+              [entry]: {
+                key: c.type,
+                repeated: true,
+                schema: layoutNodeSchema[entry],
+              },
+            }
+          ),
+          fileUri,
+          c.type,
+          locations
+        );
+        return c.children;
+      })
+      .forEach(c => {
         if (c.type === 'bounds')
           layout.layout.bounds = decodeRecord(
             c,
@@ -1346,6 +1524,9 @@ export const serializeSettingsDocument = (kind, payload, layout, fileUri) => {
       root.children.push(
         encodeRecord('editor', layout.editor, layoutNodeSchema.editor, fileUri)
       );
+    const layersNode = node('layers');
+    const instancesNode = node('instances');
+    root.children.push(layersNode, instancesNode);
     (layout.layers || []).forEach(layer => {
       const cameras = (layer.cameras || []).map(camera => {
         const out = { ...camera };
@@ -1365,14 +1546,20 @@ export const serializeSettingsDocument = (kind, payload, layout, fileUri) => {
         ),
         properties: omit(e, ['layer', 'name', 'type', 'enabled', 'folded']),
       }));
-      root.children.push(
-        encodeRecord(
-          'layer',
-          { ...layer, ...(layer.cameras ? { cameras } : {}), effects },
-          layoutNodeSchema.layer,
+      layersNode.children.push({
+        ...encodeRecord(
+          layer.id,
+          {
+            ...omit(layer, ['id']),
+            ...(layer.cameras ? { cameras } : {}),
+            ...(kind !== 'externalLayout' || effects.length ? { effects } : {}),
+          },
+          getComponentSettingsSchema(kind).children.layers.schema.namedEntries
+            .schema,
           fileUri
-        )
-      );
+        ),
+        named: true,
+      });
     });
     (layout.instances || []).forEach(instance => {
       const variables = (variablesByInstance.get(instance.id) || []).map(v =>
@@ -1381,7 +1568,7 @@ export const serializeSettingsDocument = (kind, payload, layout, fileUri) => {
       const behaviors = (behaviorsByInstance.get(instance.id) || []).map(b =>
         omit(b, ['instance'])
       );
-      root.children.push(
+      instancesNode.children.push(
         encodeRecord(
           'instance',
           {
@@ -1411,7 +1598,13 @@ export const toSettingsNodeSchema = inventorySchema;
 export const getSettingsSchemas = () => ({
   roots: ROOTS,
   components: schemas,
-  layout: layoutNodeSchema,
+  layout: {
+    ...layoutNodeSchema,
+    layer: {
+      ...layoutNodeSchema.layer,
+      fields: omit(layoutNodeSchema.layer.fields, ['id']),
+    },
+  },
   variableSchemas: {
     variable: variableSchema,
     variables: variableContainerSchema,
@@ -1426,18 +1619,36 @@ export const getComponentSettingsSchema = (kind, schemaKey) => {
   const children = {
     ...base.children,
     editor: { key: 'editor', schema: layoutNodeSchema.editor },
-    layer: {
+    layers: {
       key: 'layers',
+      named: true,
       repeated: true,
-      schema:
-        kind === 'externalLayout'
-          ? record({ id: scalar('string'), name: scalar('string') })
-          : layoutNodeSchema.layer,
+      schema: {
+        ...record(),
+        namedEntries: {
+          nameField: 'id',
+          schema:
+            kind === 'externalLayout'
+              ? record({ name: scalar('string') })
+              : {
+                  ...layoutNodeSchema.layer,
+                  fields: omit(layoutNodeSchema.layer.fields, ['id']),
+                },
+        },
+      },
     },
-    instance: {
+    instances: {
       key: 'instances',
-      repeated: true,
-      schema: layoutNodeSchema.instance,
+      schema: record(
+        {},
+        {
+          instance: {
+            key: 'instances',
+            repeated: true,
+            schema: layoutNodeSchema.instance,
+          },
+        }
+      ),
     },
   };
   if (kind === 'prefab' || kind === 'prefabVariant')

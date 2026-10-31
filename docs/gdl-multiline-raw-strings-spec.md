@@ -1,6 +1,6 @@
 # GDL 通用多行原始字符串规范
 
-版本说明：本文版本号记录该次变更的历史基线与升级过程，不代表当前版本。当前作者格式为 18，GDL catalog 为 17，instruction catalog 为 7；以 [GDL 当前规范](settings-dsl-spec.md) 及其列出的代码常量为准。
+版本说明：本文版本号记录该次变更的历史基线与升级过程，不代表当前版本。当前作者格式为 19，GDL catalog 为 18，instruction catalog 为 7；以 [GDL 当前规范](settings-dsl-spec.md) 及其列出的代码常量为准。
 
 状态：已实施；按用户确认不去缩进。日期：2026-10-30。
 
@@ -34,7 +34,7 @@ GDL 主要供 AI 阅读和修改，人类进行 review。多行原始字符串�
 ```text
 javascript {
   strict = true
-  objects = "Object"
+  objects = Object
   expanded = true
 
   code = """

@@ -9,7 +9,9 @@ export const parseCatalogInstructionArguments = source => {
   return Object.fromEntries(
     Object.entries(instruction.arguments).map(([key, item]) => [
       key,
-      item.expression === true
+      item.reference === true
+        ? { __settingsReference: true, source: item.value }
+        : item.expression === true
         ? { __settingsExpression: true, source: item.value.expression }
         : item.value,
     ])

@@ -349,7 +349,7 @@ harness.getRenderer();
   test('extracts JavaScript with exact Settings source locations', () => {
     const blocks = collectSourceFileJavaScriptBlocks({
       'game://scenes/Main/Main.gdl':
-        'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins {}\n      }\n\n      javascript {\n        strict = true\n        objects = "Player"\n        expanded = false\n\n        code = """\nconst value = 1;\n\n"""\n      }\n    }\n  }\n}\n',
+        'function {\n\n  events {\n\n    event {\n\n      conditions {\n\n        SceneJustBegins {}\n      }\n\n      javascript {\n        strict = true\n        objects = Player\n        expanded = false\n\n        code = """\nconst value = 1;\n\n"""\n      }\n    }\n  }\n}\n',
     });
     expect(blocks).toEqual([
       expect.objectContaining({
@@ -429,7 +429,7 @@ harness.getRenderer();
       serializedProject,
       sourceFiles: {
         'game://scenes/Main/Main.gdl':
-          'function {\n\n  events {\n\n    javascript {\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code = """\nfor (const player of objects) {\n  player.setX(player.getX() + 1);\n  player.getVariables().get("Health").sub(1);\n  const platformer = player.getBehavior("Platformer");\n  if (platformer) platformer.activate(true);\n}\nruntimeScene.getVariables().get("Score").add(10);\nruntimeScene.getGame().getVariables().get("HighScore").add(10);\nif (runtimeScene.getElapsedTime() < 0) return;\nconst bullet = runtimeScene.createObject("Bullet");\nif (bullet) bullet.addPolarForce(0, 720, 1);\n\n"""\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    javascript {\n      strict = true\n      objects = Player\n      expanded = false\n\n      code = """\nfor (const player of objects) {\n  player.setX(player.getX() + 1);\n  player.getVariables().get("Health").sub(1);\n  const platformer = player.getBehavior("Platformer");\n  if (platformer) platformer.activate(true);\n}\nruntimeScene.getVariables().get("Score").add(10);\nruntimeScene.getGame().getVariables().get("HighScore").add(10);\nif (runtimeScene.getElapsedTime() < 0) return;\nconst bullet = runtimeScene.createObject("Bullet");\nif (bullet) bullet.addPolarForce(0, 720, 1);\n\n"""\n    }\n  }\n}\n',
       },
     });
     expect(validation.errors).toEqual([]);
@@ -443,7 +443,7 @@ harness.getRenderer();
       serializedProject,
       sourceFiles: {
         'game://scenes/Main/Main.gdl':
-          'function {\n\n  events {\n\n    javascript {\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code = """\ngdjs.evtTools.input.requestPointerLock(runtimeScene, "first-person-camera");\nif (gdjs.evtTools.input.isPointerLocked(runtimeScene)) {\n  const movementX = gdjs.evtTools.input.getPointerMovementX(runtimeScene);\n  const movementY = gdjs.evtTools.input.getPointerMovementY(runtimeScene);\n  objects[0].setPosition(movementX, movementY);\n  gdjs.evtTools.input.exitPointerLock(runtimeScene);\n}\nconst hits = gdjs.evtTools.scene3d.raycastObjects(\n  0, 0, 0, 1, 0, 0, objects, 0, 1000, true\n);\nif (hits.length > 0) hits[0].object.setX(hits[0].pointX);\n\n"""\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    javascript {\n      strict = true\n      objects = Player\n      expanded = false\n\n      code = """\ngdjs.evtTools.input.requestPointerLock(runtimeScene, "first-person-camera");\nif (gdjs.evtTools.input.isPointerLocked(runtimeScene)) {\n  const movementX = gdjs.evtTools.input.getPointerMovementX(runtimeScene);\n  const movementY = gdjs.evtTools.input.getPointerMovementY(runtimeScene);\n  objects[0].setPosition(movementX, movementY);\n  gdjs.evtTools.input.exitPointerLock(runtimeScene);\n}\nconst hits = gdjs.evtTools.scene3d.raycastObjects(\n  0, 0, 0, 1, 0, 0, objects, 0, 1000, true\n);\nif (hits.length > 0) hits[0].object.setX(hits[0].pointX);\n\n"""\n    }\n  }\n}\n',
       },
     });
 
@@ -456,7 +456,7 @@ harness.getRenderer();
       serializedProject,
       sourceFiles: {
         'game://scenes/Main/Main.gdl':
-          'function {\n\n  events {\n\n    javascript {\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code = """\nruntimeScene.getObjects("Plaeyr");\nruntimeScene.getLayer("HUD");\nruntimeScene.getVariables().get("Scroe");\nobjects[0].getVariables().get("HP");\nobjects[0].getBehavior("Physics");\n\n"""\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    javascript {\n      strict = true\n      objects = Player\n      expanded = false\n\n      code = """\nruntimeScene.getObjects("Plaeyr");\nruntimeScene.getLayer("HUD");\nruntimeScene.getVariables().get("Scroe");\nobjects[0].getVariables().get("HP");\nobjects[0].getBehavior("Physics");\n\n"""\n    }\n  }\n}\n',
       },
     });
     expect(validation.valid).toBe(false);
@@ -476,7 +476,7 @@ harness.getRenderer();
       serializedProject,
       sourceFiles: {
         'game://scenes/Main/Main.gdl':
-          'function {\n\n  events {\n\n    javascript {\n      strict = true\n      objects = "Player"\n      expanded = false\n\n      code = """\nobjects[0]._behaviorData;\nobjects[0].notAPublicMethod();\nfetch("https://example.com");\n\n"""\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    javascript {\n      strict = true\n      objects = Player\n      expanded = false\n\n      code = """\nobjects[0]._behaviorData;\nobjects[0].notAPublicMethod();\nfetch("https://example.com");\n\n"""\n    }\n  }\n}\n',
       },
     });
     expect(validation.valid).toBe(false);
@@ -498,7 +498,7 @@ harness.getRenderer();
       serializedProject,
       sourceFiles: {
         'game://scenes/Main/Main.gdl':
-          'function {\n\n  events {\n\n    javascript {\n      strict = false\n      objects = "Player"\n      expanded = false\n\n      code = """\nobjects[0]._behaviorData;\n\n"""\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    javascript {\n      strict = false\n      objects = Player\n      expanded = false\n\n      code = """\nobjects[0]._behaviorData;\n\n"""\n    }\n  }\n}\n',
       },
     });
     expect(validation.valid).toBe(true);

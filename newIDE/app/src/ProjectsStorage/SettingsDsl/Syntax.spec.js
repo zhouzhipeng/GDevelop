@@ -68,7 +68,8 @@ test('bare operands preserve strings, arithmetic, comments and parenthesized con
 }`);
   const syntax = parseSettingsSyntax(source.replace(/\n/g, '\r\n'));
   const args = syntax.root.children[0].children[0].arguments;
-  expect(args.first.value.expression).toBe('From');
+  expect(args.first.reference).toBe(true);
+  expect(args.first.value).toBe('From');
   expect(args.second.value.expression).toBe('To + 1');
   expect(args.message.value.expression).toBe('"Score: " + ToString(Score)');
   expect(args.text.value).toBe('https://example.com/}}');
@@ -80,9 +81,7 @@ test('bare operands preserve strings, arithmetic, comments and parenthesized con
 });
 
 test.each([
-  'scene {\n name = From\n}',
   'scene {\n count = Max(1, 2)\n}',
-  instruction('A {\n flags {\n disabled = Flag\n }\n}'),
   instruction('A {\n value = From other = To\n}'),
 ])(
   'restricts expressions to semantic operands and keeps line boundaries: %s',

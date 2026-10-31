@@ -19,6 +19,14 @@ export class SettingsDslError extends Error {
 }
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*/;
+// Symbols are distinct from strings. Namespaces qualify types, not expressions.
+export const SETTINGS_REFERENCE_PATTERN = /^[\p{L}_][\p{L}\p{N}_]*(?:::[\p{L}_][\p{L}\p{N}_]*)*$/u;
+export const isSettingsReferenceName = value =>
+  typeof value === 'string' &&
+  !['true', 'false', 'null', 'NaN', 'Infinity'].includes(value) &&
+  SETTINGS_REFERENCE_PATTERN.test(value);
+export const hasSettingsReference = item =>
+  !!(item.reference || item.items?.some(hasSettingsReference));
 const NUMBER = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/;
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 export const MAX_SETTINGS_DEPTH = 100;
@@ -224,7 +232,9 @@ export const parseSettingsSyntax = (source, fileUri) => {
         } catch (_) {}
         if (continuation || !literal) {
           while (offset < cursor) advance();
-          return { type: 'expression', value: { expression }, location };
+          return isSettingsReferenceName(expression) && !continuation
+            ? { type: 'reference', value: expression, location }
+            : { type: 'expression', value: { expression }, location };
         }
       }
     }
@@ -342,13 +352,15 @@ export const parseSettingsSyntax = (source, fileUri) => {
     const rest = source.slice(offset);
     const match =
       rest.match(NUMBER) ||
-      rest.match(/^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*/);
+      rest.match(/^[\p{L}_][\p{L}\p{N}_]*(?:::[\p{L}_][\p{L}\p{N}_]*)*/u);
     if (!match)
       error(
         'Expected a node, property, or value. Only GDevelop Language (GDL) is supported.'
       );
     for (let i = 0; i < match[0].length; i++) advance();
     const text = match[0];
+    if (['null', 'NaN', 'Infinity'].includes(text))
+      error('Null and non-finite numbers are not supported.', location);
     if (NUMBER.test(text)) {
       const value = Number(text);
       if (
@@ -394,12 +406,24 @@ export const parseSettingsSyntax = (source, fileUri) => {
   const value = depth => {
     if (depth > MAX_SETTINGS_DEPTH)
       error('Settings nesting budget exceeded.', token.location);
-    if (['string', 'number', 'boolean', 'expression'].includes(token.type)) {
+    if (
+      [
+        'string',
+        'number',
+        'boolean',
+        'expression',
+        'reference',
+        'ident',
+      ].includes(token.type)
+    ) {
       const result = token;
       token = next();
       return {
         value: result.value,
         ...(result.type === 'expression' ? { expression: true } : {}),
+        ...(['reference', 'ident'].includes(result.type)
+          ? { reference: true }
+          : {}),
         ...(result.valueOffsets
           ? {
               valueOffsets: result.valueOffsets,
@@ -474,7 +498,16 @@ export const parseSettingsSyntax = (source, fileUri) => {
         consume('=', true);
         if (own(result.arguments, key.value))
           error(`Duplicate argument ${key.value}.`, key.location);
-        if (!['string', 'number', 'boolean', 'expression'].includes(token.type))
+        if (
+          ![
+            'string',
+            'number',
+            'boolean',
+            'expression',
+            'reference',
+            'ident',
+          ].includes(token.type)
+        )
           error('Expected a semantic instruction operand.', token.location);
         const item = value(depth + 1);
         result.arguments[key.value] = { ...item, keyLocation: key.location };
@@ -563,6 +596,8 @@ export const parseSettingsSyntax = (source, fileUri) => {
         } else if (token.type === '{') {
           const namedChild =
             [
+              'layers',
+              'behaviors',
               'parameters',
               'properties',
               'shared_properties',
@@ -726,6 +761,10 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
       lines.push(`${prefix}${delimiter}`);
       if (item.value) lines.push(item.value);
       lines.push(delimiter);
+    } else if (item.reference === true) {
+      if (!isSettingsReferenceName(item.value))
+        throw new Error('Invalid GDL reference name.');
+      lines.push(`${prefix}${item.value}${suffix}`);
     } else if (item.expression === true) {
       const expression = formatSettingsExpression(item.value.expression);
       lines.push(`${prefix}${expression}${suffix}`);
@@ -766,7 +805,9 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
       if (!multiline) {
         lines.push(
           `${prefix}[${items
-            .map(entry => JSON.stringify(entry.value))
+            .map(entry =>
+              entry.reference ? entry.value : JSON.stringify(entry.value)
+            )
             .join(', ')}]${suffix}`
         );
         return;

@@ -1,6 +1,6 @@
 # 系统指令固定短名与 project.gdl 项目入口
 
-版本说明：本文版本号记录该次变更的历史基线与升级过程，不代表当前版本。当前作者格式为 18，GDL catalog 为 17，instruction catalog 为 7；以 [GDL 当前规范](settings-dsl-spec.md) 及其列出的代码常量为准。
+版本说明：本文版本号记录该次变更的历史基线与升级过程，不代表当前版本。当前作者格式为 19，GDL catalog 为 18，instruction catalog 为 7；以 [GDL 当前规范](settings-dsl-spec.md) 及其列出的代码常量为准。
 
 - 状态：用户已批准，代码与作者文档已实施；桌面构建/启动由后台脚本单独执行。
 - 日期：2026-10-27。

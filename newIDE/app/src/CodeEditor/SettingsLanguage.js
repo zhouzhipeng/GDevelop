@@ -17,6 +17,7 @@ import {
   parseSettingsSyntax,
   formatSettingsDsl,
   getSettingsSchemas,
+  getComponentSettingsSchema,
 } from '../ProjectsStorage/SettingsDsl';
 
 import { decodeVariableContainer } from '../ProjectsStorage/SettingsDsl/Variables';
@@ -97,18 +98,42 @@ export const getSettingsVariableCompletions = (
   if (
     !frame.variableRole &&
     parent &&
-    ['parameters', 'properties', 'shared_properties'].includes(parent.name)
+    ['parameters', 'properties', 'shared_properties', 'behaviors'].includes(
+      parent.name
+    )
   ) {
     const schemas = getSettingsSchemas();
     const owner = stack[stack.length - 3];
     const kind =
       owner &&
       Object.keys(schemas.roots).find(key => schemas.roots[key] === owner.name);
-    const entry = kind ? schemas.components[kind]?.children[parent.name] : null;
+    const entry =
+      owner?.name === 'instance'
+        ? schemas.layout.instance.children[parent.name]
+        : kind
+        ? schemas.components[kind]?.children[parent.name]
+        : null;
     if (entry?.named)
       return Object.keys(entry.schema.namedEntries.schema.fields)
         .filter(name => !frame.fields.has(name))
-        .map(name => field(name, `${name} = "\${1:Value}"`));
+        .map(name => {
+          const descriptor = entry.schema.namedEntries.schema.fields[name];
+          const type = (frame.containerType || '').replace(/^"|"$/g, '');
+          const reference = descriptor.referenceKindsByType?.[type];
+          return field(
+            name,
+            reference
+              ? `${name} = \${1:Type}`
+              : String(descriptor.type).includes('reference')
+              ? `${name} = \${1:Symbol}`
+              : `${name} = "\${1:Value}"`
+          );
+        })
+        .concat(
+          Object.keys(entry.schema.namedEntries.schema.children)
+            .filter(name => !frame.fields.has(`@${name}`))
+            .map(name => field(name, `${name} {\n  $0\n}`))
+        );
   }
   if (frame.variableRole === 'descriptor') {
     const fields = [
@@ -214,17 +239,29 @@ export const getSettingsVariableCompletions = (
     frame.name === 'instance'
       ? schemas.layout.instance
       : kind
-      ? schemas.components[kind]
+      ? getComponentSettingsSchema(kind)
       : null;
   if (!schema) return eventSuggestions;
   return [
+    ...Object.entries(schema.fields)
+      .filter(
+        ([name, descriptor]) =>
+          !frame.fields.has(name) &&
+          String(descriptor.type).includes('reference')
+      )
+      .map(([name, descriptor]) =>
+        field(name, `${name} = \${1:Symbol}`, descriptor.type)
+      ),
     ...Object.keys(schema.children)
       .filter(
         name =>
           [
+            'layers',
+            'instances',
             'variables',
             'global_variables',
             'scene_variables',
+            'behaviors',
             'parameters',
             'properties',
             'shared_properties',
@@ -245,7 +282,9 @@ export const registerSettingsLanguage = (monaco: any) => {
     extensions: ['.gdl'],
     aliases: ['GDevelop Language', 'GDL'],
   });
-  monaco.languages.setMonarchTokensProvider(language, {
+  const monarchDefinition = {
+    // Monarch otherwise starts in the first declared state (raw).
+    start: 'root',
     tokenizer: {
       raw: [
         [
@@ -267,11 +306,23 @@ export const registerSettingsLanguage = (monaco: any) => {
         [/-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/, 'number'],
         [/[A-Za-z_][A-Za-z0-9_]*(?=\s*\{)/, 'type.identifier'],
         [/[A-Za-z_][A-Za-z0-9_]*(?=\s*=)/, 'identifier'],
+        [
+          /[A-Za-z_\u0080-\uffff][A-Za-z0-9_\u0080-\uffff]*(?:::[A-Za-z_\u0080-\uffff][A-Za-z0-9_\u0080-\uffff]*)*/,
+          'type.identifier',
+        ],
         [/[{}[\]]/, '@brackets'],
         [/[=,]/, 'delimiter'],
       ],
     },
+  };
+  // Popped-out windows use a separate Monaco realm. Regex strings avoid its
+  // instanceof RegExp check rejecting expressions created in the main window.
+  Object.keys(monarchDefinition.tokenizer).forEach(state => {
+    monarchDefinition.tokenizer[state].forEach(rule => {
+      rule[0] = rule[0].source;
+    });
   });
+  monaco.languages.setMonarchTokensProvider(language, monarchDefinition);
   monaco.languages.setLanguageConfiguration(language, {
     comments: { lineComment: '//' },
     brackets: [['{', '}'], ['[', ']']],

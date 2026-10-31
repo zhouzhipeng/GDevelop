@@ -1,6 +1,6 @@
 # GDevelop Language (GDL) 变量语法
 
-作者格式 18，GDL catalog 17，instruction catalog 7。完整契约见 [递归变量描述节点](gdl-uniform-variable-descriptors-spec.md)。
+作者格式 22，GDL catalog 21，instruction catalog 7。完整契约见 [递归变量描述节点](gdl-uniform-variable-descriptors-spec.md)。
 
 所有变量放在 variables 具名集合，名称作为节点名，每个描述节点的 type 必填；不重复 name，不输出 ID。
 
@@ -58,4 +58,4 @@ variables {
 - 普通 owner 使用 variables；Extension 双作用域使用 global_variables/scene_variables；实例和事件局部变量使用相同契约。
 - 根变量和数组顺序以当前模型为准；结构成员保留作者顺序，包括数字名称。模型保存时恢复可匹配的结构成员顺序。
 
-只接受作者格式 18，不提供兼容读取、迁移或双写。
+只接受作者格式 22，不提供兼容读取、迁移或双写。

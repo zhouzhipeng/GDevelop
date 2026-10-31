@@ -26,7 +26,7 @@ describe('GDevelop Language (GDL) authoring catalogs', () => {
     });
   test('publishes the same strict node schemas used by the current parser', () => {
     const catalog = catalogFor(project);
-    expect(catalog.formatVersion).toBe(17);
+    expect(catalog.formatVersion).toBe(21);
     expect(catalog.layoutNodes.map(entry => entry.node)).toEqual(
       expect.arrayContaining([
         'editor',
@@ -38,6 +38,9 @@ describe('GDevelop Language (GDL) authoring catalogs', () => {
       ])
     );
     expect(catalog.counts.layoutNodes).toBe(catalog.layoutNodes.length);
+    expect(
+      catalog.layoutNodes.find(entry => entry.node === 'layer').fields.id
+    ).toBeUndefined();
     const assertCurrentSchema = value => {
       if (!value || typeof value !== 'object') return;
       Object.entries(value).forEach(([key, child]) => {

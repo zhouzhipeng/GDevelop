@@ -1,7 +1,7 @@
 // @noflow
 // Shared authoring field inventory. SettingsDsl converts these descriptors to
 // strict node schemas; catalogs publish the same schemas used by the parser.
-export const SETTINGS_FORMAT_VERSION = 18;
+export const SETTINGS_FORMAT_VERSION = 22;
 const MULTI_FILE_FORMAT_VERSION = SETTINGS_FORMAT_VERSION;
 const MULTI_FILE_ENTRY_URI = 'game://project.gdl';
 const SCENE_LIFECYCLE_SOURCES = [
@@ -71,7 +71,7 @@ const objectGroupsNode = (prefix: string = ''): Object => ({
   optional: true,
   dynamicFields: {
     key: 'unique object-group name',
-    value: 'ordered string array of existing object names',
+    value: 'object reference array',
   },
 });
 
@@ -80,7 +80,7 @@ const objectGroupRequiredBehaviorsNode = (prefix: string = ''): Object => ({
   optional: true,
   dynamicFields: {
     key: `object-group name also present in ${prefix}objectGroups`,
-    value: 'ordered string array of registered behavior types',
+    value: 'behavior type reference array',
   },
 });
 
@@ -89,7 +89,7 @@ const quickCustomizationNode = (prefix: string): Object => ({
   optional: true,
   dynamicFields: {
     key: 'serialized property name',
-    value: 'enum: default, visible, or hidden',
+    value: 'enum: default, visible, hidden',
   },
 });
 
@@ -98,7 +98,7 @@ const attachedBehaviorNode = {
   repeated: true,
   fields: [
     settingsField('name', 'unique object-local string', { required: true }),
-    settingsField('type', 'registered behaviorTypes[].type', {
+    settingsField('type', 'behavior type reference', {
       required: true,
     }),
     settingsField('isFolded', 'boolean', { default: false }),
@@ -250,7 +250,14 @@ const functionSchema = ({ folder, extensionRequired }: Object): Object => ({
       ],
       fields: [
         settingsField('type', 'value type string', { required: true }),
-        settingsField('supplementaryInformation', 'string'),
+        settingsField('supplementaryInformation', 'string', {
+          referenceKindsByType: {
+            object: 'object type',
+            objectList: 'object type',
+            objectPtr: 'object type',
+            behavior: 'behavior type',
+          },
+        }),
         settingsField('optional', 'boolean', { default: false }),
         settingsField('defaultValue', 'string'),
       ],
@@ -263,7 +270,14 @@ const functionSchema = ({ folder, extensionRequired }: Object): Object => ({
         settingsField('type', 'parameter value type string', {
           required: true,
         }),
-        settingsField('supplementaryInformation', 'string'),
+        settingsField('supplementaryInformation', 'string', {
+          referenceKindsByType: {
+            object: 'object type',
+            objectList: 'object type',
+            objectPtr: 'object type',
+            behavior: 'behavior type',
+          },
+        }),
         settingsField('optional', 'boolean', { default: false }),
         settingsField('defaultValue', 'string'),
         settingsField('description', 'string', { required: true }),
@@ -311,7 +325,7 @@ const objectSettingsSchema = {
       folder: true,
       name: true,
     }),
-    settingsField('type', 'registered objectTypes[].type', { required: true }),
+    settingsField('type', 'object type reference', { required: true }),
     settingsField('persistentUuid', 'lowercase UUIDv4 string'),
     settingsField('assetStoreId', 'string'),
     settingsField('resourcesPreloading', 'string'),
@@ -610,7 +624,7 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
           settingsField('name', 'unique scene-local string', {
             required: true,
           }),
-          settingsField('type', 'registered behaviorTypes[].type', {
+          settingsField('type', 'behavior type reference', {
             required: true,
           }),
           settingsField('quickCustomizationVisibility', 'enum', {
@@ -773,7 +787,7 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
       settingsField('previewIconUrl', 'string'),
       settingsField('iconUrl', 'string'),
       settingsField('helpPath', 'string'),
-      settingsField('objectType', 'registered object type or empty string'),
+      settingsField('objectType', 'object type reference or empty string'),
       settingsField('quickCustomizationVisibility', 'enum', {
         values: ['default', 'visible', 'hidden'],
       }),

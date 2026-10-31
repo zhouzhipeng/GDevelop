@@ -242,9 +242,9 @@ test('extensions and instances use the same recursive variable contract', () => 
   ).toEqual(parsed.payload);
   const instance = decodeSettingsDocument(
     scene(
-      `layer {\n id = "base"\n name = ""\n}\ninstance {\n id = "ef3ef49d-f20f-4450-b373-0ce43291a002"\n object = "Player"\n layer = "base"\n position = [0,0]\n${variables(
+      `layers {\n base {\n  name = ""\n}\n}\ninstances {\n  instance {\n   id = "ef3ef49d-f20f-4450-b373-0ce43291a002"\n   object = Player\n   layer = "base"\n   position = [0,0]\n  ${variables(
         complex('Data', 'structure', '', 'folded = false')
-      )}\n}`
+      )}\n  }\n}`
     )
   );
   expect(

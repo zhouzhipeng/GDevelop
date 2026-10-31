@@ -58,6 +58,7 @@ export type Props = {|
    * run inside an async function, so top-level `await` is allowed).
    */
   suppressedDiagnosticsMessages?: Array<string>,
+  readOnly?: boolean,
   language?: 'javascript' | 'typescript' | 'gdevelop-gdl',
   modelPath?: string,
   extraLibraries?: Array<CodeEditorExtraLibrary>,
@@ -77,6 +78,7 @@ export const CodeEditor = ({
   onFocus,
   onBlur,
   suppressedDiagnosticsMessages,
+  readOnly = false,
   language = 'javascript',
   modelPath,
   extraLibraries = [],
@@ -300,6 +302,7 @@ export const CodeEditor = ({
         onFocus={onFocus}
         onBlur={onBlur}
         suppressedDiagnosticsMessages={suppressedDiagnosticsMessages}
+        readOnly={readOnly}
         language={language}
         modelPath={modelPath}
         extraLibraries={extraLibraries}
@@ -347,6 +350,7 @@ export const CodeEditor = ({
         editorWillUnmount={_saveEditorState}
         options={{
           ...baseEditorOptions,
+          readOnly,
           fontSize: preferences.eventsSheetZoomLevel,
         }}
       />

@@ -90,26 +90,27 @@ The behavior property uses the resource `name`, not the file path.
 Add one behavior record to the model object's `.gdl` file. Initialize all
 properties listed by the current GDL catalog. A typical record is:
 
-```settings
-behavior {
-  name = "SpringBones"
-  type = "SpringBoneDynamics::SpringBone3DBehavior"
+```text
+behaviors {
+  SpringBones {
+    type = SpringBoneDynamics::SpringBone3DBehavior
 
-  properties {
-    backendPreference = "WebGPUPreferred"
-    blendWeight = 1
-    configurationResource = "HeroSpringBones"
-    enabled = true
-    gravityScale = 1
-    maxSubsteps = 6
-    movementInertia = 1
-    rotationInertia = 1
-    simulationFrequency = 120
-    teleportAngle = 90
-    teleportDistance = 300
-    windX = 0
-    windY = 0
-    windZ = 0
+    properties {
+      backendPreference = "WebGPUPreferred"
+      blendWeight = 1
+      configurationResource = "HeroSpringBones"
+      enabled = true
+      gravityScale = 1
+      maxSubsteps = 6
+      movementInertia = 1
+      rotationInertia = 1
+      simulationFrequency = 120
+      teleportAngle = 90
+      teleportDistance = 300
+      windX = 0
+      windY = 0
+      windZ = 0
+    }
   }
 }
 ```

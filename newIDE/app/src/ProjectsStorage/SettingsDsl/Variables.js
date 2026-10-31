@@ -4,6 +4,7 @@ import {
   MAX_SETTINGS_DEPTH,
   parseSettingsSyntax,
   printSettingsSyntax,
+  hasSettingsReference,
 } from './Syntax';
 
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
@@ -97,9 +98,9 @@ export const decodeVariableNode = (
       path
     );
   for (const item of Object.values(node.properties))
-    if (item.expression)
+    if (item.expression || hasSettingsReference(item))
       fail(
-        'Expressions are not allowed in variable declarations.',
+        'Expressions and symbol references are not allowed in variable declarations.',
         item,
         fileUri,
         path

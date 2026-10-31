@@ -1,6 +1,6 @@
 # GDL 递归变量描述节点
 
-状态：用户已批准并实施。当前作者格式 18，GDL catalog 17，instruction catalog 7。
+状态：用户已批准并实施。当前作者格式 22，GDL catalog 21，instruction catalog 7。
 
 本契约替代格式 17 的 json 复杂值和 metadata JSON Pointer 映射。当前语法摘要与完整示例见 [变量语法](settings-dsl-variable-values-spec.md)。
 

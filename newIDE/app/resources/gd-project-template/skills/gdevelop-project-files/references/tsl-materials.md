@@ -482,20 +482,21 @@ own `.gdl` file, not in the layout subtree. Use the current
 `gdl-catalog.json` entry for exact field casing and required fields. A
 conceptual record is:
 
-```settings
-behavior {
-  name = "TSLMaterial"
-  type = "TSLMaterial::Material"
+```text
+behaviors {
+  TSLMaterial {
+    type = TSLMaterial::Material
 
-  properties {
-    material = "Hologram"
-    bindingName = "Default"
-    selectorMode = "MeshAndMaterialName"
-    meshName = "Body"
-    materialName = "BodyMaterial"
-    priority = 0
-    enabled = true
-    fallback = "KeepOriginal"
+    properties {
+      material = "Hologram"
+      bindingName = "Default"
+      selectorMode = "MeshAndMaterialName"
+      meshName = "Body"
+      materialName = "BodyMaterial"
+      priority = 0
+      enabled = true
+      fallback = "KeepOriginal"
+    }
   }
 }
 ```

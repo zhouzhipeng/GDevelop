@@ -6,7 +6,7 @@ import {
   validateInstructionSemantics,
 } from '../../EventsSemantics/InstructionSemanticsRegistry';
 
-import { formatSettingsExpression } from './Syntax';
+import { formatSettingsExpression, isSettingsReferenceName } from './Syntax';
 import { parseCatalogInstructionArguments } from './InstructionOperands';
 import { createBehaviorPropertySyntax } from './BehaviorPropertySyntax';
 import { buildCompleteProjectInstructionCatalog } from '../../Mcp/McpEventKnowledge';
@@ -121,13 +121,13 @@ const isExpressionOperand = (value: any): boolean =>
   !!(
     value &&
     typeof value === 'object' &&
-    value.__settingsExpression === true &&
+    (value.__settingsExpression === true ||
+      value.__settingsReference === true) &&
     typeof value.source === 'string'
   );
 
 const isReferenceParameter = parameter =>
   parameter.valueKind === 'object' || parameter.valueKind === 'behavior';
-const REFERENCE_NAME = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 
 const assertSemanticValue = (
   value: any,
@@ -142,7 +142,11 @@ const assertSemanticValue = (
     );
   }
   if (isReferenceParameter(parameter)) {
-    if (!isExpressionOperand(value) || !REFERENCE_NAME.test(value.source))
+    if (
+      !value ||
+      value.__settingsReference !== true ||
+      !isSettingsReferenceName(value.source)
+    )
       fail(
         'SETTINGS_OPERAND_TYPE_MISMATCH',
         `${label} requires an unquoted ${valueKind} reference.`
@@ -302,7 +306,7 @@ const formatSemanticValue = (
     }
     case 'object':
     case 'behavior':
-      if (!REFERENCE_NAME.test(source))
+      if (!isSettingsReferenceName(source))
         return fail(
           'SETTINGS_PARAMETER_UNREPRESENTABLE',
           `${label} cannot be represented as an unquoted reference.`

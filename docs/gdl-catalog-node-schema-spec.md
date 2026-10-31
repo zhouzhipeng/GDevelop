@@ -1,6 +1,6 @@
 # GDL catalog 节点 schema 清理
 
-版本说明：本文版本号记录该次变更的历史基线与升级过程，不代表当前版本。当前作者格式为 18，GDL catalog 为 17，instruction catalog 为 7；以 [GDL 当前规范](settings-dsl-spec.md) 及其列出的代码常量为准。
+版本说明：本文版本号记录该次变更的历史基线与升级过程，不代表当前版本。当前作者格式为 19，GDL catalog 为 18，instruction catalog 为 7；以 [GDL 当前规范](settings-dsl-spec.md) 及其列出的代码常量为准。
 
 状态：已批准并实施；仅修改生成 catalog 契约，不修改 GDL 作者语法。
 

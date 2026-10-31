@@ -78,7 +78,7 @@ JavaScript is embedded in the current GDL event form:
 ```text
 javascript {
   strict = true
-  objects = "Enemy"
+  objects = Enemy
   code = """
     for (const enemy of objects) {
       enemy.setOpacity(128);
@@ -554,7 +554,7 @@ For:
 
 ```text
 javascript {
-  objects = "Enemy"
+  objects = Enemy
   code = """
 """
 }
@@ -926,7 +926,7 @@ event {
   }
   javascript {
     strict = true
-    objects = "Enemy"
+    objects = Enemy
     code = """
       for (const enemy of objects) {
         enemy.setOpacity(128);

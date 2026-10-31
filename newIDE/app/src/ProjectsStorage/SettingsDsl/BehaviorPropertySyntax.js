@@ -71,8 +71,8 @@ export const createBehaviorPropertySyntax = (catalog, fail) => {
         );
     }
     const lowered = {
-      object: { __settingsExpression: true, source: 'Object' },
-      behavior: { __settingsExpression: true, source: 'Behavior' },
+      object: { __settingsReference: true, source: 'Object' },
+      behavior: { __settingsReference: true, source: 'Behavior' },
       ...args,
     };
     delete lowered.name;

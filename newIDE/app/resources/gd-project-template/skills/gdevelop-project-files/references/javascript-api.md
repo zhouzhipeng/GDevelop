@@ -65,7 +65,7 @@ events {
 
   javascript {
     strict = true
-    objects = "Enemy"
+    objects = Enemy
     expanded = false
 
     code = """
@@ -234,7 +234,7 @@ events {
 
     javascript {
       strict = true
-      objects = "Enemy"
+      objects = Enemy
       expanded = false
 
       code = """

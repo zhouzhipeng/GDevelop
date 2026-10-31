@@ -1,9 +1,9 @@
 # 统一 GDevelop Language (GDL)：函数、事件与 JavaScript 作者格式规范
 
-- 状态：已实施。当前作者格式 18；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
+- 状态：已实施。当前作者格式 22；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
 - 更新日期：2026-10-31。
 - 决策依据：函数声明和事件正文合入同一个 `.gdl` 文件；只保留 GDevelop Language (GDL)，不考虑任何作者格式兼容性。
-- 当前作者格式：18。GDL catalog 版本：17；instruction catalog 版本：7，发布本文的新指令结构契约。
+- 当前作者格式：19。GDL catalog 版本：18；instruction catalog 版本：7，发布本文的新指令结构契约。
 - 运行时边界：仍投影到 GDevelop 原生事件模型与代码生成器；不重新定义对象 picking、事件调度或表达式求值。
 
 文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdl`，`constants.toml` 和 JavaScript 测试文件保持各自格式。当前格式不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
@@ -295,7 +295,7 @@ actions {
 }
 ```
 
-SomeCondition/SomeAction 为示意 catalog 类型，不是新增别名。简单指令可保持一行；标记放在嵌套 flags 块内，不和具名参数共享命名空间，避免 disabled 等参数重名冲突。
+SomeCondition/SomeAction 为示意 catalog 类型，不是新增别名。只有空指令块可保持一行，非空指令必须多行；标记放在嵌套 flags 块内，不和具名参数共享命名空间，避免 disabled 等参数重名冲突。
 
 - 条件允许 disabled、inverted；动作允许 disabled、awaited。
 - 无异步能力的动作写 awaited=true 报错。
@@ -304,7 +304,7 @@ SomeCondition/SomeAction 为示意 catalog 类型，不是新增别名。简单�
 - `or` 是 catalog 中原生 `Or` 条件的固定作者名称，保留原生 picking 和子指令结构；不展开成多个事件，也不提供 if/do 语法。
 - 子指令顺序及标记无损投影原生 subInstructions。
 
-参数采用语义值：object/behavior 为不加引号的名称引用（禁止带引号字符串或计算表达式）；text/variable/resource/name 为字符串，number/boolean 为字面量，计算值直接书写表达式。code-only 参数不写；必需参数缺失报错；可选空槽由 catalog 明确默认规则投影。隐藏/废弃但确需无损保留的指令通过专用 catalog 登记，不允许新作者任意使用。
+参数采用语义值：object/behavior 为独立的裸符号引用（与配置中的对象、对象类型、行为类型引用一致）（禁止带引号字符串或计算表达式）；text/variable/resource/name 为字符串，number/boolean 为字面量，计算值直接书写表达式。code-only 参数不写；必需参数缺失报错；可选空槽由 catalog 明确默认规则投影。隐藏/废弃但确需无损保留的指令通过专用 catalog 登记，不允许新作者任意使用。
 
 ## 8. Else 分支
 
@@ -575,7 +575,7 @@ Link 继承调用者生命周期、条件选择和可见作用域。外部片段
 ```text
 javascript {
   strict = true
-  objects = "Enemy"
+  objects = Enemy
   expanded = false
   code = """
     const score = runtimeScene.getVariables().get("Score").getAsNumber();
@@ -592,7 +592,7 @@ javascript {
 
 JavaScript 是叶事件，允许公共事件标记及 strict、objects、expanded、code。code 是必需的 string 属性，与 comment.text、description 等所有字符串字段一样，同时接受普通 JSON 字符串和多行原始字符串。禁止旧 code 子节点。空代码用独占行的开始与结束标记表示，不要求 JS 语句。
 
-strict/objects/expanded 分别映射 useStrict/parameterObjects/eventsSheetExpanded。strict 缺省按原生 false 映射，新建模板显式写 true。objects 保持原生字符串契约。对象、局部变量不自动成为 JS 同名变量，实际绑定与 picking 桥接来自真实 JS 事件 API 和生成声明。脚本能力、引用和作用域仍须项目校验。
+strict/objects/expanded 分别映射 useStrict/parameterObjects/eventsSheetExpanded。strict 缺省按原生 false 映射，新建模板显式写 true。objects 非空时使用对象或对象组裸引用，空字符串仅表示不传入对象选择；编译后仍投影原生 parameterObjects 字符串。对象、局部变量不自动成为 JS 同名变量，实际绑定与 picking 桥接来自真实 JS 事件 API 和生成声明。脚本能力、引用和作用域仍须项目校验。
 
 ### 13.2 多行原始字符串边界
 
@@ -746,7 +746,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 ## 20. 后续优化的边界
 
-事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 7；GDL 作者格式为 18，GDL catalog 为 17。静态摘要不改变原生执行行为，也不代替运行验证。
+事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 7；GDL 作者格式为 19，GDL catalog 为 18。静态摘要不改变原生执行行为，也不代替运行验证。
 
 
 picking 可视化、行为相关 diff 和按 AST 的安全块移动是推荐编辑器能力，可独立迭代；不能将它们未完成视为可改变基础语法的理由。实现基础格式时至少保留精确 AST 和语义位置，使后续工具无需重新解析另一套正文语言。
