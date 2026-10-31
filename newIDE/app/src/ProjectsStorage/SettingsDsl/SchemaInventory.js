@@ -636,7 +636,6 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
     rootFields: [
       ...formatFields({ kind: 'externalEvents', name: true }),
       settingsField('description', 'string'),
-      settingsField('eventsLogic', 'string'),
     ],
     childNodes: [],
   },

@@ -6,6 +6,7 @@ import {
   validateInstructionSemantics,
 } from '../../EventsSemantics/InstructionSemanticsRegistry';
 
+import { formatSettingsExpression } from './Syntax';
 import { parseCatalogInstructionArguments } from './InstructionOperands';
 import { createBehaviorPropertySyntax } from './BehaviorPropertySyntax';
 import { buildCompleteProjectInstructionCatalog } from '../../Mcp/McpEventKnowledge';
@@ -124,6 +125,10 @@ const isExpressionOperand = (value: any): boolean =>
     typeof value.source === 'string'
   );
 
+const isReferenceParameter = parameter =>
+  parameter.valueKind === 'object' || parameter.valueKind === 'behavior';
+const REFERENCE_NAME = /^[\p{L}_][\p{L}\p{N}_]*$/u;
+
 const assertSemanticValue = (
   value: any,
   parameter: CatalogParameter,
@@ -136,11 +141,19 @@ const assertSemanticValue = (
       `${label} has no semantic valueKind.`
     );
   }
+  if (isReferenceParameter(parameter)) {
+    if (!isExpressionOperand(value) || !REFERENCE_NAME.test(value.source))
+      fail(
+        'SETTINGS_OPERAND_TYPE_MISMATCH',
+        `${label} requires an unquoted ${valueKind} reference.`
+      );
+    return;
+  }
   if (isExpressionOperand(value)) {
     if (valueKind !== 'text' && valueKind !== 'number') {
       fail(
         'SETTINGS_EXPRESSION_NOT_ALLOWED',
-        `${label} does not accept {{...}}; expected ${valueKind}.`
+        `${label} does not accept expressions; expected ${valueKind}.`
       );
     }
     if (!value.source.trim()) {
@@ -257,7 +270,7 @@ const formatSemanticValue = (
           `${label} contains an empty text expression.`
         );
       }
-      return `{{ ${trimmed} }}`;
+      return formatSettingsExpression(trimmed);
     }
     case 'number': {
       const trimmed = source.trim();
@@ -273,7 +286,7 @@ const formatSemanticValue = (
           `${label} contains an empty numeric expression.`
         );
       }
-      return `{{ ${trimmed} }}`;
+      return formatSettingsExpression(trimmed);
     }
     case 'boolean': {
       const value = parseBooleanParameter(source, parameter.type);
@@ -289,6 +302,12 @@ const formatSemanticValue = (
     }
     case 'object':
     case 'behavior':
+      if (!REFERENCE_NAME.test(source))
+        return fail(
+          'SETTINGS_PARAMETER_UNREPRESENTABLE',
+          `${label} cannot be represented as an unquoted reference.`
+        );
+      return source;
     case 'variable':
     case 'resource':
     case 'name':
@@ -585,7 +604,7 @@ export const createCatalogInstructionResolver = (
       if (argument !== undefined) {
         try {
           return lowerSemanticValue(
-            isExpressionOperand(argument)
+            isExpressionOperand(argument) && !isReferenceParameter(parameter)
               ? {
                   ...argument,
                   source: propertySyntax.lowerExpression(

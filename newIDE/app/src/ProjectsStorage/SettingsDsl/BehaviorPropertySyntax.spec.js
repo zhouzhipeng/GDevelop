@@ -92,18 +92,18 @@ test('behavior context supports canonical, encoded, and absolute paths', () => {
 test.each([
   ['name="Height" value=12', ['Object', 'Behavior', '=', '12']],
   [
-    'name="Height" modification_sign="+" value={{2 + Height}}',
+    'name="Height" modification_sign="+" value=2 + Height',
     ['Object', 'Behavior', '+', '2 + Height'],
   ],
   ['name="Title" value="Hello"', ['Object', 'Behavior', '=', '"Hello"']],
   [
-    'name="Title" value={{Title + "!"}}',
+    'name="Title" value=Title + "!"',
     ['Object', 'Behavior', '=', 'Title + "!"'],
   ],
   ['name="Fresh" value=false', ['Object', 'Behavior', 'no']],
   ['name="Fresh" value=true', ['Object', 'Behavior', 'yes']],
   [
-    'name="Height" object="Other" behavior="OtherFollow" value=3',
+    'name="Height" object=Other behavior=OtherFollow value=3',
     ['Other', 'OtherFollow', '=', '3'],
   ],
 ])('lowers typed setter %s', (source, parameters) => {
@@ -112,7 +112,7 @@ test.each([
 
 test('conditions, flags, nested events and loop expressions round trip', () => {
   const events = compile(`repeat {
-    count = {{max(1, Height)}}
+    count = max(1, Height)
     conditions {
       getProperty { name="Fresh"
  flags {
@@ -130,7 +130,7 @@ disabled = true
 } } }
     event { actions { setProperty {
   name = "Height"
-  value = {{ Height + 1 }}
+  value = Height + 1
 } } }
   }`);
   expect(events[0].repeatExpression).toBe('max(1, Height)');
@@ -157,10 +157,7 @@ test.each([
     'setProperty {\n  name = "Missing"\n  value = 1\n}',
     'Unknown action property',
   ],
-  [
-    'setProperty {\n  name = {{ "Height" }}\n  value = 1\n}',
-    'literal identifier',
-  ],
+  ['setProperty {\n  name = Height\n  value = 1\n}', 'literal identifier'],
   ['setProperty {\n  name = "Height"\n  value = "12"\n}', 'semantic number'],
   ['setProperty {\n  name = "Fresh"\n  value = "false"\n}', 'semantic boolean'],
   ['setProperty {\n  name = "Fresh"\n}', 'requires value'],
@@ -173,15 +170,15 @@ test.each([
     'has no parameter',
   ],
   [
-    'setProperty {\n  name = "Height"\n  value = {{ getProperty(name="Fresh") }}\n}',
+    'setProperty {\n  name = "Height"\n  value = getProperty(name="Fresh")\n}',
     'no longer supported',
   ],
   [
-    'setProperty {\n  name = "Height"\n  value = {{ getProperty(name="Missing") }}\n}',
+    'setProperty {\n  name = "Height"\n  value = getProperty(name="Missing")\n}',
     'no longer supported',
   ],
   [
-    'setProperty {\n  name = "Height"\n  value = {{ getProperty(name="Height" extra=1) }}\n}',
+    'setProperty {\n  name = "Height"\n  value = getProperty(name="Height" extra=1)\n}',
     'no longer supported',
   ],
 ])('rejects invalid property access %s', (source, message) => {
@@ -206,7 +203,7 @@ test('rejects aliases outside behavior scope and reports source location', () =>
 test('does not rewrite quoted text or similarly named member calls', () => {
   const expression = '"getProperty(name=\\"Missing\\")" + Title';
   expect(
-    action(`setProperty { name="Title" value={{${expression}}} }`).parameters[3]
+    action(`setProperty { name="Title" value=${expression} }`).parameters[3]
   ).toBe('"getProperty(name=\\"Missing\\")" + Title');
   expect(
     options.resolveInstruction.resolvePropertyExpression(
@@ -224,7 +221,7 @@ test('does not rewrite quoted text or similarly named member calls', () => {
 
 test('native instruction names remain accepted; missing legacy slots remain lossless', () => {
   const legacy = action(
-    'Camera::Follow::SetPropertyFresh {\n  object = "Object"\n  behavior = "Behavior"\n}'
+    'Camera::Follow::SetPropertyFresh {\n  object = Object\n  behavior = Behavior\n}'
   );
   const written = options.formatInstruction({
     kind: 'action',
@@ -266,10 +263,10 @@ test('canonical setters omit implicit target and assignment operator', () => {
 
 test.each([
   [
-    'Camera::Follow::SetPropertyHeight {\n  object = "Object"\n  behavior = "Behavior"\n  value = 1\n}',
+    'Camera::Follow::SetPropertyHeight {\n  object = Object\n  behavior = Behavior\n  value = 1\n}',
   ],
   [
-    'Camera::Follow::SetPropertyHeight {\n  object = "Object"\n  behavior = "Behavior"\n  modification_sign = "="\n}',
+    'Camera::Follow::SetPropertyHeight {\n  object = Object\n  behavior = Behavior\n  modification_sign = "="\n}',
   ],
   ['Camera::Follow::SetPropertyFresh {\n  new_value_to_set = true\n}'],
 ])('preserves legacy omitted slots: %s', source => {
@@ -307,10 +304,7 @@ test('resolves and formats property aliases from generated behavior parameter me
   for (const [kind, source] of [
     ['condition', 'getProperty {\n  name = "Fresh"\n}'],
     ['action', 'setProperty {\n  name = "Fresh"\n  value = false\n}'],
-    [
-      'action',
-      'setProperty {\n  name = "Height"\n  value = {{ Height + 2 }}\n}',
-    ],
+    ['action', 'setProperty {\n  name = "Height"\n  value = Height + 2\n}'],
   ]) {
     const instruction = resolver({ kind, source, fileUri: uri });
     const formatted = formatter({ kind, instruction, fileUri: uri });

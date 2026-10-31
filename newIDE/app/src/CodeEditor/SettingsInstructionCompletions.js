@@ -154,9 +154,13 @@ export const getSettingsInstructionCompletions = (source, catalog) => {
           : parameter.valueKind === 'boolean'
           ? false
           : '';
+      const isReference = ['object', 'behavior'].includes(parameter.valueKind);
+      const source = isReference
+        ? value || (parameter.valueKind === 'object' ? 'Object' : 'Behavior')
+        : JSON.stringify(value);
       return {
         label: parameter.dslName,
-        insertText: `${parameter.dslName}=\${1:${JSON.stringify(value)}}`,
+        insertText: `${parameter.dslName}=\${1:${source}}`,
         detail: parameter.valueKind,
         documentation: parameter.description || '',
       };

@@ -24,7 +24,7 @@
 
 版本权威来源分别是 SettingsDsl/SchemaInventory.js、ProjectSourceCatalog.js 和 SettingsDsl/InstructionCatalog.js。项目作者格式、GDL catalog、instruction catalog、项目模块地图是不同版本域，不要求数值相同。模块地图当前为版本 2，仅发布 settingsPath。
 
-普通配置、指令具名参数、GDevelop 的 {{...}}、JavaScript code 字符串使用不同上下文规则。{{...}} 内不是 JavaScript；code 内才使用 JavaScript。不存在独立事件源文件，constants.toml 与 tests/*.js 是明确的独立格式。所有字段和精确指令签名以当前项目生成的 catalog 为准。
+普通配置、指令具名参数、GDevelop 表达式、JavaScript code 字符串使用不同上下文规则。表达式使用 GDevelop 语言；code 内才使用 JavaScript。不存在独立事件源文件，constants.toml 与 tests/*.js 是明确的独立格式。所有字段和精确指令签名以当前项目生成的 catalog 为准。
 
 ## 1. 设计结论
 
@@ -182,7 +182,7 @@ value      := STRING | RAW_MULTILINE_STRING | NUMBER | BOOLEAN | array
 array      := "[" (value ("," value)* ","?)? "]"
 ```
 
-空白和注释由词法层处理。数组内部允许换行。上述仅描述普通配置；具名变量集合及具名变量描述块见变量契约。事件指令、{{...}} 与原始 code 字符串见事件契约。核心解析器遇到语法错误即返回诊断；编辑器另有不完整文档补全，不代表完整的容错 AST。
+空白和注释由词法层处理。数组内部允许换行。上述仅描述普通配置；具名变量集合及具名变量描述块见变量契约。事件指令、表达式与原始 code 字符串见事件契约。核心解析器遇到语法错误即返回诊断；编辑器另有不完整文档补全，不代表完整的容错 AST。
 
 ## 5. 根节点与上下文
 
@@ -390,7 +390,7 @@ scene {
 
   instance {
     id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
-    object = "Player"
+    object = Player
     layer = "world"
     position = [100, 200]
   }
@@ -496,7 +496,7 @@ effect {
 ```text
 instance {
   id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
-  object = "Player"
+  object = Player
   layer = "world"
   position = [100, 50, 20]
   rotation = [15, 30, 90]
@@ -691,7 +691,7 @@ scene {
 
   instance {
     id = "ef3ef49d-f20f-4450-b373-0ce43291a002"
-    object = "Player"
+    object = Player
     layer = "base"
     position = [92, 552, 20]
     rotation = [0, 30, 90]
@@ -719,7 +719,7 @@ scene {
 
   instance {
     id = "4a1e5377-cbe7-4078-9a51-96a1e9956411"
-    object = "ScoreText"
+    object = ScoreText
     layer = "hud"
     position = [24, 24]
   }
@@ -745,7 +745,7 @@ prefab {
 
   instance {
     id = "01fce651-91cd-4d11-bd56-ef1370807527"
-    object = "Body"
+    object = Body
     layer = "base"
     position = [0, 0]
     size = [128, 96]
@@ -778,7 +778,7 @@ variant {
 
   instance {
     id = "01fce651-91cd-4d11-bd56-ef1370807527"
-    object = "Body"
+    object = Body
     layer = "base"
     position = [0, 0]
     size = [160, 112]
@@ -810,7 +810,7 @@ layout {
 
   instance {
     id = "4f0234fc-e34d-41b9-88b9-e4a73316f7be"
-    object = "TreasureChest"
+    object = TreasureChest
     layer = "world"
     position = [12, 0, 8]
 

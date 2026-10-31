@@ -28,7 +28,7 @@ test('namespaced nodes, instructions, flags and empty blocks round trip with mul
   empty {}
   actions {
     Extension::Action {
-      value = {{ Max(1, 2) }}
+      value = Max(1, 2)
       flags {
         disabled = false
         awaited = true
@@ -54,3 +54,54 @@ test('even a single short instruction argument is always printed on its own line
   );
   expect(formatted).toMatch(/A \{\n\s+value = 1\n\s+\}/);
 });
+
+test('bare operands preserve strings, arithmetic, comments and parenthesized continuation', () => {
+  const source = instruction(`Compare {
+  first = From
+  second = To + 1 // operand comment
+  message = "Score: " + ToString(Score)
+  text = "https://example.com/}}"
+  count = (
+    From +
+    Max(To, Entries[0])
+  )
+}`);
+  const syntax = parseSettingsSyntax(source.replace(/\n/g, '\r\n'));
+  const args = syntax.root.children[0].children[0].arguments;
+  expect(args.first.value.expression).toBe('From');
+  expect(args.second.value.expression).toBe('To + 1');
+  expect(args.message.value.expression).toBe('"Score: " + ToString(Score)');
+  expect(args.text.value).toBe('https://example.com/}}');
+  expect(args.count.value.expression).toContain('Max(To, Entries[0])');
+  const printed = printSettingsSyntax(syntax.root, syntax.comments);
+  const reparsed = parseSettingsSyntax(printed);
+  expect(printSettingsSyntax(reparsed.root, reparsed.comments)).toBe(printed);
+  expect(printed.match(/operand comment/g)).toHaveLength(1);
+});
+
+test.each([
+  'scene {\n name = From\n}',
+  'scene {\n count = Max(1, 2)\n}',
+  instruction('A {\n flags {\n disabled = Flag\n }\n}'),
+  instruction('A {\n value = From other = To\n}'),
+])(
+  'restricts expressions to semantic operands and keeps line boundaries: %s',
+  source => {
+    expect(() => parseSettingsSyntax(source)).toThrow();
+  }
+);
+
+test.each(['1', '"Hello"', 'From +\nTo', '(\nFrom\n) + (\nTo\n)'])(
+  'continuation wrappers preserve native expression source: %s',
+  expression => {
+    const source = instruction(`A {\n value = (\n${expression}\n)\n}`);
+    const syntax = parseSettingsSyntax(source);
+    const item = syntax.root.children[0].children[0].arguments.value;
+    expect(item.expression).toBe(true);
+    expect(item.value.expression).toBe(expression);
+    const printed = printSettingsSyntax(syntax.root);
+    expect(printSettingsSyntax(parseSettingsSyntax(printed).root)).toBe(
+      printed
+    );
+  }
+);

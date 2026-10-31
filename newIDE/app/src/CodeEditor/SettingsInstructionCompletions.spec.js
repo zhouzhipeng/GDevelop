@@ -37,7 +37,7 @@ test('catalog kind comes from its explicit container, and named completion omits
   ).toEqual(['object']);
   expect(
     getSettingsInstructionCompletions(
-      'function {\n events {\n event {\n actions {\n Delete object="Player" ',
+      'function {\n events {\n event {\n actions {\n Delete object=Player ',
       catalog
     )
   ).toEqual([]);
@@ -127,4 +127,14 @@ test('loads all three files, invalidates the disk cache, and hides deprecated en
   } finally {
     fs.removeSync(directory);
   }
+});
+
+test('object reference completion inserts an unquoted name', () => {
+  const suggestions = getSettingsInstructionCompletions(
+    'function {\n events {\n event {\n actions {\n Delete ',
+    catalog
+  );
+  // The completion snippet contains a literal placeholder.
+  // eslint-disable-next-line no-template-curly-in-string
+  expect(suggestions[0].insertText).toBe('object=${1:Object}');
 });

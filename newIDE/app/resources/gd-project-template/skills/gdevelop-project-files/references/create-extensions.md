@@ -217,12 +217,12 @@ events {
 
     conditions {
 
-      booleanObjectVariable object="Object" variable="Initialized" check_if_the_value_is="False"
+      booleanObjectVariable object=Object variable="Initialized" check_if_the_value_is="False"
     }
 
     actions {
 
-      setBooleanObjectVariable object="Object" variable="Initialized" modification_sign="True"
+      setBooleanObjectVariable object=Object variable="Initialized" modification_sign="True"
     }
   }
 }
@@ -326,12 +326,17 @@ events {
 
     conditions {
 
-      numberObjectVariable object="Object" variable="HP" comparison_sign=">" value=0
+      numberObjectVariable object=Object variable="HP" comparison_sign=">" value=0
     }
 
     actions {
 
-      setNumberObjectVariable object="Object" variable="HP" modification_sign="-" value={{ Amount }}
+      setNumberObjectVariable {
+        object = Object
+        variable = "HP"
+        modification_sign = "-"
+        value = Amount
+      }
     }
   }
 }
@@ -389,7 +394,7 @@ selection through child events and nested private behavior-function calls.
 ### Accessing a behavior's properties
 
 In a behavior's `functions/*.gdl`, use `setProperty { name = "Speed" value = 100 }` and
-`{{ Speed }}`. The owner is inferred from the file path and
+`Speed`. The owner is inferred from the file path and
 instruction targets default to `Object` / `Behavior`. Boolean properties use
 `setProperty { name = "Initialized" value = true }` and the condition
 `getProperty { name = "Initialized" }`. See `gdl-usage.md` for operators, comparisons,

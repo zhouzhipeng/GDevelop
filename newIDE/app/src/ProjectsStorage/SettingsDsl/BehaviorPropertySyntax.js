@@ -70,7 +70,11 @@ export const createBehaviorPropertySyntax = (catalog, fail) => {
           name
         );
     }
-    const lowered = { object: 'Object', behavior: 'Behavior', ...args };
+    const lowered = {
+      object: { __settingsExpression: true, source: 'Object' },
+      behavior: { __settingsExpression: true, source: 'Behavior' },
+      ...args,
+    };
     delete lowered.name;
     const valueParameter = entry.parameters.find(
       p => p.valueKind === 'boolean'
@@ -126,7 +130,7 @@ export const createBehaviorPropertySyntax = (catalog, fail) => {
       return null;
     const concise = mapped.filter(
       operand =>
-        !['object="Object"', 'behavior="Behavior"', `${operator}="="`].includes(
+        !['object=Object', 'behavior=Behavior', `${operator}="="`].includes(
           operand
         )
     );

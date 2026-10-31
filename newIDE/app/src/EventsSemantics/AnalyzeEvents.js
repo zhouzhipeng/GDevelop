@@ -347,7 +347,8 @@ export const analyzeGdlEvents = ({
       }
       const childExecution = [...entryExecution];
       if (type === 'for_each') {
-        const object = nodeValue(node, 'object', '');
+        const objectValue = nodeValue(node, 'object', '');
+        const object = objectValue.expression || objectValue;
         const refs = resolve(object, state, node, path);
         refs.forEach(({ id, resolved }) => {
           const value = touch(id, state);
@@ -468,8 +469,14 @@ export const analyzeGdlEvents = ({
           nodeValue(instruction, 'inverted', false) &&
           semantics.inversion !== 'boolean-negation';
         const async = nodeValue(instruction, 'awaited', false);
-        const expressionEffects = Object.values(instruction.arguments).some(
-          argument => argument.expression
+        const expressionEffects = Object.entries(instruction.arguments).some(
+          ([name, argument]) =>
+            argument.expression &&
+            !metadata.parameters.some(
+              p =>
+                p.dslName === name &&
+                ['object', 'behavior'].includes(p.valueKind)
+            )
         );
         const isUnknown =
           semantics.status !== 'known' ||
@@ -500,7 +507,10 @@ export const analyzeGdlEvents = ({
           if (!action) step.truth = 'unknown';
         }
         const argument = name =>
-          instruction.arguments[name] && instruction.arguments[name].value;
+          instruction.arguments[name] &&
+          (instruction.arguments[name].expression
+            ? instruction.arguments[name].value.expression
+            : instruction.arguments[name].value);
         for (const parameter of metadata.parameters.filter(
           p => p.valueKind === 'object' && !p.isCodeOnly
         )) {

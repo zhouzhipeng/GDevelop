@@ -203,7 +203,7 @@ describe('project Settings instruction catalog', () => {
       ),
     });
 
-    expect(dsl).toMatch(/parameter_3d_capability\s+=\s+"Object3D"/);
+    expect(dsl).toMatch(/parameter_3d_capability\s+=\s+Object3D/);
     expect(
       areLegacyEventsEquivalent(
         input,
@@ -218,7 +218,7 @@ describe('project Settings instruction catalog', () => {
 
   test('compiles named catalog instructions with semantic operands', () => {
     const source =
-      'function {\n events {\n event {\n conditions {\n Network::Succeeded {\n  request_id = "RequestId"\n}\n }\n actions {\n Network::Send {\n  url = "https://example.com"\n  body = {{ VariableString(Payload) }}\n}\n }\n }\n }\n }\n';
+      'function {\n events {\n event {\n conditions {\n Network::Succeeded {\n  request_id = "RequestId"\n}\n }\n actions {\n Network::Send {\n  url = "https://example.com"\n  body = VariableString(Payload)\n}\n }\n }\n }\n }\n';
     const output = compileSettingsEvents(source, {
       resolveInstruction: createCatalogInstructionResolver(catalogFixture),
     });
@@ -374,9 +374,7 @@ describe('project Settings instruction catalog', () => {
     });
 
     expect(dsl).toMatch(/parameter_0\s+=\s+"Object"/);
-    expect(dsl).toMatch(
-      /parameter_1\s+=\s+\{\{ Object\.PointX\("Center"\) \}\}/
-    );
+    expect(dsl).toMatch(/parameter_1\s+=\s+Object\.PointX\("Center"\)/);
     expect(dsl).toMatch(/parameter_2\s+=\s+"Checkpoint"/);
     expect(dsl).not.toContain('\\"');
     expect(
@@ -410,17 +408,17 @@ describe('project Settings instruction catalog', () => {
 
     expect(() =>
       compile(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action {\n  count = "1"\n  object = "Enemy"\n}\n      }\n    }\n  }\n}\n'
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action {\n  count = "1"\n  object = Enemy\n}\n      }\n    }\n  }\n}\n'
       )
     ).toThrow('expects a semantic number');
     expect(() =>
       compile(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action {\n  count = 1\n  object = {{ "Enemy" }}\n}\n      }\n    }\n  }\n}\n'
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action {\n  count = 1\n  object = "Enemy"\n}\n      }\n    }\n  }\n}\n'
       )
-    ).toThrow('does not accept {{...}}');
+    ).toThrow('requires an unquoted object reference');
     expect(() =>
       compile(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action {\n  count = 1\n  object = "Enemy"\n  runtime = "scene"\n}\n      }\n    }\n  }\n}\n'
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Typed::Action {\n  count = 1\n  object = Enemy\n  runtime = "scene"\n}\n      }\n    }\n  }\n}\n'
       )
     ).toThrow('code-only and must be omitted');
   });
@@ -428,7 +426,7 @@ describe('project Settings instruction catalog', () => {
   test('scans nested calculated expressions without exposing raw operands', () => {
     const output = JSON.parse(
       compileSettingsJson(
-        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send {\n  url = "https://example.com"\n  body = {{ ToString(Max(Variable(A), Variable(B))) }}\n}\n      }\n    }\n  }\n}\n',
+        'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send {\n  url = "https://example.com"\n  body = ToString(Max(Variable(A), Variable(B)))\n}\n      }\n    }\n  }\n}\n',
         { resolveInstruction: createCatalogInstructionResolver(catalogFixture) }
       )
     );
@@ -437,14 +435,14 @@ describe('project Settings instruction catalog', () => {
     );
     expect(() =>
       compileSettingsJson(
-        'function {\n events {\n event {\n actions {\n Network::Send {\n url="https://example.com"\n body={{}}\n }\n}\n}\n}\n}\n',
+        'function {\n events {\n event {\n actions {\n Network::Send {\n url="https://example.com"\n body=\n }\n}\n}\n}\n}\n',
         { resolveInstruction: createCatalogInstructionResolver(catalogFixture) }
       )
-    ).toThrow('cannot be empty');
+    ).toThrow('Expected a semantic instruction operand');
     expect(
       JSON.parse(
         compileSettingsJson(
-          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send {\n  url = "https://example.com"\n  body = {{ ToString(\nMax(Variable(A), Variable(B))\n) }}\n}\n      }\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send {\n  url = "https://example.com"\n  body = ToString(\nMax(Variable(A), Variable(B))\n)\n}\n      }\n    }\n  }\n}\n',
           {
             resolveInstruction: createCatalogInstructionResolver(
               catalogFixture
@@ -456,7 +454,7 @@ describe('project Settings instruction catalog', () => {
     expect(
       JSON.parse(
         compileSettingsJson(
-          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send {\n  url = "https://example.com"\n  body = {{ "first line\nsecond line" }}\n}\n      }\n    }\n  }\n}\n',
+          'function {\n\n  events {\n\n    event {\n\n      actions {\n\n        Network::Send {\n  url = "https://example.com"\n  body = "first line\nsecond line"\n}\n      }\n    }\n  }\n}\n',
           {
             resolveInstruction: createCatalogInstructionResolver(
               catalogFixture
@@ -505,7 +503,7 @@ describe('project Settings instruction catalog', () => {
 
     expect(dsl).toMatch(/Text::Set\s+\{\s+text\s+=\s+""/);
     expect(dsl).toMatch(
-      /Text::Set\s+\{\s+text\s+=\s+\{\{ "Score:\s+"\s+\+\s+ToString\(Variable\(Score\)\) \}\}/
+      /Text::Set\s+\{\s+text\s+=\s+"Score:\s+"\s+\+\s+ToString\(Variable\(Score\)\)/
     );
     expect(dsl).not.toContain('\\"');
     expect(areLegacyEventsEquivalent(input, output)).toBe(true);
@@ -883,7 +881,7 @@ describe('project Settings instruction catalog', () => {
       }
     );
     expect(omittedCollisionDefaultDsl).toMatch(
-      /collision\s+\{\s+first_object\s+=\s+"Player"\s+second_object\s+=\s+"Platform"/
+      /collision\s+\{\s+first_object\s+=\s+Player\s+second_object\s+=\s+Platform/
     );
     expect(omittedCollisionDefaultDsl).not.toContain(
       `${optionalCollisionParameter.dslName}=`
@@ -907,8 +905,8 @@ describe('project Settings instruction catalog', () => {
       conditions {
 
         CollisionNP {
-          first_object="Player"
-          second_object="Platform"
+          first_object=Player
+          second_object=Platform
           ${optionalCollisionParameter.dslName}=false
         }
       }
@@ -1173,3 +1171,49 @@ test.each(['short text', '第一行\n第二行', '  keep spaces\n\ttabs  \n'])(
     }
   }
 );
+
+describe('unquoted object and behavior references', () => {
+  const catalog = withTestInstructionSemantics({
+    ...catalogFixture,
+    actions: [
+      {
+        type: 'ReferenceTest',
+        parameters: [
+          { dslName: 'target', type: 'object', valueKind: 'object' },
+          { dslName: 'state', type: 'behavior', valueKind: 'behavior' },
+        ],
+      },
+    ],
+  });
+  const resolve = createCatalogInstructionResolver(catalog);
+  const format = createCatalogInstructionFormatter(catalog);
+  const source = (target, state) =>
+    `ReferenceTest {\n target = ${target}\n state = ${state}\n}`;
+  test.each([['Object', 'ButtonFSM'], ['按钮', '动画']])(
+    'round trips references %s and %s without quotes',
+    (target, state) => {
+      const instruction = resolve({
+        kind: 'action',
+        source: source(target, state),
+        line: 1,
+      });
+      expect(instruction.parameters).toEqual([target, state]);
+      const written = format({ kind: 'action', instruction });
+      expect(written).toContain(`target=${target}`);
+      expect(written).toContain(`state=${state}`);
+      expect(
+        resolve({ kind: 'action', source: written, line: 1 }).parameters
+      ).toEqual([target, state]);
+    }
+  );
+  test.each([
+    ['"Object"', 'ButtonFSM'],
+    ['Object', '"ButtonFSM"'],
+    ['Object + Other', 'ButtonFSM'],
+    ['Object', 'GetBehavior()'],
+  ])('rejects literals and calculations: %s, %s', (target, state) => {
+    expect(() =>
+      resolve({ kind: 'action', source: source(target, state), line: 1 })
+    ).toThrow('requires an unquoted');
+  });
+});

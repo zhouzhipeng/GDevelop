@@ -18,36 +18,42 @@ const resolveInstruction = ({ kind, source }) => ({
 });
 const formatInstruction = ({ instruction }) => `${instruction.type.value} {}`;
 const options = { resolveInstruction, formatInstruction };
-test('double-brace expressions retain quoted delimiters and nested braces', () => {
+test('bare expressions retain quoted delimiters and nested brackets', () => {
   const source = wrap(
-    'event {\n actions {\n A {\n  value = {{ Func("}}", { nested: 1 }) }}\n  other = 2\n}\n }\n}'
+    'event {\n actions {\n A {\n  value = Func("}}", Nested[1])\n  other = 2\n}\n }\n}'
   );
   const syntax = parseSettingsSyntax(source);
   const printed = printSettingsSyntax(syntax.root, syntax.comments);
-  expect(printed).toContain('{{ Func("}}", { nested: 1 }) }}');
+  expect(printed).toContain('Func("}}", Nested[1])');
   expect(printSettingsSyntax(parseSettingsSyntax(printed).root)).toBe(printed);
 });
 
-test('formats inline and block expressions with one space inside delimiters', () => {
+test('formats bare expressions without delimiters', () => {
   const source = wrap(
-    'repeat {\n count = {{  MouseButton  }}\n actions {\n A {\n  value = {{ MouseButton }}\n}\n }\n}'
+    'repeat {\n count = MouseButton\n actions {\n A {\n  value = MouseButton\n}\n }\n}'
   );
   const formatted = printSettingsSyntax(parseSettingsSyntax(source).root);
-  expect(formatted).toContain('count = {{ MouseButton }}');
-  expect(formatted).toContain('value = {{ MouseButton }}');
+  expect(formatted).toContain('count = MouseButton');
+  expect(formatted).toContain('value = MouseButton');
   expect(printSettingsSyntax(parseSettingsSyntax(formatted).root)).toBe(
     formatted
   );
 });
 
-test('rejects empty, unterminated, and old-style expression operands', () => {
-  for (const operand of ['{{ }}', '{{1 + 2', 'expr(1 + 2)']) {
-    expect(() =>
-      parseSettingsSyntax(
-        wrap(`event {\n actions {\n A { value=${operand} }\n }\n}`)
-      )
-    ).toThrow();
-  }
+test.each([
+  '',
+  '{{ From }}',
+  '{{1 + 2',
+  'expr(1 + 2)',
+  '(1 + 2',
+  'From)',
+  'From]',
+])('rejects malformed and removed expression syntax: %s', operand => {
+  expect(() =>
+    parseSettingsSyntax(
+      wrap(`event {\n actions {\n A {\n value = ${operand}\n }\n }\n}`)
+    )
+  ).toThrow();
 });
 test('keeps explicit sibling and child event boundaries; list context determines instruction kind', () => {
   const source = wrap(
@@ -134,7 +140,7 @@ test('omits default group fields while preserving non-default values', () => {
 });
 test('expression operands and type-specific while lists stay separate', () => {
   const source = wrap(
-    'while {\n while_conditions {\n C {\n  value = {{ Func("(", (1 + 2)) }}\n}\n }\n conditions {\n D {}\n }\n actions {\n A {}\n }\n}'
+    'while {\n while_conditions {\n C {\n  value = Func("(", (1 + 2))\n}\n }\n conditions {\n D {}\n }\n actions {\n A {}\n }\n}'
   );
   const events = compileSettingsEvents(source, options);
   expect(events[0].whileConditions[0].type.value).toBe('C');
@@ -220,7 +226,7 @@ test('ordered event phases permit omissions and preserve child order', () => {
 
 test('all loop kinds retain fields, locals, flags and children through the unified grammar', () => {
   const source = wrap(
-    'repeat {\n  count = {{ Variable(Count) + 1 }}\n  index = "i"\n\n  variables {\n\n    State {\n      type = "enum"\n      value = "Idle"\n      values = ["Idle", "Run"]\n    }\n  }\n\n  for_each {\n    object = "Enemy"\n    index = "j"\n    order_by = {{ Enemy.X() }}\n    order = "desc"\n    limit = 10\n  }\n\n  for_each_child {\n    iterable = "Inventory"\n    index = "childIndex"\n    value = "item"\n    key = "itemKey"\n  }\n\n  while {\n    infiniteLoopWarning = true\n\n    while_conditions {\n\n      C {\n        flags {\n          inverted = true\n        }\n      }\n    }\n\n    actions {\n\n      A {\n        flags {\n          disabled = true\n          awaited = true\n        }\n      }\n    }\n  }\n}\n'
+    'repeat {\n  count = Variable(Count) + 1\n  index = "i"\n\n  variables {\n\n    State {\n      type = "enum"\n      value = "Idle"\n      values = ["Idle", "Run"]\n    }\n  }\n\n  for_each {\n    object = Enemy\n    index = "j"\n    order_by = Enemy.X()\n    order = "desc"\n    limit = 10\n  }\n\n  for_each_child {\n    iterable = "Inventory"\n    index = "childIndex"\n    value = "item"\n    key = "itemKey"\n  }\n\n  while {\n    infiniteLoopWarning = true\n\n    while_conditions {\n\n      C {\n        flags {\n          inverted = true\n        }\n      }\n    }\n\n    actions {\n\n      A {\n        flags {\n          disabled = true\n          awaited = true\n        }\n      }\n    }\n  }\n}\n'
   );
   const events = compileSettingsEvents(source, options);
   const again = compileSettingsEvents(
@@ -349,8 +355,8 @@ test('argument blocks preserve operand locations, comments, and flags with colli
     A {
       // catalog parameter, separate from the execution flag
       disabled = "parameter"
-      value = {{Max(1,
-        2)}}
+      value = Max(1,
+        2)
       flags {
   disabled = true
   awaited = true
@@ -367,7 +373,7 @@ test('argument blocks preserve operand locations, comments, and flags with colli
   expect(instruction.properties.awaited.value).toBe(true);
   const location = instruction.arguments.value.location;
   expect(source.slice(location.offset, location.endOffset)).toBe(
-    '{{Max(1,\n        2)}}'
+    'Max(1,\n        2)'
   );
   expect(instruction.children[0].type).toBe('B');
   const printed = printSettingsSyntax(syntax.root, syntax.comments);
@@ -426,7 +432,7 @@ repeat {
 }
 while {}
 for_each {
-  object = "Enemy"
+  object = Enemy
 }
 for_each_child {
   iterable = "Inventory"

@@ -44,12 +44,12 @@ function {
 
       conditions {
 
-        collision { first_object = "Player" second_object = "Coin" }
+        collision { first_object = Player second_object = Coin }
       }
 
       actions {
 
-        deleteObject { object = "Coin" }
+        deleteObject { object = Coin }
 
         setNumberVariable { variable = "Score" modification_sign = "+" value = 1 }
       }
@@ -84,15 +84,15 @@ function {
 
       conditions {
 
-        collision { first_object = "Player" second_object = "Coin" }
+        collision { first_object = Player second_object = Coin }
       }
 
       for_each {
-        object = "Coin"
+        object = Coin
 
         actions {
 
-          deleteObject { object = "Coin" }
+          deleteObject { object = Coin }
 
           setNumberVariable { variable = "Score" modification_sign = "+" value = 1 }
         }

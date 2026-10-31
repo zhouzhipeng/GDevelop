@@ -91,6 +91,10 @@ export const maskSettingsRawStrings = source => {
   return { source: chunks.join('') + source.slice(cursor), inRawString: false };
 };
 
+// A continuation wrapper belongs to GDL, not to the native expression source.
+export const formatSettingsExpression = source =>
+  /[\r\n]/.test(source) ? `(\n${source}\n)` : source;
+
 // Keep newlines as tokens: indentation never controls nesting, but two
 // assignments on the same line are deliberately not part of the language.
 export const parseSettingsSyntax = (source, fileUri) => {
@@ -123,6 +127,7 @@ export const parseSettingsSyntax = (source, fileUri) => {
     } else column++;
     return character;
   };
+  let readingAssignment = false;
   const readToken = () => {
     while (offset < source.length) {
       if (source[offset] === ' ' || source[offset] === '\t') {
@@ -151,31 +156,77 @@ export const parseSettingsSyntax = (source, fileUri) => {
       advance();
       return { type: 'newline', location };
     }
-    if (source.startsWith('{{', offset)) {
-      advance();
-      advance();
-      const start = offset;
-      let depth = 0,
-        quote = null,
-        escaped = false;
-      while (offset < source.length) {
-        if (!quote && depth === 0 && source.startsWith('}}', offset)) {
-          const expression = source.slice(start, offset).trim();
-          advance();
-          advance();
-          if (!expression) error('{{...}} cannot be empty.', location);
+    if (readingAssignment) {
+      readingAssignment = false;
+      if (
+        character !== '[' &&
+        character !== '{' &&
+        !source.startsWith('"""', offset)
+      ) {
+        const start = offset;
+        let cursor = offset;
+        const stack = [];
+        let outerEnd = -1;
+        let quote = false;
+        let escaped = false;
+        while (cursor < source.length) {
+          const c = source[cursor];
+          if (quote) {
+            if (escaped) escaped = false;
+            else if (c === '\\') escaped = true;
+            else if (c === '"') quote = false;
+          } else if (c === '"') quote = true;
+          else if (source.startsWith('//', cursor)) {
+            if (!stack.length) break;
+            error(
+              'Comments inside multiline expressions are not supported.',
+              location
+            );
+          } else if (/[\r\n]/.test(c) && !stack.length) break;
+          else if (c === '(' || c === '[' || (c === '{' && stack.length))
+            stack.push(c);
+          else if (c === ')' || c === ']' || (c === '}' && stack.length)) {
+            if (stack.pop() !== (c === ')' ? '(' : c === ']' ? '[' : '{'))
+              error('Unmatched expression delimiter.', location);
+            if (!stack.length && outerEnd === -1) outerEnd = cursor;
+          } else if (c === '{' || c === '}') {
+            error(
+              'Expected a newline after the declaration; braces cannot delimit expressions.',
+              location
+            );
+          } else if (c === '=' && !stack.length) {
+            error('Expected a newline after the declaration.', location);
+          }
+          cursor++;
+        }
+        if (quote || stack.length) error('Unterminated expression.', location);
+        let expression = source.slice(start, cursor).trim();
+        let continuation = false;
+        if (
+          /^\(\r?\n/.test(expression) &&
+          /\r?\n\)$/.test(expression) &&
+          outerEnd === start + expression.length - 1
+        ) {
+          continuation = true;
+          expression = expression
+            .replace(/^\(\r?\n/, '')
+            .replace(/\r?\n\)$/, '');
+        }
+        if (!expression.trim()) error('Expected a value.', location);
+        if (/^expr\s*\(/.test(expression))
+          error('The expr(...) wrapper is not supported.', location);
+        let literal = false;
+        try {
+          const parsed = JSON.parse(expression);
+          literal =
+            ['string', 'number', 'boolean'].includes(typeof parsed) &&
+            parsed !== null;
+        } catch (_) {}
+        if (continuation || !literal) {
+          while (offset < cursor) advance();
           return { type: 'expression', value: { expression }, location };
         }
-        const c = advance();
-        if (quote) {
-          if (escaped) escaped = false;
-          else if (c === '\\') escaped = true;
-          else if (c === quote) quote = null;
-        } else if (c === '"') quote = c;
-        else if (c === '{') depth++;
-        else if (c === '}' && depth > 0) depth--;
       }
-      error('Unterminated {{...}}.', location);
     }
     if ('{}[]=,'.includes(character)) {
       advance();
@@ -324,10 +375,11 @@ export const parseSettingsSyntax = (source, fileUri) => {
     return result;
   };
   let token = next();
-  const consume = type => {
+  const consume = (type, expressionAllowed = false) => {
     if (token.type !== type)
       error(`Expected ${type}, found ${token.type}.`, token.location);
     const result = token;
+    if (type === '=') readingAssignment = expressionAllowed;
     token = next();
     return result;
   };
@@ -419,7 +471,7 @@ export const parseSettingsSyntax = (source, fileUri) => {
       const key = token;
       token = next();
       if (token.type === '=') {
-        consume('=');
+        consume('=', true);
         if (own(result.arguments, key.value))
           error(`Duplicate argument ${key.value}.`, key.location);
         if (!['string', 'number', 'boolean', 'expression'].includes(token.type))
@@ -530,7 +582,12 @@ export const parseSettingsSyntax = (source, fileUri) => {
           result.children.push(child);
           result.members.push({ child });
         } else {
-          consume('=');
+          consume(
+            '=',
+            !named &&
+              ['repeat', 'for_each'].includes(result.type) &&
+              ['count', 'order_by', 'limit', 'object'].includes(key.value)
+          );
           if (own(result.properties, key.value) || childNames.has(key.value))
             error(
               `Duplicate property or property/node collision: ${key.value}.`,
@@ -670,7 +727,8 @@ export const printSettingsSyntax = (root, comments = [], options = {}) => {
       if (item.value) lines.push(item.value);
       lines.push(delimiter);
     } else if (item.expression === true) {
-      lines.push(`${prefix}{{ ${item.value.expression} }}${suffix}`);
+      const expression = formatSettingsExpression(item.value.expression);
+      lines.push(`${prefix}${expression}${suffix}`);
     } else if (
       item.value &&
       typeof item.value === 'object' &&

@@ -389,7 +389,7 @@ events {
 
     actions {
 
-      jsonToVariableStructure2 json_string="GlobalVariableString(Translations)" variable_where_to_store_the_json_object="Translations"
+      jsonToVariableStructure2 json_string="GlobalVariableString(Translations)" variable_where_to_store_the_json_object=Translations
     }
   }
 }

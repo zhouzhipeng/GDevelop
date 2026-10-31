@@ -25,7 +25,7 @@ const owner = {
   variables: { Score: 'scene' },
 };
 const collision =
-  'CollisionNP {\n  first_object = "Player"\n  second_object = "Coin"\n}';
+  'CollisionNP {\n  first_object = Player\n  second_object = Coin\n}';
 const score =
   'SetNumberVariable {\n  variable = "Score"\n  modification_sign = "+"\n  value = 1\n}';
 let project, catalog;
@@ -90,7 +90,7 @@ test('multi-coin deletion differs from one write per event body, without frame c
  }
  actions {
  Delete {
-  object = "Coin"
+  object = Coin
 }
  ${score}\n }\n}`
   );
@@ -113,10 +113,10 @@ test('post-filter ForEach narrows Coin only and avoids false single-effect advic
     `event {\n conditions {\n ${collision}
  }
  for_each {
- object = "Coin"
+ object = Coin
  actions {
  Delete {
-  object = "Coin"
+  object = Coin
 }
  ${score}\n }\n }\n}`
   );
@@ -133,7 +133,7 @@ test('ForEach does not make another action target a singleton', () => {
   expect(
     codes(
       analyze(
-        'for_each {\n object = "Coin"\n actions {\n Delete {\n  object = "Player"\n}\n }\n}'
+        'for_each {\n object = Coin\n actions {\n Delete {\n  object = Player\n}\n }\n}'
       )
     )
   ).toContain('GDL_FOREACH_OTHER_OBJECTS_MULTIPLE');
@@ -143,9 +143,9 @@ test('PickAll invalidates singleton facts before later actions and child entry',
     .find(entry => entry.type === 'PickAllInstances')
     .parameters.find(p => p.valueKind === 'object').dslName;
   const result = analyze(
-    `for_each {\n object = "Coin"\n actions {\n PickAllInstances {\n ${parameter}="Coin"\n }
+    `for_each {\n object = Coin\n actions {\n PickAllInstances {\n ${parameter}=Coin\n }
  Delete {
-  object = "Coin"
+  object = Coin
 }
  ${score}\n }\n event {}\n}`
   );
@@ -168,7 +168,7 @@ test('siblings do not inherit temporary filtering', () => {
 event {
  actions {
  Delete {
-  object = "Coin"
+  object = Coin
 }
  }
 }`
@@ -187,7 +187,7 @@ inverted = true
  }
  actions {
  Delete {
-  object = "Enemy"
+  object = Enemy
 }
  }
 }`
@@ -210,7 +210,7 @@ test('logical merge remains partial and does not produce a confident cardinality
  }
  actions {
  Delete {
-  object = "Coin"
+  object = Coin
 }
  ${score}\n }\n}`
   );
@@ -219,7 +219,7 @@ test('logical merge remains partial and does not produce a confident cardinality
 });
 test('disabled events and instructions do not execute or taint a sibling', () => {
   const result = analyze(
-    'event {\n disabled = true\n javascript {\n code = """\nthrow new Error("must not execute");\n\n"""\n }\n}\nevent {\n actions {\n Delete {\n object="Coin"\n\n flags {\ndisabled = true\n}\n }\n }\n}'
+    'event {\n disabled = true\n javascript {\n code = """\nthrow new Error("must not execute");\n\n"""\n }\n}\nevent {\n actions {\n Delete {\n object=Coin\n\n flags {\ndisabled = true\n}\n }\n }\n}'
   );
   expect(result.status).toBe('complete');
   expect(result.events).toHaveLength(3);
@@ -282,7 +282,7 @@ test('strict author Else adjacency stays authoritative', () => {
 });
 test('maps full multiline operands and distinguishes both While condition lists', () => {
   const source = wrap(
-    'while {\n while_conditions {\n NumberVariable {\n  variable = "Score"\n  comparison_sign = ">"\n  value = 0\n}\n }\n conditions {\n NumberVariable {\n  variable = "Score"\n  comparison_sign = "<"\n  value = 10\n}\n }\n actions {\n SetNumberVariable {\n  variable = "Score"\n  modification_sign = "+"\n  value = {{\n1 + 2\n}}\n}\n }\n}'
+    'while {\n while_conditions {\n NumberVariable {\n  variable = "Score"\n  comparison_sign = ">"\n  value = 0\n}\n }\n conditions {\n NumberVariable {\n  variable = "Score"\n  comparison_sign = "<"\n  value = 10\n}\n }\n actions {\n SetNumberVariable {\n  variable = "Score"\n  modification_sign = "+"\n  value = (\n1 + 2\n)\n}\n }\n}'
   );
   const result = analyze('', { source, detail: 'steps' });
   expect(result.success).toBe(true);
@@ -296,7 +296,7 @@ test('maps full multiline operands and distinguishes both While condition lists'
       e.list === 'actions' && e.instructionPath && !e.parameter && !e.property
   );
   expect(source.slice(action.source.offset, action.source.endOffset)).toContain(
-    '1 + 2\n}}'
+    '1 + 2\n)'
   );
 });
 test('snapshot identity, stale paths and budgets are explicit', () => {
@@ -355,7 +355,7 @@ test('subtree reads include parent action selection and map UTF-16 operands exac
  event {
  actions {
  Delete {
-  object = "Coin"
+  object = Coin
 }
  }
  }
@@ -369,7 +369,7 @@ test('subtree reads include parent action selection and map UTF-16 operands exac
   const operand = result.sourceMap.find(entry => entry.parameter === 'object');
   expect(
     wrap(body).slice(operand.source.offset, operand.source.endOffset)
-  ).toBe('"Coin"');
+  ).toBe('Coin');
 });
 
 test('rule suppression never turns unknown effects into completed coverage', () => {
@@ -448,7 +448,7 @@ test('step maps retain recursive local variables and exact raw JS content slices
 
 test('short instruction names retain reviewed picking semantics and native diagnostic identity', () => {
   const result = analyze(
-    'event {\n conditions {\n collision {\n  first_object = "Player"\n  second_object = "Coin"\n}\n }\n actions {\n deleteObject {\n  object = "Coin"\n}\n setNumberVariable {\n  variable = "Score"\n  modification_sign = "+"\n  value = 1\n}\n }\n}'
+    'event {\n conditions {\n collision {\n  first_object = Player\n  second_object = Coin\n}\n }\n actions {\n deleteObject {\n  object = Coin\n}\n setNumberVariable {\n  variable = "Score"\n  modification_sign = "+"\n  value = 1\n}\n }\n}'
   );
   expect(result.success).toBe(true);
   expect(codes(result)).toContain('GDL_MULTI_SELECTION_SINGLE_EFFECT');

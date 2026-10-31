@@ -566,7 +566,7 @@ describe('Local multi-file project storage', () => {
     fs.unlinkSync(path.join(root, 'New fragment.events'));
     fs.writeFileSync(
       path.join(root, 'New fragment.gdl'),
-      'fragment {\n name = "New fragment"\n description = ""\n eventsLogic = ""\n}\n',
+      'fragment {\n name = "New fragment"\n description = ""\n}\n',
       'utf8'
     );
     const project = await openMultiFileProject(entryPath);
@@ -2290,7 +2290,7 @@ column2 = "333"
         'utf8'
       );
       expect(eventsSource).toMatch(
-        /collision\s+\{\s+first_object\s+=\s+"Player"\s+second_object\s+=\s+"Platform"/
+        /collision\s+\{\s+first_object\s+=\s+Player\s+second_object\s+=\s+Platform/
       );
       expect(eventsSource).not.toContain(
         'ignore_objects_that_are_touching_each_other'

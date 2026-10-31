@@ -2044,7 +2044,6 @@ export const decomposeLegacyProjectToFiles = (legacyProject, options = {}) => {
 
                 name,
                 description: metadata.description || '',
-                eventsLogic: metadata.eventsLogic || '',
               },
             },
           },
@@ -3447,7 +3446,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
       const payload = restoreSettingsPayload(sceneNamespace[settingsName], uri);
       assertOnlyFields(
         payload,
-        new Set(['kind', 'name', 'description', 'eventsLogic']),
+        new Set(['kind', 'name', 'description']),
         'External events settings',
         uri
       );
@@ -3456,9 +3455,7 @@ export const composeLegacyProjectFromFiles = (filesInput, options = {}) => {
         settingsName !== name ||
         payload.name !== name ||
         (payload.description !== undefined &&
-          typeof payload.description !== 'string') ||
-        (payload.eventsLogic !== undefined &&
-          typeof payload.eventsLogic !== 'string')
+          typeof payload.description !== 'string')
       ) {
         fail(
           'MULTIFILE_IDENTITY_MISMATCH',

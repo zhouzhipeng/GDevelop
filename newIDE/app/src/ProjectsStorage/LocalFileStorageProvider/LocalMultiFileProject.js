@@ -1390,7 +1390,6 @@ export const writeLegacyProjectAsMultiFile = async (
       if (typeof settings.name === 'string') {
         externalEventSettingsByName[settings.name] = {
           description: settings.description,
-          eventsLogic: settings.eventsLogic,
         };
       }
     });

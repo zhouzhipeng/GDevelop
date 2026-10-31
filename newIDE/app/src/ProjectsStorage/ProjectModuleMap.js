@@ -42,7 +42,6 @@ const eventEntry = (
   name,
   settingsPath,
   purpose: settings.description || '',
-  eventsLogic: settings.eventsLogic || '',
   links: linksIn(
     resolver && files[`game://${settingsPath}`] !== undefined
       ? compileSettingsEvents(

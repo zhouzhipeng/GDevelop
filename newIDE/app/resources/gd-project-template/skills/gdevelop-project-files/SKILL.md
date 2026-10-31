@@ -30,7 +30,7 @@ Author actions and conditions using the catalog entry's **`dslName`** when prese
 otherwise use its exact `type`. A `dslName` equal to `type` is omitted.
 System names are fixed by the engine.
 Use parameter `dslName` unchanged. Never invent abbreviations or edit generated
-catalogs. Expressions inside `{{...}}` retain their existing names. The
+catalogs. GDevelop expressions retain their existing names. The
 formatter writes `dslName` when present and `type` otherwise.
 
 ## Source of truth
@@ -48,7 +48,7 @@ directly.
 Read `.gdevelop/project-module-map.json` first when locating project logic.
 `scenes[].events[]`, `externalEvents[]`, and `extensions[].events[]` provide
 `settingsPath`, and an authored `purpose`. Fragment entries also
-provide `eventsLogic` and `linkedFrom`. `links` contains statically found Link
+provide `linkedFrom`. `links` contains statically found Link
 target names; `linkPaths` gives their resolved event paths. Check `diagnostics`
 body before reasoning about execution. The map is generated with the catalogs;
 never edit it directly. Regenerate catalogs after source edits.

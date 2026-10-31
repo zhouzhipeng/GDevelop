@@ -11,7 +11,7 @@
 系统 action/condition 由引擎固定映射发布作者短名。instruction catalog 7 的
 action/condition 的 `dslName` 与 `type` 相同时省略。GDL 和 AI 优先使用
 `dslName`，缺失时使用精确原生 `type`；解析器也接受精确原生 `type`，
-格式化优先输出 `dslName`，缺失时输出 `type`。参数名称及 `{{...}}` 中的表达式名称通常不变；
+格式化优先输出 `dslName`，缺失时输出 `type`。参数名称及表达式名称通常不变；
 行为内部的 `setProperty` / `getProperty` 是本文末尾定义的语法映射例外。
 同一 kind 内短名与原生名称不得交叉冲突；错误必须明确拒绝。
 详见 [系统指令与入口契约](gdl-system-instruction-names-and-project-entry-spec.md)。
@@ -121,15 +121,15 @@ function {
         conditions {
 
           collision {
-            first_object = "Player"
-            second_object = "Coin"
+            first_object = Player
+            second_object = Coin
           }
         }
 
         actions {
 
           deleteObject {
-            object = "Coin"
+            object = Coin
           }
 
           setNumberVariable {
@@ -182,7 +182,7 @@ instructionType  := IDENT_OR_NAMESPACED_TYPE | STRING
 namedArgument    := IDENT '=' operand
 operand          := stringLiteral | NUMBER | BOOLEAN | expression
 stringLiteral    := STRING | rawMultilineString
-expression       := '{{' expressionSource '}}'
+expression       := expressionSource // newline ends the value unless parentheses or brackets remain open
 flagsBlock       := 'flags' '{' NEWLINE assignment* '}'
 codeProperty     := 'code' '=' stringLiteral
 ```
@@ -191,9 +191,9 @@ codeProperty     := 'code' '=' stringLiteral
 
 指令优先使用 catalog 精确 dslName；也接受精确原生 type，包含空格时使用 JSON 字符串。列表内部 `Name = value` 是非法赋值，不可当作指令；指令调用使用多行 `Type` 节点块，花括号不可省略，包括无参数调用。指令块内赋值表示具名参数；执行标记放在嵌套 `flags {}` 中，避免与参数重名。
 
-`{{...}}` 专用于 catalog 允许表达式的参数与循环字段，不能出现在普通 settings 属性中。扫描识别表达式中的嵌套花括号、字符串和转义；只有字符串外且嵌套深度为零的 `}}` 才结束表达式。参数不得重复、不得使用位置参数。所有非空节点（包括指令和 flags）必须多行书写，属性与子节点之间必须换行；禁止 `node { a=1 b=2 }` 和同行单属性形式。空节点允许 `node {}`。{{...}} 内容可跨行，保留原生表达式的精确源码。官方模板包含此类表达式，不能折叠空白或截断。格式化器始终将非空指令输出为多行，每个参数独占一行。
+表达式专用于 catalog 允许表达式的参数与循环字段，不能出现在普通 settings 属性中。直接在 `=` 后书写 GDevelop 表达式，字符串外且括号配对完整时以换行结束。多行表达式使用圆括号续行，也允许函数参数及下标的未闭合括号续行；字符串和转义不影响括号计数。表达式源码保留，不折叠内部空白。格式化器将多行表达式输出为 `(`、换行、原生表达式源码、换行、`)`；读取时仅移除这层续行包装，保留源码内部的分组括号。表达式内部不支持注释，行尾注释写在完整表达式之后。参数不得重复、不得使用位置参数。所有非空节点（包括指令和 flags）必须多行书写，每个参数独占一行；禁止 `node { a=1 b=2 }` 和同行单属性形式。空节点允许 `node {}`。
 
-例如，`angle_in_degrees = {{ MousePointerLock::MovementX() * HorizontalSpeed / SceneWindowWidth() }}`。规范输出在双花括号内两侧各使用一个空格。双花括号内使用 GDevelop 表达式语言，不是 JavaScript 或 GDL 结构块。`message = "Hello"` 是文本字面量，`message = {{ "Score: " + ToString(Score) }}` 是表达式。旧的 `expr(...)` 写法不受支持。
+例如，`angle_in_degrees = MousePointerLock::MovementX() * HorizontalSpeed / SceneWindowWidth()`。`message = "Hello"` 是文本字面量，`message = "Score: " + ToString(Score)` 是表达式。表达式使用 GDevelop 语言。双花括号表达式和旧的 `expr(...)` 包装语法不受支持。
 
 不保留 if/do 前缀和第二种条件/动作表达。JavaScript code 内的 if、do 等 JS 关键字正常有效。
 
@@ -222,15 +222,15 @@ function {
       conditions {
 
         collision {
-          first_object = "Player"
-          second_object = "Enemy"
+          first_object = Player
+          second_object = Enemy
         }
       }
 
       actions {
 
         deleteObject {
-          object = "Enemy"
+          object = Enemy
         }
       }
 
@@ -304,7 +304,7 @@ SomeCondition/SomeAction 为示意 catalog 类型，不是新增别名。简单�
 - `or` 是 catalog 中原生 `Or` 条件的固定作者名称，保留原生 picking 和子指令结构；不展开成多个事件，也不提供 if/do 语法。
 - 子指令顺序及标记无损投影原生 subInstructions。
 
-参数采用语义值：text/object/behavior/variable/resource/name 为字符串，number/boolean 为字面量，计算值使用 {{...}}。code-only 参数不写；必需参数缺失报错；可选空槽由 catalog 明确默认规则投影。隐藏/废弃但确需无损保留的指令通过专用 catalog 登记，不允许新作者任意使用。
+参数采用语义值：object/behavior 为不加引号的名称引用（禁止带引号字符串或计算表达式）；text/variable/resource/name 为字符串，number/boolean 为字面量，计算值直接书写表达式。code-only 参数不写；必需参数缺失报错；可选空槽由 catalog 明确默认规则投影。隐藏/废弃但确需无损保留的指令通过专用 catalog 登记，不允许新作者任意使用。
 
 ## 8. Else 分支
 
@@ -374,15 +374,15 @@ repeat {
 }
 ```
 
-count 必需，接受有限数字或 {{...}}；投影原生 repeatExpression。动态次数的取整、负数等行为沿用引擎，不在 DSL 另定义。静态明显无效输入按原生表达式验证规则诊断。index 可选，投影 loopIndexVariable。
+count 必需，接受有限数字或表达式；投影原生 repeatExpression。动态次数的取整、负数等行为沿用引擎，不在 DSL 另定义。静态明显无效输入按原生表达式验证规则诊断。index 可选，投影 loopIndexVariable。
 
 ### 9.2 For each object
 
 ```text
 for_each {
-  object = "Enemy"
+  object = Enemy
   index = "i"
-  order_by = {{ Enemy.Variable(HP) }}
+  order_by = Enemy.Variable(HP)
   order = "desc"
   limit = 10
 
@@ -538,7 +538,6 @@ comment 是独立的持久化注释节点，投影为原生 Comment 事件，tex
 fragment {
   name = "SharedCombat"
   description = "共享接触处理"
-  eventsLogic = "在调用者选择范围内处理战斗"
 
   events {
 
@@ -792,7 +791,7 @@ function {
         setProperty {
           name = "CameraZ"
           modification_sign = "+"
-          value = {{ CameraZ * 0.1 }}
+          value = CameraZ * 0.1
         }
       }
     }
@@ -801,9 +800,9 @@ function {
 ```
 
 - Action: use a multiline `setProperty` node with `name` and `value` properties.
-  `object="Object"` and `behavior="Behavior"` are implicit; either may be supplied
+  `object=Object` and `behavior=Behavior` are implicit; either may be supplied
   explicitly on its own line. Numeric/text values use their actual semantic type,
-  with `{{...}}` for calculations. `modification_sign` defaults to `"="` for
+  with bare expressions for calculations. `modification_sign` defaults to `"="` for
   numeric/text setters; supported operators come from the underlying property
   catalog. Boolean setters require `value=true` or `value=false` and do not accept
   modification operators.
@@ -811,7 +810,7 @@ function {
   boolean property for true. A nested multiline `flags` node with `inverted = true`
   checks for false. Numeric/text comparisons use `name`, `value`, and optionally
   `comparison_sign` (default `"="`), each on its own line.
-- Expression: use the bare property name, for example `{{ CameraZ + 1 }}`.
+- Expression: use the bare property name, for example `CameraZ + 1`.
   Native expression AST binding resolves visible properties before variables,
   including event-local variables. A property type error never falls back to a
   same-named variable. Function names, explicit variable access, members and text
@@ -828,4 +827,4 @@ function {
 
 ## 具名集合与属性引用
 
-参数和属性描述符分别使用 parameters/properties/shared_properties 容器，成员名作为节点名，不重复 name 字段。变量使用 variables 具名集合；详见[变量规范](settings-dsl-variable-values-spec.md)。表达式直接引用属性名，例如 `{{ Height + 1 }}`；可见属性优先于同名变量，包括事件局部变量。找到属性后类型错误不回退到变量。显式变量访问、函数调用、成员访问和字符串仍遵循原生表达式 AST 语义；旧 getProperty(name=...) 表达式别名拒绝。
+参数和属性描述符分别使用 parameters/properties/shared_properties 容器，成员名作为节点名，不重复 name 字段。变量使用 variables 具名集合；详见[变量规范](settings-dsl-variable-values-spec.md)。表达式直接引用属性名，例如 `Height + 1`；可见属性优先于同名变量，包括事件局部变量。找到属性后类型错误不回退到变量。显式变量访问、函数调用、成员访问和字符串仍遵循原生表达式 AST 语义；旧 getProperty(name=...) 表达式别名拒绝。

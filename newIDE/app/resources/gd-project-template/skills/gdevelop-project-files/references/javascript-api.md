@@ -229,7 +229,7 @@ events {
 
     conditions {
 
-      collision first_object="Player" second_object="Enemy"
+      collision first_object=Player second_object=Enemy
     }
 
     javascript {

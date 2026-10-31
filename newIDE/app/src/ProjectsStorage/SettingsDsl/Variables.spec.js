@@ -157,7 +157,7 @@ test.each([
   'A {}',
   'A {\n value = 1\n}',
   'A {\n type = "number"\n value = "1"\n}',
-  'A {\n type = "number"\n value = {{ 1 }}\n}',
+  'A {\n type = "number"\n value = Counter\n}',
   'A {\n type = "number"\n value = [1]\n}',
   'A {\n type = "boolean"\n value = 1\n}',
   'A {\n type = "structure"\n json = "{}"\n}',

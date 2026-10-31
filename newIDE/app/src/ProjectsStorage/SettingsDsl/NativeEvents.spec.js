@@ -49,18 +49,18 @@ test('real engine generates identical picking, OR, child-JS and loop code after 
         conditions {
           ${orType} {
             CollisionNP {
-  first_object = "Player"
-  second_object = "Enemy"
+  first_object = Player
+  second_object = Enemy
 }
             CollisionNP {
-  first_object = "Player"
-  second_object = "Coin"
+  first_object = Player
+  second_object = Coin
 }
           }
         }
         actions {
           Delete {
-  object = "Coin"
+  object = Coin
 }
         }
         javascript {
@@ -132,7 +132,7 @@ if (pickedCount > 0) { objects[0].setX(42); }
         }
       }
       for_each {
-        object = "Enemy"
+        object = Enemy
         actions {
           SetNumberVariable {
   variable = "Score"
@@ -252,7 +252,7 @@ test('generates native cardinality fixtures and checks their static contracts', 
         .find(entry => entry.type === type)
         .parameters.find(parameter => parameter.valueKind === 'object').dslName;
     const collision =
-      'CollisionNP {\n  first_object = "Player"\n  second_object = "Coin"\n}';
+      'CollisionNP {\n  first_object = Player\n  second_object = Coin\n}';
     const score =
       'SetNumberVariable {\n  variable = "Score"\n  modification_sign = "+"\n  value = 1\n}';
     const picked = 'conditions {\n' + collision + '\n}\n';
@@ -261,7 +261,7 @@ test('generates native cardinality fixtures and checks their static contracts', 
         name: 'multi-delete-single-score',
         body: `event {\n${picked}actions {
 Delete {
-  object = "Coin"
+  object = Coin
 }
 ${score}\n}\n}`,
         coins: 1,
@@ -272,10 +272,10 @@ ${score}\n}\n}`,
         name: 'post-filter-for-each',
         body: `event {
 ${picked}for_each {
-object = "Coin"
+object = Coin
 actions {
 Delete {
-  object = "Coin"
+  object = Coin
 }
 ${score}
 }
@@ -289,9 +289,9 @@ ${score}
         name: 'repick-all-after-filter',
         body: `event {\n${picked}actions {\nPickAllInstances {\n ${objectArgument(
           'PickAllInstances'
-        )}="Coin"\n }
+        )}=Coin\n }
 Delete {
-  object = "Coin"
+  object = Coin
 }
 ${score}\n}\n}`,
         coins: 0,
@@ -302,9 +302,9 @@ ${score}\n}\n}`,
         name: 'random-current-selection',
         body: `event {\n${picked}actions {\nPickRandomInstance {\n ${objectArgument(
           'PickRandomInstance'
-        )}="Coin"\n }
+        )}=Coin\n }
 Delete {
-  object = "Coin"
+  object = Coin
 }
 ${score}\n}\n}`,
         coins: 2,
@@ -317,7 +317,7 @@ ${score}\n}\n}`,
 event {
 actions {
 Delete {
-  object = "Coin"
+  object = Coin
 }
 }
 }`,
@@ -447,7 +447,7 @@ test('behavior property aliases use native metadata and generate identical execu
     const uri =
       'game://extensions/PropertyAliasTest/behaviors/Follow/functions/doStepPreEvents.gdl';
     const source =
-      'function {\n      events {\n        event {\n          variables {\n            Height {\n type = "string"\n value = "local variable"\n }\n            Title {\n type = "number"\n value = 123\n }\n          }\n          conditions {\n            getProperty {\n  name = "Fresh"\n}\n          }\n          actions {\n            setProperty {\n  name = "Fresh"\n  value = false\n}\n            setProperty {\n  name = "Height"\n  value = {{ Height + 2 }}\n}\n            setProperty {\n  name = "Title"\n  value = {{ Title + "!" }}\n}\n          }\n        }\n      }\n    }';
+      'function {\n      events {\n        event {\n          variables {\n            Height {\n type = "string"\n value = "local variable"\n }\n            Title {\n type = "number"\n value = 123\n }\n          }\n          conditions {\n            getProperty {\n  name = "Fresh"\n}\n          }\n          actions {\n            setProperty {\n  name = "Fresh"\n  value = false\n}\n            setProperty {\n  name = "Height"\n  value = Height + 2\n}\n            setProperty {\n  name = "Title"\n  value = Title + "!"\n}\n          }\n        }\n      }\n    }';
     const events = compileSettingsEvents(source, options, uri);
     expect(events[0].actions[0].parameters).toEqual([
       'Object',
@@ -457,28 +457,22 @@ test('behavior property aliases use native metadata and generate identical execu
     const legacy = source
       .replace(
         'getProperty {\n  name = "Fresh"\n}',
-        'PropertyAliasTest::Follow::PropertyFresh {\n  object = "Object"\n  behavior = "Behavior"\n}'
+        'PropertyAliasTest::Follow::PropertyFresh {\n  object = Object\n  behavior = Behavior\n}'
       )
       .replace(
         'setProperty {\n  name = "Fresh"\n  value = false\n}',
-        'PropertyAliasTest::Follow::SetPropertyFresh {\n  object = "Object"\n  behavior = "Behavior"\n  new_value_to_set = false\n}'
+        'PropertyAliasTest::Follow::SetPropertyFresh {\n  object = Object\n  behavior = Behavior\n  new_value_to_set = false\n}'
       )
       .replace(
         'setProperty {\n  name = "Height"\n}',
-        'PropertyAliasTest::Follow::SetPropertyHeight {\n  object = "Object"\n  behavior = "Behavior"\n  modification_sign = "="\n}'
+        'PropertyAliasTest::Follow::SetPropertyHeight {\n  object = Object\n  behavior = Behavior\n  modification_sign = "="\n}'
       )
       .replace(
         'setProperty {\n  name = "Title"\n}',
-        'PropertyAliasTest::Follow::SetPropertyTitle {\n  object = "Object"\n  behavior = "Behavior"\n  modification_sign = "="\n}'
+        'PropertyAliasTest::Follow::SetPropertyTitle {\n  object = Object\n  behavior = Behavior\n  modification_sign = "="\n}'
       )
-      .replace(
-        '{{ Height + 2 }}',
-        '{{ Object.Behavior::PropertyHeight() + 2 }}'
-      )
-      .replace(
-        '{{ Title + "!" }}',
-        '{{ Object.Behavior::PropertyTitle() + "!" }}'
-      );
+      .replace('Height + 2', 'Object.Behavior::PropertyHeight() + 2')
+      .replace('Title + "!"', 'Object.Behavior::PropertyTitle() + "!"');
     const nativeEvents = compileSettingsEvents(legacy, options, uri);
     expect(nativeEvents[0].actions[1].parameters[3]).toBe(
       'Object.Behavior::PropertyHeight() + 2'
@@ -563,12 +557,12 @@ test('recursive typed locals and descendant enum metadata round trip through the
         SetNumberVariable {
           variable = "Score"
           modification_sign = "="
-          value = {{ State.Entries[0].HP }}
+          value = State.Entries[0].HP
         }
         SetStringVariable {
           variable = "ModeResult"
           modification_sign = "="
-          value = {{ State.Mode }}
+          value = State.Mode
         }
       }
     }

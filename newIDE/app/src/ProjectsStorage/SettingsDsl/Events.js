@@ -37,7 +37,7 @@ const make = (type, data = {}, children = []) => ({
       k,
       {
         value,
-        ...(expressionFields.includes(k) &&
+        ...((expressionFields.includes(k) || k === 'object') &&
         value &&
         typeof value.expression === 'string'
           ? { expression: true }
@@ -258,9 +258,20 @@ export const decodeEventList = (
     for (const [key, nativeKey] of Object.entries(extra[kind])) {
       if (!own(data, key)) continue;
       const value = data[key];
-      if (expressionFields.includes(key)) {
+      if (kind === 'for_each' && key === 'object') {
+        if (
+          !n.properties[key].expression ||
+          !/^[\p{L}_][\p{L}\p{N}_]*$/u.test(value.expression)
+        )
+          error(
+            'object requires an unquoted object reference.',
+            n.properties[key],
+            uri
+          );
+        result[nativeKey] = value.expression;
+      } else if (expressionFields.includes(key)) {
         if (typeof value !== 'number' && !n.properties[key].expression)
-          error(`${key} requires a number or {{...}}.`, n, uri);
+          error(`${key} requires a number or expression.`, n, uri);
         result[nativeKey] =
           typeof value === 'number'
             ? String(value)
@@ -563,7 +574,11 @@ export const encodeEventList = (events, options = {}, uri, depth = 0) => {
                           )
                         : String(value),
                   };
-        } else data[key] = value;
+        } else
+          data[key] =
+            kind === 'for_each' && key === 'object'
+              ? { expression: value }
+              : value;
       });
       if (kind === 'group') {
         const groupColor = [
@@ -720,6 +735,8 @@ export const EVENT_SCHEMAS = Object.fromEntries(
                 : {}),
               type: booleans.includes(name)
                 ? 'boolean'
+                : kind === 'for_each' && name === 'object'
+                ? 'unquoted object reference'
                 : expressionFields.includes(name)
                 ? 'number or expression'
                 : ['color', 'background'].includes(name)

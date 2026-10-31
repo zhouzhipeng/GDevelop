@@ -47,7 +47,7 @@ for (const object of objects) {
 }
 ```
 
-这是通用 string 字面量，解码后仍为 string，不新增运行时值类型。所有字符串类型的 value 均接受普通 JSON 字符串或多行原始字符串，包括 javascript.code；schema 决定字段是否接收字符串，不在 lexer 中按字段名启用。不新增语言标签、插值、单行 raw、尾换行开关或单引号变体。现有普通 JSON 字符串及表达式 `{{ ... }}` 含义不变。所有字符串值包含 LF 时规范输出为多行原始字符串，其他值默认使用普通 JSON 字符串；AST 格式化保留已有 raw 形式。javascript.code 的模型输出仍优先 raw，但读取同时接受两种形式。含不能直接写入 raw 的控制字符时保留 JSON 转义，以保证值不变。
+这是通用 string 字面量，解码后仍为 string，不新增运行时值类型。所有字符串类型的 value 均接受普通 JSON 字符串或多行原始字符串，包括 javascript.code；schema 决定字段是否接收字符串，不在 lexer 中按字段名启用。不新增语言标签、插值、单行 raw、尾换行开关或单引号变体。现有普通 JSON 字符串含义不变；表达式直接在 `=` 后书写。所有字符串值包含 LF 时规范输出为多行原始字符串，其他值默认使用普通 JSON 字符串；AST 格式化保留已有 raw 形式。javascript.code 的模型输出仍优先 raw，但读取同时接受两种形式。含不能直接写入 raw 的控制字符时保留 JSON 转义，以保证值不变。
 
 ### 定界符
 

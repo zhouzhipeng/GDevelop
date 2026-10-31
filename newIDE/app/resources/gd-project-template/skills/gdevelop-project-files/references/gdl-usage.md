@@ -54,7 +54,7 @@ screen/row/column layout nodes are not implemented.
   and have a trailing comma. `//` starts a comment outside a string.
 - Values are strings, finite numbers, booleans and arrays; structures use named nodes. Null, dates and includes are forbidden. Ordinary configuration fields do not
   accept expressions; event instruction operands and supported loop fields use
-  {{...}} as described in [Events](#events). Integers must be safe integers.
+  bare expressions as described in [Events](#events). Integers must be safe integers.
 - Unknown fields/nodes and duplicate properties/singleton nodes are errors.
 - Only project.gdl declares formatVersion. All other root fields come
   directly from the matching component schema.
@@ -74,7 +74,6 @@ screen/row/column layout nodes are not implemented.
 fragment {
   name = "SharedCombat"
   description = "Shared combat fragment"
-  eventsLogic = "Apply damage after collision selection"
 }
 ```
 
@@ -163,7 +162,7 @@ Author actions and conditions using the catalog entry's **`dslName`** when prese
 otherwise use its exact `type`. A `dslName` equal to `type` is omitted.
 System names are fixed by the engine.
 Use parameter `dslName` unchanged. Never invent abbreviations or edit generated
-catalogs. Expressions inside `{{...}}` retain their existing names. The
+catalogs. GDevelop expressions retain their existing names. The
 formatter writes `dslName` when present and `type` otherwise, except for the behavior
 property syntax aliases described below (`setProperty` / `getProperty`).
 
@@ -190,15 +189,15 @@ function {
         conditions {
 
           collision {
-            first_object = "Player"
-            second_object = "Coin"
+            first_object = Player
+            second_object = Coin
           }
         }
 
         actions {
 
           deleteObject {
-            object = "Coin"
+            object = Coin
           }
 
           setNumberVariable {
@@ -242,14 +241,15 @@ that a scene-variable action adds once per coin. Use for_each when required.
 - Conditions and actions determine catalog instruction kind. Write catalog
   instruction `dslName` (or `type` if absent) followed by semantic named arguments. No positional args,
   user-defined aliases, @ annotations, > depth prefixes, ? prefixes or raw JSON.
-- Ordinary text/object/behavior/variable/resource/name operands are quoted;
-  numbers and booleans are literals. Use {{...}} for calculated expressions.
-  Canonical output puts one space inside each delimiter: `{{ MouseButton }}`.
-  Expression bodies may span lines; preserve their expression source.
-- `{{ ... }}` contains a GDevelop expression, not JavaScript or a GDL block.
-  For example, `angle_in_degrees = {{ MousePointerLock::MovementX() * HorizontalSpeed / SceneWindowWidth() }}`.
+- Object and behavior operands are unquoted references (for example `object = Player`, `behavior = Animation`); quoted references are rejected.
+  Ordinary text/variable/resource/name operands are quoted;
+  numbers and booleans are literals. Write calculated expressions directly after `=`.
+  End single-line expressions with a newline; use parentheses to continue across lines.
+  The formatter wraps multiline expression source in `(` + newline and newline + `)`; the reader removes this continuation wrapper. Preserve internal expression whitespace.
+- Expression operands use GDevelop syntax. Multiline expressions continue while parentheses or brackets remain open.
+  For example, `angle_in_degrees = MousePointerLock::MovementX() * HorizontalSpeed / SceneWindowWidth()`.
   A plain string such as `message = "Hello"` is a literal, while
-  `message = {{ "Score: " + ToString(Score) }}` is an expression. The old
+  `message = "Score: " + ToString(Score)` is an expression. The old
   `expr(...)` wrapper is not supported.
 - Every non-empty node, instruction, and flags block must use multiple lines,
   with each property or child node on its own line. Single-line calls with
@@ -298,8 +298,8 @@ repeat {
 }
 
 for_each {
-  object = "Enemy"
-  order_by = {{ Enemy.Variable(HP) }}
+  object = Enemy
+  order_by = Enemy.Variable(HP)
   order = "desc"
   limit = 10
 }
@@ -449,7 +449,7 @@ function {
 
         setProperty {
           name = "CameraZ"
-          value = {{ CameraZ + 10 }}
+          value = CameraZ + 10
         }
       }
     }
@@ -457,10 +457,10 @@ function {
 }
 ```
 
-The owning behavior comes from the file path. `object="Object"` and
-`behavior="Behavior"` default automatically on instructions. `name` must be a
+The owning behavior comes from the file path. `object=Object` and
+`behavior=Behavior` default automatically on instructions. `name` must be a
 literal existing property name. Keep values typed: numbers as numbers, text as
-strings, booleans as `true`/`false`, calculations inside `{{...}}`.
+strings, booleans as `true`/`false`, calculations directly after `=`.
 `modification_sign` on numeric/text setters defaults to `"="`; boolean setters
 require an explicit value. Numeric/text conditions accept `value` and
 `comparison_sign` (default `"="`). A boolean condition tests true; use

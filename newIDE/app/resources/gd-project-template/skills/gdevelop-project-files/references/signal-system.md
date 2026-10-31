@@ -103,12 +103,18 @@ events {
 
     conditions {
 
-      compareStrings first_string_expression={{ SignalName }} comparison_sign="=" second_string_expression="Game.Ready"
+      compareStrings {
+        first_string_expression = SignalName
+        comparison_sign = "="
+        second_string_expression = "Game.Ready"
+      }
     }
 
     actions {
 
-      log message_to_log={{ Payload }}
+      log {
+        message_to_log = Payload
+      }
     }
   }
 }
@@ -209,12 +215,16 @@ events {
 
     conditions {
 
-      compareStrings first_string_expression={{ SignalName }} comparison_sign="=" second_string_expression="Card.Refresh"
+      compareStrings {
+        first_string_expression = SignalName
+        comparison_sign = "="
+        second_string_expression = "Card.Refresh"
+      }
     }
 
     actions {
 
-      setBooleanObjectVariable object="Object" variable="RefreshPending" modification_sign="True"
+      setBooleanObjectVariable object=Object variable="RefreshPending" modification_sign="True"
     }
   }
 }
@@ -245,12 +255,16 @@ events {
 
     conditions {
 
-      booleanObjectVariable object="CardSlot" variable="NeedsRefresh" check_if_the_value_is="True"
+      booleanObjectVariable object=CardSlot variable="NeedsRefresh" check_if_the_value_is="True"
     }
 
     actions {
 
-      emitSignalToObjectInstance instance_id={{ CardSlot.InstanceId() }} signal_name="Card.Refresh" payload="inventory-changed"
+      emitSignalToObjectInstance {
+        instance_id = CardSlot.InstanceId()
+        signal_name = "Card.Refresh"
+        payload = "inventory-changed"
+      }
     }
   }
 }
