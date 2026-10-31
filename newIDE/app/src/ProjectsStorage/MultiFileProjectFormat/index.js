@@ -44,6 +44,10 @@ const PROJECT_SPLIT_FIELDS = new Set([
 
 export const LEGACY_FOLDER_STRUCTURE_FIELDS = Object.freeze([
   'eventsFunctionsFolderStructure',
+  'externalEventsFolderStructure',
+  'externalLayoutsFolderStructure',
+  'layoutsFolderStructure',
+  'testsFolderStructure',
   'objectsFolderStructure',
   'propertiesFolderStructure',
   'sharedPropertiesFolderStructure',

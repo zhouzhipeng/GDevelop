@@ -554,6 +554,10 @@ column2 = "ssfssdfsf"
     const prefab = extension.eventsBasedObjects[0];
     const behavior = extension.eventsBasedBehaviors[0];
 
+    project.externalEventsFolderStructure = folder;
+    project.externalLayoutsFolderStructure = folder;
+    project.layoutsFolderStructure = folder;
+    project.testsFolderStructure = folder;
     project.objectsFolderStructure = folder;
     project.layouts[0].objectsFolderStructure = folder;
     extension.eventsFunctionsFolderStructure = folder;
