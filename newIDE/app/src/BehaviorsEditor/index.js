@@ -28,6 +28,8 @@ import {
   addBehaviorToObject,
   addRequiredBehaviorsForBehaviorHolder,
   listObjectBehaviorsTypes,
+  isObjectSynchronizedOverNetwork,
+  multiplayerObjectBehaviorType,
 } from '../Utils/Behavior';
 import { sendBehaviorAdded } from '../Utils/Analytics/EventSender';
 import ElementWithMenu from '../UI/Menu/ElementWithMenu';
@@ -44,6 +46,8 @@ import {
 import useAlertDialog from '../UI/Alert/useAlertDialog';
 import PasteIcon from '../UI/CustomSvgIcons/Clipboard';
 import CopyIcon from '../UI/CustomSvgIcons/Copy';
+import NetworkSynchronized from '../UI/CustomSvgIcons/NetworkSynchronized';
+import NetworkNotSynchronized from '../UI/CustomSvgIcons/NetworkNotSynchronized';
 import ResponsiveFlatButton from '../UI/ResponsiveFlatButton';
 import { useResponsiveWindowSize } from '../UI/Responsive/ResponsiveWindowMeasurer';
 import Text from '../UI/Text';
@@ -144,6 +148,7 @@ type BehaviorConfigurationEditorProps = {|
   openExtension: (behaviorType: string) => void,
   isListLocked: boolean,
   canToggleBehaviorMute: boolean,
+  areObjectsSynchronizedOverNetwork: boolean,
   layersContainer: gdLayersContainer,
   hideConstantPlaceholderHints?: boolean,
 |};
@@ -170,6 +175,7 @@ const BehaviorConfigurationEditor = React.forwardRef<
       openExtension,
       isListLocked,
       canToggleBehaviorMute,
+      areObjectsSynchronizedOverNetwork,
       layersContainer,
       hideConstantPlaceholderHints,
     },
@@ -297,6 +303,7 @@ const BehaviorConfigurationEditor = React.forwardRef<
         return property.getLabel() || name;
       }
     ).filter(Boolean);
+    const isSynchronizedOverNetwork = behavior.isSynchronizedOverNetwork();
 
     return (
       <Accordion
@@ -310,6 +317,37 @@ const BehaviorConfigurationEditor = React.forwardRef<
       >
         <AccordionHeader
           actions={[
+            ...(areObjectsSynchronizedOverNetwork &&
+            behaviorTypeName !== multiplayerObjectBehaviorType
+              ? [
+                  <IconButton
+                    key="network-synchronization"
+                    size="small"
+                    id={`behavior-${behaviorName}-network-synchronization-button`}
+                    tooltip={
+                      isSynchronizedOverNetwork
+                        ? t`Synchronized with other players`
+                        : t`Not synchronized: when this behavior is enabled, disabled or changed, other players are not affected. Useful for behaviors handling the player inputs.`
+                    }
+                    onClick={ev => {
+                      ev.stopPropagation();
+                      [behavior].forEach(behavior =>
+                        behavior.setSynchronizedOverNetwork(
+                          !isSynchronizedOverNetwork
+                        )
+                      );
+                      forceUpdate();
+                      onBehaviorsUpdated();
+                    }}
+                  >
+                    {isSynchronizedOverNetwork ? (
+                      <NetworkSynchronized />
+                    ) : (
+                      <NetworkNotSynchronized />
+                    )}
+                  </IconButton>,
+                ]
+              : []),
             <HelpIcon
               key="help"
               size="small"
@@ -889,6 +927,9 @@ const BehaviorsEditor = (props: Props): React.Node => {
   } = props;
   const forceUpdate = useForceUpdate();
 
+  const areObjectsSynchronizedOverNetwork = isObjectSynchronizedOverNetwork(
+    object
+  );
   const {
     changeBehaviorName,
     removeBehavior,
@@ -1035,6 +1076,9 @@ const BehaviorsEditor = (props: Props): React.Node => {
                   isListLocked={isListLocked}
                   canToggleBehaviorMute={!!canToggleBehaviorMute}
                   hideConstantPlaceholderHints={hideConstantPlaceholderHints}
+                  areObjectsSynchronizedOverNetwork={
+                    areObjectsSynchronizedOverNetwork
+                  }
                 />
               );
             })}

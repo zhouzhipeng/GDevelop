@@ -1087,6 +1087,7 @@ const ObjectsList = React.forwardRef<Props, ObjectsListInterface>(
       bulkCut,
       bulkPaste,
       bulkDuplicate,
+      bulkMoveToNewFolder,
       bulkSetAsGlobalObject,
       buildBulkMenuTemplate,
     } = useBulkObjectOperations({
@@ -1499,6 +1500,10 @@ const ObjectsList = React.forwardRef<Props, ObjectsListInterface>(
             }
           });
           keyboardShortcutsRef.current.setShortcutCallback(
+            'onGroupInFolder',
+            bulkMoveToNewFolder
+          );
+          keyboardShortcutsRef.current.setShortcutCallback(
             'onSelectAll',
             selectAllInSection
           );
@@ -1517,6 +1522,7 @@ const ObjectsList = React.forwardRef<Props, ObjectsListInterface>(
         bulkCut,
         bulkPaste,
         bulkDuplicate,
+        bulkMoveToNewFolder,
         pasteIntoFolder,
         globalObjectsRootFolder,
         objectsRootFolder,

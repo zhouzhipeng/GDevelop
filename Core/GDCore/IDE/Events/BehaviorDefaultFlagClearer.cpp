@@ -15,9 +15,16 @@ void BehaviorDefaultFlagClearer::DoVisitObject(gd::Object& object) {
 };
 
 void BehaviorDefaultFlagClearer::DoVisitBehavior(gd::Behavior& behavior) {
+  ClearDefaultFlags(behavior);
+};
+
+void BehaviorDefaultFlagClearer::ClearDefaultFlags(gd::Behavior& behavior) {
   behavior.SetDefaultBehavior(false);
   behavior.SetMaterializeInheritedContent(true);
-};
+  // The Runtime doesn't know the behavior metadata: it considers behaviors
+  // synchronized unless specified otherwise.
+  behavior.SetSynchronizedOverNetworkByDefault(true);
+}
 
 BehaviorDefaultFlagClearer::~BehaviorDefaultFlagClearer() {}
 
@@ -25,8 +32,7 @@ void BehaviorDefaultFlagClearer::SerializeObjectWithCleanDefaultBehaviorFlags(
     const gd::Object &object, SerializerElement &serializerElement) {
   gd::Object clonedObject(object);
   for (const auto &behaviorName : clonedObject.GetAllBehaviorNames()) {
-    clonedObject.GetBehavior(behaviorName).SetDefaultBehavior(false);
-    clonedObject.GetBehavior(behaviorName).SetMaterializeInheritedContent(true);
+    ClearDefaultFlags(clonedObject.GetBehavior(behaviorName));
   }
   clonedObject.SerializeTo(serializerElement);
 }

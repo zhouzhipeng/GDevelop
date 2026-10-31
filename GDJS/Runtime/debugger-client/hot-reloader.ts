@@ -195,6 +195,11 @@ namespace gdjs {
         }
         const reloadedScriptElement = document.createElement('script');
         reloadedScriptElement.src = srcFilename + '?timestamp=' + Date.now();
+        // Like the scripts of index.html: without it, a script from another
+        // origin (like the runtime of the browser previews) has an
+        // "about:blank" base URL, so its relative dynamic imports
+        // (like the Jolt physics library) can't be resolved.
+        reloadedScriptElement.crossOrigin = 'anonymous';
         reloadedScriptElement.onload = () => {
           resolve();
         };
@@ -1176,7 +1181,8 @@ namespace gdjs {
       this._hotReloadRuntimeSceneObjects(
         oldObjectDataList,
         newObjectDataList,
-        runtimeInstanceContainer
+        runtimeInstanceContainer,
+        { shouldReplaceRegisteredObjectData: true }
       );
       this._hotReloadRuntimeSceneInstances(
         oldProjectData,
@@ -1333,10 +1339,21 @@ namespace gdjs {
       // runtimeInstanceContainer gives an access as a map.
       runtimeInstanceContainer: gdjs.RuntimeInstanceContainer
     ): void {
-      const oldObjects: Array<ObjectData | null> = updatedObjects.map(
-        (objectData) =>
-          runtimeInstanceContainer._objects.get(objectData.name) || null
-      );
+      // The registered object data are the ones from the ProjectData:
+      // they are registered when the scene is loaded and they are the ones
+      // updated below.
+      //
+      // In gdjs.CustomRuntimeObjectInstanceContainer.loadFrom, object can
+      // be registered with a different instance from the ProjectData. This
+      // is only done for children of a custom object with a children overriding.
+      // In the case of the editor, the fake custom object used for editing
+      // variants has no children overriding (see
+      // gdjs.RuntimeGame._createSceneWithCustomObject).
+      const projectObjectDataList: Array<ObjectData | null> =
+        updatedObjects.map(
+          (objectData) =>
+            runtimeInstanceContainer._objects.get(objectData.name) || null
+        );
 
       const projectData: ProjectData = this._runtimeGame._data;
       const newObjectDataList = HotReloader.resolveCustomObjectConfigurations(
@@ -1345,24 +1362,21 @@ namespace gdjs {
       );
 
       this._hotReloadRuntimeSceneObjects(
-        oldObjects,
+        projectObjectDataList,
         newObjectDataList,
-        runtimeInstanceContainer
+        runtimeInstanceContainer,
+        // Replacing them with a copy (`newObjectDataList`) would make the next
+        // hot-reload update the copy, and a scene loaded again from the
+        // ProjectData (when the editor switches back to it) would lose the
+        // changes.
+        { shouldReplaceRegisteredObjectData: false }
       );
-      // Update the GameData
       for (let index = 0; index < updatedObjects.length; index++) {
-        const oldObjectData = oldObjects[index];
+        const projectObjectData = projectObjectDataList[index];
         // When the object is new, the hot-reload call `registerObject`
         // so `_objects` is already updated.
-        if (oldObjectData) {
-          // In gdjs.CustomRuntimeObjectInstanceContainer.loadFrom, object can
-          // be registered with a different instance from the ProjectData. This
-          // is only done for children of a custom object with a children overriding.
-          // In the case of the editor, the fake custom object used for editing
-          // variants has no children overriding (see
-          // gdjs.RuntimeGame._createSceneWithCustomObject).
-          // Thus, the oldObjectData is always the one from the ProjectData.
-          HotReloader.assignOrDelete(oldObjectData, updatedObjects[index]);
+        if (projectObjectData) {
+          HotReloader.assignOrDelete(projectObjectData, updatedObjects[index]);
         } else {
           console.warn(
             `Can't update object data for "${updatedObjects[index].name}" because it doesn't exist.`
@@ -1374,7 +1388,8 @@ namespace gdjs {
     _hotReloadRuntimeSceneObjects(
       oldObjects: Array<ObjectData | null>,
       newObjects: ObjectData[],
-      runtimeInstanceContainer: gdjs.RuntimeInstanceContainer
+      runtimeInstanceContainer: gdjs.RuntimeInstanceContainer,
+      options: { shouldReplaceRegisteredObjectData: boolean }
     ): void {
       oldObjects.forEach((oldObjectData) => {
         if (!oldObjectData) {
@@ -1398,7 +1413,8 @@ namespace gdjs {
             this._hotReloadRuntimeSceneObject(
               oldObjectData,
               newObjectData,
-              runtimeInstanceContainer
+              runtimeInstanceContainer,
+              options
             );
           }
         }
@@ -1421,7 +1437,12 @@ namespace gdjs {
     _hotReloadRuntimeSceneObject(
       oldObjectData: ObjectData,
       newObjectData: ObjectData,
-      runtimeInstanceContainer: gdjs.RuntimeInstanceContainer
+      runtimeInstanceContainer: gdjs.RuntimeInstanceContainer,
+      {
+        shouldReplaceRegisteredObjectData,
+      }: {
+        shouldReplaceRegisteredObjectData: boolean;
+      }
     ): void {
       let hotReloadSucceeded = true;
       if (!HotReloader.deepEqual(oldObjectData, newObjectData)) {
@@ -1433,8 +1454,10 @@ namespace gdjs {
             '" was modified and is hot-reloaded.',
         });
 
-        // Register the updated object data, used for new instances.
-        runtimeInstanceContainer.updateObject(newObjectData);
+        if (shouldReplaceRegisteredObjectData) {
+          // Replace the registered object data, used for new instances.
+          runtimeInstanceContainer.updateObject(newObjectData);
+        }
 
         // Update existing instances
         const runtimeObjects = runtimeInstanceContainer.getObjects(

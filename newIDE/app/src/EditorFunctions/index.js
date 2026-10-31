@@ -90,7 +90,11 @@ import {
   addOrReplaceResourcesFromAttachments,
 } from './AttachmentResources';
 import getObjectByName from '../Utils/GetObjectByName';
-import { getAllVisibleBehaviorNames } from '../Utils/Behavior';
+import {
+  getAllVisibleBehaviorNames,
+  isObjectSynchronizedOverNetwork,
+  multiplayerObjectBehaviorType,
+} from '../Utils/Behavior';
 import type {
   SceneEventsOutsideEditorChanges,
   ExtensionsOutsideEditorChanges,
@@ -324,6 +328,8 @@ export type EditorFunctionGenericOutput = {|
   eventsRenderingErrors?: Array<EventsTextRenderingError>,
   objectName?: string,
   behaviorName?: string,
+  // `inspect_behavior_properties`, for an object synchronized with other players.
+  isSynchronizedOverNetwork?: boolean,
   properties?: any,
   sharedProperties?: any,
   instances?: any,
@@ -498,7 +504,7 @@ export type EventsGenerationOptions = {|
   objectsList: string,
   existingEventsJson: string | null,
   placementHint: string | null,
-  relatedAiRequestId: string,
+  relatedAiRequestId: string | null,
   estimatedComplexity: number | null,
 |};
 
@@ -1082,6 +1088,20 @@ const serializeNamedProperty = (
 // guessing property names from actions/expressions.
 const noEditablePropertiesText =
   "No editable properties exist here. This is expected for capability behaviors (Scale, Opacity, Flippable, Resizable, Effect...): they are only used through their actions, conditions and expressions in events — never guess property names from those. An object's default size, scale or opacity is set on each placed instance, or with actions in events.";
+
+// Not a property of the behavior, but changed like one by
+// `change_behavior_property`. Only shown for objects synchronized with other
+// players (the multiplayer behavior itself is always synchronized).
+const networkSynchronizationPropertyName = 'isSynchronizedOverNetwork';
+
+const getNetworkSynchronizationOfBehavior = (
+  object: gdObject,
+  behavior: gdBehavior
+): {| isSynchronizedOverNetwork: boolean |} | void =>
+  isObjectSynchronizedOverNetwork(object) &&
+  behavior.getTypeName() !== multiplayerObjectBehaviorType
+    ? { isSynchronizedOverNetwork: behavior.isSynchronizedOverNetwork() }
+    : undefined;
 
 // List the (visible) property names so a "property not found" warning lets
 // the caller immediately pick the right name instead of guessing again. If no
@@ -2550,14 +2570,17 @@ const inspectObjectPropertiesEffects: EditorFunction = {
     const behaviors = object
       .getAllBehaviorNames()
       .toJSArray()
-      .map(behaviorName => {
-        if (!object) return null;
-        const behavior = object.getBehavior(behaviorName);
-        return {
-          behaviorName: behaviorName,
-          behaviorType: behavior.getTypeName(),
-        };
-      })
+      .map(
+        (behaviorName): SimplifiedBehavior | null => {
+          if (!object) return null;
+          const behavior = object.getBehavior(behaviorName);
+          return {
+            behaviorName: behaviorName,
+            behaviorType: behavior.getTypeName(),
+            ...getNetworkSynchronizationOfBehavior(object, behavior),
+          };
+        }
+      )
       .filter(Boolean);
 
     // Also include information about animations:
@@ -3815,12 +3838,21 @@ const inspectBehaviorProperties: EditorFunction = {
       properties.length === 0 &&
       (!sharedProperties || sharedProperties.length === 0);
 
+    const networkSynchronization = getNetworkSynchronizationOfBehavior(
+      object,
+      behavior
+    );
+
     return {
       success: true,
       behaviorName: behavior_name,
       properties: properties,
       sharedProperties,
-      message: hasNoPropertyAtAll ? noEditablePropertiesText : undefined,
+      ...networkSynchronization,
+      message:
+        hasNoPropertyAtAll && !networkSynchronization
+          ? noEditablePropertiesText
+          : undefined,
     };
   },
   modifiesProject: false,
@@ -4217,6 +4249,35 @@ const changeBehaviorProperty: EditorFunction = {
         warnings.push(...propertyWarnings);
         // $FlowFixMe[incompatible-type]
         changes.push(...propertyChanges);
+      } else if (
+        // Matched like the name of a real property (see `findPropertyByName`).
+        propertyName.toLowerCase().replace(/\s|_|-/g, '') ===
+        networkSynchronizationPropertyName.toLowerCase()
+      ) {
+        const booleanNewValue = newValue.toLowerCase().trim();
+        if (!['true', 'false', '1', '0'].includes(booleanNewValue)) {
+          warnings.push(
+            `Could not set "${networkSynchronizationPropertyName}" on behavior "${behavior_name}": use "true" or "false".`
+          );
+          return;
+        }
+        const isSynchronizedOverNetwork =
+          booleanNewValue === 'true' || booleanNewValue === '1';
+        for (const object of objectsWithBehavior) {
+          object
+            .getBehavior(behavior_name)
+            .setSynchronizedOverNetwork(isSynchronizedOverNetwork);
+          if (!isObjectSynchronizedOverNetwork(object)) {
+            warnings.push(
+              `"${object.getName()}" has no "${multiplayerObjectBehaviorType}" behavior: "${networkSynchronizationPropertyName}" has no effect until it's added.`
+            );
+          }
+        }
+        changes.push(
+          `Set "${networkSynchronizationPropertyName}" on behavior "${behavior_name}" = "${String(
+            isSynchronizedOverNetwork
+          )}".`
+        );
       } else {
         warnings.push(
           `Property "${propertyName}" not on behavior "${behavior_name}" of "${object_name}".${getAvailablePropertyNamesText(
@@ -8370,12 +8431,6 @@ const addSceneEvents: EditorFunction = {
       };
     };
 
-    if (!relatedAiRequestId) {
-      return makeGenericFailure(
-        'No related AI request ID found for events generation.'
-      );
-    }
-
     // A refused call (unknown scene or function, extension of the store...)
     // regenerates nothing: the target is checked first.
     const checkedEventsTarget = resolveEventsTarget();
@@ -8595,8 +8650,24 @@ const addSceneEvents: EditorFunction = {
           'No events description/events script provided for some event batches. Provide one for each event(s) to generate.'
         );
       }
+      // Outside the GDevelop AI (no AI request), the events scripts are only
+      // compiled: no agent writes events from a description.
+      if (
+        !relatedAiRequestId &&
+        parsedEventBatches.some(
+          batch => !batch.eventScript && batch.placementRelation !== 'delete'
+        )
+      ) {
+        return makeGenericFailure(
+          'Without the GDevelop AI, events are only compiled from `event_script`: give one for each batch (an `events_description` alone is not handled).'
+        );
+      }
     } else if (!eventsDescription) {
       return makeGenericFailure('No events description provided.');
+    } else if (!relatedAiRequestId) {
+      return makeGenericFailure(
+        'Without the GDevelop AI, events are only compiled from `event_script` batches: use `event_batches`.'
+      );
     }
 
     try {

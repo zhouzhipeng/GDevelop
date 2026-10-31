@@ -984,3 +984,25 @@ export const sendAiRequestMessageSent = (metadata: {|
 |}) => {
   recordEvent('ai-request-message-sent', metadata);
 };
+
+export const sendMcpToolCalled = (metadata: {|
+  toolName: string,
+  clientName: string | null,
+  success: boolean,
+  durationMs: number,
+  // `http`: an agent connected to the opened editor; `stdio`: `--mcp`.
+  transport: 'http' | 'stdio',
+|}) => {
+  recordEvent('mcp-tool-called', metadata);
+};
+
+export const sendMcpAgentConnected = (metadata: {|
+  clientName: string | null,
+  clientVersion: string | null,
+  transport: 'http' | 'stdio',
+  isReadOnly: boolean,
+  // Null for `--mcp`, where the project is the one given in the arguments.
+  hasOpenedProject: boolean | null,
+|}) => {
+  recordEvent('mcp-agent-connected', metadata);
+};

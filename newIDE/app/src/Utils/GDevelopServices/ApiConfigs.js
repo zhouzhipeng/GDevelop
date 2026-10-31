@@ -149,8 +149,17 @@ export const GDevelopProjectApi = {
   baseUrl: ((getGDevelopApiBaseUrl('project'): string): string),
 };
 
+// In development, the GDevelop AI backend can be a local one (`generation-api`
+// run with serverless offline): `--generation-api-url http://localhost:3013`.
+const getDevelopmentGenerationApiUrl = (): string | null => {
+  if (!isDev) return null;
+  const url = Window.getArguments()['generation-api-url'];
+  return typeof url === 'string' && url ? url : null;
+};
+
 export const GDevelopGenerationApi = {
-  baseUrl: ((getGDevelopApiBaseUrl('generation'): string): string),
+  baseUrl: (getDevelopmentGenerationApiUrl() ||
+    getGDevelopApiBaseUrl('generation'): string),
 };
 
 export const GDevelopAiCdn = {
@@ -187,7 +196,6 @@ export const GDevelopPrivateGameTemplatesStorage = {
 
 export const GDevelopPublicAssetResourcesStorageBaseUrl =
   gdevelopAssetResourcesProxyPath || 'https://asset-resources.gdevelop.io';
-export const GDevelopPublicAssetResourcesStorageStagingBaseUrl =
-  gdevelopAssetResourcesProxyPath
-    ? `${gdevelopAssetResourcesProxyPath}/staging`
-    : 'https://asset-resources.gdevelop.io/staging';
+export const GDevelopPublicAssetResourcesStorageStagingBaseUrl = gdevelopAssetResourcesProxyPath
+  ? `${gdevelopAssetResourcesProxyPath}/staging`
+  : 'https://asset-resources.gdevelop.io/staging';

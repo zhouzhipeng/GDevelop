@@ -28,23 +28,33 @@ class GD_CORE_API Behavior: public BehaviorConfigurationContainer {
       : BehaviorConfigurationContainer(),
         isDefaultBehavior(false),
         isInheritedFromObjectType(false),
-        isMuted(false) {};
+        isMuted(false),
+        isSynchronizedOverNetwork(true),
+        isSynchronizedOverNetworkByDefault(true) {};
   Behavior(const gd::String& name_, const gd::String& type_)
       : BehaviorConfigurationContainer(name_, type_),
         isDefaultBehavior(false),
         isInheritedFromObjectType(false),
-        isMuted(false) {};
+        isMuted(false),
+        isSynchronizedOverNetwork(true),
+        isSynchronizedOverNetworkByDefault(true) {};
   Behavior(const Behavior& other)
       : BehaviorConfigurationContainer(other),
         isDefaultBehavior(other.isDefaultBehavior),
         isInheritedFromObjectType(other.isInheritedFromObjectType),
-        isMuted(other.isMuted) {};
+        isMuted(other.isMuted),
+        isSynchronizedOverNetwork(other.isSynchronizedOverNetwork),
+        isSynchronizedOverNetworkByDefault(
+            other.isSynchronizedOverNetworkByDefault) {};
   Behavior& operator=(const Behavior& other) {
     if (this != &other) {
       BehaviorConfigurationContainer::operator=(other);
       isDefaultBehavior = other.isDefaultBehavior;
       isInheritedFromObjectType = other.isInheritedFromObjectType;
       isMuted = other.isMuted;
+      isSynchronizedOverNetwork = other.isSynchronizedOverNetwork;
+      isSynchronizedOverNetworkByDefault =
+          other.isSynchronizedOverNetworkByDefault;
     }
     return *this;
   }
@@ -59,6 +69,35 @@ class GD_CORE_API Behavior: public BehaviorConfigurationContainer {
 
   void SetDefaultBehavior(bool isDefaultBehavior_) {
     isDefaultBehavior = isDefaultBehavior_;
+  }
+
+  /**
+   * \brief Check if the behavior state is synchronized with other players,
+   * when its object is synchronized over the network (multiplayer).
+   *
+   * When not synchronized, the behavior only runs as decided by the game of
+   * the player owning the object (useful for behaviors reacting to the inputs
+   * of the player).
+   */
+  bool IsSynchronizedOverNetwork() const { return isSynchronizedOverNetwork; }
+
+  void SetSynchronizedOverNetwork(bool isSynchronizedOverNetwork_) {
+    isSynchronizedOverNetwork = isSynchronizedOverNetwork_;
+  }
+
+  /**
+   * \brief Check if the behavior is synchronized over the network when not
+   * specified otherwise. This comes from the behavior metadata, and is not
+   * serialized: `IsSynchronizedOverNetwork` is only serialized when it's
+   * different from this.
+   */
+  bool IsSynchronizedOverNetworkByDefault() const {
+    return isSynchronizedOverNetworkByDefault;
+  }
+
+  void SetSynchronizedOverNetworkByDefault(
+      bool isSynchronizedOverNetworkByDefault_) {
+    isSynchronizedOverNetworkByDefault = isSynchronizedOverNetworkByDefault_;
   }
 
   bool IsInheritedFromObjectType() const {
@@ -82,6 +121,8 @@ class GD_CORE_API Behavior: public BehaviorConfigurationContainer {
   bool isDefaultBehavior;
   bool isInheritedFromObjectType;
   bool isMuted;
+  bool isSynchronizedOverNetwork;
+  bool isSynchronizedOverNetworkByDefault;
 };
 
 }  // namespace gd

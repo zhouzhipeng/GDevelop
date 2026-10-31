@@ -29,6 +29,7 @@
 #include "GDCore/Project/ExternalEvents.h"
 #include "GDCore/Project/ExternalLayout.h"
 #include "GDCore/Project/Layout.h"
+#include "GDCore/Project/ProjectItemFolderOrItem.h"
 #include "GDCore/Project/Object.h"
 #include "GDCore/Project/ObjectConfiguration.h"
 #include "GDCore/Project/ObjectGroupsContainer.h"
@@ -183,7 +184,12 @@ Project::Project()
       constantsJson("{}"),
       objectsContainer(gd::ObjectsContainer::SourceType::Global),
       resourcesContainer(gd::ResourcesContainer::SourceType::Global),
-      sceneResourcesPreloading("at-startup"), sceneResourcesUnloading("never") {
+      sceneResourcesPreloading("at-startup"), sceneResourcesUnloading("never"),
+      layoutsRootFolder(gd::make_unique<gd::LayoutFolderOrLayout>("__ROOT")) {
+  externalLayoutsRootFolder =
+      gd::make_unique<gd::ExternalLayoutFolderOrExternalLayout>("__ROOT");
+  externalEventsRootFolder =
+      gd::make_unique<gd::ExternalEventsFolderOrExternalEvents>("__ROOT");
 }
 
 Project::~Project() {}
@@ -583,6 +589,8 @@ gd::Layout& Project::InsertNewLayout(const gd::String& name,
   newlyInsertedLayout.SetName(name);
   newlyInsertedLayout.UpdateBehaviorsSharedData(*this);
 
+  layoutsRootFolder->InsertItem(&newlyInsertedLayout);
+
   return newlyInsertedLayout;
 }
 
@@ -594,6 +602,8 @@ gd::Layout& Project::InsertLayout(const gd::Layout& layout,
 
   newlyInsertedLayout.UpdateBehaviorsSharedData(*this);
 
+  layoutsRootFolder->InsertItem(&newlyInsertedLayout);
+
   return newlyInsertedLayout;
 }
 
@@ -603,6 +613,10 @@ void Project::RemoveLayout(const gd::String& name) {
         return layout->GetName() == name;
       });
   if (scene == scenes.end()) return;
+
+  // Remove the layout from the folder structure first, so that it does not
+  // keep a dangling pointer to the layout being destroyed.
+  layoutsRootFolder->RemoveRecursivelyItemNamed(name);
 
   scenes.erase(scene);
 }
@@ -653,6 +667,7 @@ gd::ExternalEvents& Project::InsertNewExternalEvents(const gd::String& name,
       new gd::ExternalEvents())));
 
   newlyInsertedExternalEvents.SetName(name);
+  externalEventsRootFolder->InsertItem(&newlyInsertedExternalEvents);
 
   return newlyInsertedExternalEvents;
 }
@@ -663,6 +678,7 @@ gd::ExternalEvents& Project::InsertExternalEvents(
       position < externalEvents.size() ? externalEvents.begin() + position
                                        : externalEvents.end(),
       new gd::ExternalEvents(events))));
+  externalEventsRootFolder->InsertItem(&newlyInsertedExternalEvents);
 
   return newlyInsertedExternalEvents;
 }
@@ -676,6 +692,7 @@ void Project::RemoveExternalEvents(const gd::String& name) {
               });
   if (events == externalEvents.end()) return;
 
+  externalEventsRootFolder->RemoveRecursivelyItemNamed(name);
   externalEvents.erase(events);
 }
 
@@ -783,6 +800,7 @@ gd::ExternalLayout& Project::InsertNewExternalLayout(const gd::String& name,
       new gd::ExternalLayout())));
 
   newlyInsertedExternalLayout.SetName(name);
+  externalLayoutsRootFolder->InsertItem(&newlyInsertedExternalLayout);
   return newlyInsertedExternalLayout;
 }
 
@@ -792,6 +810,7 @@ gd::ExternalLayout& Project::InsertExternalLayout(
       position < externalLayouts.size() ? externalLayouts.begin() + position
                                         : externalLayouts.end(),
       new gd::ExternalLayout(layout))));
+  externalLayoutsRootFolder->InsertItem(&newlyInsertedExternalLayout);
 
   return newlyInsertedExternalLayout;
 }
@@ -805,6 +824,7 @@ void Project::RemoveExternalLayout(const gd::String& name) {
               });
   if (externalLayout == externalLayouts.end()) return;
 
+  externalLayoutsRootFolder->RemoveRecursivelyItemNamed(name);
   externalLayouts.erase(externalLayout);
 }
 
@@ -1137,7 +1157,10 @@ void Project::UnserializeFrom(const SerializerElement& element) {
   objectsContainer.AddMissingObjectsInRootFolder();
 
   GetVariables().UnserializeFrom(element.GetChild("variables", 0, "Variables"));
+
   scenes.clear();
+  // Clear the folder structure too: it points to the layouts being destroyed.
+  layoutsRootFolder->Clear();
   const SerializerElement& layoutsElement =
       element.GetChild("layouts", 0, "Scenes");
   layoutsElement.ConsiderAsArrayOf("layout", "Scene");
@@ -1152,7 +1175,18 @@ void Project::UnserializeFrom(const SerializerElement& element) {
   // The preview layout is only serialized when it is set.
   SetPreviewLayout(element.GetStringAttribute("previewLayout"));
 
+  // `InsertNewLayout` added all the layouts at the root of the folder
+  // structure: replace it by the saved one, if any.
+  layoutsRootFolder->UnserializeFromChildOf(
+      element,
+      "layoutsFolderStructure",
+      [this](const gd::String& name) {
+        return HasLayoutNamed(name) ? &GetLayout(name) : nullptr;
+      },
+      scenes);
+
   externalEvents.clear();
+  externalEventsRootFolder->Clear();
   const SerializerElement& externalEventsElement =
       element.GetChild("externalEvents", 0, "ExternalEvents");
   externalEventsElement.ConsiderAsArrayOf("externalEvents", "ExternalEvents");
@@ -1165,11 +1199,20 @@ void Project::UnserializeFrom(const SerializerElement& element) {
         GetExternalEventsCount());
     externalEvents.UnserializeFrom(*this, externalEventElement);
   }
+  externalEventsRootFolder->UnserializeFromChildOf(
+      element,
+      "externalEventsFolderStructure",
+      [this](const gd::String& name) {
+        return HasExternalEventsNamed(name) ? &GetExternalEvents(name)
+                                            : nullptr;
+      },
+      externalEvents);
 
   tests.ClearTests();
   if (element.HasChild("tests")) {
     tests.UnserializeTestsFrom(element.GetChild("tests"));
   }
+  tests.UnserializeFolderStructureFromChildOf(element, "testsFolderStructure");
 
   namedEasings.ClearNamedEasings();
   if (element.HasChild("namedEasings")) {
@@ -1177,6 +1220,7 @@ void Project::UnserializeFrom(const SerializerElement& element) {
   }
 
   externalLayouts.clear();
+  externalLayoutsRootFolder->Clear();
   const SerializerElement& externalLayoutsElement =
       element.GetChild("externalLayouts", 0, "ExternalLayouts");
   externalLayoutsElement.ConsiderAsArrayOf("externalLayout", "ExternalLayout");
@@ -1188,6 +1232,14 @@ void Project::UnserializeFrom(const SerializerElement& element) {
         InsertNewExternalLayout("", GetExternalLayoutsCount());
     newExternalLayout.UnserializeFrom(*this, externalLayoutElement);
   }
+  externalLayoutsRootFolder->UnserializeFromChildOf(
+      element,
+      "externalLayoutsFolderStructure",
+      [this](const gd::String& name) {
+        return HasExternalLayoutNamed(name) ? &GetExternalLayout(name)
+                                            : nullptr;
+      },
+      externalLayouts);
 }
 
 void Project::UnserializeAndInsertExtensionsFrom(
@@ -1405,7 +1457,7 @@ void Project::SerializeTo(SerializerElement& element) const {
   // end of compatibility code
 
   extensionProperties.SerializeTo(propElement.AddChild("extensionProperties"));
-  
+
   SerializerElement& platformsElement = propElement.AddChild("platforms");
   platformsElement.ConsiderAsArrayOf("platform");
   for (std::size_t i = 0; i < platforms.size(); ++i) {
@@ -1445,15 +1497,20 @@ void Project::SerializeTo(SerializerElement& element) const {
   for (std::size_t i = 0; i < GetLayoutsCount(); i++)
     GetLayout(i).SerializeTo(layoutsElement.AddChild("layout"));
 
+  layoutsRootFolder->SerializeTo(element.AddChild("layoutsFolderStructure"));
+
   SerializerElement& externalEventsElement = element.AddChild("externalEvents");
   externalEventsElement.ConsiderAsArrayOf("externalEvents");
   for (std::size_t i = 0; i < GetExternalEventsCount(); ++i)
     GetExternalEvents(i).SerializeTo(
         externalEventsElement.AddChild("externalEvents"));
+  externalEventsRootFolder->SerializeTo(
+      element.AddChild("externalEventsFolderStructure"));
 
   if (tests.GetTestsCount() > 0) {
     tests.SerializeTestsTo(element.AddChild("tests"));
   }
+  tests.SerializeFolderStructureTo(element.AddChild("testsFolderStructure"));
 
   if (namedEasings.GetNamedEasingsCount() > 0) {
     namedEasings.SerializeNamedEasingsTo(element.AddChild("namedEasings"));
@@ -1473,6 +1530,8 @@ void Project::SerializeTo(SerializerElement& element) const {
   for (std::size_t i = 0; i < externalLayouts.size(); ++i)
     externalLayouts[i]->SerializeTo(
         externalLayoutsElement.AddChild("externalLayout"));
+  externalLayoutsRootFolder->SerializeTo(
+      element.AddChild("externalLayoutsFolderStructure"));
 }
 
 bool Project::IsNameSafe(const gd::String& name) {
@@ -1580,13 +1639,26 @@ void Project::Init(const gd::Project& game) {
 
   scenes = gd::Clone(game.scenes);
 
+  // The folder structures are not copied (they point to the items of the
+  // other project). It's not an issue because the UI uses the serialization
+  // for duplication: rebuild flat structures so that every item stays
+  // reachable.
+  layoutsRootFolder = gd::make_unique<gd::LayoutFolderOrLayout>("__ROOT");
+  layoutsRootFolder->AddMissingItems(scenes);
+
   externalEvents = gd::Clone(game.externalEvents);
+  externalEventsRootFolder =
+      gd::make_unique<gd::ExternalEventsFolderOrExternalEvents>("__ROOT");
+  externalEventsRootFolder->AddMissingItems(externalEvents);
 
   tests = game.tests;
 
   namedEasings = game.namedEasings;
 
   externalLayouts = gd::Clone(game.externalLayouts);
+  externalLayoutsRootFolder =
+      gd::make_unique<gd::ExternalLayoutFolderOrExternalLayout>("__ROOT");
+  externalLayoutsRootFolder->AddMissingItems(externalLayouts);
   eventsFunctionsExtensions = gd::Clone(game.eventsFunctionsExtensions);
 
   variables = game.GetVariables();

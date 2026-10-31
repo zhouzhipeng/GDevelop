@@ -7,8 +7,20 @@ const argsParserOptions = {
     'keep-open',
     'block-on-diagnostic-errors',
     'headless',
+    'json',
+    'dry-run',
+    'read-only',
+    'mcp',
+    'show',
   ],
-  string: ['_', 'run-command', 'cmd-args', 'mcp-port'],
+  string: [
+    '_',
+    'run-command',
+    'cmd-args',
+    'mcp-port',
+    'results-path',
+    'generation-api-url',
+  ],
   // Preserve the settings file value when this flag is absent.
   default: { 'block-on-diagnostic-errors': null },
 };

@@ -5,6 +5,9 @@ import { mapFor } from './MapFor';
 
 const gd: libGDevelop = global.gd;
 
+export const multiplayerObjectBehaviorType =
+  'Multiplayer::MultiplayerObjectBehavior';
+
 const getBehaviorNamesWithType = (object: any, type: string): Array<string> =>
   object
     .getAllBehaviorNames()
@@ -86,6 +89,13 @@ export const addRequiredBehaviorsForBehaviorHolder = (
       });
     });
 };
+
+/**
+ * Return true if the object is synchronized with other players (multiplayer),
+ * in which case its behaviors can be set as synchronized or not.
+ */
+export const isObjectSynchronizedOverNetwork = (object: gdObject): boolean =>
+  !!hasBehaviorWithType(object, multiplayerObjectBehaviorType);
 
 export const addBehaviorToObject = (
   project: gdProject,

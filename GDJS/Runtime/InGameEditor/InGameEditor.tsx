@@ -2304,19 +2304,21 @@ namespace gdjs {
     setVisibleScreenArea(visibleScreenArea: ScreenArea) {
       this._visibleScreenArea = visibleScreenArea;
 
-      // Toolbars are centered in this area.
-      if (typeof document === 'undefined') return;
-      const rootElement = document.documentElement;
-      if (!rootElement) return;
-      rootElement.style.setProperty(
+      // Toolbars are centered in this area. They are rendered in the DOM
+      // element container, so they inherit these properties from it.
+      const domElementContainer = this._runtimeGame
+        .getRenderer()
+        .getDomElementContainer();
+      if (!domElementContainer) return;
+      domElementContainer.style.setProperty(
         '--in-game-editor-visible-area-left',
         visibleScreenArea.minX * 100 + '%'
       );
-      rootElement.style.setProperty(
+      domElementContainer.style.setProperty(
         '--in-game-editor-visible-area-right',
         (1 - visibleScreenArea.maxX) * 100 + '%'
       );
-      rootElement.style.setProperty(
+      domElementContainer.style.setProperty(
         '--in-game-editor-visible-area-top',
         visibleScreenArea.minY * 100 + '%'
       );
@@ -7133,7 +7135,7 @@ namespace gdjs {
       this._renderer.onDestroyed();
     }
   }
-  gdjs.registerObject('', UnknownRuntimeObject);
+  gdjs.registerObject(gdjs.inGameEditorUnknownObjectType, UnknownRuntimeObject);
 
   class UnknownRuntimeObjectRenderer extends gdjs.RuntimeObject3DRenderer {
     private _threeObject: THREE.Mesh;

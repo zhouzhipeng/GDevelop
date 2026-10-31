@@ -217,6 +217,12 @@ declare type BehaviorData = {
   type: string;
   /** When true, the behavior is initially deactivated. */
   isMuted?: boolean;
+  /**
+   * False if the behavior state must not be synchronized with other players
+   * (for behaviors reacting to the inputs of the player owning the object).
+   * Synchronized if not specified.
+   */
+  isSynchronizedOverNetwork?: boolean;
 };
 
 declare type BehaviorNetworkSyncData = {

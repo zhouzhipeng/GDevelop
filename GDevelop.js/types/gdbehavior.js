@@ -20,6 +20,9 @@ declare class gdBehavior {
   serializeEffectiveTo(element: gdSerializerElement): void;
   isInheritedFromObjectType(): boolean;
   setInheritedFromObjectType(isInheritedFromObjectType: boolean): void;
+  isSynchronizedOverNetwork(): boolean;
+  setSynchronizedOverNetwork(isSynchronizedOverNetwork: boolean): void;
+  isSynchronizedOverNetworkByDefault(): boolean;
   delete(): void;
   ptr: number;
 };
