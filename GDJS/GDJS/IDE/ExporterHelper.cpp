@@ -266,6 +266,22 @@ bool ExporterHelper::ExportProjectForPixiPreview(
       InsertUnique(includesFiles,
                    options.exportPath + "/tsl-material-registry.js");
     }
+    // Gameplay tests can only be run when a debugger client is included
+    // (see `AddLibsInclude`): then, include the files adding helpers to the
+    // gameplay test harness, for the extensions used by the project.
+    if (!options.websocketDebuggerServerAddress.empty() ||
+        options.useWindowMessageDebuggerClient) {
+      const auto &platform = exportedProject.GetCurrentPlatform();
+      for (const auto &extensionName :
+           usedExtensionsResult.GetUsedExtensions()) {
+        if (!platform.IsExtensionLoaded(extensionName)) continue;
+        for (const auto &includeFile :
+             platform.GetExtension(extensionName)
+                 ->GetGameplayTestIncludeFiles()) {
+          InsertUnique(includesFiles, includeFile);
+        }
+      }
+    }
     for (const auto &requiredFile : usedExtensionsResult.GetUsedRequiredFiles()) {
       InsertUnique(resourcesFiles, requiredFile);
     }

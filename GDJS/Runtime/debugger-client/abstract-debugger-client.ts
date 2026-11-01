@@ -1463,8 +1463,8 @@ namespace gdjs {
         } else if (data.command === 'gameplayTest.run') {
           if (gdjs.gameplayTests) {
             gdjs.gameplayTests
-              .runGameplayTest(runtimeGame, data.payload, (frame) => {
-                that.sendGameplayTestProgress(data.messageId, frame);
+              .runGameplayTest(runtimeGame, data.payload, (progress) => {
+                that.sendGameplayTestProgress(data.messageId, progress);
               })
               .then((result) => {
                 that.sendGameplayTestResult(data.messageId, result);
@@ -2181,12 +2181,15 @@ namespace gdjs {
     /**
      * Send a progress update about the gameplay test being run.
      */
-    sendGameplayTestProgress(messageId: number, frame: number): void {
+    sendGameplayTestProgress(
+      messageId: number,
+      progress: gdjs.gameplayTests.GameplayTestProgress
+    ): void {
       this._sendMessage(
         circularSafeStringify({
           command: 'gameplayTest.progress',
           messageId,
-          payload: { frame },
+          payload: progress,
         })
       );
     }
