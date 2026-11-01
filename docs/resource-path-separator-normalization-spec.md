@@ -316,7 +316,7 @@ while changing only the export projection of `file`.
 
 ### Documentation
 
-- `docs/settings-dsl-spec.md`
+- `docs/gdl-spec.md`
   - Declare canonical `/` separators for local resource `file` values.
   - Document filename-only names for newly registered resources.
   - Explicitly state that names loaded from existing projects are preserved.

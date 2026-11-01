@@ -1,7 +1,7 @@
 # GDL 符号引用
 
 状态：已实施。作者格式 22，GDL catalog 21，instruction catalog 7。
-当前入口见 [GDL 规范](settings-dsl-spec.md)。不提供旧作者格式兼容读取。
+当前入口见 [GDL 规范](gdl-spec.md)。不提供旧作者格式兼容读取。
 
 ## 值与身份
 
@@ -57,9 +57,3 @@ AST 使用 `reference: true` 标记引用值，并保存原始 source range。
 在允许表达式的指令参数及循环字段中，单个裸符号也可以作为原生表达式的
 叶节点，例如 `count = Count`；这不允许引用字段接受计算表达式。
 格式化保留字符串与符号的区别，不把 `"Player"` 自动改成 `Player`。
-
-作者格式从 18 升至 19，GDL catalog 从 17 升至 18。原生指令身份及参数
-valueKind 不变，instruction catalog 仍为 7。
-
-回归覆盖类型与实例引用、Unicode、命名空间、具名参数类型约束、引用数组、
-错误类型、源码位置、编辑器补全、存储往返、原生事件代码生成及浏览器执行。

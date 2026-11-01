@@ -10,3 +10,11 @@ Instruction metadata is generated into three files: `.gdevelop/conditions-catalo
 `.gdevelop/actions-catalog.json`, and `.gdevelop/expressions-catalog.json`. Read the
 file matching the instruction kind. Use these files for new events. `.gdevelop/deprecated-instructions-catalog.json` is only for understanding existing legacy instructions; never use it to write new events. Regenerate all four together; never edit
 generated catalogs. See [the GDevelop authoring skill](skills/gdevelop-project-files/SKILL.md) for the full contract.
+
+For every GDL event-logic change, after successful validate_project_files call
+`generate_gdl_javascript` and read the returned JavaScript artifact to review
+picking, execution counts and side effects. Cover every affected compilation
+unit; external fragments require a real caller in `context_file`. Later source
+edits invalidate this review. Pure configuration changes are exempt. Follow the
+full generated-JavaScript review workflow in the bundled skill; generation
+success does not replace gameplay verification.

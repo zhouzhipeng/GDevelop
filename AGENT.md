@@ -193,7 +193,7 @@ semantics.
 
 ### Change the multi-file project format
 
-Read `docs/settings-dsl-spec.md`,
+Read `docs/gdl-spec.md`,
 `docs/settings-dsl-variable-values-spec.md`, and
 `docs/unified-settings-events-dsl-spec.md` first. Format changes are usually breaking
 and therefore require the spec-review gate above.

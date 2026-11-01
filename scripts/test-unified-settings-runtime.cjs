@@ -36,6 +36,13 @@ try {
       }
     }
   );
+  run(
+    process.platform === "win32" ? "npm.cmd" : "npm",
+    ["test", "--", "--watchAll=false", "--runInBand", "--silent",
+      "src/Mcp/McpGdlJavaScript.spec.js"],
+    { cwd: path.join(root, "newIDE/app"),
+      env: { ...process.env, CI: "true", GDEVELOP_UNIFIED_RUNTIME_FIXTURE: fixture } }
+  );
   const originalConfig = path.join(root, "GDJS/tests/karma.conf.js");
   const test = path.join(
     root,

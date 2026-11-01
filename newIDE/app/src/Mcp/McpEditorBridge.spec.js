@@ -1169,7 +1169,8 @@ describe('McpEditorBridge', () => {
       method: 'tools/call',
       params: { name: 'generate-catalogs', arguments: {} },
     });
-    const result = JSON.parse(response.content[0].text);
+    const result = response.structuredContent;
+    expect(JSON.parse(response.content[0].text).responseDetail).toBe('summary');
 
     if (response.isError) throw new Error(JSON.stringify(result));
     expect(response.isError).not.toBe(true);
@@ -1267,7 +1268,8 @@ describe('McpEditorBridge', () => {
       method: 'tools/call',
       params: { name: 'validate_project_files', arguments: {} },
     });
-    const result = JSON.parse(response.content[0].text);
+    const result = response.structuredContent;
+    expect(JSON.parse(response.content[0].text).responseDetail).toBe('summary');
 
     expect(response.isError).not.toBe(true);
     expect(reloadProjectAndWait).not.toHaveBeenCalled();
@@ -1645,7 +1647,8 @@ describe('McpEditorBridge', () => {
         },
       },
     });
-    const result = JSON.parse(response.content[0].text);
+    const result = response.structuredContent;
+    expect(JSON.parse(response.content[0].text).responseDetail).toBe('summary');
 
     expect(response.isError).toBe(true);
     expect(result).toEqual(
@@ -1924,7 +1927,8 @@ describe('McpEditorBridge', () => {
       params: { name: 'reload_project', arguments: {} },
       reportProgress,
     });
-    const result = JSON.parse(response.content[0].text);
+    const result = response.structuredContent;
+    expect(JSON.parse(response.content[0].text).responseDetail).toBe('summary');
 
     expect(response.isError).not.toBe(true);
     expect(reloadProjectAndWait).toHaveBeenCalledTimes(1);
@@ -2303,6 +2307,24 @@ describe('McpEditorBridge', () => {
     );
     project.delete();
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  });
+
+  it('applies receipt presentation at the public boundary and supports full detail', async () => {
+    const bridge = makeBridge({ getProject: () => null });
+    const call = (detail?: string) =>
+      bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: {
+          name: 'validate_project_files',
+          arguments: detail ? { detail } : {},
+        },
+      });
+    const summary = await call();
+    const full = await call('full');
+    expect(summary.isError).toBe(true);
+    expect(summary.structuredContent).toEqual(full.structuredContent);
+    expect(JSON.parse(summary.content[0].text).responseDetail).toBe('summary');
+    expect(JSON.parse(full.content[0].text)).toEqual(full.structuredContent);
   });
 
   it('returns unexpected tool failures as structured JSON', async () => {

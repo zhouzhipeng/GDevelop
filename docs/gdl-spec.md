@@ -3,7 +3,7 @@
 - 状态：已实施；当前作者格式 22，GDL catalog 21，instruction catalog 7。
 - 统一事件契约：[统一 GDevelop Language (GDL)：函数、事件与 JavaScript](unified-settings-events-dsl-spec.md)。当前格式将函数和事件合入同一文档，旧 `.events` 文件明确拒绝。
 - 变量契约：[递归变量描述节点](settings-dsl-variable-values-spec.md)。第 8.2 节仅作摘要，完整规则由该文档维护。
-- 更新日期：2026-10-31
+- 更新日期：2026-11-01
 - 范围：全部现有 `.gdl` 作者文件；项目入口 `project.gdl` 同时使用本语法
 - 工作名称：GDevelop Language (GDL)
 - 文件扩展名：统一使用 `.gdl`；不新增 `.layout` 文件或单独的 Layout DSL
@@ -17,13 +17,14 @@
 
 本页是当前 GDL 作者文档的唯一入口，各专题只维护自己的契约：
 
+- [多行原始字符串](gdl-multiline-raw-strings-spec.md)：字符串边界、换行与空白保留。
+- [具名行为集合](gdl-named-behaviors-spec.md)：行为附着与实例覆盖。
 - [符号引用](gdl-symbol-references-spec.md)：对象、行为及其类型的裸引用与字符串边界。
 - [变量](settings-dsl-variable-values-spec.md)：递归描述节点、显式类型、元数据与作用域。
 - [事件与 JavaScript](unified-settings-events-dsl-spec.md)：指令、表达式、控制流、代码块、Link 和执行顺序。
 - [场景生命周期](scene-event-phases-spec.md)：固定签名、必需文件与执行时机。
 - [Gameplay 测试存储](gameplay-tests-multifile-serialization-spec.md)：tests.gdl、测试脚本和本地结果。
 - [JavaScript API](gdevelop-javascript-authoring-api-spec.md)：生成声明与实际脚本上下文。
-- [事件语义分析](gdl-event-semantics-analysis-spec.md)及[实现覆盖](gdl-event-semantics-implementation-report.md)：区分已实现分析、未知范围与后续设计。
 
 版本权威来源分别是 SettingsDsl/SchemaInventory.js、ProjectSourceCatalog.js 和 SettingsDsl/InstructionCatalog.js。项目作者格式、GDL catalog、instruction catalog、项目模块地图是不同版本域，不要求数值相同。模块地图当前为版本 2，仅发布 settingsPath。
 
@@ -118,7 +119,7 @@ extensions/Combat/prefabs/Knight/
 
 字段清单以共享 SchemaInventory、SettingsDsl 节点 schema 及注册类型元数据为准，生成 catalog 发布同一结构。
 
-多行原始字符串的完整契约见 [设计与实现说明](gdl-multiline-raw-strings-spec.md)：不转义、不插值、不去缩进，保留正文空白。
+多行原始字符串的完整契约见 [多行原始字符串规范](gdl-multiline-raw-strings-spec.md)：不转义、不插值、不去缩进，保留正文空白。
 
 ## 4. 词法与语法
 
@@ -938,24 +939,8 @@ Dirty 保存只更新发生变化的组件文件。改变场景布局不重写�
 
 当前 Syntax.js 限制源码长度为 16 × 1024 × 1024 个 JavaScript 字符、token 为 2,000,000、嵌套深度为 100；JavaScript code 字符串校验限制为 2 × 1024 × 1024 个字符。文件系统读取器另有字节和项目总量预算，不能将字符数当作 UTF-8 字节数。
 
-## 18. 官方模板导入边界与回归（2026-10-26）
+## 18. 效果参数与原生数字字段
 
-模板服务提供的原生 JSON 快照在 URL 导入边界转换为当前项目模型；这不增加旧 `.gdl` 语法的读取、回退或迁移支持。转换规则：
+效果类型的公开编辑属性使用 parameters，完整序列化参数使用 serializedParameters；后者包含引擎明确声明的隐藏、deprecated 参数。严格解码与布局验证使用完整参数声明，未声明参数报错。
 
-- 自定义行为、行为共享配置和自定义对象 `content` 仅保留模板所附扩展定义仍声明的属性，包含隐藏属性。已删除、运行时不再读取的属性不进入新项目。内建或未知类型的属性不按猜测清理。
-- 全局对象、场景对象、Prefab、Variant 和嵌套子对象配置使用同一规则；有效值、子对象覆盖和其他作者数据保留。
-- 旧行为包装只有在内外 `name`、`type` 完全相同时才展开。
-- 非光照图层中越界的、未使用的环境光颜色恢复为原生默认值 `[200, 200, 200]`；真正光照图层和有效颜色仍严格验证。
-- 本地 `.gdl` 的未知字段仍报错，不从用户文档内容推断或扩展 schema。
-
-DSL 序列化保留对象组的声明顺序。类型的惰性加载只补充缺失 schema，不能覆盖已注册的项目自定义类型；自定义对象动画中的 `loop` 映射到原生 `looping` 字段。
-
-完整官方 `platformer` 和 `starting-platformer` 原始 JSON 作为离线回归样本保存，不预先清理样本。回归使用真实原生引擎、扩展元数据、URL 导入转换及本地保存/读取代码，要求首次保存、重新打开、再次保存均成功，并比较有效作者数据。代码生成专用参数按生产指令 catalog 规范化后比较。
-
-## 19. 3D 效果参数与原生数字字段补充（2026-10-26）
-
-效果类型同时提供公开编辑属性 `parameters` 和完整序列化参数 `serializedParameters`。后者包含引擎明确声明的隐藏、deprecated 参数，严格解码与布局验证使用后者；未声明参数仍报错。旧生成 catalog 自动重建，不增加旧作者语法兼容路径。
-
-原生 JSON 数字样本不能证明字段只允许整数。对象配置推断使用 `number`，以支持默认值为整数的小数参数，例如 3D 纹理的 `tileScale = 0.2`。已有显式整数 schema 不变。
-
-校验临时项目不得替换编辑器真实扩展的脚本路径或依赖。加载器保留各扩展的完整元数据快照，用于校验完成或失败后的恢复；替换与卸载必须释放原生快照。实际 GUI 与运行时验证见 `template-gui-regression-report-2026-10-26.md`。
+对象配置推断使用 number，以支持默认值为整数的小数参数，例如 3D 纹理的 tileScale = 0.2。已有显式整数 schema 不变。

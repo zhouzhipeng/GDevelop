@@ -56,7 +56,7 @@ describe("unified GDevelop Language (GDL) runtime", function() {
 });
 
 describe("GDL reviewed cardinality rules", function() {
-  (window.__gdlSemanticsFixtures || []).forEach(function(fixture) {
+  (window.__gdlSemanticsFixtures || []).concat(window.__gdlToolFixtures || []).forEach(function(fixture) {
     it(fixture.name, function() {
       // eslint-disable-next-line no-eval
       (0, eval)(fixture.code);

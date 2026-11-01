@@ -18,7 +18,7 @@ Related specifications:
 
 - [GDL events and JavaScript](unified-settings-events-dsl-spec.md), especially its JavaScript
   event syntax and runtime semantics.
-- [GDevelop multi-file project format](settings-dsl-spec.md), especially
+- [GDevelop multi-file project format](gdl-spec.md), especially
   generated catalogs, save-time validation, and `.gdevelop/` ownership.
 
 ---

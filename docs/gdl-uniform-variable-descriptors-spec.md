@@ -1,8 +1,8 @@
 # GDL 递归变量描述节点
 
-状态：用户已批准并实施。当前作者格式 22，GDL catalog 21，instruction catalog 7。
+状态：当前语法。当前作者格式 22，GDL catalog 21，instruction catalog 7。
 
-本契约替代格式 17 的 json 复杂值和 metadata JSON Pointer 映射。当前语法摘要与完整示例见 [变量语法](settings-dsl-variable-values-spec.md)。
+当前语法摘要与完整示例见 [变量语法](settings-dsl-variable-values-spec.md)。
 
 ## 统一结构
 
@@ -42,12 +42,6 @@ variableSchemas.variable 发布标量字段与 members/elements 子容器。memb
 补全支持根变量、结构成员、数组 item 及任意嵌套描述节点，按 type 建议 value、members 或 elements；enum 建议 values；元数据直接补全 folded/hasMixedValues。不再建议 json 或 metadata。
 
 事件源码映射递归标记每个描述节点及其属性，保留结构路径和准确源范围，不发布虚构的 JSON 字符位置。
-
-## 版本与兼容性
-
-SETTINGS_FORMAT_VERSION 从 17 升至 18，PROJECT_GDL_CATALOG_FORMAT_VERSION 从 16 升至 17；instruction catalog 仍为 7，因为原生指令身份和参数契约不变。
-
-不读取旧作者格式，不迁移、不双写、不提供 json/metadata 别名。原生模型导入通过新 writer 输出递归节点。不会自动改写磁盘上的用户项目。
 
 ## 验证要求
 

@@ -379,6 +379,27 @@ sceneUpdate.gdl. Preserve lifecycle signatures. Guard per-frame actions
 with effective conditions. Validate, reload, then verify behavior using the
 project workflow; successful parsing alone is not runtime verification.
 
+### Required generated-JavaScript review
+
+After changing event logic, save and pass `validate_project_files`, then call:
+
+```json
+{"file":"scenes/Game/functions/sceneUpdate.gdl"}
+```
+
+with `generate_gdl_javascript`. Read the full JS artifact at `artifacts[].path`
+and review relevant code plus context for picking, iteration counts, variable
+writes, event order and asynchronous effects. Resolve getFromIndex(N) using
+the current variable declaration order. The returned scope can be a whole
+scene, behavior or custom object, rather than just the requested function.
+External fragments require a real caller `context_file`; cover every affected
+caller compilation unit. Shared units at the same snapshot may be reviewed once.
+After further source edits repeat validation, generation and review. Report
+reviewed scopes and unresolved behavior; unavailable or failed generation is
+an incomplete review. Generation alone does not prove logic or gameplay
+correctness. Pure configuration edits are exempt. Follow the full workflow in
+[the project skill](../SKILL.md#mandatory-generated-javascript-review-for-gdl-events).
+
 ### Execution and picking analysis
 
 Instruction catalog version 6 publishes optional instruction `dslName` and structured `semantics` when available. Missing `semantics` means the instruction is unregistered and unknown. Exact parameter names still

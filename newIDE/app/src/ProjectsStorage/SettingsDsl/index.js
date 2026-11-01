@@ -291,6 +291,29 @@ const registeredObjects = new Map([['Sprite', sprite]]);
 const registeredBehaviors = new Map();
 const registeredEffects = new Map();
 const registeredSharedBehaviors = new Map();
+// Run synchronous disk composition without leaking its type registrations into
+// the editor. Do not await inside this callback: the registries are global.
+export const withIsolatedSettingsTypes = callback => {
+  const registries = [
+    registeredObjects,
+    registeredBehaviors,
+    registeredEffects,
+    registeredSharedBehaviors,
+  ];
+  const snapshots = registries.map(registry => new Map(registry));
+  const previousProvider = typeProvider;
+  try {
+    resetSettingsTypes();
+    typeProvider = undefined;
+    return callback();
+  } finally {
+    registries.forEach((registry, index) => {
+      registry.clear();
+      snapshots[index].forEach((value, key) => registry.set(key, value));
+    });
+    typeProvider = previousProvider;
+  }
+};
 export const resetSettingsTypes = () => {
   registeredObjects.clear();
   registeredObjects.set('Sprite', sprite);

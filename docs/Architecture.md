@@ -706,7 +706,7 @@ requested.
 
 The current authoring reader accepts GDL 16 only. It does not detect or migrate
 older authoring formats. Native JSON template import is a separate boundary,
-not a fallback GDL reader. See the [current GDL contract](settings-dsl-spec.md).
+not a fallback GDL reader. See the [current GDL contract](gdl-spec.md).
 
 Packaged desktop builds associate `.gdevelop` with GDevelop. Windows and Linux
 open the selected document through the positional project argument; macOS

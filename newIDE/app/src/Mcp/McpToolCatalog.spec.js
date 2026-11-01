@@ -19,6 +19,7 @@ const fs = require('fs');
 const path = require('path');
 
 const expectedAlwaysAvailableTools = [
+  'generate_gdl_javascript',
   'analyze_gdl_events',
   'get_gdl_instruction_semantics',
   'lookup_instruction_catalog',
@@ -145,6 +146,34 @@ describe('McpToolCatalog', () => {
         getMcpTools({ allowWriteTools: true, allowCommandTools: true })
       )
     ).not.toContain('save_and_relaunch_preview_paused');
+  });
+
+  it('publishes bounded generated-JavaScript artifact review without authoring project sources', () => {
+    const tool = getMcpTools({
+      allowWriteTools: false,
+      allowCommandTools: false,
+    }).find(tool => tool.name === 'generate_gdl_javascript');
+    expect(tool.inputSchema).toMatchObject({
+      required: ['file'],
+      additionalProperties: false,
+      properties: {
+        file: { type: 'string' },
+        context_file: { type: 'string' },
+      },
+    });
+    expect(tool.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    });
+    expect(tool.description).toContain('READ the artifact');
+    expect(tool.description).toContain('Pure configuration');
+    expect(
+      getCapabilitiesSummary({
+        allowWriteTools: false,
+        allowCommandTools: false,
+      }).categories['Project-file validation'].map(entry => entry.name)
+    ).toContain('generate_gdl_javascript');
   });
 
   it('describes the file-first boundary in capabilities', () => {
@@ -558,7 +587,7 @@ describe('McpToolCatalog', () => {
     ).toHaveLength(2);
   });
 
-  it('exposes validate_project_files as a no-input catalog-regenerating validation gate', () => {
+  it('exposes validate_project_files with optional receipt detail and no required inputs', () => {
     const tool = getMcpTools({
       allowWriteTools: false,
       allowCommandTools: false,
@@ -569,7 +598,12 @@ describe('McpToolCatalog', () => {
       expect.objectContaining({
         inputSchema: {
           type: 'object',
-          properties: {},
+          properties: {
+            detail: expect.objectContaining({
+              type: 'string',
+              enum: ['summary', 'full'],
+            }),
+          },
           additionalProperties: false,
         },
         annotations: expect.objectContaining({

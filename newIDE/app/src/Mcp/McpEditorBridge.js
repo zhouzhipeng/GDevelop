@@ -1,4 +1,6 @@
 // @flow
+import { presentMcpToolResult } from './McpResponsePresentation';
+import { generateGdlJavaScript } from './McpGdlJavaScript';
 import { analyzeProjectGdl } from '../EventsSemantics/ProjectAnalysis';
 import {
   callGdlSemanticsTool,
@@ -5607,6 +5609,31 @@ const callMcpTool = async ({
     }
   }
 
+  if (toolName === 'generate_gdl_javascript') {
+    if (!project) return errorResult('No project opened.');
+    try {
+      return textResult(
+        await generateGdlJavaScript(project, args, () => context.getProject())
+      );
+    } catch (error) {
+      return errorResult(error.message, {
+        success: false,
+        status: error.code || 'generation-failed',
+        code: error.code || 'GDL_JAVASCRIPT_GENERATION_FAILED',
+        runtimeVerified: false,
+        diagnostics: [
+          {
+            code: error.code || 'GDL_JAVASCRIPT_GENERATION_FAILED',
+            message: error.message,
+            file: error.fileUri || (args && args.file),
+            line: error.line,
+            column: error.column,
+          },
+        ],
+      });
+    }
+  }
+
   if (
     toolName === 'analyze_gdl_events' ||
     toolName === 'get_gdl_instruction_semantics'
@@ -6463,7 +6490,7 @@ export const createMcpEditorBridge = (
         const toolName = params && params.name;
         if (typeof toolName !== 'string') throw new Error('Missing tool name.');
         try {
-          return await callMcpTool({
+          const result = await callMcpTool({
             toolName,
             args:
               params.arguments && typeof params.arguments === 'object'
@@ -6473,6 +6500,11 @@ export const createMcpEditorBridge = (
               ? { ...deferredContext, reportProgress }
               : deferredContext,
           });
+          return presentMcpToolResult(
+            toolName,
+            params.arguments && params.arguments.detail,
+            result
+          );
         } catch (error) {
           return errorResult(
             error && error.message

@@ -15,6 +15,8 @@ export type GeneratedEventsCode = {|
    * because GDevelop does not expose per-method generation for those.
    */
   isWholeEntity?: boolean,
+  dependencies?: Array<string>,
+  diagnostics?: Array<Object>,
 |};
 
 /**
@@ -48,7 +50,25 @@ export const generateEventsCodeForScope = (
         diagnosticReport,
         /* compilationForRuntime= */ true
       );
-      return { name: layout.getName(), code, error: null };
+      return {
+        name: layout.getName(),
+        code,
+        error: null,
+        dependencies: readIncludes(includeFiles),
+        diagnostics: Array.from(
+          { length: diagnosticReport.count() },
+          (_, i) => {
+            const diagnostic = diagnosticReport.get(i);
+            return {
+              type: diagnostic.getType(),
+              message: diagnostic.getMessage(),
+              object: diagnostic.getObjectName(),
+              actual: diagnostic.getActualValue(),
+              expected: diagnostic.getExpectedValue(),
+            };
+          }
+        ),
+      };
     } catch (error) {
       return {
         name: layout.getName(),
@@ -104,7 +124,14 @@ export const generateEventsCodeForScope = (
         includeFiles,
         /* compilationForRuntime= */ true
       );
-      return { name, code, error: null, isWholeEntity: true };
+      return {
+        name,
+        code,
+        error: null,
+        isWholeEntity: true,
+        dependencies: readIncludes(includeFiles),
+        diagnostics: [],
+      };
     } catch (error) {
       return { name, code: null, error: errorMessage(error) };
     } finally {
@@ -154,7 +181,14 @@ export const generateEventsCodeForScope = (
         includeFiles,
         /* compilationForRuntime= */ true
       );
-      return { name, code, error: null, isWholeEntity: true };
+      return {
+        name,
+        code,
+        error: null,
+        isWholeEntity: true,
+        dependencies: readIncludes(includeFiles),
+        diagnostics: [],
+      };
     } catch (error) {
       return { name, code: null, error: errorMessage(error) };
     } finally {
@@ -188,7 +222,13 @@ export const generateEventsCodeForScope = (
         includeFiles,
         /* compilationForRuntime= */ true
       );
-      return { name, code, error: null };
+      return {
+        name,
+        code,
+        error: null,
+        dependencies: readIncludes(includeFiles),
+        diagnostics: [],
+      };
     } catch (error) {
       return { name, code: null, error: errorMessage(error) };
     } finally {
@@ -217,3 +257,12 @@ export const canGenerateEventsCodeForScope = (scope: EventsScope): boolean =>
 const errorMessage = (error: ?Error): string =>
   (error && error.message) ||
   'An unexpected error happened while generating the code.';
+
+const readIncludes = (includes: gdSetString): Array<string> => {
+  const vector = includes.toNewVectorString();
+  try {
+    return Array.from({ length: vector.size() }, (_, i) => vector.at(i));
+  } finally {
+    vector.delete();
+  }
+};

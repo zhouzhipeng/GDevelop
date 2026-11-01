@@ -1,9 +1,9 @@
 # 统一 GDevelop Language (GDL)：函数、事件与 JavaScript 作者格式规范
 
-- 状态：已实施。当前作者格式 22；基础配置与文档导航见 [GDL 当前规范](settings-dsl-spec.md)。
-- 更新日期：2026-10-31。
+- 状态：已实施。当前作者格式 22；基础配置与文档导航见 [GDL 当前规范](gdl-spec.md)。
+- 更新日期：2026-11-01。
 - 决策依据：函数声明和事件正文合入同一个 `.gdl` 文件；只保留 GDevelop Language (GDL)，不考虑任何作者格式兼容性。
-- 当前作者格式：19。GDL catalog 版本：18；instruction catalog 版本：7，发布本文的新指令结构契约。
+- 当前作者格式：22。GDL catalog 版本：21；instruction catalog 版本：7。
 - 运行时边界：仍投影到 GDevelop 原生事件模型与代码生成器；不重新定义对象 picking、事件调度或表达式求值。
 
 文件命名：语言正式名称为 **GDevelop Language（GDL）**，统一源码后缀为 `.gdl`；项目入口保留 `project.gdl`，`constants.toml` 和 JavaScript 测试文件保持各自格式。当前格式不读取旧 `.settings` 项目，不提供双读或迁移。内部 SettingsDsl 模块及生成 catalog 的标识不因后缀更名而改变。
@@ -14,7 +14,7 @@ action/condition 的 `dslName` 与 `type` 相同时省略。GDL 和 AI 优先使
 格式化优先输出 `dslName`，缺失时输出 `type`。参数名称及表达式名称通常不变；
 行为内部的 `setProperty` / `getProperty` 是本文末尾定义的语法映射例外。
 同一 kind 内短名与原生名称不得交叉冲突；错误必须明确拒绝。
-详见 [系统指令与入口契约](gdl-system-instruction-names-and-project-entry-spec.md)。
+精确指令名称、参数和作用域以当前项目生成的指令 catalog 为准。
 
 ## 1. 最终结论
 
@@ -673,7 +673,7 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 
 ## 17. 项目读取、写入与事务
 
-读取顺序：入口格式 18 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
+读取顺序：入口格式 22 → 按现有组件目录发现 settings → 统一解析 → 注册函数签名和类型 → 解析事件引用/参数 → 原生模型投影 → 表达式及代码生成验证 → JS 类型检查。
 
 签名注册先于事件调用解析，支持跨文件函数和现有合法递归调用；不能通过文件枚举顺序决定可见性。
 
@@ -743,15 +743,6 @@ instruction catalog 继续独立描述精确 type、dslName、valueKind、默认
 - formatter 幂等；局部修改保留无关注释和 JS 原始内容，只有声明的换行规范化例外。
 - 规模测试覆盖大量事件、深指令树、大 JS 代码块及预算上限，记录实测而非预设性能承诺。
 - 最终受管理项目不产生 `.events`，公开工具无旧语言入口；过期作者格式明确拒绝。
-
-## 20. 后续优化的边界
-
-事件语义分析的独立契约见 [GDL 事件执行与对象选择语义](gdl-event-semantics-analysis-spec.md)。结构化指令语义使用 instruction catalog 7；GDL 作者格式为 19，GDL catalog 为 18。静态摘要不改变原生执行行为，也不代替运行验证。
-
-
-picking 可视化、行为相关 diff 和按 AST 的安全块移动是推荐编辑器能力，可独立迭代；不能将它们未完成视为可改变基础语法的理由。实现基础格式时至少保留精确 AST 和语义位置，使后续工具无需重新解析另一套正文语言。
-
-本文只采用显式 conditions/actions 块中的指令调用块、独立的 event/else/repeat/while/for_each/for_each_child/javascript/group/comment/link 节点 和原始多行 code 字符串。禁止并行支持 if/do、event 的 type 字段、嵌套 events 包装及旧 code 子块等备用写法，也不增加所有者名称简写。若未来改变，应重新评审整个作者契约，而不是逐步累积别名。
 
 ## Behavior property syntax aliases
 
@@ -828,3 +819,12 @@ function {
 ## 具名集合与属性引用
 
 参数和属性描述符分别使用 parameters/properties/shared_properties 容器，成员名作为节点名，不重复 name 字段。变量使用 variables 具名集合；详见[变量规范](settings-dsl-variable-values-spec.md)。表达式直接引用属性名，例如 `Height + 1`；可见属性优先于同名变量，包括事件局部变量。找到属性后类型错误不回退到变量。显式变量访问、函数调用、成员访问和字符串仍遵循原生表达式 AST 语义；旧 getProperty(name=...) 表达式别名拒绝。
+
+## 事件编写后的生成代码 review
+
+新增或修改 GDL 事件逻辑后，AI 必须先通过 validate_project_files，再调用
+`generate_gdl_javascript` 并读取 artifacts 中的完整 JS，对照需求检查 picking、
+循环与执行次数、变量副作用及异步上下文。纯配置修改不要求调用。
+文件入口映射到真实编译单元：场景、自由函数、完整行为或完整自定义对象。
+外部片段须指定真实调用方 context_file，并覆盖全部受影响调用方编译单元。
+源码再次修改后旧 review 失效。生成成功与逻辑 review 不替代运行验证。

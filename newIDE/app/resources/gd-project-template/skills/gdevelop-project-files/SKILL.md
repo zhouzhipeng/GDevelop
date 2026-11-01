@@ -1,6 +1,6 @@
 ---
 name: gdevelop-project-files
-description: Create, inspect, modify, refactor, and verify GDevelop games through the version 20 multi-file project sources (`project.gdl`, `constants.toml`, `.gdl`, `tests.gdl`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
+description: Create, inspect, modify, refactor, and verify GDevelop games through the version 22 multi-file project sources (`project.gdl`, `constants.toml`, `.gdl`, `tests.gdl`, and flat `tests/*.js` scripts). Use for any GDevelop project, scene, object, behavior, prefab, extension, third-party extension installation, reusable-component refactor, variable, resource, GLB animation/bone-name inspection, TSL material (`.tsl.ts`) authoring and GLB binding, Constants/placeholder, signal-system, SpringBoneDynamics hair/chest secondary bone animation, layout, event-sheet, JavaScript-event, or gameplay-test work. Read the generated authoring catalogs and public JavaScript/TSL declarations when relevant; regenerate catalogs after large structural changes, then validate direct edits before reload and runtime verification.
 ---
 
 # GDevelop Project Files
@@ -217,8 +217,8 @@ All `.gdl` and `project.gdl` use **GDevelop Language (GDL)**, not TOML. Read
   camera/effect; instance contains properties/variables/behavior overrides.
   Order within instances is global serialized order; preserve UUIDs.
 - Object definitions remain flat `objects/<Object>.gdl` files. An
-  object.behavior defines an attachment; instance.behavior only overrides an
-  existing attachment. Dynamic fields must be registered in the catalog.
+  `behaviors { AttachmentName { ... } }` defines attachments on objects and
+  overrides existing attachments on instances. Dynamic fields must be registered in the catalog.
 - Declare variables inside one `variables {}` container. Every member is a named
   descriptor with explicit type. Scalars use value; structures use named descriptors
   in members; arrays use repeated item descriptors in elements. Every descendant
@@ -234,8 +234,8 @@ All `.gdl` and `project.gdl` use **GDevelop Language (GDL)**, not TOML. Read
 - Object/behavior references and object/behavior types are bare symbols, e.g.
   `object = Player`, `type = Sprite`, `type = PlatformBehavior::PlatformerObjectBehavior`.
   Quoted references and computed references are errors. Name declarations, text,
-  paths and enum labels remain strings. Instance behavior override `name` is a
-  reference to an existing attachment, so write `name = Movement`.
+  paths and enum labels remain strings. Instance behavior override member names
+  identify existing attachments; do not add a name or type field inside them.
 - Object groups use `objectGroups { Group = [Player] }`, expanded across
   lines. Required behaviors use objectGroupRequiredBehaviors. Empty repeated
   collections may use an empty array assignment; nonempty record collections
@@ -296,12 +296,12 @@ Do not create optional component-grouping folders. Canonical component directori
 fixed; object/function grouping belongs in each settings file's `folder`
 array. Settings files never reference other settings files.
 
-In format version 13, each `.gdl` document under
+Each `.gdl` document under
 `external-events/` declares a fragment. Its decoded filename and settings
 `name` supply its project-unique NFC identity; the physical scene supplies its
 authoring context. Names must also be unique ignoring case. There is no
 fragment `order`: display is sorted by name, while execution follows Link
-positions. `link "Name"` expands the same body in every caller lifecycle and
+positions. A link node with target = "Name" expands the same body in every caller lifecycle and
 inherits parent conditions, picked objects and local variables. Empty,
 comment-only and unreferenced event bodies are valid, but the settings file is
 still required. Declare an external layout
@@ -582,6 +582,40 @@ transmission. Runtime mesh/material inspection is bounded to 256 MiB and may
 load the model's geometry and textures; use the Blender workflow for deeper
 scene inspection or any mutation.
 
+## Mandatory generated-JavaScript review for GDL events
+
+After adding or changing GDL event logic (conditions, actions, loops, child
+events, Link targets, JavaScript events, or execution flags), first save and
+pass `validate_project_files`. Then call `generate_gdl_javascript` with the
+project-relative `file` and **read the complete returned JavaScript artifact**.
+Review the relevant generated code and its surrounding context for picking
+list initialization/filtering/inheritance, invocation and loop counts, variable
+side effects, parent/sibling execution and asynchronous continuations. Inspect
+runtime helper implementations when their effects are unclear; do not infer
+correctness from a function name or successful generation alone. Generated
+variable accesses may use getFromIndex(N); resolve them against the current
+GDL declaration order instead of assuming variable names appear in JS.
+
+The result states the actual compilation scope: a free function, whole scene,
+whole behavior or whole custom object. One invocation per affected compilation
+unit at the same source snapshot is sufficient. For an external fragment,
+provide `context_file` naming a real scene function that directly or transitively
+links it. Use the module map and current Link sources to cover **every affected
+caller compilation unit**, including cross-scene callers; never treat one
+caller as proof for all contexts.
+
+Fix findings in GDL, then repeat validation, generation and code review. Later
+source edits invalidate the earlier review. Report the reviewed files/scopes,
+source snapshot and any unresolved semantics. If the tool is unavailable,
+generation fails, or crucial generated behavior remains unclear, report the
+review as incomplete. Continue the existing runtime-verification workflow;
+generated-code review is not gameplay verification.
+
+**Pure configuration edits do not require this tool.** It generates no
+independent executable code for configuration files. Generated artifacts under
+`tmp/gdl-javascript-review/` are disposable review output; never edit them or
+use them as authoring sources.
+
 ## MCP boundary
 
 MCP is extension-import/synchronization/read/debug/gameplay-test-only. Use it
@@ -598,6 +632,8 @@ The complete public protocol surface is the following allowlist:
   `inspect_model_materials`.
 - TSL authoring and validation: `get_tsl_authoring_context`,
   `validate_tsl_file`, and `render_tsl_material_preview`.
+- GDL generated-code review: `generate_gdl_javascript` (writes only disposable
+  review artifacts, never project source).
 - GDL execution and picking inspection: `analyze_gdl_events` and
   `get_gdl_instruction_semantics` (read-only disk-source analysis).
 - Catalog, validation, and tool discovery:
@@ -780,6 +816,9 @@ Before finishing:
 - Confirm Physics3D world scale is finite and positive and runtime instance
   coordinates remain finite.
 - Confirm catalog instruction types, kinds, scopes, and `dslName` arguments.
+- For changed GDL event logic, confirm `generate_gdl_javascript` ran after final
+  validation and the returned JS was read and reviewed for each affected
+  compilation unit. Pure configuration edits are exempt.
 - For every changed JavaScript event, confirm `strict=true`, validate all
   context globals/project literals/public members against both generated
   `.d.ts` files, and confirm no forbidden private or ambient API is used.

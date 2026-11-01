@@ -1,4 +1,5 @@
 // @flow
+import { withMcpResponseDetail } from './McpResponsePresentation';
 
 export type McpPermissionOptions = {|
   allowWriteTools: boolean,
@@ -1650,6 +1651,34 @@ const readTools: Array<McpTool> = [
     },
   },
   {
+    name: 'generate_gdl_javascript',
+    description:
+      'Generate unminified JavaScript for a saved GDL event function using current disk project sources and the native compiler. Returns complete artifact paths: a whole scene, free function, behavior, or custom object, with the actual scope and source snapshot. External fragments require context_file naming a real caller; review every affected caller compilation unit. Configuration files are unsupported. Writes only owned tmp/gdl-javascript-review cache files; does not reload, regenerate catalogs, or run code. After every GDL event-logic change, validate_project_files, call this tool and READ the artifact to review picking, execution counts, loops and side effects. Later source changes invalidate the review. Pure configuration edits do not require this tool. Generation success does not prove gameplay correctness.',
+    inputSchema: {
+      type: 'object',
+      required: ['file'],
+      additionalProperties: false,
+      properties: {
+        file: {
+          type: 'string',
+          description:
+            'Managed project-relative GDL event function or external fragment path.',
+        },
+        context_file: {
+          type: 'string',
+          description:
+            'For an external fragment only: a scene function that directly or transitively links it.',
+        },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
     name: 'analyze_gdl_events',
     description:
       'Explain execution counts, object picking, action targets and unknown effects in one saved GDL function or external fragment. Reads disk sources and current generated catalogs; never regenerates, reloads or executes code. Mixed event_path includes groups, comments and links. Analyzes parent context before selecting the returned subtree. complete means rule coverage, not gameplay correctness. Refresh catalogs with generate-catalogs if catalog-stale.',
@@ -1699,7 +1728,7 @@ const readTools: Array<McpTool> = [
   {
     name: 'validate_project_files',
     description:
-      'Load the current local multi-file project from project.gdl, regenerate all five catalogs and all four public JavaScript declaration files (including .gdevelop/harness-api.d.ts), reload the sources using the fresh instruction catalog, reconstruct the legacy game.json representation in memory, validate JavaScript event blocks against the generated context-aware API, then validate through GDevelop and preflight generated extension JavaScript. strict=true JavaScript API violations block validation; compatibility blocks report semantic warnings while syntax errors still block. Returns a separate conservative pickingAnalysis with rule coverage and unknown effects. valid:true proves structural, JavaScript authoring-API, and code-generation validity only; it does NOT verify runtime gameplay semantics, object picking, or action side effects. Accepts no inputs, writes only nine generated .gdevelop authoring files, does not reload editor memory, and reports the blocking file, error code, line, column, and source excerpt when available. Call this after direct project-file edits and require valid:true before reload_project, then runtime-test behavior-sensitive changes with a paused preview and run_frames or authored tests with run_gameplay_tests.',
+      'Load the current local multi-file project from project.gdl, regenerate all five catalogs and all four public JavaScript declaration files (including .gdevelop/harness-api.d.ts), reload the sources using the fresh instruction catalog, reconstruct the legacy game.json representation in memory, validate JavaScript event blocks against the generated context-aware API, then validate through GDevelop and preflight generated extension JavaScript. strict=true JavaScript API violations block validation; compatibility blocks report semantic warnings while syntax errors still block. Returns a separate conservative pickingAnalysis with rule coverage and unknown effects. valid:true proves structural, JavaScript authoring-API, and code-generation validity only; it does NOT verify runtime gameplay semantics, object picking, or action side effects. Requires no inputs, writes only nine generated .gdevelop authoring files, does not reload editor memory, and reports the blocking file, error code, line, column, and source excerpt when available. Call this after direct project-file edits and require valid:true before reload_project, then runtime-test behavior-sensitive changes with a paused preview and run_frames or authored tests with run_gameplay_tests.',
     inputSchema: noInputSchema,
     annotations: {
       readOnlyHint: false,
@@ -2046,6 +2075,21 @@ const toolUsageExamples: { [string]: Array<Object> } = {
       },
     },
   ],
+  generate_gdl_javascript: [
+    {
+      description:
+        'Generate the scene containing the edited lifecycle function, then read the returned JavaScript artifact.',
+      arguments: { file: 'scenes/Game/functions/sceneUpdate.gdl' },
+    },
+    {
+      description:
+        'Review a changed fragment in an actual caller context; repeat for other affected compilation units.',
+      arguments: {
+        file: 'scenes/Game/external-events/Combat.gdl',
+        context_file: 'scenes/Game/functions/sceneUpdate.gdl',
+      },
+    },
+  ],
   analyze_gdl_events: [
     {
       description:
@@ -2361,7 +2405,7 @@ const withDefaultToolAnnotations = (tool: McpTool): McpTool => {
   ) {
     annotations.destructiveHint = false;
   }
-  return { ...tool, annotations };
+  return withMcpResponseDetail({ ...tool, annotations });
 };
 
 export const getMcpTools = (
@@ -2429,6 +2473,7 @@ export const getCapabilitiesSummary = (
       'lookup_instruction_catalog',
     ],
     'Project-file validation': [
+      'generate_gdl_javascript',
       'generate-catalogs',
       'validate_project_files',
       'reload_project',
@@ -2460,7 +2505,7 @@ export const getCapabilitiesSummary = (
   });
   return {
     note:
-      'GDevelop MCP is intentionally limited to local project creation and opening, one extension import/conversion tool, editor queries, bounded local GLB metadata inspection, synchronization, validation, authored gameplay-test execution, and preview debugging. There are no Constants MCP tools: the AI model must read and modify constants.toml directly on disk. After create_project or import_extension generates canonical sources, author the game through project files and the generated .gdevelop/gdl-catalog.json (including embedded-layout authoring data) and .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json. Before authoring JavaScript events, also read .gdevelop/runtime-api.d.ts and .gdevelop/project-api.d.ts; before authoring gameplay tests, read .gdevelop/harness-api.d.ts.',
+      'GDevelop MCP is intentionally limited to local project creation and opening, one extension import/conversion tool, editor queries, bounded local GLB metadata inspection, synchronization, validation, authored gameplay-test execution, and preview debugging. There are no Constants MCP tools: the AI model must read and modify constants.toml directly on disk. After create_project or import_extension generates canonical sources, author the game through project files and the generated .gdevelop/gdl-catalog.json (including embedded-layout authoring data) and .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json. For every GDL event-logic edit, after validate_project_files call generate_gdl_javascript and read its artifact to review picking, iteration and side effects; pure configuration edits are exempt. Before authoring JavaScript events, also read .gdevelop/runtime-api.d.ts and .gdevelop/project-api.d.ts; before authoring gameplay tests, read .gdevelop/harness-api.d.ts.',
     permissions: {
       writeToolsEnabled: !!permissions.allowWriteTools,
       commandToolsEnabled: !!permissions.allowCommandTools,

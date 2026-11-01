@@ -39,7 +39,7 @@ const validationI18n = ({
  * sources being checked. The returned callback restores the editor project's
  * metadata exactly after validation.
  */
-const temporarilyLoadProjectExtensionMetadataForValidation = (
+export const temporarilyLoadProjectExtensionMetadataForValidation = (
   validationProject: gdProject,
   restoreProject: gdProject
 ): (() => void) => {
@@ -64,6 +64,9 @@ const temporarilyLoadProjectExtensionMetadataForValidation = (
     extensionNames.push(extensionName);
   }
 
+  const originallyLoaded = new Set(
+    extensionNames.filter(name => platform.isExtensionLoaded(name))
+  );
   const originalExtensionsByName = new Map(
     extensionNames.map(name => [
       name,
@@ -77,9 +80,10 @@ const temporarilyLoadProjectExtensionMetadataForValidation = (
     extensionNames.forEach(extensionName => {
       platform.removeExtension(extensionName);
       const originalExtension = originalExtensionsByName.get(extensionName);
-      if (originalExtension) {
+      if (originalExtension && originallyLoaded.has(extensionName)) {
         platform.addNewExtension(originalExtension);
       } else if (
+        originallyLoaded.has(extensionName) &&
         restoreProject.hasEventsFunctionsExtensionNamed(extensionName)
       ) {
         // Headless callers can supply a project without a live loader snapshot.

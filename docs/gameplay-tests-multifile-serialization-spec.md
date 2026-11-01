@@ -1,6 +1,6 @@
 # Gameplay test sources in GDL projects
 
-Status: current GDL authoring format 22. The [GDL documentation entry](settings-dsl-spec.md)
+Status: current GDL authoring format 22. The [GDL documentation entry](gdl-spec.md)
 defines the shared grammar; this document defines test-source ownership.
 
 ## Files and metadata
