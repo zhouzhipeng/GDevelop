@@ -682,7 +682,7 @@ const behaviorPropertiesSchema = (fields = {}) => {
   return record(scalars, children);
 };
 const effectSchema = (schema, data) => {
-  const fields = registeredEffects.get(data.effectType);
+  const fields = ensureType(registeredEffects, data.effectType);
   if (!fields) return schema;
   const children = { ...schema.children };
   ['doubleParameters', 'stringParameters', 'booleanParameters'].forEach(key => {
