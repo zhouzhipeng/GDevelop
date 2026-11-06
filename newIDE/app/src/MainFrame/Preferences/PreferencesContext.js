@@ -287,6 +287,9 @@ export type PreferencesValues = {|
   newProjectsDefaultStorageProviderName: string,
   useShortcutToClosePreviewWindow: boolean,
   watchProjectFolderFilesForLocalProjects: boolean,
+  /** The month (YYYY-MM) when the claimable products dialog was last shown. */
+  lastClaimableProductsDialogMonth: ?string,
+  autoDisplayClaimableProductsDialog: boolean,
   newFeaturesAcknowledgements: {
     [featureId: string]: {| dates: [number] |},
   },
@@ -417,6 +420,8 @@ export type Preferences = {|
   setNewProjectsDefaultFolder: (newProjectsDefaultFolder: string) => void,
   setUseShortcutToClosePreviewWindow: (enabled: boolean) => void,
   setWatchProjectFolderFilesForLocalProjects: (enabled: boolean) => void,
+  setLastClaimableProductsDialogMonth: (month: string) => void,
+  setAutoDisplayClaimableProductsDialog: (enabled: boolean) => void,
   setNewFeaturesAcknowledgements: ({
     [featureId: string]: {| dates: [number] |},
   }) => void,
@@ -506,6 +511,8 @@ export const initialPreferences = {
     newProjectsDefaultStorageProviderName: 'Cloud',
     useShortcutToClosePreviewWindow: true,
     watchProjectFolderFilesForLocalProjects: true,
+    lastClaimableProductsDialogMonth: null,
+    autoDisplayClaimableProductsDialog: true,
     newFeaturesAcknowledgements: {},
     editorStateByProject: {},
     fetchPlayerTokenForPreviewAutomatically: true,
@@ -602,6 +609,8 @@ export const initialPreferences = {
   setNewProjectsDefaultStorageProviderName: () => {},
   setUseShortcutToClosePreviewWindow: () => {},
   setWatchProjectFolderFilesForLocalProjects: () => {},
+  setLastClaimableProductsDialogMonth: () => {},
+  setAutoDisplayClaimableProductsDialog: () => {},
   setNewFeaturesAcknowledgements: () => {},
   getEditorStateForProject: (projectId: any): any => {},
   setEditorStateForProject: (projectId: any, editorState: any) => {},

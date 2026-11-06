@@ -122,6 +122,8 @@ export const getInitialPreferences = (): {
   isMenuBarHiddenInPreview: boolean,
   isProjectManagerPinned: boolean,
   language: string,
+  lastClaimableProductsDialogMonth: null,
+  autoDisplayClaimableProductsDialog: boolean,
   lastLaunchedVersion: void,
   enableMcpServer: boolean,
   mcpAllowCommandTools: boolean,
@@ -394,6 +396,14 @@ export default class PreferencesProvider extends React.Component<Props, State> {
     ): any),
     // $FlowFixMe[method-unbinding]
     setWatchProjectFolderFilesForLocalProjects: (this._setWatchProjectFolderFilesForLocalProjects.bind(
+      this
+    ): any),
+    // $FlowFixMe[method-unbinding]
+    setLastClaimableProductsDialogMonth: (this._setLastClaimableProductsDialogMonth.bind(
+      this
+    ): any),
+    // $FlowFixMe[method-unbinding]
+    setAutoDisplayClaimableProductsDialog: (this._setAutoDisplayClaimableProductsDialog.bind(
       this
     ): any),
     // $FlowFixMe[method-unbinding]
@@ -1330,6 +1340,32 @@ export default class PreferencesProvider extends React.Component<Props, State> {
         values: {
           ...state.values,
           watchProjectFolderFilesForLocalProjects: enable,
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _setAutoDisplayClaimableProductsDialog(
+    autoDisplayClaimableProductsDialog: boolean
+  ) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          autoDisplayClaimableProductsDialog,
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _setLastClaimableProductsDialogMonth(month: string) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          lastClaimableProductsDialogMonth: month,
         },
       }),
       () => this._persistValuesToLocalStorage(this.state)

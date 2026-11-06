@@ -429,6 +429,7 @@ const PreferencesDialog = ({
     showAllAnnouncements,
     showAllAskAiStandAloneForms,
     setAutoDisplayChangelog,
+    setAutoDisplayClaimableProductsDialog,
     setEventsSheetShowObjectThumbnails,
     setAutosaveOnPreview,
     setUseGDJSDevelopmentWatcher,
@@ -996,6 +997,17 @@ const PreferencesDialog = ({
                 renderToggle(
                   values.autoDisplayChangelog,
                   setAutoDisplayChangelog
+                ),
+            },
+            {
+              id: 'auto-display-claimable-products',
+              label: i18n._(
+                t`Display the free products to claim each month with your subscription`
+              ),
+              renderControl: () =>
+                renderToggle(
+                  values.autoDisplayClaimableProductsDialog,
+                  setAutoDisplayClaimableProductsDialog
                 ),
             },
           ],

@@ -44,3 +44,4 @@ __pycache__/
 build/
 GDJS Runtime Documentation/
 /GDJS/tests/.benchmark-runtimes
+/GDJS/tests/rendering-snapshots-results

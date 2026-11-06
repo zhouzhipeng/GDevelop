@@ -92,10 +92,11 @@ const exportExtension = async (
   );
 };
 
-const openGitHubIssue = (isFromTheStore: boolean) => {
+const openSubmissionPage = (isFromTheStore: boolean) => {
   Window.openExternalURL(
-    'https://github.com/GDevelopApp/GDevelop-extensions/issues/new?template=' +
-      (isFromTheStore ? 'extension-update.yml' : 'new-extension.yml')
+    isFromTheStore
+      ? 'https://github.com/GDevelopApp/GDevelop-extensions#submit-an-extension'
+      : 'https://github.com/GDevelopApp/GDevelop-community-list/issues/new?template=new-extension.yml'
   );
 };
 
@@ -127,7 +128,7 @@ const ExtensionExporterDialog = (props: Props): React.Node => {
               <Trans>Submit to the community</Trans>
             )
           }
-          onClick={() => openGitHubIssue(isFromTheStore)}
+          onClick={() => openSubmissionPage(isFromTheStore)}
         />,
       ]}
       actions={[

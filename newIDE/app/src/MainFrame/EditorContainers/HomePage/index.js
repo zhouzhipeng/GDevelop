@@ -60,6 +60,7 @@ import {
 import { type CreateProjectResult } from '../../../Utils/UseCreateProject';
 import { CreditsPackageStoreContext } from '../../../AssetStore/CreditsPackages/CreditsPackageStoreContext';
 import { type OpenAskAiOptions } from '../../../AiGeneration/Utils';
+import ClaimableProductsDialogContainer from '../../../AssetStore/ClaimableProducts/ClaimableProductsDialogContainer';
 
 const noop = () => {};
 
@@ -746,6 +747,7 @@ export const HomePage: React.ComponentType<Props> = React.memo<Props>(
                   onOpenAbout={onOpenAbout}
                 />
               </div>
+              <ClaimableProductsDialogContainer isActive={isActive} />
             </TeamProvider>
           )}
         </I18n>
