@@ -259,10 +259,7 @@ const errorMessage = (error: ?Error): string =>
   'An unexpected error happened while generating the code.';
 
 const readIncludes = (includes: gdSetString): Array<string> => {
+  // The WebIDL [Value] binding returns a borrowed static VectorString.
   const vector = includes.toNewVectorString();
-  try {
-    return Array.from({ length: vector.size() }, (_, i) => vector.at(i));
-  } finally {
-    vector.delete();
-  }
+  return Array.from({ length: vector.size() }, (_, i) => vector.at(i));
 };

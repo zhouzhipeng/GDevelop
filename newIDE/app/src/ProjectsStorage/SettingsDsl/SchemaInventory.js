@@ -788,6 +788,9 @@ export const SETTINGS_FILE_SCHEMAS = Object.freeze({
       settingsField('iconUrl', 'string'),
       settingsField('helpPath', 'string'),
       settingsField('objectType', 'object type reference or empty string'),
+      settingsField('isSynchronizedOverNetworkByDefault', 'boolean', {
+        default: true,
+      }),
       settingsField('quickCustomizationVisibility', 'enum', {
         values: ['default', 'visible', 'hidden'],
       }),

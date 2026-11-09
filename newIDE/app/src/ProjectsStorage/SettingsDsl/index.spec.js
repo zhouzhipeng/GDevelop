@@ -11,6 +11,17 @@ import {
 import { compileLayoutDocument } from '../LayoutDocument';
 
 describe('GDevelop Language (GDL)', () => {
+  test('round trips a behavior that opts out of network synchronization', () => {
+    const source = serializeSettingsDocument('behavior', {
+      name: 'PointerMapper',
+      isSynchronizedOverNetworkByDefault: false,
+    });
+    expect(source).toContain('isSynchronizedOverNetworkByDefault = false');
+    expect(
+      decodeSettingsDocument(source).payload.isSynchronizedOverNetworkByDefault
+    ).toBe(false);
+  });
+
   test.each(['project', 'scene', 'function', 'prefab'])(
     'omits empty objectGroups when saving %s and retains declared groups',
     kind => {

@@ -11,6 +11,61 @@ import * as EventsValidationScanner from '../Utils/EventsValidationScanner';
 const gd = global.gd;
 
 describe('Validation metadata isolation', () => {
+  test('repeatedly validates native property setters inside their owning behavior', () => {
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    const name = 'TestMagazine';
+    const extension = project.insertNewEventsFunctionsExtension(name, 0);
+    const behavior = extension.getEventsBasedBehaviors().insertNew('Ammo', 0);
+    behavior
+      .getPropertyDescriptors()
+      .insertNew('Rounds', 0)
+      .setType('Number')
+      .setValue('30');
+    project.insertNewLayout('Scene', 0);
+    for (const [index, functionName] of ['Reload', 'Reset'].entries()) {
+      const fn = behavior
+        .getEventsFunctions()
+        .insertNewEventsFunction(functionName, index);
+      fn.setFunctionType(gd.EventsFunction.Action);
+      fn.getParameters()
+        .insertNewParameter('Object', 0)
+        .setType('object');
+      fn.getParameters()
+        .insertNewParameter('Behavior', 1)
+        .setType('behavior')
+        .setExtraInfo(`${name}::Ammo`);
+      const event = gd.asStandardEvent(
+        fn
+          .getEvents()
+          .insertNewEvent(project, 'BuiltinCommonInstructions::Standard', 0)
+      );
+      const action = new gd.Instruction();
+      action.setType(
+        `${name}::Ammo::${gd.EventsBasedBehavior.getPropertyActionName(
+          'Rounds'
+        )}`
+      );
+      action.setParametersCount(4);
+
+      ['Object', 'Behavior', '=', '30'].forEach((parameter, i) =>
+        action.setParameter(i, parameter)
+      );
+      event.getActions().insert(action, 0);
+      action.delete();
+    }
+    try {
+      const serialized = serializeToJSObject(project);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const result = validateSerializedProject(serialized, {}, project);
+        expect(result.errors).toEqual([]);
+        expect(result.valid).toBe(true);
+      }
+    } finally {
+      unloadProjectEventsFunctionsExtension(project, name);
+      project.delete();
+    }
+  });
+
   test.each([false, true])(
     'preserves live extension include paths and generated metadata (validation throws: %s)',
     throws => {

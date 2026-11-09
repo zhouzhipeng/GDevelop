@@ -1937,13 +1937,27 @@ const isInstructionVisibleForExtensionFunction = ({
 
 const collectInstructionScopeIssues = ({
   project,
-  parentKind,
-  eventsFunction,
+  target,
 }: {|
   project: gdProject,
-  parentKind: string,
-  eventsFunction: gdEventsFunction,
+  target: ExtensionFunctionTarget,
 |}): Array<Object> => {
+  const { parentKind, eventsFunction } = target;
+  const behaviorPropertyInstructions = new Set<string>();
+  if (parentKind === 'behavior') {
+    const behavior: gdEventsBasedBehavior = (target.parent: any);
+    const namespace = `${target.extension.getName()}::${behavior.getName()}`;
+    const properties = behavior.getPropertyDescriptors();
+    for (let index = 0; index < properties.getCount(); index++) {
+      const name = properties.getAt(index).getName();
+      behaviorPropertyInstructions.add(
+        `${namespace}::${gd.EventsBasedBehavior.getPropertyActionName(name)}`
+      );
+      behaviorPropertyInstructions.add(
+        `${namespace}::${gd.EventsBasedBehavior.getPropertyConditionName(name)}`
+      );
+    }
+  }
   const issues: Array<Object> = [];
   collectEventReferences(eventsFunction.getEvents()).forEach(eventReference => {
     collectEventInstructionReferences(eventReference.event).forEach(
@@ -1972,7 +1986,10 @@ const collectInstructionScopeIssues = ({
             suggestion:
               'Use an instruction that is relevant for extension function events. Instructions that are not relevant to the current function scope render with GDevelop warning/deprecated styling and can be ignored or compiled incorrectly.',
           });
-        } else if (metadata.isHidden()) {
+        } else if (
+          metadata.isHidden() &&
+          !behaviorPropertyInstructions.has(instructionType)
+        ) {
           issues.push({
             severity: 'error',
             type: 'hidden-instruction-in-extension-function',
@@ -2376,13 +2393,7 @@ const lintExtensionFunctionTarget = (
         });
       });
 
-    issues.push(
-      ...collectInstructionScopeIssues({
-        project,
-        parentKind: target.parentKind,
-        eventsFunction: target.eventsFunction,
-      })
-    );
+    issues.push(...collectInstructionScopeIssues({ project, target }));
     issues.push(
       ...collectFunctionVariableParameterMisuseIssues(target.eventsFunction)
     );
