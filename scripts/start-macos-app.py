@@ -207,27 +207,32 @@ def stop_existing_processes(repo_root: Path, electron_exe: Path, dry_run: bool) 
 
 
 def ensure_electron_dependencies(
-    repo_root: Path,
     electron_app_dir: Path,
     electron_exe: Path,
     dry_run: bool,
 ) -> None:
     step("Ensure Electron dependencies")
     needed, reason = npm_install_needed(electron_app_dir)
-    if electron_exe.exists() and not needed:
+    if needed:
+        print(
+            f"electron-app dependencies out of date ({reason}); installing.",
+            flush=True,
+        )
+        run_command([resolve_tool("npm"), "install"], cwd=electron_app_dir, dry_run=dry_run)
+
+    # Electron 45 installs the binary on demand, and this launcher starts it
+    # directly instead of going through Electron's npm CLI.
+    if not electron_exe.is_file() or (dry_run and needed):
+        run_command(
+            [resolve_tool("npm"), "exec", "--no", "--", "install-electron"],
+            cwd=electron_app_dir,
+            dry_run=dry_run,
+        )
+
+    if not dry_run:
+        if not electron_exe.is_file():
+            raise RuntimeError(f"Electron executable missing after installation: {electron_exe}")
         print(f"Electron executable exists: {electron_exe}", flush=True)
-        return
-
-    if not electron_exe.exists():
-        reason = "Electron executable is missing"
-    print(
-        f"electron-app dependencies out of date ({reason}); installing.",
-        flush=True,
-    )
-    run_command([resolve_tool("npm"), "install"], cwd=electron_app_dir, dry_run=dry_run)
-
-    if not dry_run and not electron_exe.exists():
-        raise RuntimeError(f"Electron executable still missing after npm install: {electron_exe}")
 
 
 def ensure_packaged_electron_runtime_dependencies(
@@ -482,7 +487,7 @@ def main() -> int:
     build = args.build
 
     try:
-        ensure_electron_dependencies(repo_root, electron_app_dir, electron_exe, args.dry_run)
+        ensure_electron_dependencies(electron_app_dir, electron_exe, args.dry_run)
         ensure_packaged_electron_runtime_dependencies(
             electron_runtime_dir, args.dry_run
         )
