@@ -231,6 +231,7 @@ export default class LocalPreviewLauncher extends React.Component<
             // Allow Node.js API access in renderer process, as long
             // as we've not removed dependency on it and on "@electron/remote".
             nodeIntegration: true,
+            sandbox: false,
             contextIsolation: false,
             backgroundThrottling: false,
           },

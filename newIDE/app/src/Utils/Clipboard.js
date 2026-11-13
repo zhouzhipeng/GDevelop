@@ -1,23 +1,18 @@
 // @flow
 import optionalRequire from './OptionalRequire';
 const electron = optionalRequire('electron');
-const electronClipboard = electron ? electron.clipboard : null;
+const ipcRenderer = electron ? electron.ipcRenderer : null;
 
 export type ClipboardKind = string;
 
 let internalClipboard = '';
 
 const copyTextWithElectronClipboard = (text: string): Promise<void> => {
-  if (!electronClipboard) {
+  if (!ipcRenderer) {
     return Promise.reject(new Error('Clipboard API is unavailable.'));
   }
 
-  try {
-    electronClipboard.writeText(text);
-    return Promise.resolve();
-  } catch (error) {
-    return Promise.reject(error);
-  }
+  return ipcRenderer.invoke('clipboard-write-text-async', text);
 };
 
 export const copyTextToClipboard = (text: string): Promise<void> => {
@@ -48,8 +43,8 @@ export default class Clipboard {
       content: object,
     });
 
-    if (electronClipboard) {
-      electronClipboard.writeText(text);
+    if (ipcRenderer) {
+      ipcRenderer.sendSync('clipboard-write-text', text);
     } else {
       internalClipboard = text;
     }
@@ -63,8 +58,8 @@ export default class Clipboard {
    */
   static has(kind: ClipboardKind): boolean {
     let text = '';
-    if (electronClipboard) {
-      text = electronClipboard.readText();
+    if (ipcRenderer) {
+      text = ipcRenderer.sendSync('clipboard-read-text');
     } else {
       text = internalClipboard;
     }
@@ -83,8 +78,8 @@ export default class Clipboard {
     if (!Clipboard.has(kind)) return null;
 
     let text = '';
-    if (electronClipboard) {
-      text = electronClipboard.readText();
+    if (ipcRenderer) {
+      text = ipcRenderer.sendSync('clipboard-read-text');
     } else {
       text = internalClipboard;
     }

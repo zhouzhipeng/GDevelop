@@ -23,6 +23,10 @@ import { AiRequestChat, type AiRequestChatInterface } from './AiRequestChat';
 import { canPayForAiRequest } from './AiRequestChat/Utils';
 import { registerAskAiPrefillListener } from './AskAiPrefill';
 import {
+  registerAskAiAutomationDriver,
+  getAiToolsVersionOverride,
+} from './AskAiAutomation';
+import {
   getLatestInGameEditorExtensionErrors,
   addInGameEditorExtensionErrorsToFunctionCallOutputs,
 } from '../InGameEditorExtensionErrors';
@@ -56,6 +60,7 @@ import {
   aiRequestHasWorkInProgress,
   getFunctionCallOutputsFromEditorFunctionCallResults,
   getFunctionCallsToProcess,
+  getLatestActivePlan,
 } from './AiRequestUtils';
 import { type EditorFunctionCallResult } from '../EditorFunctions';
 import { useStableUpToDateRef } from '../Utils/UseStableUpToDateCallback';
@@ -208,6 +213,7 @@ type Props = {|
   gameEditorMode: 'embedded-game' | 'instances-editor',
   continueProcessingFunctionCallsOnMount?: boolean,
   onOpenAskAi: (?OpenAskAiOptions) => void,
+  onCloseAskAi: () => void,
   onCheckoutVersion: (
     version: ExpandedCloudProjectVersion,
     options?: {| dontSaveCheckedOutVersionStatus?: boolean |}
@@ -316,6 +322,7 @@ export const AskAiEditor: React.ComponentType<Props> = React.memo<Props>(
         onWillInstallExtension,
         onExtensionInstalled,
         onOpenAskAi,
+        onCloseAskAi,
         gameEditorMode,
         continueProcessingFunctionCallsOnMount,
         onCheckoutVersion,
@@ -594,6 +601,18 @@ export const AskAiEditor: React.ComponentType<Props> = React.memo<Props>(
         false
       );
 
+      const hideAskAi =
+        !!limits &&
+        !!limits.capabilities.classrooms &&
+        limits.capabilities.classrooms.hideAskAi;
+      // Close the tab if it was opened before knowing AI is disabled for this student.
+      React.useEffect(
+        () => {
+          if (hideAskAi) onCloseAskAi();
+        },
+        [hideAskAi, onCloseAskAi]
+      );
+
       const availableCredits = limits ? limits.credits.userBalance.amount : 0;
       const quota =
         (limits && limits.quotas && limits.quotas['consumed-ai-credits']) ||
@@ -703,7 +722,8 @@ export const AskAiEditor: React.ComponentType<Props> = React.memo<Props>(
                 fileMetadata,
                 storageProviderName,
                 mode,
-                toolsVersion: AI_ORCHESTRATOR_TOOLS_VERSION,
+                toolsVersion:
+                  getAiToolsVersionOverride() || AI_ORCHESTRATOR_TOOLS_VERSION,
                 aiConfiguration: {
                   presetId: aiConfigurationPresetId,
                 },
@@ -951,7 +971,7 @@ export const AskAiEditor: React.ComponentType<Props> = React.memo<Props>(
                 // sent to a sub-agent request (explorer or edit agent).
                 mode: hasUserMessage ? 'orchestrator' : undefined,
                 toolsVersion: hasUserMessage
-                  ? AI_ORCHESTRATOR_TOOLS_VERSION
+                  ? getAiToolsVersionOverride() || AI_ORCHESTRATOR_TOOLS_VERSION
                   : undefined,
               })
             );
@@ -1314,6 +1334,76 @@ export const AskAiEditor: React.ComponentType<Props> = React.memo<Props>(
           );
         },
         [selectedAiRequest, getEditorFunctionCallResults]
+      );
+
+      // Let a request be run from start to end without a user (see
+      // `AskAiAutomation`), with what a user would do in the chat.
+      const automationRef = useStableUpToDateRef({
+        selectedAiRequest,
+        getHasWorkInProgress,
+        isSending:
+          isSendingUserMessage || isSendingAiRequest(selectedAiRequestId),
+        isSavingProject: !!savingProjectForMessageId,
+        lastSendError: getLastSendError(selectedAiRequestId),
+        hasProject: !!project,
+        onSendMessage,
+        getEditorFunctionCallResults,
+        suspendAiRequest,
+      });
+      React.useEffect(
+        () =>
+          registerAskAiAutomationDriver({
+            startNewChat: () => setSelectedAiRequestId(null),
+            startNewRequest: ({ userRequest, aiConfigurationPresetId }) =>
+              startNewAiRequest({
+                mode: 'orchestrator',
+                userRequest,
+                attachmentIds: [],
+                aiConfigurationPresetId,
+              }),
+            sendUserMessage: async userMessage => {
+              const { selectedAiRequest } = automationRef.current;
+              if (!selectedAiRequest) return;
+              await automationRef.current.onSendMessage({
+                aiRequestId: selectedAiRequest.id,
+                userMessage,
+                editorFunctionCallResults:
+                  automationRef.current.getEditorFunctionCallResults(
+                    selectedAiRequest.id
+                  ) || [],
+              });
+            },
+            stop: async () => {
+              const { selectedAiRequest } = automationRef.current;
+              if (!selectedAiRequest) return;
+              if (!automationRef.current.getHasWorkInProgress()) return;
+              await automationRef.current.suspendAiRequest(
+                selectedAiRequest.id
+              );
+            },
+            getState: () => {
+              const {
+                selectedAiRequest,
+                getHasWorkInProgress,
+                isSending,
+                isSavingProject,
+                lastSendError,
+                hasProject,
+              } = automationRef.current;
+              return {
+                aiRequest: selectedAiRequest,
+                hasWorkInProgress: getHasWorkInProgress(),
+                isSending,
+                isSavingProject,
+                lastSendError,
+                hasProject,
+                hasUnfinishedPlan:
+                  !!selectedAiRequest &&
+                  !!getLatestActivePlan(selectedAiRequest),
+              };
+            },
+          }),
+        [automationRef, setSelectedAiRequestId]
       );
 
       const onStop = React.useCallback(
@@ -1880,6 +1970,7 @@ export const renderAskAiEditorContainer = (
         onWillInstallExtension={props.onWillInstallExtension}
         onExtensionInstalled={props.onExtensionInstalled}
         onOpenAskAi={props.onOpenAskAi}
+        onCloseAskAi={props.onCloseAskAi}
         gameEditorMode={props.gameEditorMode}
         continueProcessingFunctionCallsOnMount={
           props.extraEditorProps

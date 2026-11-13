@@ -72,6 +72,15 @@ const isUnavoidableLibraryWarning = ({ group, message }: Log): boolean =>
   (message.includes('Electron Security Warning') ||
     message.includes('Warning: This is a browser-targeted Firebase bundle'));
 
+// The gameplay test frame is only driven by the gameplay test runner: it's not
+// a preview to inspect, and pausing or resuming it would interfere with the tests.
+const isGameplayTestFrame = (id: DebuggerId): boolean =>
+  id === 'gameplay-test-frame';
+
+const getInspectableDebuggerIds = (
+  debuggerIds: Array<DebuggerId>
+): Array<DebuggerId> => debuggerIds.filter(id => !isGameplayTestFrame(id));
+
 type Props = {|
   project: gdProject,
   setToolbar: React.Node => void,
@@ -117,7 +126,9 @@ export default class Debugger extends React.Component<Props, State> {
       | 'starting'
       | 'stopped'),
     debuggerServerError: null,
-    debuggerIds: (this.props.previewDebuggerServer.getExistingDebuggerIds(): Array<DebuggerId>),
+    debuggerIds: (getInspectableDebuggerIds(
+      this.props.previewDebuggerServer.getExistingDebuggerIds()
+    ): Array<DebuggerId>),
     unregisterDebuggerServerCallbacks: null,
     debuggerGameData: {},
     profilerOutputs: {},
@@ -271,7 +282,10 @@ export default class Debugger extends React.Component<Props, State> {
           () => this.updateToolbar()
         );
       },
-      onConnectionClosed: ({ id, debuggerIds }) => {
+      onConnectionClosed: ({ id, debuggerIds: allDebuggerIds }) => {
+        if (isGameplayTestFrame(id)) return;
+
+        const debuggerIds = getInspectableDebuggerIds(allDebuggerIds);
         const didCloseActiveIssueReport =
           !!this.state.activeIssueReport &&
           this.state.activeIssueReport.debuggerId === id;
@@ -355,11 +369,13 @@ export default class Debugger extends React.Component<Props, State> {
         );
       },
       onConnectionOpened: ({ id, debuggerIds }) => {
+        if (isGameplayTestFrame(id)) return;
+
         this.setState(state => {
           const isPreparingOrEditingIssueReport =
             state.isIssueReportStarting || !!state.activeIssueReport;
           return {
-            debuggerIds,
+            debuggerIds: getInspectableDebuggerIds(debuggerIds),
             selectedId: isPreparingOrEditingIssueReport ? state.selectedId : id,
           };
         }, this.updateToolbar);
@@ -381,6 +397,8 @@ export default class Debugger extends React.Component<Props, State> {
         );
       },
       onHandleParsedMessage: ({ id, parsedMessage }) => {
+        if (isGameplayTestFrame(id)) return;
+
         this._handleMessage(id, parsedMessage);
       },
     });
@@ -389,7 +407,9 @@ export default class Debugger extends React.Component<Props, State> {
     });
 
     // Fetch the status of each debugger client.
-    previewDebuggerServer.getExistingDebuggerIds().forEach(debuggerId => {
+    getInspectableDebuggerIds(
+      previewDebuggerServer.getExistingDebuggerIds()
+    ).forEach(debuggerId => {
       previewDebuggerServer.sendMessage(debuggerId, { command: 'getStatus' });
     });
   };

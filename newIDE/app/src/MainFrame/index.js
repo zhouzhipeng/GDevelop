@@ -588,6 +588,7 @@ type CliCommandRunnerOptions = {|
   saveProject: SaveProject,
   ensureProjectSettingsApplied: () => Promise<void>,
   projectCreationCallbacks: CliProjectCreationCallbacks,
+  openAskAi: (?OpenAskAiOptions) => void,
 |};
 
 // A child component, so that the editor services the CLI runner subscribes to
@@ -2008,8 +2009,15 @@ const MainFrame = (props: Props): React.MixedElement => {
 
   useDiscordRichPresence(currentProject);
 
+  const hideAskAi =
+    !!authenticatedUser.limits &&
+    !!authenticatedUser.limits.capabilities.classrooms &&
+    authenticatedUser.limits.capabilities.classrooms.hideAskAi;
+
   const openAskAi = React.useCallback(
     (options: ?OpenAskAiOptions) => {
+      if (hideAskAi) return;
+
       const {
         aiRequestId,
         paneIdentifier,
@@ -2084,7 +2092,7 @@ const MainFrame = (props: Props): React.MixedElement => {
         }
       });
     },
-    [setState, getEditorOpeningOptions, currentProject]
+    [setState, getEditorOpeningOptions, currentProject, hideAskAi]
   );
 
   const closeAskAi = React.useCallback(
@@ -8600,7 +8608,7 @@ const MainFrame = (props: Props): React.MixedElement => {
             await fetchAndOpenNewProjectSetupDialogForExample(
               initialExampleSlugToOpen
             );
-          } else {
+          } else if (!Window.isRunningCommandFromCli()) {
             await tryAutoOpenMostRecentProjectAtStartup({
               preferences: {
                 getAutoOpenMostRecentProject,
@@ -9309,6 +9317,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       createProjectFromExample,
       saveProjectAsWithStorageProvider,
     },
+    openAskAi,
   };
 
   const projectScopedContainersAccessor: ProjectScopedContainersAccessor | null = React.useMemo(
@@ -9362,10 +9371,6 @@ const MainFrame = (props: Props): React.MixedElement => {
   });
 
   const previewLoading = previewLoadingRef.current;
-  const hideAskAi =
-    !!authenticatedUser.limits &&
-    !!authenticatedUser.limits.capabilities.classrooms &&
-    authenticatedUser.limits.capabilities.classrooms.hideAskAi;
   const showBlockingLoader = isProjectOpening || isLoadingProject;
   const showPreviewLoader = !!previewLoading && !showBlockingLoader;
 
