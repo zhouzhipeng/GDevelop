@@ -178,6 +178,17 @@ type McpEditorBridgeContext = {|
   beginPreviewLaunchSequence?: () => boolean,
   endPreviewLaunchSequence?: () => void,
   gameplayTestOperations?: McpGameplayTestOperations,
+  startLocalPreview?: (
+    sceneName: string
+  ) => Promise<?{|
+    url: string,
+    networkUrl: ?string,
+  |}>,
+  prepareWebExport?: (project: gdProject) => Promise<void>,
+  exportWeb?: (
+    project: gdProject,
+    options: {| outputDir: string, packResources: boolean |}
+  ) => Promise<void>,
   getIsGameplayTestRunInProgress?: () => boolean,
   reloadProjectAndWait?: (
     reportProgress?: McpRequestProgressReporter
@@ -4414,6 +4425,7 @@ const callMcpTool = async ({
     (toolName === 'open_project' ||
       toolName === 'reload_project' ||
       toolName === 'launch_preview' ||
+      toolName === 'start_local_preview' ||
       toolName === 'verify_project_change')
   ) {
     return errorResult(
@@ -4423,6 +4435,146 @@ const callMcpTool = async ({
         active_operation_id: activeGameplayTestOperationId || undefined,
       }
     );
+  }
+
+  if (toolName === 'start_local_preview') {
+    const startLocalPreview = context.startLocalPreview;
+    if (!startLocalPreview) {
+      return errorResult(
+        'Local network preview requires the GDevelop desktop app.'
+      );
+    }
+    if (!project || !project.getLayoutsCount()) {
+      return errorResult('Open a project with at least one scene first.');
+    }
+    const requestedScene = args && args.scene_name;
+    if (
+      requestedScene !== undefined &&
+      (typeof requestedScene !== 'string' || !requestedScene.trim())
+    ) {
+      return errorResult('scene_name must be a non-empty string.');
+    }
+    const { expectedScene, error } = resolveExpectedPreviewScene(project, args);
+    if (!expectedScene) {
+      return errorResult(error || 'Scene not found.', {
+        availableScenes: getSceneNames(project),
+      });
+    }
+    if (
+      context.beginPreviewLaunchSequence &&
+      !context.beginPreviewLaunchSequence()
+    ) {
+      return errorResult(
+        'Another MCP preview workflow is already in progress.'
+      );
+    }
+    try {
+      const urls = await startLocalPreview(expectedScene);
+      if (!urls) {
+        return errorResult(
+          'Local preview could not start. Check project diagnostics and whether another preview launch is in progress.',
+          { code: 'LOCAL_PREVIEW_FAILED' }
+        );
+      }
+      return textResult({
+        success: true,
+        launched: true,
+        sceneName: expectedScene,
+        ...urls,
+      });
+    } catch (error) {
+      return errorResult(error.message, { code: 'LOCAL_PREVIEW_FAILED' });
+    } finally {
+      if (
+        context.beginPreviewLaunchSequence &&
+        context.endPreviewLaunchSequence
+      ) {
+        context.endPreviewLaunchSequence();
+      }
+    }
+  }
+
+  if (toolName === 'export_web') {
+    const exportWeb = context.exportWeb;
+    if (!fs || !path || !exportWeb) {
+      return errorResult('Web export requires the GDevelop desktop app.', {
+        code: 'WEB_EXPORT_UNAVAILABLE',
+      });
+    }
+    if (!project) return errorResult('No project opened.');
+    if (isGameplayTestRunInProgress) {
+      return errorResult(
+        'Web export is unavailable while gameplay tests are running.',
+        {
+          code: 'GAMEPLAY_TEST_RUN_IN_PROGRESS',
+          active_operation_id: activeGameplayTestOperationId || undefined,
+        }
+      );
+    }
+
+    const {
+      output_directory: directory,
+      pack_resources: packResources = true,
+    } = args || {};
+    if (
+      typeof directory !== 'string' ||
+      !path.isAbsolute(directory) ||
+      typeof packResources !== 'boolean'
+    ) {
+      return errorResult(
+        'output_directory must be an absolute local path and pack_resources must be a boolean.',
+        { code: 'WEB_EXPORT_INVALID_ARGUMENTS' }
+      );
+    }
+
+    const outputDir = path.resolve(directory);
+    let directoryCreated = false;
+    let snapshot: ?gdProject = null;
+    try {
+      if (context.prepareWebExport) await context.prepareWebExport(project);
+      if (context.getProject() !== project) {
+        throw new Error(
+          'The open project changed while preparing the export. Try again.'
+        );
+      }
+      const projectFile = project.getProjectFile();
+      if (!projectFile || !path.isAbsolute(projectFile)) {
+        throw new Error('Open a saved local project before exporting.');
+      }
+
+      // Own a snapshot across the asynchronous exporter: opening or reloading
+      // another project can delete the editor's native project.
+      snapshot = gd.ProjectHelper.createNewGDJSProject();
+      unserializeFromJSObject(snapshot, serializeToJSObject(project));
+      snapshot.setConstantsJson(project.getConstantsJson());
+      snapshot.setProjectFile(projectFile);
+
+      // Non-recursive mkdir refuses existing directories, files, and symlinks.
+      fs.mkdirSync(outputDir);
+      directoryCreated = true;
+      await exportWeb(snapshot, { outputDir, packResources });
+      const indexHtmlPath = path.join(outputDir, 'index.html');
+      if (!fs.statSync(indexHtmlPath).isFile()) {
+        throw new Error('The export did not produce an index.html file.');
+      }
+
+      return textResult({
+        success: true,
+        exported: true,
+        outputDir,
+        indexHtmlPath,
+        packResources,
+      });
+    } catch (error) {
+      return errorResult(error.message, {
+        code: 'WEB_EXPORT_FAILED',
+        ...(directoryCreated
+          ? { outputDir, partialOutputMayRemain: true }
+          : {}),
+      });
+    } finally {
+      if (snapshot) snapshot.delete();
+    }
   }
 
   if (toolName === 'inspect_glb_model') {

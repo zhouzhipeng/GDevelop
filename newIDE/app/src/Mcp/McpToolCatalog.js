@@ -1855,6 +1855,34 @@ const readTools: Array<McpTool> = [
 
 const writeTools: Array<McpTool> = [
   {
+    name: 'export_web',
+    description:
+      'Export the open local project as a standalone HTML5 game folder without opening a dialog or publishing online. After editing source files directly, validate_project_files and reload_project first. The output directory must be new and its parent must exist. Returns outputDir and indexHtmlPath; a failed export may leave partial files in the new directory.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        output_directory: {
+          type: 'string',
+          minLength: 1,
+          description: 'Absolute path to a new directory; parent must exist.',
+        },
+        pack_resources: {
+          type: 'boolean',
+          default: true,
+          description: 'Bundle game resources into .gdpak archives.',
+        },
+      },
+      required: ['output_directory'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  {
     name: 'create_project',
     description:
       'Create a new local multi-file GDevelop game with a default Game scene, generated authoring catalogs, and bundled skill/template files. Works without an open project. project_directory must not exist and its parent must exist. Does not replace the current editor project; use open_project with the returned projectFile to open it. Never overwrites an existing directory. On failure, partial files may remain in the new directory.',
@@ -1906,7 +1934,26 @@ const writeTools: Array<McpTool> = [
   },
 ];
 
-const commandTools: Array<McpTool> = [];
+const commandTools: Array<McpTool> = [
+  {
+    name: 'start_local_preview',
+    description:
+      'Start the desktop Start Local Preview HTTP server for a browser or another device on the same local network. Returns url for this computer and networkUrl when a LAN address is available. Defaults to the project’s first scene. After editing files directly, validate and reload the project first.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        scene_name: { type: 'string', minLength: 1 },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+];
 
 const toolUsageExamples: { [string]: Array<Object> } = {
   create_project: [
@@ -2321,6 +2368,19 @@ const toolUsageExamples: { [string]: Array<Object> } = {
       },
     },
   ],
+  start_local_preview: [
+    {
+      description:
+        'Start a browser preview of the first scene on the local network.',
+      arguments: {},
+    },
+  ],
+  export_web: [
+    {
+      description: 'Build a local HTML5 export',
+      arguments: { output_directory: '/absolute/path/to/game/builds/web' },
+    },
+  ],
   launch_preview: [
     {
       description:
@@ -2479,9 +2539,11 @@ export const getCapabilitiesSummary = (
       'reload_project',
     ],
     'Gameplay tests': ['run_gameplay_tests', 'get_gameplay_test_results'],
+    'Web export': ['export_web'],
     'Tool discovery': ['inspect_tool_schema', 'get_tool_usage_examples'],
     'Preview runtime': [
       'launch_preview',
+      'start_local_preview',
       'wait_until_preview_ready',
       'preview_health_check',
       'gdevelop_inspect_running_preview',
@@ -2505,7 +2567,7 @@ export const getCapabilitiesSummary = (
   });
   return {
     note:
-      'GDevelop MCP is intentionally limited to local project creation and opening, one extension import/conversion tool, editor queries, bounded local GLB metadata inspection, synchronization, validation, authored gameplay-test execution, and preview debugging. There are no Constants MCP tools: the AI model must read and modify constants.toml directly on disk. After create_project or import_extension generates canonical sources, author the game through project files and the generated .gdevelop/gdl-catalog.json (including embedded-layout authoring data) and .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json. For every GDL event-logic edit, after validate_project_files call generate_gdl_javascript and read its artifact to review picking, iteration and side effects; pure configuration edits are exempt. Before authoring JavaScript events, also read .gdevelop/runtime-api.d.ts and .gdevelop/project-api.d.ts; before authoring gameplay tests, read .gdevelop/harness-api.d.ts.',
+      'GDevelop MCP is intentionally limited to local project creation and opening, one extension import/conversion tool, editor queries, bounded local GLB metadata inspection, synchronization, validation, authored gameplay-test execution, preview debugging, and local Web export. There are no Constants MCP tools: the AI model must read and modify constants.toml directly on disk. After create_project or import_extension generates canonical sources, author the game through project files and the generated .gdevelop/gdl-catalog.json (including embedded-layout authoring data) and .gdevelop/conditions-catalog.json, .gdevelop/actions-catalog.json, .gdevelop/expressions-catalog.json. For every GDL event-logic edit, after validate_project_files call generate_gdl_javascript and read its artifact to review picking, iteration and side effects; pure configuration edits are exempt. Before authoring JavaScript events, also read .gdevelop/runtime-api.d.ts and .gdevelop/project-api.d.ts; before authoring gameplay tests, read .gdevelop/harness-api.d.ts.',
     permissions: {
       writeToolsEnabled: !!permissions.allowWriteTools,
       commandToolsEnabled: !!permissions.allowCommandTools,

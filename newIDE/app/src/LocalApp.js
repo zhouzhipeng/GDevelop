@@ -78,8 +78,8 @@ export const create = (authentication: Authentication): React.Node => {
             <MainFrame
               i18n={i18n}
               useCliCommandRunner={useCliCommandRunner}
-              onExportHtml5External={async (project, i18n) => {
-                await exportLocalHtml5Headless({ project, i18n });
+              onExportHtml5External={async (project, i18n, options) => {
+                await exportLocalHtml5Headless({ project, i18n, ...options });
               }}
               renderMainMenu={(props, callbacks, extraCallbacks) => (
                 <ElectronMainMenu

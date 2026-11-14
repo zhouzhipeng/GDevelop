@@ -80,6 +80,8 @@ describe('McpToolCatalog', () => {
       [
         ...expectedAlwaysAvailableTools,
         ...expectedAlwaysAvailableWriteTools,
+        'export_web',
+        'start_local_preview',
       ].sort()
     );
     expect(
@@ -90,8 +92,17 @@ describe('McpToolCatalog', () => {
       [
         ...expectedAlwaysAvailableTools,
         ...expectedAlwaysAvailableWriteTools,
+        'export_web',
+        'start_local_preview',
       ].sort()
     );
+    expect(isWriteTool('export_web')).toBe(true);
+    expect(
+      canCallMcpTool('export_web', {
+        allowWriteTools: false,
+        allowCommandTools: true,
+      }).canCall
+    ).toBe(false);
     expect(isWriteTool('import_extension')).toBe(true);
     expect(
       canCallMcpTool('import_extension', {
@@ -190,6 +201,7 @@ describe('McpToolCatalog', () => {
       'Project opening',
       'Project-file validation',
       'Tool discovery',
+      'Web export',
     ]);
     expect(capabilities.note).toContain('project files');
     expect(capabilities.note).toContain('actions-catalog.json');

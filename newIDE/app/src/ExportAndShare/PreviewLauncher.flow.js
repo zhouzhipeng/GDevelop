@@ -10,7 +10,9 @@ export type LaunchCaptureOptions = {|
   |}>,
 |};
 
+export type LocalPreviewUrls = {| url: string, networkUrl: ?string |};
 export type LaunchPreviewOptions = {
+  onLocalPreviewReady?: LocalPreviewUrls => void,
   networkPreview?: boolean,
   // When set, preview this specific layout instead of the editor's currently
   // active/previewed tab. Used by MCP so an agent can preview the project's
@@ -56,6 +58,7 @@ export type PreviewOptions = {|
   eventsBasedObjectType: string | null,
   eventsBasedObjectVariantName: string | null,
   networkPreview: boolean,
+  onLocalPreviewReady?: LocalPreviewUrls => void,
   hotReload: boolean,
   shouldReloadProjectData: boolean,
   shouldReloadLibraries: boolean,

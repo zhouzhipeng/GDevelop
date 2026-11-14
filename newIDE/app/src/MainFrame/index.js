@@ -189,6 +189,7 @@ import {
   type PreviewLauncherProps,
   type PreviewLauncherComponent,
   type LaunchPreviewOptions,
+  type LocalPreviewUrls,
 } from '../ExportAndShare/PreviewLauncher.flow';
 import {
   type ResourceSource,
@@ -636,7 +637,11 @@ export type Props = {|
   initialExampleSlugToOpen: ?string,
   i18n: I18n,
   useCliCommandRunner: (options: CliCommandRunnerOptions) => void,
-  onExportHtml5External?: (project: gdProject, i18n: I18n) => Promise<void>,
+  onExportHtml5External?: (
+    project: gdProject,
+    i18n: I18n,
+    options?: {| outputDir: string, packResources: boolean |}
+  ) => Promise<void>,
 |};
 
 const saveProjectStaleTimeoutMs = 5 * 60 * 1000;
@@ -861,7 +866,8 @@ const MainFrame = (props: Props): React.MixedElement => {
   const checkDiagnosticErrorsAndIfShouldBlock = React.useCallback(
     async (
       project: ?gdProject,
-      actionType: 'preview' | 'export'
+      actionType: 'preview' | 'export',
+      showDialogs: boolean = true
     ): Promise<boolean> => {
       if (!project) {
         return false;
@@ -897,7 +903,7 @@ const MainFrame = (props: Props): React.MixedElement => {
           mustBlockForUnconditionedActions ||
           mustBlockForLifecycleIncompatibilities;
 
-        if (mustBlockForInvalidConstantPlaceholder) {
+        if (mustBlockForInvalidConstantPlaceholder && showDialogs) {
           setDiagnosticReportDialogOpen(true);
           return true;
         }
@@ -907,6 +913,7 @@ const MainFrame = (props: Props): React.MixedElement => {
           (shouldBlockAllDiagnosticErrors &&
             blockingValidationErrors.length > 0)
         ) {
+          if (!showDialogs) return true;
           const title = mustBlockForUnsafeExternalLayoutCreation
             ? t`External layout action needs a condition`
             : mustBlockForUnconditionedActions
@@ -4202,6 +4209,7 @@ const MainFrame = (props: Props): React.MixedElement => {
   const _launchPreview = React.useCallback(
     async ({
       networkPreview,
+      onLocalPreviewReady,
       forcedPreviewLayoutName,
       numberOfWindows,
       hotReload,
@@ -4271,7 +4279,8 @@ const MainFrame = (props: Props): React.MixedElement => {
         if (!isForInGameEdition && !skipDiagnosticErrorBlocking) {
           const shouldBlockPreview = await checkDiagnosticErrorsAndIfShouldBlock(
             currentProject,
-            'preview'
+            'preview',
+            !onLocalPreviewReady
           );
           if (isPreviewLaunchCancelled(previewLaunchId)) {
             return false;
@@ -4416,7 +4425,9 @@ const MainFrame = (props: Props): React.MixedElement => {
           : null;
 
         const [authenticatedPlayer, captureOptions] = await Promise.all([
-          isForInGameEdition ? null : getAuthenticatedPlayerForPreview(),
+          isForInGameEdition || onLocalPreviewReady
+            ? null
+            : getAuthenticatedPlayerForPreview(),
           isForInGameEdition
             ? null
             : createCaptureOptionsForPreview(launchCaptureOptions),
@@ -4466,6 +4477,7 @@ const MainFrame = (props: Props): React.MixedElement => {
               ? isForInGameEdition.eventsBasedObjectVariantName
               : null,
             networkPreview: !!networkPreview,
+            ...(onLocalPreviewReady ? { onLocalPreviewReady } : {}),
             hotReload: !!hotReload,
             shouldReloadProjectData:
               shouldReloadProjectData === undefined
@@ -4554,7 +4566,8 @@ const MainFrame = (props: Props): React.MixedElement => {
             if (
               !isForInGameEdition &&
               (forceDiagnosticReport ||
-                preferences.values.openDiagnosticReportAutomatically) &&
+                (!onLocalPreviewReady &&
+                  preferences.values.openDiagnosticReportAutomatically)) &&
               wholeProjectDiagnosticReport.hasAnyIssue()
             ) {
               setDiagnosticReportDialogOpen(true);
@@ -4563,6 +4576,7 @@ const MainFrame = (props: Props): React.MixedElement => {
           return true;
         } catch (error) {
           clearPreviewLoadingForLaunch(previewLaunchId);
+          if (onLocalPreviewReady) throw error;
           console.error(
             'Error caught while launching preview, this should never happen.',
             error
@@ -9010,6 +9024,59 @@ const MainFrame = (props: Props): React.MixedElement => {
         beginPreviewLaunchSequence: beginMcpPreviewLaunchSequence,
         endPreviewLaunchSequence: endMcpPreviewLaunchSequence,
         gameplayTestOperations: mcpGameplayTestOperations,
+        exportWeb: onExportHtml5External
+          ? (project, options) => onExportHtml5External(project, i18n, options)
+          : undefined,
+        prepareWebExport: async project => {
+          if (
+            getStorageProvider().internalName !==
+            localFileStorageProviderInternalName
+          ) {
+            throw new Error('Open a saved local project before exporting.');
+          }
+          await eventsFunctionsExtensionsState.ensureLoadFinished(project);
+          await ensureProjectSettingsApplied();
+          if (currentProjectRef.current !== project) {
+            throw new Error(
+              'The open project changed while preparing the export. Try again.'
+            );
+          }
+          if (hasExtensionLoadErrors) {
+            throw new Error('Fix extension loading errors before exporting.');
+          }
+          if (!project.getLayoutsCount()) {
+            throw new Error('The project needs at least one scene to export.');
+          }
+          const errors = scanProjectForValidationErrors(project);
+          const blockingError = errors.find(
+            error => error.severity !== 'warning'
+          );
+          if (blockingError) {
+            throw new Error(
+              blockingError.diagnosticMessage ||
+                `Project validation blocked export: ${blockingError.type} in ${
+                  blockingError.locationName
+                }. Run validate_project_files for details.`
+            );
+          }
+        },
+        startLocalPreview: async sceneName => {
+          const launcher = _previewLauncher.current;
+          if (!launcher || !launcher.canDoNetworkPreview()) {
+            throw new Error(
+              'Local network preview requires the GDevelop desktop app.'
+            );
+          }
+          let urls: ?LocalPreviewUrls = null;
+          const started = await _launchPreview({
+            networkPreview: true,
+            forcedPreviewLayoutName: sceneName,
+            onLocalPreviewReady: result => {
+              urls = result;
+            },
+          });
+          return started ? urls : null;
+        },
         getIsGameplayTestRunInProgress,
         getLaunchPreviewForScene: () => launchPreviewForSceneRef.current,
         cancelPreviewLaunch: cancelPreviewLaunchForMcp,
@@ -9185,6 +9252,8 @@ const MainFrame = (props: Props): React.MixedElement => {
       isHeadless,
       preferences.values.mcpAllowWriteTools,
       preferences.values.mcpAllowCommandTools,
+      onExportHtml5External,
+      hasExtensionLoadErrors,
       i18n,
       mcpEditorCallbacks,
       triggerUnsavedChanges,
@@ -9206,6 +9275,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       releaseCancelledPreviewPreparation,
       cancelPreviewLaunchForMcp,
       launchPreviewForSceneRef,
+      _launchPreview,
       getMcpEditorSelection,
       generateEvents,
       onSceneEventsModifiedOutsideEditor,

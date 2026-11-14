@@ -79,13 +79,14 @@ const isVerifyProjectChangeRequest = request =>
 
 const PROJECT_FILES_OPERATION_TOOL_NAMES = new Set([
   'open_project',
+  'export_web',
   'generate-catalogs',
   'validate_project_files',
   'validate_tsl_file',
   'render_tsl_material_preview',
 ]);
 
-const PREVIEW_OPERATION_TOOL_NAMES = new Set(['launch_preview']);
+const PREVIEW_OPERATION_TOOL_NAMES = new Set(['launch_preview', 'start_local_preview']);
 
 const isProjectFilesOperationRequest = request =>
   !!request &&

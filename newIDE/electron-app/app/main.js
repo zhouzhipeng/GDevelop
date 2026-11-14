@@ -1329,6 +1329,17 @@ app.on('ready', async function() {
   });
 
   // ServeFolder events:
+  ipcMain.handle('start-local-preview-server', (event, root) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) throw new Error('The preview editor window is unavailable.');
+    return new Promise((resolve, reject) => {
+      serveFolder({ root, windowId: window.id }, (error, serverParams) => {
+        if (error) reject(error);
+        else resolve({ port: serverParams.port, host: findLocalIp() });
+      });
+    });
+  });
+
   ipcMain.on('serve-folder', (event, options) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     const windowId = window ? window.id : 'unknown';

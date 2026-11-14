@@ -115,6 +115,104 @@ describe('McpEditorBridge', () => {
       ...overrides,
     });
 
+  it('returns local preview URLs only after a valid scene starts', async () => {
+    const urls = { url: 'http://localhost:2929', networkUrl: null };
+    const startLocalPreview = jest.fn<[string], Promise<typeof urls>>(
+      async () => urls
+    );
+    const endPreviewLaunchSequence = jest.fn<[], void>();
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    project.insertNewLayout('Game', 0);
+    const bridge = makeBridge({
+      getProject: () => project,
+      getPermissions: () => ({
+        allowCommandTools: true,
+        allowWriteTools: false,
+      }),
+      startLocalPreview,
+      beginPreviewLaunchSequence: () => true,
+      endPreviewLaunchSequence,
+    });
+    const call = (args: Object) =>
+      bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: { name: 'start_local_preview', arguments: args },
+      });
+    try {
+      expect((await call({ scene_name: 'Missing' })).isError).toBe(true);
+      expect(startLocalPreview).not.toHaveBeenCalled();
+      expect((await call({})).structuredContent).toMatchObject({
+        ...urls,
+        launched: true,
+        sceneName: 'Game',
+      });
+      expect(startLocalPreview).toHaveBeenCalledWith('Game');
+      startLocalPreview.mockImplementationOnce(async () => {
+        throw new Error('Server failed');
+      });
+      expect((await call({ scene_name: 'Game' })).isError).toBe(true);
+      expect(endPreviewLaunchSequence).toHaveBeenCalledTimes(2);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('exports a snapshot of the open project into a new directory only', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gdevelop-web-export-'));
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    const projectFile = path.join(root, 'project.gdl');
+    const outputDir = path.join(root, 'web');
+    const indexHtmlPath = path.join(outputDir, 'index.html');
+    project.setProjectFile(projectFile);
+    project.setConstantsJson('{"speed":3}');
+    const exportWeb = jest.fn(
+      async (
+        snapshot: gdProject,
+        options: {| outputDir: string, packResources: boolean |}
+      ) => {
+        expect(snapshot).not.toBe(project);
+        expect(snapshot.getProjectFile()).toBe(projectFile);
+        expect(JSON.parse(snapshot.getConstantsJson())).toEqual({ speed: 3 });
+        expect(options).toEqual({ outputDir, packResources: false });
+        fs.writeFileSync(indexHtmlPath, '<!doctype html>');
+      }
+    );
+    const bridge = makeBridge({
+      getProject: () => project,
+      getPermissions: () => ({
+        allowWriteTools: true,
+        allowCommandTools: false,
+      }),
+      exportWeb,
+    });
+    const call = (directory: string) =>
+      bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: {
+          name: 'export_web',
+          arguments: { output_directory: directory, pack_resources: false },
+        },
+      });
+    try {
+      const invalid = await call('relative/web');
+      expect(invalid.isError).toBe(true);
+      expect(exportWeb).not.toHaveBeenCalled();
+
+      const result = await call(outputDir);
+      expect(result.structuredContent).toMatchObject({
+        exported: true,
+        outputDir,
+        indexHtmlPath,
+      });
+      expect((await call(outputDir)).isError).toBe(true);
+      expect(exportWeb).toHaveBeenCalledTimes(1);
+      expect(fs.readFileSync(indexHtmlPath, 'utf8')).toBe('<!doctype html>');
+    } finally {
+      project.delete();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('looks up all exact instruction names and reports missing catalogs', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gdevelop-lookup-'));
     const directory = path.join(root, '.gdevelop');

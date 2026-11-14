@@ -616,10 +616,44 @@ independent executable code for configuration files. Generated artifacts under
 `tmp/gdl-javascript-review/` are disposable review output; never edit them or
 use them as authoring sources.
 
+## Start a local browser preview
+
+Use `start_local_preview` in desktop GDevelop for the **Start Local Preview**
+menu workflow. Enable **Allow MCP command tools**. After direct source edits,
+wait for successful `validate_project_files` and `reload_project` calls.
+Call with `{}` for the first scene or with `{"scene_name":"Game"}` to select
+a scene. After success, open `url` on the editor computer or `networkUrl`
+from another device on the same network when that address is available.
+This serves the preview to the local network. For debugger-driven tests,
+use `launch_preview` and `run_frames`.
+
+## Export a local Web build
+
+Use `export_web` in desktop GDevelop when asked for a standalone HTML5 build.
+Open the local project with `open_project` if needed. After direct source edits,
+require `validate_project_files` to return `valid: true` and wait for
+`reload_project` to complete so the export uses the latest project.
+
+Create the ignored `builds/` parent directory if needed, then call:
+
+```json
+{"output_directory": "/absolute/path/to/project/builds/web"}
+```
+
+Use an absolute path for a new directory. The tool refuses to overwrite any
+existing path, including an empty directory. Set `pack_resources: false` to
+keep individual resource files; otherwise eligible resources are packed into
+`.gdpak` archives.
+
+Require `exported: true` and use the returned `outputDir` and `indexHtmlPath`.
+Serve the entire output directory over HTTP to check it in a browser. The tool
+creates a local build and does not publish it. If it fails after creating the
+directory, partial files may remain; use a fresh path for a new export.
+
 ## MCP boundary
 
-MCP is extension-import/synchronization/read/debug/gameplay-test-only. Use it
-only for:
+Use MCP for the supported project operations below. Edit project sources
+directly on disk.
 
 The complete public protocol surface is the following allowlist:
 
@@ -644,8 +678,10 @@ The complete public protocol surface is the following allowlist:
   `preview_health_check`, `gdevelop_inspect_running_preview`, `run_frames`,
   `verify_project_change`, `simulate_preview_input`, `control_preview`,
   `set_runtime_state`, and `capture_preview_screenshot`.
+- Local browser preview: `start_local_preview` (requires **Allow MCP command tools**).
 - Gameplay tests: `run_gameplay_tests` and `get_gameplay_test_results`.
-- Public write operations: `create_project` and `import_extension`.
+- Public write operations: `create_project`, `import_extension`, and
+  `export_web` (requires **Allow MCP write tools**).
 
 No other MCP tool name is supported, introspectable, or callable, even when
 write/command permissions are enabled. The two gameplay-test tools are always

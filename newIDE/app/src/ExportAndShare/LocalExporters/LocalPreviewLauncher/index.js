@@ -58,9 +58,11 @@ type State = {|
 const prepareExporter = async ({
   isForInGameEdition,
   isForGameplayTest,
+  networkPreview,
 }: {
   isForInGameEdition: boolean,
   isForGameplayTest: boolean,
+  networkPreview: boolean,
 }): Promise<{|
   outputDir: string,
   exporter: gdjsExporter,
@@ -81,6 +83,8 @@ const prepareExporter = async ({
       ? 'gameplay-test-preview'
       : isForInGameEdition
       ? 'in-game-editor-preview'
+      : networkPreview
+      ? 'network-preview'
       : 'preview'
   );
   const exporter = new gd.Exporter(fileSystem, gdjsRoot);
@@ -216,7 +220,7 @@ export default class LocalPreviewLauncher extends React.Component<
     project: gdProject,
     gamePath: string,
     options: PreviewOptions
-  ): void => {
+  ): Promise<void> => {
     this.setState(
       // $FlowFixMe[incompatible-type]
       {
@@ -245,38 +249,37 @@ export default class LocalPreviewLauncher extends React.Component<
         captureOptions: options.captureOptions,
       },
       () => {
-        if (!options.networkPreview) {
-          this._openPreviewBrowserWindow();
-        } else {
-          if (!ipcRenderer) return;
+        if (!options.networkPreview) this._openPreviewBrowserWindow();
+      }
+    );
+    if (!options.networkPreview) return Promise.resolve();
+    if (!ipcRenderer)
+      return Promise.reject(new Error('Electron IPC unavailable.'));
 
-          ipcRenderer.removeAllListeners('serve-folder-done');
-          ipcRenderer.removeAllListeners('local-network-ips');
-          ipcRenderer.on('serve-folder-done', (event, err, serverParams) => {
-            if (err) {
-              this.setState({
-                networkPreviewDialogOpen: true,
-                networkPreviewPort: null,
-                networkPreviewHost: null,
-                networkPreviewError: err,
-              });
-            } else {
-              this.setState({
-                networkPreviewDialogOpen: true,
-                networkPreviewPort: serverParams.port,
-              });
-            }
+    return ipcRenderer.invoke('start-local-preview-server', gamePath).then(
+      ({ port, host }) => {
+        if (options.onLocalPreviewReady) {
+          options.onLocalPreviewReady({
+            url: `http://localhost:${port}`,
+            networkUrl: host ? `http://${host}:${port}` : null,
           });
-          ipcRenderer.on('local-network-ip', (event, ipAddress) => {
-            this.setState({
-              networkPreviewHost: ipAddress,
-            });
+        } else {
+          this.setState({
+            networkPreviewDialogOpen: true,
+            networkPreviewPort: port,
+            networkPreviewHost: host,
+            networkPreviewError: null,
           });
-          ipcRenderer.send('serve-folder', {
-            root: gamePath,
-          });
-          ipcRenderer.send('get-local-network-ip');
         }
+      },
+      error => {
+        if (options.onLocalPreviewReady) throw error;
+        this.setState({
+          networkPreviewDialogOpen: true,
+          networkPreviewPort: null,
+          networkPreviewHost: null,
+          networkPreviewError: error,
+        });
       }
     );
   };
@@ -312,6 +315,7 @@ export default class LocalPreviewLauncher extends React.Component<
       {
         isForInGameEdition: previewOptions.isForInGameEdition,
         isForGameplayTest: !!previewOptions.isForGameplayTest,
+        networkPreview: previewOptions.networkPreview,
       }
     );
     if (previewOptions.isLaunchCancelled()) {
@@ -530,6 +534,7 @@ export default class LocalPreviewLauncher extends React.Component<
       addGlobalObjectGroupsToDataJs(project, fileSystem.readFile(dataJsPath))
     );
 
+    let windowLaunch: ?Promise<void> = null;
     if (shouldHotReload) {
       const projectDataElement = new gd.SerializerElement();
       exporter.serializeProjectData(
@@ -607,7 +612,11 @@ export default class LocalPreviewLauncher extends React.Component<
           },
         });
       } else if (previewOptions.numberOfWindows >= 1) {
-        this._openPreviewWindow(project, outputDir, previewOptions);
+        windowLaunch = this._openPreviewWindow(
+          project,
+          outputDir,
+          previewOptions
+        );
       }
     }
 
@@ -617,6 +626,8 @@ export default class LocalPreviewLauncher extends React.Component<
 
     exporter.delete();
     previewExportOptions.delete();
+
+    if (windowLaunch) await windowLaunch;
 
     const previewStopTime = performance.now();
     console.info(
