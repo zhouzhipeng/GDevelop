@@ -95,6 +95,41 @@ describe('generate_gdl_javascript', () => {
     project.delete();
     fs.rmSync(directory, { recursive: true, force: true });
   });
+  it('resolves disk constants during validation and JavaScript generation', async () => {
+    files['game://constants.toml'] = '[signals]\nready = "Game.Ready"\n';
+    files['game://' + sceneFile] = replaceEmbeddedEventBody(
+      files['game://' + sceneFile],
+      `function {
+  events {
+    event {
+      conditions {
+        compareNumbers {
+          first_expression = TimeDelta()
+          comparison_sign = ">"
+          second_expression = 0
+        }
+      }
+      actions {
+        emitSceneSignal {
+          signal_name = "{{signals.ready}}"
+          payload = ""
+        }
+      }
+    }
+  }
+}`
+    );
+    await writeMultiFileSourceTree({
+      entryPath: project.getProjectFile(),
+      files,
+    });
+    expect((await call('validate_project_files')).valid).toBe(true);
+    const result = await call('generate_gdl_javascript', { file: sceneFile });
+    const code = fs.readFileSync(result.artifacts[0].path, 'utf8');
+    expect(code).toContain('"Game.Ready"');
+    expect(code).not.toContain('{{signals.ready}}');
+    expect(JSON.parse(project.getConstantsJson())).toEqual({});
+  });
   it('routes through MCP, generates current disk code and preserves sources, catalogs and editor state', async () => {
     const source = fs.readFileSync(path.join(directory, sceneFile), 'utf8');
     const catalog = fs.readFileSync(

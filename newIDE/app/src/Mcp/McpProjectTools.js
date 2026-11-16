@@ -744,6 +744,9 @@ export const validateSerializedProject = (
   let restoreExtensionMetadata = () => {};
   try {
     unserializeFromJSObject(validationProject, serializedProject);
+    validationProject.setConstantsJson(
+      JSON.stringify(serializedProject.constants || {})
+    );
     // Round-trip serialization catches late serializer crashes and normalizes
     // the same path the editor will use after a sync/apply.
     serializeToJSObject(validationProject);

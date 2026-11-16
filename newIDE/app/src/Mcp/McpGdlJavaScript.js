@@ -291,6 +291,7 @@ export const generateGdlJavaScript = async (
       let restore = () => {};
       try {
         unserializeFromJSObject(project, serialized);
+        project.setConstantsJson(JSON.stringify(serialized.constants || {}));
         restore = temporarilyLoadProjectExtensionMetadataForValidation(
           project,
           editorProject
