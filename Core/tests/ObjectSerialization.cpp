@@ -226,6 +226,29 @@ TEST_CASE("ObjectSerialization", "[common]") {
     CheckSpriteConfiguration(*(clonedObject.get()));
   }
 
+  SECTION("Write custom object properties as a record after loading legacy content") {
+    gd::Platform platform;
+    gd::Project project;
+    auto &object = SetupProjectWithCustomObject(project, platform);
+
+    const auto input = gd::Serializer::FromJSON(
+        R"({"empty":{"content":[]},"configured":{"content":{"items":[],"label":"Hello"}}})");
+    auto &configuration = object.GetConfiguration();
+
+    configuration.UnserializeFrom(project, input.GetChild("empty"));
+    SerializerElement emptyOutput;
+    configuration.SerializeTo(emptyOutput);
+    REQUIRE(gd::Serializer::ToJSON(emptyOutput.GetChild("content")) == "{}");
+
+    configuration.UnserializeFrom(project, input.GetChild("configured"));
+    SerializerElement configuredOutput;
+    configuration.SerializeTo(configuredOutput);
+    const auto &content = configuredOutput.GetChild("content");
+    REQUIRE_FALSE(content.ConsideredAsArray());
+    REQUIRE(content.GetChild("items").ConsideredAsArray());
+    REQUIRE(content.GetStringAttribute("label") == "Hello");
+  }
+
   SECTION("Save and load a project with a custom object configuration") {
     gd::Platform platform;
     gd::Project writtenProject;

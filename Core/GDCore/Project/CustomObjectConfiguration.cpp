@@ -193,7 +193,13 @@ void CustomObjectConfiguration::DoSerializeTo(SerializerElement& element) const 
 }
 void CustomObjectConfiguration::DoUnserializeFrom(Project& project,
                                                const SerializerElement& element) {
-  objectContent = element.GetChild("content");
+  const auto& content = element.GetChild("content");
+  // Older projects can store an empty property record as an array.
+  if (content.ConsideredAsArray() && content.GetChildrenCount() == 0) {
+    objectContent = SerializerElement();
+  } else {
+    objectContent = content;
+  }
 
   if (element.HasChild("animatable")) {
     auto &animatableElement = element.GetChild("animatable");
