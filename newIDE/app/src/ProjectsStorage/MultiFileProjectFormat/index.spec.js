@@ -644,6 +644,21 @@ column2 = "ssfssdfsf"
     ).toBe(true);
   });
 
+  test('round-trips prefab objects with empty native property content', () => {
+    const project = JSON.parse(JSON.stringify(projectFixture));
+    project.layouts[0].objects.push({
+      name: 'Enemy',
+      type: 'Combat::Enemy',
+      content: [],
+    });
+
+    const files = decomposeLegacyProjectToFiles(project);
+    const output = composeLegacyProjectFromFiles(files);
+
+    expect(output.layouts[0].objects[0].content).toEqual({});
+    expect(areLegacyProjectsEquivalent(project, output)).toBe(true);
+  });
+
   test('saves custom-object variants with untouched empty editor settings', () => {
     const project = JSON.parse(JSON.stringify(projectFixture));
     const variant =

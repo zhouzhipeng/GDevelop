@@ -4710,6 +4710,12 @@ export const normalizeLegacyProjectForMultiFile = (
       normalizeVariables(event);
       normalizeEventVariables(event.events);
     });
+  const prefabTypes = new Set();
+  project.eventsFunctionsExtensions.forEach(extension => {
+    extension.eventsBasedObjects.forEach(prefab => {
+      prefabTypes.add(`${extension.name}::${prefab.name}`);
+    });
+  });
   const normalizeOwner = owner => {
     normalizeVariables(owner);
     (owner.instances || []).forEach(instance =>
@@ -4724,7 +4730,18 @@ export const normalizeLegacyProjectForMultiFile = (
     (owner.eventsFunctions || []).forEach(fn =>
       normalizeEventVariables(fn.events)
     );
-    (owner.objects || []).forEach(normalizeVariables);
+    (owner.objects || []).forEach(object => {
+      normalizeVariables(object);
+      // libGD serializes a prefab with no configured properties as [].
+      // GDL reconstructs the same empty property record as {}.
+      if (
+        prefabTypes.has(object.type) &&
+        Array.isArray(object.content) &&
+        object.content.length === 0
+      ) {
+        object.content = {};
+      }
+    });
     (owner.eventsFunctions || []).forEach(normalizeVariables);
   };
   normalizeOwner(project);
