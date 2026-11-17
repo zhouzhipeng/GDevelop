@@ -390,6 +390,18 @@ struct PreviewExportOptions {
     return *this;
   }
 
+  /**
+   * \brief Set where to upload the short gameplay video recorded during the
+   * preview, either automatically or by the user with a toolbar shown in the
+   * preview.
+   */
+  PreviewExportOptions &SetPreviewVideoCapture(const gd::String &signedUrl,
+                                               const gd::String &publicUrl,
+                                               bool isRecordedByUser) {
+    captureOptions.SetPreviewVideo(signedUrl, publicUrl, isRecordedByUser);
+    return *this;
+  }
+
   gd::Project &project;
   gd::String exportPath;
   gd::String websocketDebuggerServerAddress;
@@ -505,6 +517,7 @@ class ExporterHelper {
    * \brief Export a project without its events and options to 2 JS variables
    *
    * \param fs The abstract file system to use to write the file
+   * \param gdjsRoot The root directory of GDJS, used to copy runtime files.
    * \param project The project to be exported.
    * \param filename The filename where export the project
    * \param runtimeGameOptions The content of the extra configuration to store
@@ -514,9 +527,9 @@ class ExporterHelper {
    * description of the error otherwise.
    */
   static gd::String ExportProjectData(
-      gd::AbstractFileSystem &fs, gd::Project &project, gd::String filename,
+      gd::AbstractFileSystem &fs, const gd::String &gdjsRoot,
+      gd::Project &project, gd::String filename,
       const gd::SerializerElement &runtimeGameOptions, bool isInGameEdition,
-      const std::vector<gd::InGameEditorResourceMetadata> &inGameEditorResources,
       bool displayCollisionShapes = false,
       bool displaySignalAnimations = false);
 
@@ -524,16 +537,31 @@ class ExporterHelper {
    * \brief Serialize a project without its events to JSON
    *
    * \param fs The abstract file system to use to write the file
+   * \param gdjsRoot The root directory of GDJS, used to copy runtime files.
    * \param project The project to be exported.
    * \param options The content of the extra configuration
    * \param projectDataElement The element where the project data is serialized
    * \param inGameEditorResources The list of in-game editor resources to be used.
    */
   static void SerializeProjectData(gd::AbstractFileSystem &fs,
+                                   const gd::String &gdjsRoot,
                                    const gd::Project &project,
                                    const PreviewExportOptions &options,
-                                   gd::SerializerElement &projectDataElement,
-                                   const std::vector<gd::InGameEditorResourceMetadata> &inGameEditorResources);
+                                   gd::SerializerElement &projectDataElement);
+
+  /**
+   * List all the in-game editor resources, so they can be later included in the
+   * exported project resources.
+   * \param fs The abstract file system to use to write the file
+   * \param gdjsRoot The root directory of GDJS, used to copy runtime files.
+   * \param project The project to be exported.
+   * \param inGameEditorResources The resources list where the in-game editor
+   * resources are added
+   */
+  static void AddAllInGameEditorResources(
+      gd::AbstractFileSystem &fs, const gd::String &gdjsRoot,
+      const gd::Project &project,
+      std::vector<gd::InGameEditorResourceMetadata> &inGameEditorResources);
 
   /**
    * \brief Serialize the content of the extra configuration to store
