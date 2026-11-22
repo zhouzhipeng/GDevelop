@@ -19,6 +19,7 @@ import IconButton from '../UI/IconButton';
 import FlatButton from '../UI/FlatButton';
 import Checkbox from '../UI/Checkbox';
 import InfoBar from '../UI/Messages/InfoBar';
+import Text from '../UI/Text';
 import { copyTextToClipboard } from '../Utils/Clipboard';
 
 import TimerIcon from '@material-ui/icons/Timer';
@@ -54,6 +55,17 @@ export class LogsManager {
   _onNewGroup: Set<() => void> = new Set();
   _pendingLogs: Array<Log> = [];
   _pendingCommit: boolean = false;
+  _logIds: WeakMap<Log, number> = new WeakMap();
+  _nextLogId: number = 0;
+
+  getLogId(log: Log): number {
+    let id = this._logIds.get(log);
+    if (id === undefined) {
+      id = this._nextLogId++;
+      this._logIds.set(log, id);
+    }
+    return id;
+  }
 
   _commitLogs() {
     this.logs.push(...this._pendingLogs);
@@ -144,6 +156,31 @@ const iconMap = {
   error: <ErrorIcon color="error" fontSize="small" />,
 };
 
+type LogType = 'info' | 'warning' | 'error';
+const logTypes: Array<LogType> = ['info', 'warning', 'error'];
+const logTypeLabels = {
+  info: <Trans>Information</Trans>,
+  warning: <Trans>Warnings</Trans>,
+  error: <Trans>Errors</Trans>,
+};
+
+const getLogType = (log: Log): LogType =>
+  log.type === 'warning' || log.type === 'error' ? log.type : 'info';
+
+const formatTimestamp = (timestamp: number): string =>
+  Math.round(timestamp * 1000) / 1000000 + 's';
+
+const formatLogsAsText = (logs: Array<Log>, withDetails: boolean): string =>
+  logs
+    .map(log =>
+      withDetails
+        ? `[${formatTimestamp(log.timestamp)}] [${getLogType(log)}]` +
+          (log.group ? ` [${log.group}]` : '') +
+          ` ${log.message}`
+        : log.message
+    )
+    .join('\n');
+
 export const DebuggerConsole = ({
   logsManager,
 }: {
@@ -167,14 +204,21 @@ export const DebuggerConsole = ({
   );
 
   const cachedHeightsForWidth = React.useRef(0);
+  const displayedLogs = React.useRef<Array<Log>>([]);
   const cellMeasurerCache = React.useMemo(
     () =>
       new CellMeasurerCache({
         defaultHeight: 45,
         minHeight: 25,
         fixedWidth: true,
+        // Indices shift when a log is added or when filters change:
+        // identify the cached heights by log instead.
+        keyMapper: index => {
+          const log = displayedLogs.current[index];
+          return log ? logsManager.getLogId(log) : -1;
+        },
       }),
-    []
+    [logsManager]
   );
 
   const [hideInternal, setHideInternal] = React.useState(false);
@@ -217,9 +261,26 @@ export const DebuggerConsole = ({
     [editingHiddenGroups, forceUpdate, logsManager]
   );
 
-  const filteredLogs = logs
-    .filter(({ internal }) => !(hideInternal && internal))
-    .filter(({ group }) => !hiddenGroups.has(group));
+  const [hiddenTypes, setHiddenTypes] = React.useState<Array<LogType>>([]);
+
+  const filteredLogs = logs.filter(
+    log =>
+      !(hideInternal && log.internal) &&
+      !hiddenGroups.has(log.group) &&
+      !hiddenTypes.includes(getLogType(log))
+  );
+  displayedLogs.current = filteredLogs;
+
+  const listRef = React.useRef<?{ recomputeRowHeights: () => void }>(null);
+  React.useLayoutEffect(
+    () => {
+      // Rows keep their cached position when the displayed logs change without
+      // any new log to measure, so recompute them when a filter changes.
+      if (listRef.current) listRef.current.recomputeRowHeights();
+    },
+    [hideInternal, hiddenTypes, hiddenGroups.size]
+  );
+  const hasActiveFilter = hiddenGroups.size > 0 || hiddenTypes.length > 0;
 
   return (
     <Column noMargin noOverflowParent expand>
@@ -236,6 +297,7 @@ export const DebuggerConsole = ({
 
             return (
               <List
+                ref={listRef}
                 deferredMeasurementCache={cellMeasurerCache}
                 height={height}
                 width={width}
@@ -265,9 +327,7 @@ export const DebuggerConsole = ({
                           }}
                           ref={registerChild}
                         >
-                          <Column noMargin>
-                            {iconMap[log.type] || iconMap['info']}
-                          </Column>
+                          <Column noMargin>{iconMap[getLogType(log)]}</Column>
                           <Spacer />
                           <Column noMargin expand>
                             <div style={styles.consoleMessageLine}>
@@ -339,22 +399,36 @@ export const DebuggerConsole = ({
             checked={!hideInternal}
             onCheck={(_, value) => setHideInternal(!value)}
           />
-          <IconButton
-            tooltip={t`Filter the logs by group`}
-            onClick={() => setEditingHiddenGroups(true)}
-            edge="start"
-            size="small"
-          >
-            <FilterIcon />
-          </IconButton>
-          <FlatButton
-            label={<Trans>Clear logs</Trans>}
-            leftIcon={<TrashIcon />}
-            onClick={clearLogs}
-            disabled={!logs.length}
-            noBackground
-            noBorder
-          />
+          <Line noMargin alignItems="center">
+            <IconButton
+              tooltip={t`Filter the logs`}
+              onClick={() => setEditingHiddenGroups(true)}
+              selected={hasActiveFilter}
+              size="small"
+            >
+              <FilterIcon />
+            </IconButton>
+            <IconButton
+              tooltip={t`Copy all the logs`}
+              onClick={() => {
+                copyTextToClipboard(
+                  formatLogsAsText(filteredLogs, !hideDetails)
+                );
+              }}
+              disabled={!filteredLogs.length}
+              size="small"
+            >
+              <CopyIcon />
+            </IconButton>
+            <IconButton
+              tooltip={t`Clear the console`}
+              onClick={clearLogs}
+              disabled={!logs.length}
+              size="small"
+            >
+              <TrashIcon />
+            </IconButton>
+          </Line>
         </Line>
       </MiniToolbar>
 
@@ -366,7 +440,7 @@ export const DebuggerConsole = ({
 
       {editingHiddenGroups && (
         <Dialog
-          title={<Trans>Select log groups to display</Trans>}
+          title={<Trans>Select logs to display</Trans>}
           maxWidth="sm"
           open
           actions={[
@@ -381,13 +455,36 @@ export const DebuggerConsole = ({
           onApply={() => setEditingHiddenGroups(false)}
         >
           <Column>
+            <Text size="sub-title">
+              <Trans>Types</Trans>
+            </Text>
+            {logTypes.map(type => (
+              <Line key={type}>
+                <Checkbox
+                  label={logTypeLabels[type]}
+                  checked={!hiddenTypes.includes(type)}
+                  onCheck={(_, checked) => {
+                    setHiddenTypes(
+                      checked
+                        ? hiddenTypes.filter(hiddenType => hiddenType !== type)
+                        : [...hiddenTypes, type]
+                    );
+                  }}
+                />
+              </Line>
+            ))}
+            {groups.size > 0 && (
+              <Text size="sub-title">
+                <Trans>Groups</Trans>
+              </Text>
+            )}
             {(() => {
               const list = [];
               for (const group of groups.values())
                 list.push(
                   <Line key={group}>
                     <Checkbox
-                      label={group}
+                      label={group || <Trans>No group</Trans>}
                       checked={!hiddenGroups.has(group)}
                       onCheck={(_, checked) => {
                         if (checked) hiddenGroups.delete(group);

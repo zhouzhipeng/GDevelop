@@ -97,6 +97,7 @@ export const getInitialPreferences = (): {
   autoDownloadUpdates: boolean,
   autoOpenMostRecentProject: boolean,
   automaticallyApplyAiRequestEditsByProjectId: { [string]: boolean },
+  preferredAiConfigurationPresetId: string | null,
   automaticallyUseCreditsForAiRequests: boolean,
   autosaveOnPreview: boolean,
   backdropClickBehavior: string,
@@ -460,6 +461,10 @@ export default class PreferencesProvider extends React.Component<Props, State> {
     setMcpAllowWriteTools: (this._setMcpAllowWriteTools.bind(this): any),
     // $FlowFixMe[method-unbinding]
     setMcpAllowCommandTools: (this._setMcpAllowCommandTools.bind(this): any),
+    // $FlowFixMe[method-unbinding]
+    setPreferredAiConfigurationPresetId: (this._setPreferredAiConfigurationPresetId.bind(
+      this
+    ): any),
     // $FlowFixMe[method-unbinding]
     setUseBackgroundSerializerForSaving: (this._setUseBackgroundSerializerForSaving.bind(
       this
@@ -1596,6 +1601,18 @@ export default class PreferencesProvider extends React.Component<Props, State> {
             ...state.values.automaticallyApplyAiRequestEditsByProjectId,
             [projectId]: newValue,
           },
+        },
+      }),
+      () => this._persistValuesToLocalStorage(this.state)
+    );
+  }
+
+  _setPreferredAiConfigurationPresetId(newValue: string) {
+    this.setState(
+      state => ({
+        values: {
+          ...state.values,
+          preferredAiConfigurationPresetId: newValue,
         },
       }),
       () => this._persistValuesToLocalStorage(this.state)
