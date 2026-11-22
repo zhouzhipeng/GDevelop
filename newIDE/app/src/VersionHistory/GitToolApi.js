@@ -35,6 +35,7 @@ export type GitCommit = {|
 
 export type GitStatus = {|
   isAvailable: boolean,
+  canInitialize?: boolean,
   projectDirectory: string,
   repoRoot: ?string,
   branch: string,

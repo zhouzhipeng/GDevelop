@@ -12,6 +12,7 @@ const runGit = (workingDirectory, args, options = {}) =>
       args,
       {
         cwd: workingDirectory,
+        env: options.env,
         timeout: gitCommandTimeoutMs,
         maxBuffer: gitCommandMaxBuffer,
         windowsHide: true,
@@ -47,10 +48,11 @@ const getProjectDirectory = projectFilePath => {
 
 const resolveGitRepository = async projectFilePath => {
   const projectDirectory = getProjectDirectory(projectFilePath);
-  const result = await runGit(projectDirectory, [
-    'rev-parse',
-    '--show-toplevel',
-  ]);
+  const result = await runGit(
+    projectDirectory,
+    ['rev-parse', '--show-toplevel'],
+    { env: { ...process.env, LC_ALL: 'C' } }
+  );
   const repoRoot = result.stdout.split(/\r?\n/)[0];
   if (!repoRoot) throw new Error('Unable to find the Git repository root.');
 
@@ -299,8 +301,10 @@ const getStatus = async projectFilePath => {
       commits,
     };
   } catch (error) {
+    const message = error && error.message ? error.message : String(error);
     return {
       isAvailable: false,
+      canInitialize: message.startsWith('fatal: not a git repository'),
       projectDirectory: getProjectDirectory(projectFilePath),
       repoRoot: null,
       branch: '',
@@ -310,7 +314,7 @@ const getStatus = async projectFilePath => {
       remotes: [],
       changedFiles: [],
       commits: [],
-      error: error && error.message ? error.message : String(error),
+      error: message,
     };
   }
 };

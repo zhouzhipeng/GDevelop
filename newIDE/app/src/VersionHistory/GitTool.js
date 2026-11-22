@@ -1087,7 +1087,6 @@ const GitTool = ({
   const commits = status && status.isAvailable ? status.commits : [];
   const canCommit = !!status && status.isAvailable && !!changedFiles.length;
   const canPush = !!status && status.isAvailable && !!commits.length;
-  const hasStatusError = !!status && !status.isAvailable;
   const currentError = errorMessage || (status && status.error);
   const remoteDialogActions: Array<?React.Node> = [
     <FlatButton
@@ -1185,7 +1184,7 @@ const GitTool = ({
                     {currentError}
                   </Text>
                 )}
-                {hasStatusError && (
+                {status && status.canInitialize && (
                   <Line noMargin>
                     <RaisedButton
                       label={<Trans>Initialize Git</Trans>}
