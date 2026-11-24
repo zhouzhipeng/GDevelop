@@ -104,8 +104,7 @@ const cleanUserTracesOnDevice = async () => {
   ]);
 };
 
-const TEN_SECONDS = 10 * 1000;
-const ONE_MINUTE = 6 * TEN_SECONDS;
+const ONE_MINUTE = 60 * 1000;
 
 export default class AuthenticatedUserProvider extends React.Component<
   Props,
@@ -136,7 +135,6 @@ export default class AuthenticatedUserProvider extends React.Component<
     userSnackbarMessage: null,
   };
   _automaticallyUpdateUserProfile = true;
-  _hasNotifiedUserAboutEmailVerification = false;
   _abortController: ?AbortController = null;
   _notificationPollingIntervalId: ?IntervalID = null;
 
@@ -275,7 +273,6 @@ export default class AuthenticatedUserProvider extends React.Component<
           this.props.authentication.getAuthorizationHeader(),
       },
     }));
-    this._hasNotifiedUserAboutEmailVerification = false;
   }
 
   // This should be called every time the user is detected as logged out.
@@ -294,7 +291,6 @@ export default class AuthenticatedUserProvider extends React.Component<
         ...authenticatedUserLoggedOutAttributes,
       },
     }));
-    this._hasNotifiedUserAboutEmailVerification = false;
 
     listDefaultRecommendations().then(
       recommendations =>
@@ -337,7 +333,6 @@ export default class AuthenticatedUserProvider extends React.Component<
 
   _fetchUserProfileWithoutThrowingErrors = async (
     options: ?{
-      dontNotifyAboutEmailVerification?: boolean,
       resetState?: boolean,
     }
   ) => {
@@ -353,7 +348,6 @@ export default class AuthenticatedUserProvider extends React.Component<
 
   _fetchUserProfile = async (
     options: ?{
-      dontNotifyAboutEmailVerification?: boolean,
       /**
        * By default, fetching the user does not reset their attributes to a null state
        * to avoid the UI displaying loaders everywhere. This boolean should be set
@@ -727,9 +721,6 @@ export default class AuthenticatedUserProvider extends React.Component<
         // We call this function every time the user is fetched, as it will
         // automatically prevent the event to be sent if the user attributes haven't changed.
         identifyUserForAnalytics(this.state.authenticatedUser);
-        if (!options || !options.dontNotifyAboutEmailVerification) {
-          this._notifyUserAboutEmailVerification();
-        }
       }
     );
   };
@@ -1157,30 +1148,6 @@ export default class AuthenticatedUserProvider extends React.Component<
     }
   };
 
-  _notifyUserAboutEmailVerification = () => {
-    const { profile, firebaseUser } = this.state.authenticatedUser;
-    if (!profile) return;
-    if (firebaseUser && firebaseUser.emailVerified) return;
-
-    const now = Date.now();
-    // If the user has not verified their email when logging in we show a dialog to do so.
-    // - If they just registered, we don't send the email again as it will be sent automatically,
-    // nor do we show a button to send again.
-    // - If they are just logging in, we don't send the email but we show a button to send again.
-    // Use a boolean to show the dialog only once.
-    const accountAgeInMs = now - profile.createdAt;
-    const hasJustCreatedAccount = accountAgeInMs < TEN_SECONDS;
-    if (!this._hasNotifiedUserAboutEmailVerification) {
-      setTimeout(() => {
-        this.openEmailVerificationDialog({
-          open: true,
-          sendEmailAutomatically: false,
-          showSendEmailButton: !hasJustCreatedAccount,
-        });
-      }, 1000);
-    }
-  };
-
   _doLogout = async () => {
     if (this.props.authentication) {
       await this.props.authentication.logout();
@@ -1394,8 +1361,6 @@ export default class AuthenticatedUserProvider extends React.Component<
       }
 
       await this._fetchUserProfileWithoutThrowingErrors({
-        // When creating an account, avoid showing the email verification dialog right away.
-        dontNotifyAboutEmailVerification: true,
         resetState: true,
       });
       this.openCreateAccountDialog(false);
@@ -1544,11 +1509,6 @@ export default class AuthenticatedUserProvider extends React.Component<
         showSendEmailButton: open ? showSendEmailButton : false, // reset to false when closing dialog.
       },
     });
-    // We save the fact that the user has seen the dialog when they close it.
-    // And we show them the additional info dialog if they haven't seen it yet.
-    if (!open) {
-      this._hasNotifiedUserAboutEmailVerification = true;
-    }
   };
 
   openResetPassword = (open: boolean = true) => {

@@ -185,6 +185,7 @@ type McpEditorBridgeContext = {|
     networkUrl: ?string,
   |}>,
   prepareWebExport?: (project: gdProject) => Promise<void>,
+  exportMacDmg?: (project: gdProject, outputDir: string) => Promise<string>,
   exportWeb?: (
     project: gdProject,
     options: {| outputDir: string, packResources: boolean |}
@@ -4494,17 +4495,24 @@ const callMcpTool = async ({
     }
   }
 
-  if (toolName === 'export_web') {
-    const exportWeb = context.exportWeb;
-    if (!fs || !path || !exportWeb) {
-      return errorResult('Web export requires the GDevelop desktop app.', {
-        code: 'WEB_EXPORT_UNAVAILABLE',
-      });
+  if (toolName === 'export_web' || toolName === 'export_mac_dmg') {
+    const isMacDmg = toolName === 'export_mac_dmg';
+    const exportLabel = isMacDmg ? 'macOS DMG' : 'Web';
+    const codePrefix = isMacDmg ? 'MAC_DMG_EXPORT' : 'WEB_EXPORT';
+    const { exportWeb, exportMacDmg } = context;
+    if (!fs || !path || (isMacDmg ? !exportMacDmg : !exportWeb)) {
+      return errorResult(
+        exportLabel + ' export requires the GDevelop desktop app.',
+        {
+          code: codePrefix + '_UNAVAILABLE',
+        }
+      );
     }
     if (!project) return errorResult('No project opened.');
     if (isGameplayTestRunInProgress) {
       return errorResult(
-        'Web export is unavailable while gameplay tests are running.',
+        exportLabel +
+          ' export is unavailable while gameplay tests are running.',
         {
           code: 'GAMEPLAY_TEST_RUN_IN_PROGRESS',
           active_operation_id: activeGameplayTestOperationId || undefined,
@@ -4519,11 +4527,13 @@ const callMcpTool = async ({
     if (
       typeof directory !== 'string' ||
       !path.isAbsolute(directory) ||
-      typeof packResources !== 'boolean'
+      (!isMacDmg && typeof packResources !== 'boolean')
     ) {
       return errorResult(
-        'output_directory must be an absolute local path and pack_resources must be a boolean.',
-        { code: 'WEB_EXPORT_INVALID_ARGUMENTS' }
+        isMacDmg
+          ? 'output_directory must be an absolute local path.'
+          : 'output_directory must be an absolute local path and pack_resources must be a boolean.',
+        { code: codePrefix + '_INVALID_ARGUMENTS' }
       );
     }
 
@@ -4552,6 +4562,19 @@ const callMcpTool = async ({
       // Non-recursive mkdir refuses existing directories, files, and symlinks.
       fs.mkdirSync(outputDir);
       directoryCreated = true;
+      if (isMacDmg && exportMacDmg) {
+        const dmgPath = await exportMacDmg(snapshot, outputDir);
+        if (!fs.statSync(dmgPath).isFile()) {
+          throw new Error('The export did not produce a DMG file.');
+        }
+        return textResult({
+          success: true,
+          exported: true,
+          outputDir,
+          dmgPath,
+        });
+      }
+      if (!exportWeb) throw new Error('Web export is unavailable.');
       await exportWeb(snapshot, { outputDir, packResources });
       const indexHtmlPath = path.join(outputDir, 'index.html');
       if (!fs.statSync(indexHtmlPath).isFile()) {
@@ -4567,7 +4590,7 @@ const callMcpTool = async ({
       });
     } catch (error) {
       return errorResult(error.message, {
-        code: 'WEB_EXPORT_FAILED',
+        code: codePrefix + '_FAILED',
         ...(directoryCreated
           ? { outputDir, partialOutputMayRemain: true }
           : {}),

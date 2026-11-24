@@ -682,6 +682,7 @@ The complete public protocol surface is the following allowlist:
 - Gameplay tests: `run_gameplay_tests` and `get_gameplay_test_results`.
 - Public write operations: `create_project`, `import_extension`, and
   `export_web` (requires **Allow MCP write tools**).
+- Local macOS desktop build: `export_mac_dmg` (requires **Allow MCP command tools**).
 
 No other MCP tool name is supported, introspectable, or callable, even when
 write/command permissions are enabled. The two gameplay-test tools are always

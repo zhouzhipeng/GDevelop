@@ -3539,7 +3539,6 @@ export class PreviewExportOptions extends EmscriptenObject {
   setGDevelopVersionWithHash(gdevelopVersionWithHash: string): PreviewExportOptions;
   setProjectTemplateSlug(projectTemplateSlug: string): PreviewExportOptions;
   addScreenshotCapture(delayTimeInSeconds: number, signedUrl: string, publicUrl: string): PreviewExportOptions;
-  setPreviewVideoCapture(signedUrl: string, publicUrl: string, isRecordedByUser: boolean): PreviewExportOptions;
 }
 
 export class ExportOptions extends EmscriptenObject {

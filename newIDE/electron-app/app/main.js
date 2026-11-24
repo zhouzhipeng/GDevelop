@@ -10,6 +10,10 @@ const isDev = require('electron-is-dev');
 const ipcMain = electron.ipcMain;
 const autoUpdater = require('electron-updater').autoUpdater;
 const log = require('electron-log');
+const { createPreviewDesktopServices } = require('./PreviewDesktopServices');
+const previewDesktopServices = createPreviewDesktopServices(electron.utilityProcess);
+app.on('will-quit', () => previewDesktopServices.stop());
+
 const { uploadLocalFile } = require('./LocalFileUploader');
 const { serveFolder, stopServer, stopAllServers } = require('./ServeFolder');
 const {
@@ -1110,6 +1114,13 @@ app.on('ready', async function() {
         error && error.message ? error.message : String(error)
       );
     }
+  });
+
+  ipcMain.handle('ensure-preview-desktop-service', (event, service) => {
+    if (!mainWindows.has(BrowserWindow.fromWebContents(event.sender))) {
+      throw new Error('Desktop services can only be started by the editor.');
+    }
+    return previewDesktopServices.ensure(service);
   });
 
   ipcMain.handle('preview-open', async (event, options) => {

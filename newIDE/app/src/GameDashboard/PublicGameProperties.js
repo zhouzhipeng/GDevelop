@@ -192,12 +192,7 @@ export function PublicGameProperties({
                     onUpdatingGame={onUpdatingGame}
                     fullWidthOnMobile
                   />
-                  {publicGame && (
-                    <GameThumbnailVideo
-                      publicGame={publicGame}
-                      disabled={disabled}
-                    />
-                  )}
+                  {publicGame && <GameThumbnailVideo publicGame={publicGame} />}
                 </ResponsiveLineStackLayout>
                 <Spacer />
               </>

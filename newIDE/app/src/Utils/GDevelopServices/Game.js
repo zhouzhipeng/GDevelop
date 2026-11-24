@@ -9,10 +9,7 @@ import { type UserPublicProfile } from './User';
 import { t } from '@lingui/macro';
 import { ensureIsArray, ensureObjectHasProperty } from '../DataValidator';
 
-export type GameUploadType =
-  | 'game-thumbnail'
-  | 'game-screenshot'
-  | 'game-preview-video';
+export type GameUploadType = 'game-thumbnail' | 'game-screenshot';
 
 export type SavedStatus = 'draft' | 'saved';
 
@@ -94,8 +91,6 @@ export type GameUpdatePayload = {|
   orientation?: string,
   thumbnailUrl?: ?string,
   screenshotUrls?: ?Array<string>,
-  previewVideoUrls?: ?Array<string>,
-  thumbnailVideoUrl?: string,
   discoverable?: boolean,
   acceptsBuildComments?: boolean,
   acceptsGameComments?: boolean,
@@ -360,8 +355,6 @@ export const updateGame = async (
     orientation,
     thumbnailUrl,
     screenshotUrls,
-    previewVideoUrls,
-    thumbnailVideoUrl,
     discoverable,
     acceptsBuildComments,
     acceptsGameComments,
@@ -384,8 +377,6 @@ export const updateGame = async (
       orientation,
       thumbnailUrl,
       screenshotUrls,
-      previewVideoUrls,
-      thumbnailVideoUrl,
       discoverable,
       acceptsBuildComments,
       acceptsGameComments,

@@ -20,7 +20,12 @@
   },
   "build": {
     "appId": "GDJS_GAME_PACKAGE_NAME",
-    "extraFiles": [
+    "files": [
+      "**/*",
+      "!gdevelop-desktop-service/**",
+      "!LICENSE.GDevelop.txt"
+    ],
+    "extraResources": [
       "LICENSE.GDevelop.txt"
     ],
     "directories": {

@@ -13,6 +13,50 @@ GDevelop is built on **platforms**. A platform is the term used in GDevelop code
 
 For now, there is a _single_ **platform** used in the GDevelop editor, which is called _GDJS_ (GDevelop JavaScript platform). The different exports that you can find in the editor are using the same _generator that export a whole game_ but with different parameters.
 
+## Run a Node.js service in a desktop export
+
+To include a service in a local manual Electron desktop export, put a
+`desktop-service.json` next to the project file:
+
+```json
+{
+  "entry": "tools/service.mjs",
+  "files": ["service-settings.json"]
+}
+```
+
+The entry must be a project-relative `.mjs` file. List any local imports and
+data files the service needs in `files`. The exporter copies these files
+with their original relative paths. Electron Builder puts them under the
+application's resources, outside the ASAR archive. Keep credentials and
+other per-user data outside the package.
+
+The exported Electron app starts the entry in a utility process before
+opening the game window and stops it when the app quits. The utility
+process uses Electron's Node.js runtime. Services that listen on a local
+port should handle startup asynchronously, and the game should retry while
+the service is starting. Save writable data under a user-data location.
+
+To start the same service when clicking **Preview** in the desktop editor,
+add `"preview": { "port": 18746, "path": "/health" }` to the manifest.
+The editor checks that endpoint on `127.0.0.1` for a successful HTTP response.
+The default method is `GET`. Set `"method": "OPTIONS"` if the service uses
+that method for its readiness check. Preview opens after the service responds.
+The editor reuses an existing service and stops only services it owns when
+the editor quits. Enable this option for projects and scripts you trust.
+
+Use **Build Manually → Desktop** in the desktop editor, then **Build
+binary**. The desktop service is available in that export workflow.
+
+### Build a DMG through MCP
+
+On macOS, enable **Allow MCP command tools**, open the saved project in
+GDevelop, and call `export_mac_dmg` with `output_directory` set to an
+absolute path that does not exist yet. The tool runs the same local desktop
+export, installs its npm build dependencies, and builds a local DMG without
+publishing it. The receipt includes `dmgPath`. Node and npm are required
+on the build machine. The exported application carries its own runtime.
+
 ## Can I get examples in the source code?
 
 - The _code generator for events_ for GDJS is in [GDJS/Events/CodeGeneration](https://github.com/4ian/GDevelop/tree/master/GDJS/GDJS/Events/CodeGeneration).

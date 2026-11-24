@@ -1936,6 +1936,29 @@ const writeTools: Array<McpTool> = [
 
 const commandTools: Array<McpTool> = [
   {
+    name: 'export_mac_dmg',
+    description:
+      'Build the open local project as a macOS DMG using the local Electron desktop exporter and npm. Includes the project desktop service if configured. Requires the macOS editor and Node/npm on the build machine. After direct source changes validate and reload first. The output directory must be new and its parent must exist. Returns outputDir and dmgPath. Runs local build commands without publishing. Export only trusted projects.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        output_directory: {
+          type: 'string',
+          minLength: 1,
+          description: 'Absolute path to a new directory; parent must exist.',
+        },
+      },
+      required: ['output_directory'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  {
     name: 'start_local_preview',
     description:
       'Start the desktop Start Local Preview HTTP server for a browser or another device on the same local network. Returns url for this computer and networkUrl when a LAN address is available. Defaults to the project’s first scene. After editing files directly, validate and reload the project first.',
@@ -2375,6 +2398,12 @@ const toolUsageExamples: { [string]: Array<Object> } = {
       arguments: {},
     },
   ],
+  export_mac_dmg: [
+    {
+      description: 'Build a local macOS disk image',
+      arguments: { output_directory: '/absolute/path/to/game/builds/mac' },
+    },
+  ],
   export_web: [
     {
       description: 'Build a local HTML5 export',
@@ -2540,6 +2569,7 @@ export const getCapabilitiesSummary = (
     ],
     'Gameplay tests': ['run_gameplay_tests', 'get_gameplay_test_results'],
     'Web export': ['export_web'],
+    'macOS export': ['export_mac_dmg'],
     'Tool discovery': ['inspect_tool_schema', 'get_tool_usage_examples'],
     'Preview runtime': [
       'launch_preview',

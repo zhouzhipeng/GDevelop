@@ -353,9 +353,6 @@ import { useAuthenticatedPlayer } from './UseAuthenticatedPlayer';
 import ListIcon from '../UI/ListIcon';
 import { type ObjectWithContext } from '../ObjectsList/EnumerateObjects';
 import useGamesList from '../GameDashboard/UseGamesList';
-import PreviewVideoRecordingContext, {
-  type PreviewVideoRecording,
-} from './PreviewVideoRecordingContext';
 import useCapturesManager from './UseCapturesManager';
 import {
   readProjectSettings,
@@ -640,6 +637,7 @@ export type Props = {|
   initialExampleSlugToOpen: ?string,
   i18n: I18n,
   useCliCommandRunner: (options: CliCommandRunnerOptions) => void,
+  onExportMacDmgExternal?: (gdProject, I18n, string) => Promise<string>,
   onExportHtml5External?: (
     project: gdProject,
     i18n: I18n,
@@ -1262,6 +1260,7 @@ const MainFrame = (props: Props): React.MixedElement => {
     renderMainMenu,
     useCliCommandRunner,
     onExportHtml5External,
+    onExportMacDmgExternal,
   } = props;
 
   const {
@@ -4696,28 +4695,6 @@ const MainFrame = (props: Props): React.MixedElement => {
       });
     },
     [currentProject, launchPreview, getHotReloadPreviewLaunchCaptureOptions]
-  );
-
-  const recordPreviewVideo = React.useCallback(
-    () =>
-      launchPreview({
-        networkPreview: false,
-        launchCaptureOptions: {
-          screenshots: [],
-          previewVideo: 'recorded-by-user',
-        },
-      }),
-    [launchPreview]
-  );
-
-  const previewVideoRecording = React.useMemo(
-    (): PreviewVideoRecording => ({
-      currentProjectGameId: currentProject
-        ? currentProject.getProjectUuid()
-        : null,
-      onRecordPreviewVideo: recordPreviewVideo,
-    }),
-    [currentProject, recordPreviewVideo]
   );
 
   const launchNetworkPreview = React.useCallback(
@@ -9052,6 +9029,10 @@ const MainFrame = (props: Props): React.MixedElement => {
         exportWeb: onExportHtml5External
           ? (project, options) => onExportHtml5External(project, i18n, options)
           : undefined,
+        exportMacDmg: onExportMacDmgExternal
+          ? (project, outputDir) =>
+              onExportMacDmgExternal(project, i18n, outputDir)
+          : undefined,
         prepareWebExport: async project => {
           if (
             getStorageProvider().internalName !==
@@ -9278,6 +9259,7 @@ const MainFrame = (props: Props): React.MixedElement => {
       preferences.values.mcpAllowWriteTools,
       preferences.values.mcpAllowCommandTools,
       onExportHtml5External,
+      onExportMacDmgExternal,
       hasExtensionLoadErrors,
       i18n,
       mcpEditorCallbacks,
@@ -9739,7 +9721,7 @@ const MainFrame = (props: Props): React.MixedElement => {
   );
 
   return (
-    <PreviewVideoRecordingContext.Provider value={previewVideoRecording}>
+    <>
       <div
         className={
           'main-frame' /* The root styling, done in CSS to read some CSS variables. */
@@ -10325,7 +10307,7 @@ const MainFrame = (props: Props): React.MixedElement => {
         )}
         <CustomDragLayer />
       </div>
-    </PreviewVideoRecordingContext.Provider>
+    </>
   );
 };
 

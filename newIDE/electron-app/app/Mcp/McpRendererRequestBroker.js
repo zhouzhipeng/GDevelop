@@ -80,13 +80,17 @@ const isVerifyProjectChangeRequest = request =>
 const PROJECT_FILES_OPERATION_TOOL_NAMES = new Set([
   'open_project',
   'export_web',
+  'export_mac_dmg',
   'generate-catalogs',
   'validate_project_files',
   'validate_tsl_file',
   'render_tsl_material_preview',
 ]);
 
-const PREVIEW_OPERATION_TOOL_NAMES = new Set(['launch_preview', 'start_local_preview']);
+const PREVIEW_OPERATION_TOOL_NAMES = new Set([
+  'launch_preview',
+  'start_local_preview',
+]);
 
 const isProjectFilesOperationRequest = request =>
   !!request &&
@@ -142,7 +146,12 @@ const getRequestTimeout = ({
   // verify_project_change.timeout_ms bounds its launch and inspection stages,
   // not the aggregate validation/reload/preview workflow.
   const requestedTimeout = getReloadArguments(request).timeout_ms;
-  const defaultTimeout = isReloadProjectRequest(request)
+  const isMacDmgExport =
+    isProjectFilesOperationRequest(request) &&
+    request.params.name === 'export_mac_dmg';
+  const defaultTimeout = isMacDmgExport
+    ? maximumRequestTimeoutMs
+    : isReloadProjectRequest(request)
     ? defaultReloadTimeoutMs
     : isVerifyProjectChangeRequest(request)
     ? defaultVerifyProjectChangeTimeoutMs

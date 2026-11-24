@@ -213,6 +213,51 @@ describe('McpEditorBridge', () => {
     }
   });
 
+  it('returns a DMG from a project snapshot and refuses an existing destination', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gdevelop-dmg-export-'));
+    const project = gd.ProjectHelper.createNewGDJSProject();
+    const projectFile = path.join(root, 'project.gdl');
+    const outputDir = path.join(root, 'mac');
+    const dmgPath = path.join(outputDir, 'game.dmg');
+    project.setProjectFile(projectFile);
+    const exportMacDmg = jest.fn(async (snapshot, directory) => {
+      expect(snapshot).not.toBe(project);
+      expect(snapshot.getProjectFile()).toBe(projectFile);
+      expect(directory).toBe(outputDir);
+      fs.writeFileSync(dmgPath, 'fixture');
+      return dmgPath;
+    });
+    const bridge = makeBridge({
+      getProject: () => project,
+      getPermissions: () => ({
+        allowWriteTools: false,
+        allowCommandTools: true,
+      }),
+      exportMacDmg,
+    });
+    const call = (directory: string) =>
+      bridge.handleRendererMcpRequest({
+        method: 'tools/call',
+        params: {
+          name: 'export_mac_dmg',
+          arguments: { output_directory: directory },
+        },
+      });
+    try {
+      expect((await call('relative/mac')).isError).toBe(true);
+      expect((await call(outputDir)).structuredContent).toMatchObject({
+        exported: true,
+        outputDir,
+        dmgPath,
+      });
+      expect((await call(outputDir)).isError).toBe(true);
+      expect(exportMacDmg).toHaveBeenCalledTimes(1);
+    } finally {
+      project.delete();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('looks up all exact instruction names and reports missing catalogs', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gdevelop-lookup-'));
     const directory = path.join(root, '.gdevelop');

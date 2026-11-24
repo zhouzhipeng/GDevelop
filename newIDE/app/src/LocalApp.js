@@ -27,6 +27,7 @@ import ProjectStorageProviders from './ProjectsStorage/ProjectStorageProviders';
 import LocalFileStorageProvider from './ProjectsStorage/LocalFileStorageProvider';
 import { LocalGDJSDevelopmentWatcher } from './GameEngineFinder/LocalGDJSDevelopmentWatcher';
 import { useCliCommandRunner } from './MainFrame/LocalCliCommandRunner';
+import { exportLocalMacDmg } from './ExportAndShare/Headless/ExportLocalMacDmg';
 import { exportLocalHtml5Headless } from './ExportAndShare/Headless/ExportLocalHtml5Headless';
 import CloudStorageProvider from './ProjectsStorage/CloudStorageProvider';
 import UrlStorageProvider from './ProjectsStorage/UrlStorageProvider';
@@ -81,6 +82,7 @@ export const create = (authentication: Authentication): React.Node => {
               onExportHtml5External={async (project, i18n, options) => {
                 await exportLocalHtml5Headless({ project, i18n, ...options });
               }}
+              onExportMacDmgExternal={exportLocalMacDmg}
               renderMainMenu={(props, callbacks, extraCallbacks) => (
                 <ElectronMainMenu
                   props={props}

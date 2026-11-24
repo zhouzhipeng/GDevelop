@@ -8,8 +8,6 @@ export type LaunchCaptureOptions = {|
   screenshots: Array<{|
     delayTimeInSeconds: number,
   |}>,
-  // A video recorded automatically, or by the user with a toolbar shown in the preview.
-  previewVideo: 'automatic' | 'recorded-by-user' | null,
 |};
 
 export type LocalPreviewUrls = {| url: string, networkUrl: ?string |};
@@ -51,11 +49,6 @@ export type CaptureOptions = {|
     delayTimeInSeconds: number,
     publicUrl: string,
   |}>,
-  previewVideo: {|
-    signedUrl: string,
-    publicUrl: string,
-    isRecordedByUser: boolean,
-  |} | null,
 |};
 
 export type PreviewOptions = {|

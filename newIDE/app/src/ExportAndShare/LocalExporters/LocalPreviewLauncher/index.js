@@ -1,6 +1,7 @@
 // @flow
 import * as React from 'react';
 import LocalFileSystem from '../LocalFileSystem';
+import { getLocalElectronServicePreview } from '../LocalElectronService';
 import optionalRequire from '../../../Utils/OptionalRequire';
 import { findGDJS } from '../../../GameEngineFinder/LocalGDJSFinder';
 import LocalNetworkPreviewDialog from './LocalNetworkPreviewDialog';
@@ -15,6 +16,7 @@ import {
   localPreviewDebuggerServer,
 } from './LocalPreviewDebuggerServer';
 import Window from '../../../Utils/Window';
+import { showErrorBox } from '../../../UI/Messages/MessageBox';
 import { getIDEVersionWithHash } from '../../../Version';
 import { setEmbeddedGameFramePreviewLocation } from '../../../EmbeddedGame/EmbeddedGameFrame';
 import {
@@ -299,6 +301,34 @@ export default class LocalPreviewLauncher extends React.Component<
       previewOptions
     );
 
+    if (
+      ipcRenderer &&
+      !previewOptions.networkPreview &&
+      !previewOptions.isForInGameEdition &&
+      !previewOptions.isForGameplayTest
+    ) {
+      try {
+        const service = getLocalElectronServicePreview(
+          project.getProjectFile()
+        );
+        if (service) {
+          await ipcRenderer.invoke('ensure-preview-desktop-service', service);
+          if (previewOptions.isLaunchCancelled()) return;
+        }
+      } catch (error) {
+        if (previewOptions.isLaunchCancelled()) return;
+        if (!Window.isHeadless()) {
+          showErrorBox({
+            message: error.message,
+            rawError: error,
+            errorId: 'preview-desktop-service-startup',
+            doNotReport: true,
+          });
+        }
+        throw error;
+      }
+    }
+
     // Start the debugger server for previews. Even if not used,
     // useful if the user opens the Debugger editor later, or want to
     // hot reload.
@@ -444,16 +474,6 @@ export default class LocalPreviewLauncher extends React.Component<
           );
         });
       }
-    }
-    if (
-      previewOptions.captureOptions &&
-      previewOptions.captureOptions.previewVideo
-    ) {
-      previewExportOptions.setPreviewVideoCapture(
-        previewOptions.captureOptions.previewVideo.signedUrl,
-        previewOptions.captureOptions.previewVideo.publicUrl,
-        previewOptions.captureOptions.previewVideo.isRecordedByUser
-      );
     }
     if (previewOptions.editorCameraState3D) {
       previewExportOptions.setEditorCameraState3D(

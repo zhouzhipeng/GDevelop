@@ -571,16 +571,6 @@ void ExporterHelper::SerializeRuntimeGameOptions(
             .SetStringAttribute("publicUrl", screenshot.GetPublicUrl());
       }
     }
-    if (!options.captureOptions.GetPreviewVideoSignedUrl().empty()) {
-      captureOptionsElement.AddChild("previewVideo")
-          .SetStringAttribute("signedUrl",
-                              options.captureOptions.GetPreviewVideoSignedUrl())
-          .SetStringAttribute("publicUrl",
-                              options.captureOptions.GetPreviewVideoPublicUrl())
-          .SetBoolAttribute(
-              "isRecordedByUser",
-              options.captureOptions.IsPreviewVideoRecordedByUser());
-    }
   }
 
   // Pass in the options the list of scripts files - useful for hot-reloading.
@@ -1499,7 +1489,6 @@ void ExporterHelper::AddLibsInclude(bool pixiRenderers,
     InsertUnique(includesFiles, "InGameEditor/InGameEditor.js");
   }
   if (includeCaptureManager) {
-    InsertUnique(includesFiles, "PreviewVideoRecordingToolbar.js");
     InsertUnique(includesFiles, "capturemanager.js");
   }
 }

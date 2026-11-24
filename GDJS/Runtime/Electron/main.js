@@ -3,7 +3,31 @@
  * running in Electron Runtime.
  */
 // Modules to control application life and create native browser window
-const { app, BrowserWindow, shell, Menu } = require('electron');
+const { app, BrowserWindow, shell, Menu, utilityProcess } = require('electron');
+const path = require('node:path');
+const { gdevelopDesktopService } = require('./package.json');
+
+let desktopService = null;
+
+function startDesktopService() {
+  if (!gdevelopDesktopService) return;
+  const root = path.join(
+    app.isPackaged ? process.resourcesPath : __dirname,
+    'gdevelop-desktop-service'
+  );
+  desktopService = utilityProcess.fork(path.join(root, gdevelopDesktopService), [], {
+    cwd: root,
+    serviceName: 'GDevelop Desktop Service',
+  });
+  desktopService.on('exit', (code) => {
+    desktopService = null;
+    if (code !== 0) console.error('GDevelop desktop service exited with code', code);
+  });
+}
+
+app.on('will-quit', () => {
+  if (desktopService) desktopService.kill();
+});
 
 // On computers having an integrated and a discrete graphics card (most gaming
 // laptops), Chromium uses the integrated one by default: games would run a lot
@@ -75,7 +99,10 @@ function createWindow() {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.on('ready', () => {
+  startDesktopService();
+  createWindow();
+});
 
 // Quit when all windows are closed.
 app.on('window-all-closed', function () {
