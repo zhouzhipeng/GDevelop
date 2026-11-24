@@ -10,13 +10,16 @@ const isRelativeFile = (value: mixed): boolean =>
   typeof value === 'string' &&
   value.split('/').every(part => /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(part));
 
-export type DesktopServicePreview = {|
-  entry: string,
-  cwd: string,
-  port: number,
-  path: string,
-  method: 'GET' | 'OPTIONS',
-|};
+export type DesktopServicePreview =
+  | {| entry: string, cwd: string, transport: 'ipc' |}
+  | {|
+      entry: string,
+      cwd: string,
+      transport?: void,
+      port: number,
+      path: string,
+      method: 'GET' | 'OPTIONS',
+    |};
 
 const readLocalElectronService = (
   projectFile: string
@@ -69,7 +72,9 @@ const readLocalElectronService = (
   const sources = files.map(readProjectFile);
   let preview = null;
   const readiness = manifest.preview;
-  if (readiness !== undefined) {
+  if (readiness && readiness.transport === 'ipc') {
+    preview = { entry: sources[0], cwd: realRoot, transport: 'ipc' };
+  } else if (readiness !== undefined) {
     if (
       !readiness ||
       !Number.isInteger(readiness.port) ||

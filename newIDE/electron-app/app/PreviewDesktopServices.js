@@ -1,5 +1,6 @@
 const http = require('node:http');
 const path = require('node:path');
+const { createDesktopServiceIpc } = require('./DesktopServiceIpc');
 const { setTimeout: delay } = require('node:timers/promises');
 
 const isReady = service =>
@@ -32,17 +33,19 @@ const createPreviewDesktopServices = (
   let stopping = false;
 
   const start = async service => {
-    if (await probe(service)) return;
+    const usesIpc = service.transport === 'ipc';
+    if (!usesIpc && (await probe(service))) return;
     if (stopping) throw new Error('The editor is shutting down.');
-    let child = children.get(service.entry);
-    if (!child) {
-      child = utilityProcess.fork(service.entry, [], {
+    let running = children.get(service.entry);
+    if (!running) {
+      const child = utilityProcess.fork(service.entry, [], {
         cwd: service.cwd,
         serviceName: 'GDevelop Preview Desktop Service',
       });
-      children.set(service.entry, child);
+      running = { child, invoke: createDesktopServiceIpc(child) };
+      children.set(service.entry, running);
       child.once('exit', () => {
-        if (children.get(service.entry) === child)
+        if (children.get(service.entry) === running)
           children.delete(service.entry);
       });
       child.on('error', error =>
@@ -50,11 +53,13 @@ const createPreviewDesktopServices = (
       );
     }
 
+    if (usesIpc) return;
+
     try {
       const deadline = Date.now() + startupTimeout;
       while (Date.now() < deadline && !stopping) {
         if (await probe(service)) return;
-        if (children.get(service.entry) !== child) {
+        if (children.get(service.entry) !== running) {
           throw new Error('The desktop service exited before it was ready.');
         }
         await delay(retryInterval);
@@ -66,7 +71,7 @@ const createPreviewDesktopServices = (
           '.'
       );
     } catch (error) {
-      if (children.get(service.entry) === child) child.kill();
+      if (children.get(service.entry) === running) running.child.kill();
       throw error;
     }
   };
@@ -82,12 +87,13 @@ const createPreviewDesktopServices = (
         !path.isAbsolute(service.entry) ||
         path.extname(service.entry) !== '.mjs' ||
         !path.isAbsolute(service.cwd) ||
-        !Number.isInteger(service.port) ||
-        service.port < 1 ||
-        service.port > 65535 ||
-        typeof service.path !== 'string' ||
-        !/^\/[^\s#]*$/.test(service.path) ||
-        !['GET', 'OPTIONS'].includes(service.method)
+        (service.transport !== 'ipc' &&
+          (!Number.isInteger(service.port) ||
+            service.port < 1 ||
+            service.port > 65535 ||
+            typeof service.path !== 'string' ||
+            !/^\/[^\s#]*$/.test(service.path) ||
+            !['GET', 'OPTIONS'].includes(service.method)))
       ) {
         return Promise.reject(
           new Error('Invalid preview desktop service entry.')
@@ -101,9 +107,14 @@ const createPreviewDesktopServices = (
       starting.set(service.entry, operation);
       return operation;
     },
+    invoke(entry, method, params) {
+      const running = children.get(entry);
+      if (!running) throw new Error('Desktop service is unavailable.');
+      return running.invoke(method, params);
+    },
     stop() {
       stopping = true;
-      for (const child of children.values()) child.kill();
+      for (const { child } of children.values()) child.kill();
       children.clear();
     },
   };

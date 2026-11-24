@@ -1245,6 +1245,16 @@ bool ExporterHelper::ExportElectronFiles(const gd::Project &project,
   }
 
   {
+    gd::String ipcBridge =
+        fs.ReadFile(gdjsRoot + "/Runtime/Electron/DesktopServiceIpc.js");
+    if (ipcBridge.empty() ||
+        !fs.WriteToFile(exportDir + "/DesktopServiceIpc.js", ipcBridge)) {
+      lastError = "Unable to write Electron desktop service IPC bridge.";
+      return false;
+    }
+  }
+
+  {
     gd::String str =
         fs.ReadFile(gdjsRoot + "/Runtime/Electron/LICENSE.GDevelop.txt");
 

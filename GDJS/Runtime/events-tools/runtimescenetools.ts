@@ -5,6 +5,25 @@
  */
 namespace gdjs {
   export namespace evtTools {
+    export namespace desktopService {
+      /** Invoke a method on the game window's configured Electron service. */
+      export const invoke = async (
+        runtimeScene: gdjs.RuntimeScene,
+        method: string,
+        params?: unknown
+      ): Promise<unknown> => {
+        const electron = runtimeScene.getGame().getRenderer().getElectron();
+        if (!electron?.ipcRenderer) {
+          throw new Error('Desktop service requires an Electron game window.');
+        }
+        return electron.ipcRenderer.invoke(
+          'gdevelop-desktop-service:invoke',
+          method,
+          params
+        );
+      };
+    }
+
     export namespace runtimeScene {
       export const sceneJustBegins = function (
         runtimeScene: gdjs.RuntimeScene

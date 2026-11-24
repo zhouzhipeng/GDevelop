@@ -3,11 +3,26 @@
  * running in Electron Runtime.
  */
 // Modules to control application life and create native browser window
-const { app, BrowserWindow, shell, Menu, utilityProcess } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  shell,
+  Menu,
+  utilityProcess,
+  ipcMain,
+} = require('electron');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+const {
+  createDesktopServiceIpc,
+  desktopServiceChannel,
+  isDesktopServiceSender,
+} = require('./DesktopServiceIpc');
+const gameIndexPath = 'app/index.html';
 const { gdevelopDesktopService } = require('./package.json');
 
 let desktopService = null;
+let invokeDesktopService = null;
 
 function startDesktopService() {
   if (!gdevelopDesktopService) return;
@@ -15,13 +30,20 @@ function startDesktopService() {
     app.isPackaged ? process.resourcesPath : __dirname,
     'gdevelop-desktop-service'
   );
-  desktopService = utilityProcess.fork(path.join(root, gdevelopDesktopService), [], {
-    cwd: root,
-    serviceName: 'GDevelop Desktop Service',
-  });
-  desktopService.on('exit', (code) => {
+  desktopService = utilityProcess.fork(
+    path.join(root, gdevelopDesktopService),
+    [],
+    {
+      cwd: root,
+      serviceName: 'GDevelop Desktop Service',
+    }
+  );
+  invokeDesktopService = createDesktopServiceIpc(desktopService);
+  desktopService.on('exit', code => {
     desktopService = null;
-    if (code !== 0) console.error('GDevelop desktop service exited with code', code);
+    invokeDesktopService = null;
+    if (code !== 0)
+      console.error('GDevelop desktop service exited with code', code);
   });
 }
 
@@ -50,6 +72,7 @@ app.on('remote-require', (event, _webContents, moduleName) => {
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let mainWindow = null;
+let gameIndexUrl;
 
 function createWindow() {
   // Create the browser window.
@@ -80,7 +103,8 @@ function createWindow() {
   });
 
   // and load the index.html of the app.
-  mainWindow.loadFile('app/index.html');
+  gameIndexUrl = pathToFileURL(path.join(app.getAppPath(), gameIndexPath)).href;
+  mainWindow.loadFile(gameIndexPath);
 
   Menu.setApplicationMenu(null);
 
@@ -95,6 +119,19 @@ function createWindow() {
     mainWindow = null;
   });
 }
+
+ipcMain.handle(desktopServiceChannel, (event, method, params) => {
+  if (
+    !mainWindow ||
+    !isDesktopServiceSender(event, mainWindow.webContents, gameIndexUrl)
+  ) {
+    throw new Error(
+      'Desktop service IPC is only available to the game window.'
+    );
+  }
+  if (!invokeDesktopService) throw new Error('Desktop service is unavailable.');
+  return invokeDesktopService(method, params);
+});
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.

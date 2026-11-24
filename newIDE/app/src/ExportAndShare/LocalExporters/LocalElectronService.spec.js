@@ -93,6 +93,23 @@ describe('exportLocalElectronService', () => {
     });
   });
 
+  test('configures IPC preview without an HTTP readiness endpoint', () => {
+    fs.outputFileSync(path.join(project, 'service.mjs'), 'export {};');
+    fs.outputJsonSync(path.join(project, 'desktop-service.json'), {
+      entry: 'service.mjs',
+      files: [],
+      preview: { transport: 'ipc' },
+    });
+    const realProject = fs.realpathSync(project);
+    expect(
+      getLocalElectronServicePreview(path.join(project, 'project.gdl'))
+    ).toEqual({
+      entry: path.join(realProject, 'service.mjs'),
+      cwd: realProject,
+      transport: 'ipc',
+    });
+  });
+
   test('rejects an entry symlink pointing outside the project', () => {
     fs.outputFileSync(path.join(root, 'external.mjs'), 'export {};');
     fs.symlinkSync(

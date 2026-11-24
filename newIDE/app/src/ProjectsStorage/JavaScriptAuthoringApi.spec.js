@@ -451,6 +451,36 @@ harness.getRenderer();
     expect(validation.errors).toEqual([]);
   });
 
+  test('exposes the desktop service invocation to strict code', () => {
+    const validate = inlineCode =>
+      validateProjectJavaScriptAuthoring({
+        serializedProject: {
+          ...serializedProject,
+          layouts: serializedProject.layouts.map(layout => ({
+            ...layout,
+            events: [
+              {
+                type: 'BuiltinCommonInstructions::JsCode',
+                useStrict: true,
+                inlineCode,
+              },
+            ],
+          })),
+        },
+      });
+    expect(
+      validate('gdjs.evtTools.desktopService.invoke(runtimeScene, "snapshot");')
+        .errors
+    ).toEqual([]);
+    expect(
+      validate('gdjs.evtTools.desktopService.invoke(runtimeScene, 42);').errors
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'JS_API_TYPE_MISMATCH' }),
+      ])
+    );
+  });
+
   test('rejects stale project literals in a known scene context', () => {
     const validation = validateProjectJavaScriptAuthoring({
       serializedProject,

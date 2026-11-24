@@ -610,6 +610,13 @@ raw string AST 保存定界符长度、整个值与内容范围、每行原始�
 
 编辑器在 code 内提供 JS 高亮、补全和括号匹配，退出后恢复 Settings；大纲显示为 JavaScript event。单纯打开、解析、格式化和校验均不执行代码。
 
+### 13.5 Electron 桌面服务 IPC
+
+本地 Electron 导出和编辑器的独立 Electron 预览窗口可以通过 IPC 调用项目的
+`.mjs` 服务。渲染进程通过 Electron 的 `require` 访问该接口，因此直接调用会触发
+`strict = true` 的 GDL JavaScript 校验诊断。项目清单、预览配置和双端示例见
+[Electron 桌面服务 IPC 指南](../newIDE/app/resources/gd-project-template/docs/DESKTOP_SERVICE_IPC.md)。
+
 ## 14. Picking 与运行语义
 
 统一语法只改变作者表示：

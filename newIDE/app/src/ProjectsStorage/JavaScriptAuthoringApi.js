@@ -274,6 +274,9 @@ declare namespace gdjs {
   }
 
   export namespace evtTools {
+    export namespace desktopService {
+      function invoke(runtimeScene: RuntimeScene, method: string, params?: unknown): Promise<unknown>;
+    }
     export namespace runtimeScene {
       function replaceScene(runtimeScene: RuntimeScene, sceneName: string, clearOthers: boolean): void;
       function pushScene(runtimeScene: RuntimeScene, sceneName: string): void;

@@ -3,6 +3,7 @@
 - [Project structure](PROJECT_STRUCTURE.md)
 - [Asset provenance](ASSET_SOURCES.md)
 - [Gameplay tests](GAMEPLAY_TESTS.md)
+- [Electron desktop service IPC](DESKTOP_SERVICE_IPC.md)
 - [Project tools](../tools/README.md)
 - [Verification artifacts](../artifacts/README.md)
 

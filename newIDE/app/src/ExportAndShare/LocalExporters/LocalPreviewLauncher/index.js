@@ -44,6 +44,7 @@ type State = {|
   networkPreviewPort: ?number,
   networkPreviewError: ?any,
   previewGamePath: ?string,
+  desktopServiceIpcEntry: ?string,
   previewBrowserWindowOptions: ?{
     width: number,
     height: number,
@@ -118,6 +119,7 @@ export default class LocalPreviewLauncher extends React.Component<
     networkPreviewPort: null,
     networkPreviewError: null,
     previewGamePath: null,
+    desktopServiceIpcEntry: null,
     previewBrowserWindowOptions: null,
     hideMenuBar: true,
     alwaysOnTop: true,
@@ -127,6 +129,7 @@ export default class LocalPreviewLauncher extends React.Component<
   _openPreviewBrowserWindow = () => {
     const {
       previewGamePath,
+      desktopServiceIpcEntry,
       previewBrowserWindowOptions,
       captureOptions,
       alwaysOnTop,
@@ -139,6 +142,7 @@ export default class LocalPreviewLauncher extends React.Component<
 
     ipcRenderer.invoke('preview-open', {
       previewBrowserWindowOptions,
+      desktopServiceIpcEntry,
       previewGameIndexHtmlPath: `file://${previewGamePath}/index.html`,
       alwaysOnTop,
       hideMenuBar,
@@ -221,7 +225,8 @@ export default class LocalPreviewLauncher extends React.Component<
   _openPreviewWindow = (
     project: gdProject,
     gamePath: string,
-    options: PreviewOptions
+    options: PreviewOptions,
+    desktopServiceIpcEntry: ?string
   ): Promise<void> => {
     this.setState(
       // $FlowFixMe[incompatible-type]
@@ -243,6 +248,7 @@ export default class LocalPreviewLauncher extends React.Component<
           },
         },
         previewGamePath: gamePath,
+        desktopServiceIpcEntry,
         hideMenuBar: !options.getIsMenuBarHiddenInPreview(),
         alwaysOnTop:
           options.forceAlwaysOnTopInPreview ||
@@ -301,6 +307,7 @@ export default class LocalPreviewLauncher extends React.Component<
       previewOptions
     );
 
+    let desktopServiceIpcEntry = null;
     if (
       ipcRenderer &&
       !previewOptions.networkPreview &&
@@ -313,6 +320,8 @@ export default class LocalPreviewLauncher extends React.Component<
         );
         if (service) {
           await ipcRenderer.invoke('ensure-preview-desktop-service', service);
+          if (service.transport === 'ipc')
+            desktopServiceIpcEntry = service.entry;
           if (previewOptions.isLaunchCancelled()) return;
         }
       } catch (error) {
@@ -645,7 +654,8 @@ export default class LocalPreviewLauncher extends React.Component<
         windowLaunch = this._openPreviewWindow(
           project,
           outputDir,
-          previewOptions
+          previewOptions,
+          desktopServiceIpcEntry
         );
       }
     }

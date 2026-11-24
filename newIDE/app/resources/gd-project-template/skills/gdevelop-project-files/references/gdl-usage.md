@@ -379,6 +379,13 @@ sceneUpdate.gdl. Preserve lifecycle signatures. Guard per-frame actions
 with effective conditions. Validate, reload, then verify behavior using the
 project workflow; successful parsing alone is not runtime verification.
 
+### Electron desktop service IPC
+
+The [desktop service guide](../../../docs/DESKTOP_SERVICE_IPC.md) covers
+`desktop-service.json`, the Electron renderer call, and the `.mjs` handler.
+The renderer example uses Electron's `require`, which strict GDL JavaScript
+validation rejects. The guide documents the Electron runtime interface.
+
 ### Required generated-JavaScript review
 
 After changing event logic, save and pass `validate_project_files`, then call:

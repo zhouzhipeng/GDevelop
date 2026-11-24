@@ -200,6 +200,9 @@ applies to project-authored JavaScript, local extensions, a caller-supplied
 path, or a matching name alone, so do not remove `strict=true` or imitate the
 compatibility profile in project source.
 
+For the desktop-specific runtime protocol and its strict-validation limitation,
+see the [Electron desktop service guide](../../../docs/DESKTOP_SERVICE_IPC.md).
+
 ## Safety and performance
 
 - Put every state-changing block behind an effective condition in its event or

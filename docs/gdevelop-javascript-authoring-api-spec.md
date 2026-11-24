@@ -813,6 +813,12 @@ If a game genuinely requires a capability such as networking, it should use a
 reviewed GDevelop extension or an explicit future capability grant. The API
 specification for such grants is outside version 1.
 
+Electron desktop exports and standalone Electron previews have a desktop service
+IPC channel. The renderer entry point uses Electron's `require`, which is
+outside the strict authoring API and produces a diagnostic in strict GDL blocks.
+The [desktop service IPC guide](../newIDE/app/resources/gd-project-template/docs/DESKTOP_SERVICE_IPC.md)
+documents the manifest and the renderer and service message contracts.
+
 ### 15.3 Runtime performance policy
 
 Validation should warn about clear high-risk patterns in new AI-authored code:

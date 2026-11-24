@@ -32,6 +32,7 @@ const filesToDownload: { [FileSet]: Array<string> } = {
   electron: [
     '/Runtime/index.html',
     '/Runtime/Electron/main.js',
+    '/Runtime/Electron/DesktopServiceIpc.js',
     '/Runtime/Electron/package.json',
     '/Runtime/Electron/LICENSE.GDevelop.txt',
   ],

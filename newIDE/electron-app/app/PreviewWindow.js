@@ -466,6 +466,7 @@ const openPreviewWindow = ({
   numberOfWindows,
   captureOptions,
   openEvent,
+  onWindowCreated,
   headless = false,
 }) => {
   // If opening multiple windows at once, place them across the screen.
@@ -553,6 +554,7 @@ const openPreviewWindow = ({
       return { action: 'deny' };
     });
 
+    if (onWindowCreated) onWindowCreated(previewWindow.webContents);
     previewWindow.loadURL(previewGameIndexHtmlPath);
 
     previewWindow.on('close', () => {

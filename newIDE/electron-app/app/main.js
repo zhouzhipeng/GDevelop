@@ -10,6 +10,11 @@ const isDev = require('electron-is-dev');
 const ipcMain = electron.ipcMain;
 const autoUpdater = require('electron-updater').autoUpdater;
 const log = require('electron-log');
+const {
+  desktopServiceChannel,
+  isDesktopServiceSender,
+} = require('./DesktopServiceIpc');
+const previewDesktopServiceByWindow = new WeakMap();
 const { createPreviewDesktopServices } = require('./PreviewDesktopServices');
 const previewDesktopServices = createPreviewDesktopServices(electron.utilityProcess);
 app.on('will-quit', () => previewDesktopServices.stop());
@@ -1123,6 +1128,19 @@ app.on('ready', async function() {
     return previewDesktopServices.ensure(service);
   });
 
+  ipcMain.handle(desktopServiceChannel, (event, method, params) => {
+    const preview = previewDesktopServiceByWindow.get(event.sender);
+    if (
+      !preview ||
+      !isDesktopServiceSender(event, event.sender, preview.gameUrl)
+    ) {
+      throw new Error(
+        'Desktop service IPC is only available to its game preview.'
+      );
+    }
+    return previewDesktopServices.invoke(preview.entry, method, params);
+  });
+
   ipcMain.handle('preview-open', async (event, options) => {
     const parentWindow = BrowserWindow.fromWebContents(event.sender);
     return openPreviewWindow({
@@ -1134,6 +1152,16 @@ app.on('ready', async function() {
       numberOfWindows: options.numberOfWindows,
       captureOptions: options.captureOptions,
       openEvent: event,
+      onWindowCreated:
+        mainWindows.has(parentWindow) &&
+        event.senderFrame === event.sender.mainFrame &&
+        typeof options.desktopServiceIpcEntry === 'string'
+          ? webContents =>
+              previewDesktopServiceByWindow.set(webContents, {
+                entry: options.desktopServiceIpcEntry,
+                gameUrl: options.previewGameIndexHtmlPath,
+              })
+          : undefined,
       headless: !!(
         parentWindow &&
         windowArgsById[parentWindow.id] &&

@@ -71,3 +71,56 @@ test('kills a service that never becomes ready and allows a retry', async () => 
   assert.equal(utility.children.length, 2);
   launcher.stop();
 });
+
+test('routes concurrent IPC calls to the service without probing HTTP', async () => {
+  const utility = makeUtilityProcess();
+  const launcher = createPreviewDesktopServices(utility, {
+    probe: async () => assert.fail('IPC must not probe HTTP'),
+  });
+  await launcher.ensure({
+    cwd: service.cwd,
+    entry: service.entry,
+    transport: 'ipc',
+  });
+  const [child] = utility.children;
+  const requests = [];
+  child.postMessage = request => requests.push(request);
+  const first = launcher.invoke(service.entry, 'get', { key: 'first' });
+  const second = launcher.invoke(service.entry, 'get', { key: 'second' });
+  assert.equal(requests.length, 0);
+  child.emit('spawn');
+  assert.deepEqual(requests[0], {
+    type: 'gdevelop-desktop-service:request',
+    id: 1,
+    method: 'get',
+    params: { key: 'first' },
+  });
+  child.emit('message', {
+    type: 'gdevelop-desktop-service:response',
+    id: requests[1].id,
+    ok: false,
+    error: 'Unknown key',
+  });
+  child.emit('message', {
+    type: 'gdevelop-desktop-service:response',
+    id: requests[0].id,
+    ok: true,
+    result: 'first result',
+  });
+  await assert.rejects(second, /Unknown key/);
+  assert.equal(await first, 'first result');
+
+  const interrupted = launcher.invoke(service.entry, 'get', {});
+  launcher.stop();
+  await assert.rejects(interrupted, /disconnected/);
+  assert.throws(() => launcher.invoke(service.entry, 'get'), /unavailable/);
+});
+
+test('drops timed out requests before a service starts', async () => {
+  const { createDesktopServiceIpc } = require('../app/DesktopServiceIpc');
+  const child = new EventEmitter();
+  child.postMessage = () => assert.fail('Timed out request was sent');
+  const invoke = createDesktopServiceIpc(child, 5);
+  await assert.rejects(invoke('get'), /timed out/);
+  child.emit('spawn');
+});
