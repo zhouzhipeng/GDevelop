@@ -554,7 +554,7 @@ const openPreviewWindow = ({
       return { action: 'deny' };
     });
 
-    if (onWindowCreated) onWindowCreated(previewWindow.webContents);
+    if (onWindowCreated) onWindowCreated(previewWindow);
     previewWindow.loadURL(previewGameIndexHtmlPath);
 
     previewWindow.on('close', () => {

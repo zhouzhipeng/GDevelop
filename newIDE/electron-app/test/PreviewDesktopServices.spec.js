@@ -13,7 +13,7 @@ const service = {
   method: 'OPTIONS',
 };
 
-function makeUtilityProcess() {
+function makeUtilityProcess({ deferExit = false } = {}) {
   const children = [];
   return {
     children,
@@ -24,7 +24,7 @@ function makeUtilityProcess() {
       const child = new EventEmitter();
       child.kill = () => {
         child.killed = true;
-        child.emit('exit', 0);
+        if (!deferExit) child.emit('exit', 0);
       };
       children.push(child);
       return child;
@@ -37,7 +37,9 @@ test('reuses a ready service started outside the editor', async () => {
   const launcher = createPreviewDesktopServices(utility, {
     probe: async () => true,
   });
+  const release = launcher.retain(service.entry);
   await launcher.ensure(service);
+  release();
   launcher.stop();
   assert.equal(utility.children.length, 0);
 });
@@ -123,4 +125,31 @@ test('drops timed out requests before a service starts', async () => {
   const invoke = createDesktopServiceIpc(child, 5);
   await assert.rejects(invoke('get'), /timed out/);
   child.emit('spawn');
+});
+
+test('stops the service after its last preview closes and starts fresh on reopen', async () => {
+  const utility = makeUtilityProcess({ deferExit: true });
+  const launcher = createPreviewDesktopServices(utility);
+  const ipcService = { ...service, transport: 'ipc' };
+  const releaseFirst = launcher.retain(service.entry);
+  const releaseSecond = launcher.retain(service.entry);
+  await launcher.ensure(ipcService);
+  const [child] = utility.children;
+
+  releaseFirst();
+  releaseFirst();
+  assert.equal(child.killed, undefined);
+  releaseSecond();
+  assert.equal(child.killed, true);
+  assert.throws(() => launcher.invoke(service.entry, 'get'), /unavailable/);
+
+  const releaseReopened = launcher.retain(service.entry);
+  const reopening = launcher.ensure(ipcService);
+  assert.equal(utility.children.length, 1);
+  child.emit('exit', 0);
+  await reopening;
+  assert.equal(utility.children.length, 2);
+  releaseReopened();
+  assert.equal(utility.children[1].killed, true);
+  utility.children[1].emit('exit', 0);
 });

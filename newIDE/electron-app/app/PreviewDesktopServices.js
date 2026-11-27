@@ -30,10 +30,13 @@ const createPreviewDesktopServices = (
 ) => {
   const children = new Map();
   const starting = new Map();
+  const users = new Map();
   let stopping = false;
 
   const start = async service => {
     const usesIpc = service.transport === 'ipc';
+    const previous = children.get(service.entry);
+    if (previous && previous.stopping) await previous.exited;
     if (!usesIpc && (await probe(service))) return;
     if (stopping) throw new Error('The editor is shutting down.');
     let running = children.get(service.entry);
@@ -42,12 +45,15 @@ const createPreviewDesktopServices = (
         cwd: service.cwd,
         serviceName: 'GDevelop Preview Desktop Service',
       });
-      running = { child, invoke: createDesktopServiceIpc(child) };
-      children.set(service.entry, running);
-      child.once('exit', () => {
-        if (children.get(service.entry) === running)
-          children.delete(service.entry);
+      const exited = new Promise(resolve => {
+        child.once('exit', () => {
+          if (children.get(service.entry) === running)
+            children.delete(service.entry);
+          resolve();
+        });
       });
+      running = { child, exited, invoke: createDesktopServiceIpc(child) };
+      children.set(service.entry, running);
       child.on('error', error =>
         console.error('Preview desktop service:', error)
       );
@@ -71,12 +77,34 @@ const createPreviewDesktopServices = (
           '.'
       );
     } catch (error) {
-      if (children.get(service.entry) === running) running.child.kill();
+      if (children.get(service.entry) === running) stopChild(running);
       throw error;
     }
   };
 
+  const stopChild = running => {
+    if (running.stopping) return;
+    running.stopping = true;
+    running.child.kill();
+  };
+
   return {
+    retain(entry) {
+      users.set(entry, (users.get(entry) || 0) + 1);
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        const remaining = users.get(entry) - 1;
+        if (remaining > 0) {
+          users.set(entry, remaining);
+          return;
+        }
+        users.delete(entry);
+        const running = children.get(entry);
+        if (running) stopChild(running);
+      };
+    },
     ensure(service) {
       if (stopping)
         return Promise.reject(new Error('The editor is shutting down.'));
@@ -109,12 +137,13 @@ const createPreviewDesktopServices = (
     },
     invoke(entry, method, params) {
       const running = children.get(entry);
-      if (!running) throw new Error('Desktop service is unavailable.');
+      if (!running || running.stopping)
+        throw new Error('Desktop service is unavailable.');
       return running.invoke(method, params);
     },
     stop() {
       stopping = true;
-      for (const { child } of children.values()) child.kill();
+      for (const running of children.values()) stopChild(running);
       children.clear();
     },
   };

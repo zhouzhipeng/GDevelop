@@ -1,7 +1,10 @@
 // @flow
 import * as React from 'react';
 import LocalFileSystem from '../LocalFileSystem';
-import { getLocalElectronServicePreview } from '../LocalElectronService';
+import {
+  getLocalElectronServicePreview,
+  type DesktopServicePreview,
+} from '../LocalElectronService';
 import optionalRequire from '../../../Utils/OptionalRequire';
 import { findGDJS } from '../../../GameEngineFinder/LocalGDJSFinder';
 import LocalNetworkPreviewDialog from './LocalNetworkPreviewDialog';
@@ -44,7 +47,7 @@ type State = {|
   networkPreviewPort: ?number,
   networkPreviewError: ?any,
   previewGamePath: ?string,
-  desktopServiceIpcEntry: ?string,
+  desktopService: ?DesktopServicePreview,
   previewBrowserWindowOptions: ?{
     width: number,
     height: number,
@@ -119,7 +122,7 @@ export default class LocalPreviewLauncher extends React.Component<
     networkPreviewPort: null,
     networkPreviewError: null,
     previewGamePath: null,
-    desktopServiceIpcEntry: null,
+    desktopService: null,
     previewBrowserWindowOptions: null,
     hideMenuBar: true,
     alwaysOnTop: true,
@@ -129,7 +132,7 @@ export default class LocalPreviewLauncher extends React.Component<
   _openPreviewBrowserWindow = () => {
     const {
       previewGamePath,
-      desktopServiceIpcEntry,
+      desktopService,
       previewBrowserWindowOptions,
       captureOptions,
       alwaysOnTop,
@@ -140,9 +143,9 @@ export default class LocalPreviewLauncher extends React.Component<
 
     if (!ipcRenderer) return;
 
-    ipcRenderer.invoke('preview-open', {
+    const opening = ipcRenderer.invoke('preview-open', {
       previewBrowserWindowOptions,
-      desktopServiceIpcEntry,
+      desktopService,
       previewGameIndexHtmlPath: `file://${previewGamePath}/index.html`,
       alwaysOnTop,
       hideMenuBar,
@@ -163,6 +166,7 @@ export default class LocalPreviewLauncher extends React.Component<
       }
     };
     ipcRenderer.on('preview-window-closed', this._onPreviewWindowClosed);
+    return opening;
   };
 
   closePreview = (windowId: number) => {
@@ -226,41 +230,63 @@ export default class LocalPreviewLauncher extends React.Component<
     project: gdProject,
     gamePath: string,
     options: PreviewOptions,
-    desktopServiceIpcEntry: ?string
+    desktopService: ?DesktopServicePreview
   ): Promise<void> => {
-    this.setState(
-      // $FlowFixMe[incompatible-type]
-      {
-        previewBrowserWindowOptions: {
-          width: project.getGameResolutionWidth(),
-          height: project.getGameResolutionHeight(),
-          useContentSize: true,
-          title: `Preview of ${project.getName()}`,
-          backgroundColor: '#000000',
-          webPreferences: {
-            webSecurity: false, // Allow to access to local files,
-            // Allow Node.js API access in renderer process, as long
-            // as we've not removed dependency on it and on "@electron/remote".
-            nodeIntegration: true,
-            sandbox: false,
-            contextIsolation: false,
-            backgroundThrottling: false,
-          },
+    const previewState = {
+      previewBrowserWindowOptions: {
+        width: project.getGameResolutionWidth(),
+        height: project.getGameResolutionHeight(),
+        useContentSize: true,
+        title: `Preview of ${project.getName()}`,
+        backgroundColor: '#000000',
+        webPreferences: {
+          webSecurity: false, // Allow to access to local files,
+          // Allow Node.js API access in renderer process, as long
+          // as we've not removed dependency on it and on "@electron/remote".
+          nodeIntegration: true,
+          sandbox: false,
+          contextIsolation: false,
+          backgroundThrottling: false,
         },
-        previewGamePath: gamePath,
-        desktopServiceIpcEntry,
-        hideMenuBar: !options.getIsMenuBarHiddenInPreview(),
-        alwaysOnTop:
-          options.forceAlwaysOnTopInPreview ||
-          options.getIsAlwaysOnTopInPreview(),
-        numberOfWindows: options.numberOfWindows,
-        captureOptions: options.captureOptions,
       },
-      () => {
-        if (!options.networkPreview) this._openPreviewBrowserWindow();
-      }
-    );
-    if (!options.networkPreview) return Promise.resolve();
+      previewGamePath: gamePath,
+      desktopService,
+      hideMenuBar: !options.getIsMenuBarHiddenInPreview(),
+      alwaysOnTop:
+        options.forceAlwaysOnTopInPreview ||
+        options.getIsAlwaysOnTopInPreview(),
+      numberOfWindows: options.numberOfWindows,
+      captureOptions: options.captureOptions,
+    };
+    if (!options.networkPreview) {
+      return new Promise((resolve, reject) => {
+        this.setState(previewState, () => {
+          if (options.isLaunchCancelled()) {
+            resolve();
+            return;
+          }
+          Promise.resolve(this._openPreviewBrowserWindow()).then(
+            () => resolve(),
+            error => {
+              if (options.isLaunchCancelled()) {
+                resolve();
+                return;
+              }
+              if (!Window.isHeadless()) {
+                showErrorBox({
+                  message: error.message,
+                  rawError: error,
+                  errorId: 'preview-desktop-service-startup',
+                  doNotReport: true,
+                });
+              }
+              reject(error);
+            }
+          );
+        });
+      });
+    }
+    this.setState(previewState);
     if (!ipcRenderer)
       return Promise.reject(new Error('Electron IPC unavailable.'));
 
@@ -307,7 +333,7 @@ export default class LocalPreviewLauncher extends React.Component<
       previewOptions
     );
 
-    let desktopServiceIpcEntry = null;
+    let desktopService = null;
     if (
       ipcRenderer &&
       !previewOptions.networkPreview &&
@@ -315,15 +341,9 @@ export default class LocalPreviewLauncher extends React.Component<
       !previewOptions.isForGameplayTest
     ) {
       try {
-        const service = getLocalElectronServicePreview(
+        desktopService = getLocalElectronServicePreview(
           project.getProjectFile()
         );
-        if (service) {
-          await ipcRenderer.invoke('ensure-preview-desktop-service', service);
-          if (service.transport === 'ipc')
-            desktopServiceIpcEntry = service.entry;
-          if (previewOptions.isLaunchCancelled()) return;
-        }
       } catch (error) {
         if (previewOptions.isLaunchCancelled()) return;
         if (!Window.isHeadless()) {
@@ -655,7 +675,7 @@ export default class LocalPreviewLauncher extends React.Component<
           project,
           outputDir,
           previewOptions,
-          desktopServiceIpcEntry
+          desktopService
         );
       }
     }

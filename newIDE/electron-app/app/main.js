@@ -1121,13 +1121,6 @@ app.on('ready', async function() {
     }
   });
 
-  ipcMain.handle('ensure-preview-desktop-service', (event, service) => {
-    if (!mainWindows.has(BrowserWindow.fromWebContents(event.sender))) {
-      throw new Error('Desktop services can only be started by the editor.');
-    }
-    return previewDesktopServices.ensure(service);
-  });
-
   ipcMain.handle(desktopServiceChannel, (event, method, params) => {
     const preview = previewDesktopServiceByWindow.get(event.sender);
     if (
@@ -1143,31 +1136,52 @@ app.on('ready', async function() {
 
   ipcMain.handle('preview-open', async (event, options) => {
     const parentWindow = BrowserWindow.fromWebContents(event.sender);
-    return openPreviewWindow({
-      parentWindow: parentWindow,
-      previewBrowserWindowOptions: options.previewBrowserWindowOptions,
-      previewGameIndexHtmlPath: options.previewGameIndexHtmlPath,
-      alwaysOnTop: options.alwaysOnTop,
-      hideMenuBar: options.hideMenuBar,
-      numberOfWindows: options.numberOfWindows,
-      captureOptions: options.captureOptions,
-      openEvent: event,
-      onWindowCreated:
-        mainWindows.has(parentWindow) &&
-        event.senderFrame === event.sender.mainFrame &&
-        typeof options.desktopServiceIpcEntry === 'string'
-          ? webContents =>
-              previewDesktopServiceByWindow.set(webContents, {
-                entry: options.desktopServiceIpcEntry,
-                gameUrl: options.previewGameIndexHtmlPath,
-              })
+    const service =
+      mainWindows.has(parentWindow) &&
+      event.senderFrame === event.sender.mainFrame &&
+      options.numberOfWindows >= 1
+        ? options.desktopService
+        : null;
+    // Keep the service alive while this request starts it and attaches windows.
+    let releaseStartup;
+    try {
+      if (service) {
+        // Validation in ensure runs before any child process can be started.
+        const startup = previewDesktopServices.ensure(service);
+        releaseStartup = previewDesktopServices.retain(service.entry);
+        await startup;
+        if (event.sender.isDestroyed() || parentWindow.isDestroyed()) return;
+      }
+      return openPreviewWindow({
+        parentWindow,
+        previewBrowserWindowOptions: options.previewBrowserWindowOptions,
+        previewGameIndexHtmlPath: options.previewGameIndexHtmlPath,
+        alwaysOnTop: options.alwaysOnTop,
+        hideMenuBar: options.hideMenuBar,
+        numberOfWindows: options.numberOfWindows,
+        captureOptions: options.captureOptions,
+        openEvent: event,
+        onWindowCreated: service
+          ? previewWindow => {
+              const release = previewDesktopServices.retain(service.entry);
+              previewWindow.once('closed', release);
+              if (service.transport === 'ipc') {
+                previewDesktopServiceByWindow.set(previewWindow.webContents, {
+                  entry: service.entry,
+                  gameUrl: options.previewGameIndexHtmlPath,
+                });
+              }
+            }
           : undefined,
-      headless: !!(
-        parentWindow &&
-        windowArgsById[parentWindow.id] &&
-        windowArgsById[parentWindow.id].headless
-      ),
-    });
+        headless: !!(
+          parentWindow &&
+          windowArgsById[parentWindow.id] &&
+          windowArgsById[parentWindow.id].headless
+        ),
+      });
+    } finally {
+      if (releaseStartup) releaseStartup();
+    }
   });
   ipcMain.handle('preview-close', async (event, options) => {
     return closePreviewWindow(options.windowId);
