@@ -34,6 +34,7 @@ describe('SVG UI native overlay', function () {
         usedResources: [],
         uiSettings: {
           grid: false,
+          windowMask: false,
           gridType: 'rectangular',
           gridWidth: 10,
           gridHeight: 10,

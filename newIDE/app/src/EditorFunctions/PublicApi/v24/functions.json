@@ -1,5 +1,5 @@
 {
-  "toolsVersion": "v22",
+  "toolsVersion": "v24",
   "functions": [
     {
       "name": "create_or_replace_object",
@@ -136,6 +136,105 @@
           "scope",
           "object_type",
           "object_name"
+        ]
+      }
+    },
+    {
+      "name": "create_image_from_code",
+      "description": "Create a PNG image resource from SVG code, and optionally a 2D object using it: for a 2D visual the asset store does not have. The result gives the resource name, the image size, the object created and the SVG features that were removed (scripts, external references).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "object",
+            "description": "Where the object is created. Set `type` and the name field(s) of that type.",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "scene",
+                  "custom_object_variant"
+                ],
+                "description": "`scene`: a scene (`scene_name`). `custom_object_variant`: the child objects, instances and layers of a variant of a custom object (`extension_name` + `custom_object_name` + `variant_name`, `\"\"` being the default variant that named variants inherit from)."
+              },
+              "scene_name": {
+                "type": "string",
+                "description": "The name of the scene (type `scene`)."
+              },
+              "extension_name": {
+                "type": "string",
+                "description": "The name of the extension (extension, custom_behavior, custom_object and custom_object_variant types)."
+              },
+              "custom_object_name": {
+                "type": "string",
+                "description": "The name of the custom object in the extension (custom_object and custom_object_variant types)."
+              },
+              "variant_name": {
+                "type": "string",
+                "description": "The name of the variant of the custom object (type `custom_object_variant`); \"\" is the default variant."
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "propertyOrdering": [
+              "type",
+              "scene_name",
+              "extension_name",
+              "custom_object_name",
+              "variant_name"
+            ]
+          },
+          "svg": {
+            "type": "string",
+            "description": "A standalone SVG. Its width and height, in pixels, are the size of the image (4096 at most)."
+          },
+          "object_name": {
+            "type": "string",
+            "description": "When given, an object using the image is created with this name."
+          },
+          "object_type": {
+            "type": "string",
+            "enum": [
+              "Sprite",
+              "TiledSpriteObject::TiledSprite",
+              "PanelSpriteObject::PanelSprite"
+            ],
+            "description": "The type of the object created (default `Sprite`). A tiled sprite or a panel sprite is sized to the image."
+          },
+          "replace_existing_object": {
+            "type": "boolean",
+            "description": "Replace an existing object of the same name. Otherwise the existing object is kept unchanged and the call fails."
+          }
+        },
+        "required": [
+          "scope",
+          "svg"
+        ]
+      }
+    },
+    {
+      "name": "copy_from_example",
+      "description": "Copy a scene of an example project into the project as a new scene, with everything it needs: its objects and the global objects it uses, their resources, the extensions they and the events use, layers and effects, variables, instances, events and the external events and layouts linked from the scene. Never changes or removes what the project has: on a name conflict (a global variable, an extension), the project keeps its own and the result says so. The result gives the new scene name and what was copied.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "example": {
+            "type": "string",
+            "description": "The slug of the example, exactly as given by `search`."
+          },
+          "scene": {
+            "type": "string",
+            "description": "The name of the scene of the example to copy."
+          },
+          "new_scene_name": {
+            "type": "string",
+            "description": "The name of the new scene (default: the name of the scene of the example, made unique)."
+          }
+        },
+        "required": [
+          "example",
+          "scene"
         ]
       }
     },
@@ -1306,7 +1405,7 @@
     },
     {
       "name": "change_scene_properties_layers_effects_groups",
-      "description": "Change one or more properties of a scene (background color, rename the scene, etc...) or modify a layer (add, remove, change name, order or initial visibility) or an effect of a layer (add, remove, properties), or modify a group (add, remove, rename, add/remove objects in the group), or move instances to another scene or external layout (`move_instances`). On a variant of a custom object, `changed_properties` are the bounds of its area (`areaMinX`, `areaMinY`, `areaMinZ`, `areaMaxX`, `areaMaxY`, `areaMaxZ`), `delete_this_scene` is invalid (delete a variant with `change_custom_object`) and object groups can only be changed on the default variant (`variant_name` \"\"). For game-wide properties (resolution, game name...), use `change_project_properties_resources`. An effect of the asset store (a skybox or a fog preset for a 3D layer) is added on a layer with the `asset_id` of a `changed_layer_effects` item.",
+      "description": "Change one or more properties of a scene (background color, rename the scene, etc...) or modify a layer (add, remove, change name, order, initial visibility, rendering type or camera) or an effect of a layer (add, remove, properties), or modify a group (add, remove, rename, add/remove objects in the group), or move instances to another scene or external layout (`move_instances`). On a variant of a custom object, `changed_properties` are the bounds of its area (`areaMinX`, `areaMinY`, `areaMinZ`, `areaMaxX`, `areaMaxY`, `areaMaxZ`), `delete_this_scene` is invalid (delete a variant with `change_custom_object`) and object groups can only be changed on the default variant (`variant_name` \"\"). For game-wide properties (resolution, game name...), use `change_project_properties_resources`. An effect of the asset store (a skybox or a fog preset for a 3D layer) is added on a layer with the `asset_id` of a `changed_layer_effects` item.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1404,6 +1503,44 @@
                 "new_visibility": {
                   "type": "boolean",
                   "description": "The visibility of the layer when the scene starts. Set to false to hide the layer (and everything on it) initially. Unchanged if not set. To show or hide a layer while the game is running, use the \"Show layer\" action in events instead."
+                },
+                "new_rendering_type": {
+                  "type": "string",
+                  "enum": [
+                    "",
+                    "2d",
+                    "3d",
+                    "2d+3d"
+                  ],
+                  "description": "What the layer displays: \"\" (2D and 3D objects, the default), \"2d\" (only 2D objects: a UI layer), \"3d\" (only 3D objects) or \"2d+3d\". Unchanged if not set."
+                },
+                "new_camera_type": {
+                  "type": "string",
+                  "enum": [
+                    "perspective",
+                    "orthographic"
+                  ],
+                  "description": "For a layer showing 3D objects: the 3D camera, \"perspective\" (the default) or \"orthographic\" (no perspective: isometric or top-down 3D games). Unchanged if not set."
+                },
+                "new_default_camera_behavior": {
+                  "type": "string",
+                  "enum": [
+                    "do-nothing",
+                    "top-left-anchored-if-never-moved"
+                  ],
+                  "description": "What the camera of the layer does when the game resolution changes and events never moved it: \"do-nothing\" keeps it centered (best for game content), \"top-left-anchored-if-never-moved\" keeps the top-left corner fixed (best for content that can extend, like a UI). Unchanged if not set."
+                },
+                "new_camera_3d_near_plane_distance": {
+                  "type": "number",
+                  "description": "For a layer showing 3D objects: the distance from the 3D camera under which nothing is displayed (the \"near plane\"), in pixels. Must be greater than 0 and lower than the far plane distance. Unchanged if not set."
+                },
+                "new_camera_3d_far_plane_distance": {
+                  "type": "number",
+                  "description": "For a layer showing 3D objects: the distance from the 3D camera beyond which nothing is displayed (the \"far plane\"), in pixels. Increase it for large 3D worlds where distant objects or terrain disappear. Unchanged if not set."
+                },
+                "new_camera_3d_field_of_view": {
+                  "type": "number",
+                  "description": "For a layer showing 3D objects: the field of view of the 3D camera, in degrees (greater than 0, at most 180; 45 by default). Unchanged if not set."
                 },
                 "delete_this_layer": {
                   "type": "boolean",
@@ -3647,6 +3784,75 @@
         },
         "required": [
           "names"
+        ]
+      }
+    },
+    {
+      "name": "search",
+      "description": "Search GDevelop for what the game needs: ready-made objects, behaviors, extensions and effects, single assets of the asset store, asset packs, example projects with scenes to copy, and recipes (how to structure something like levels or menus, read with `read_recipe`). Search before making an object, a mechanic, a HUD element or a level. Put everything needed for the task in ONE call: one query per thing. Each result ends with the exact call to make. Example: queries [\"health bar\", \"enemy waves\", \"medieval castle walls\", \"golden key\"].",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "queries": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "string"
+            },
+            "description": "One query per thing needed, each a few English words naming ONE thing (not a sentence), e.g. \"score counter\", \"checkpoint respawn\", \"golden key\"."
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "object",
+                "behavior",
+                "extension",
+                "effect",
+                "asset",
+                "asset_pack",
+                "example",
+                "example_scene",
+                "recipe"
+              ]
+            },
+            "description": "Optional: only return these kinds of results."
+          },
+          "dimension": {
+            "type": "string",
+            "enum": [
+              "2D",
+              "3D"
+            ],
+            "description": "Optional: only what is made for 2D or for 3D games (what works in both is always kept)."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "description": "Optional: the maximum number of results per query (default 3 when there are several queries, 5 otherwise)."
+          }
+        },
+        "required": [
+          "queries"
+        ]
+      }
+    },
+    {
+      "name": "read_recipe",
+      "description": "Read a recipe given by `search` (`[recipe]` results): a short, verified how-to for structuring something in GDevelop with your tools (levels, menus...). Read it before building that structure, and follow it.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the recipe, exactly as given by `search` (e.g. \"levels-in-external-layouts\")."
+          }
+        },
+        "required": [
+          "name"
         ]
       }
     },

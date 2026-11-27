@@ -277,7 +277,7 @@ struct PreviewExportOptions {
   }
 
   /**
-   * \brief Set the camera state to use in the in-game editor.
+   * \brief Set the 3D camera state to use in the in-game editor.
    */
   PreviewExportOptions &
   SetEditorCameraState3D(const gd::String &cameraMode, double positionX,
@@ -291,6 +291,17 @@ struct PreviewExportOptions {
     editorCamera3DRotationAngle = rotationAngle;
     editorCamera3DElevationAngle = elevationAngle;
     editorCamera3DDistance = distance;
+    return *this;
+  }
+
+  /**
+   * \brief Set the 2D camera state to use in the in-game editor.
+   */
+  PreviewExportOptions &SetEditorCameraState2D(double centerX, double centerY,
+                                               double zoom) {
+    editorCamera2DCenterX = centerX;
+    editorCamera2DCenterY = centerY;
+    editorCamera2DZoom = zoom;
     return *this;
   }
 
@@ -427,6 +438,9 @@ struct PreviewExportOptions {
   double editorCamera3DRotationAngle = 0;
   double editorCamera3DElevationAngle = 0;
   double editorCamera3DDistance = 0;
+  double editorCamera2DCenterX = 0;
+  double editorCamera2DCenterY = 0;
+  double editorCamera2DZoom = 1;
   unsigned int nonRuntimeScriptsCacheBurst;
   gd::String electronRemoteRequirePath;
   gd::String gdevelopResourceToken;

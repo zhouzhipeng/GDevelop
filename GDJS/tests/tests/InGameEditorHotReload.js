@@ -44,6 +44,7 @@ describe('Hot-reload of objects in the in-game editor', function () {
     gridColor: 0,
     gridAlpha: 1,
     snap: false,
+        windowMask: false,
   };
 
   /**
@@ -105,6 +106,7 @@ describe('Hot-reload of objects in the in-game editor', function () {
   const createEventsBasedObjectData = ({ name, instances, objects }) => ({
     name,
     variables: [],
+    behaviors: [],
     instances,
     objects,
     objectsGroups: [],

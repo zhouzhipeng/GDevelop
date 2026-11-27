@@ -281,6 +281,7 @@ export type PreferencesValues = {|
   openDiagnosticReportAutomatically: boolean,
   blockPreviewAndExportOnDiagnosticErrors: boolean,
   use3DEditor: boolean,
+  useRealTime2DEditor: boolean,
   showBasicProfilingCounters: boolean,
   inAppTutorialsProgress: InAppTutorialProgressDatabase,
   newProjectsDefaultFolder: string,
@@ -314,6 +315,7 @@ export type PreferencesValues = {|
   showJsTypeError: boolean,
   canonicalEventSerialization: boolean,
   resourcesToolsSettings: ResourcesToolsSettings,
+  showExtensionChangesToKeepOnUpdate: boolean,
 |};
 
 /**
@@ -406,6 +408,8 @@ export type Preferences = {|
     | 'icon-and-deprecated-warning-text',
   setUse3DEditor: (enabled: boolean) => void,
   getUse3DEditor: () => boolean,
+  setUseRealTime2DEditor: (enabled: boolean) => void,
+  getUseRealTime2DEditor: () => boolean,
   setShowBasicProfilingCounters: (enabled: boolean) => void,
   setDisableNpmScriptConfirmation: (enabled: boolean) => void,
   setNewProjectsDefaultStorageProviderName: (name: string) => void,
@@ -457,6 +461,7 @@ export type Preferences = {|
   setUseBackgroundSerializerForSaving: (enabled: boolean) => void,
   setShowJsTypeError: (enabled: boolean) => void,
   setCanonicalEventSerialization: (enabled: boolean) => void,
+  setShowExtensionChangesToKeepOnUpdate: (enabled: boolean) => void,
 |};
 
 export const initialPreferences = {
@@ -507,6 +512,7 @@ export const initialPreferences = {
     blockPreviewAndExportOnDiagnosticErrors: true,
     showDeprecatedInstructionWarning: 'icon-and-deprecated-warning-text',
     use3DEditor: (isWebGL2Supported(): boolean),
+    useRealTime2DEditor: false,
     showBasicProfilingCounters: false,
     inAppTutorialsProgress: {},
     newProjectsDefaultFolder: ((app ? findDefaultFolder(app) : ''): string),
@@ -537,6 +543,7 @@ export const initialPreferences = {
     showJsTypeError: true,
     canonicalEventSerialization: false,
     resourcesToolsSettings: defaultResourcesToolsSettings,
+    showExtensionChangesToKeepOnUpdate: false,
   },
   setMultipleValues: () => {},
   setLanguage: () => {},
@@ -604,6 +611,8 @@ export const initialPreferences = {
   getShowDeprecatedInstructionWarning: (): string => 'no',
   setUse3DEditor: (enabled: boolean) => {},
   getUse3DEditor: (): boolean => false,
+  setUseRealTime2DEditor: (enabled: boolean) => {},
+  getUseRealTime2DEditor: (): boolean => false,
   setShowBasicProfilingCounters: (enabled: boolean) => {},
   setDisableNpmScriptConfirmation: (enabled: boolean) => {},
   saveTutorialProgress: () => {},
@@ -643,6 +652,7 @@ export const initialPreferences = {
   setUseBackgroundSerializerForSaving: (enabled: boolean) => {},
   setShowJsTypeError: (enabled: boolean) => {},
   setCanonicalEventSerialization: (enabled: boolean) => {},
+  setShowExtensionChangesToKeepOnUpdate: (enabled: boolean) => {},
 };
 
 const PreferencesContext: React.Context<Preferences> = React.createContext<Preferences>(

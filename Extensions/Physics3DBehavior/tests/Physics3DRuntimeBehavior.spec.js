@@ -191,6 +191,7 @@ describe('gdjs.Physics3DRuntimeBehavior', () => {
           gridColor: 0,
           gridAlpha: 1,
           snap: false,
+          windowMask: false,
         },
       },
       usedExtensionsWithVariablesData: [],

@@ -50,6 +50,7 @@ describe('gdjs.ResourcePackManager', () => {
     usedResources: [],
     uiSettings: {
       grid: false,
+      windowMask: false,
       gridType: 'rectangular',
       gridWidth: 10,
       gridHeight: 10,

@@ -446,11 +446,13 @@ const PreferencesDialog = ({
     setIsAlwaysOnTopInPreview,
     setEventsSheetCancelInlineParameter,
     setShowExperimentalExtensions,
+    setShowExtensionChangesToKeepOnUpdate,
     setShowInAppTutorialDeveloperMode,
     setOpenDiagnosticReportAutomatically,
     setBlockPreviewAndExportOnDiagnosticErrors,
     setShowDeprecatedInstructionWarning,
     setUse3DEditor,
+    setUseRealTime2DEditor,
     setShowBasicProfilingCounters,
     setNewProjectsDefaultFolder,
     setUseShortcutToClosePreviewWindow,
@@ -1239,6 +1241,16 @@ const PreferencesDialog = ({
                   !is3DRenderingSupported
                 ),
             },
+            {
+              id: 'use-experimental-real-time-2d-editor',
+              label: i18n._(t`Use experimental real-time 2D scene editor`),
+              renderControl: () =>
+                renderToggle(
+                  values.useRealTime2DEditor,
+                  setUseRealTime2DEditor,
+                  !is3DRenderingSupported
+                ),
+            },
           ],
           renderFooter: () =>
             !is3DRenderingSupported ? (
@@ -1409,6 +1421,17 @@ const PreferencesDialog = ({
                 renderToggle(
                   values.showExperimentalExtensions,
                   setShowExperimentalExtensions
+                ),
+            },
+            {
+              id: 'show-extension-changes-to-keep-on-update',
+              label: i18n._(
+                t`Let me keep some of my changes when updating or importing again an extension`
+              ),
+              renderControl: () =>
+                renderToggle(
+                  values.showExtensionChangesToKeepOnUpdate,
+                  setShowExtensionChangesToKeepOnUpdate
                 ),
             },
           ],

@@ -499,7 +499,14 @@ type Props = {|
     eventsFunctionsExtension: gdEventsFunctionsExtension,
     eventsBasedObject: gdEventsBasedObject
   ) => void,
-  onExportAssets: () => void,
+  /**
+   * Export objects as an asset pack.
+   * @param objectFolderOrObjectsWithContext The objects and folders to export,
+   * or null to export all the objects of the scene.
+   */
+  onExportAssets: (
+    objectFolderOrObjectsWithContext: Array<ObjectFolderOrObjectWithContext> | null
+  ) => void,
   onImportAssets: () => void,
   onObjectCreated: (
     objects: Array<gdObject>,
@@ -1105,6 +1112,7 @@ const ObjectsList = React.forwardRef<Props, ObjectsListInterface>(
       onMovedObjectFolderOrObjectToAnotherFolderInSameContainer,
       onSetAsGlobalObject,
       beforeSetAsGlobalObject,
+      onExportAssets,
       showDeleteConfirmation,
       forceUpdateList,
       onNewFolderCreated,
@@ -1158,6 +1166,7 @@ const ObjectsList = React.forwardRef<Props, ObjectsListInterface>(
         onObjectModified,
         onObjectCreated,
         swapObjectAsset,
+        onExportAssets,
         onMovedObjectFolderOrObjectToAnotherFolderInSameContainer,
         canSetAsGlobalObject,
         setAsGlobalObject,
@@ -1188,6 +1197,7 @@ const ObjectsList = React.forwardRef<Props, ObjectsListInterface>(
         onObjectModified,
         onObjectCreated,
         swapObjectAsset,
+        onExportAssets,
         onMovedObjectFolderOrObjectToAnotherFolderInSameContainer,
         canSetAsGlobalObject,
         setAsGlobalObject,
@@ -1214,6 +1224,7 @@ const ObjectsList = React.forwardRef<Props, ObjectsListInterface>(
         expandFolders,
         addFolder,
         onAddNewObject,
+        onExportAssets,
         onMovedObjectFolderOrObjectToAnotherFolderInSameContainer,
         onRenameObjectFolderOrObjectWithContextFinish,
         onDeleteObjects,
@@ -1235,6 +1246,7 @@ const ObjectsList = React.forwardRef<Props, ObjectsListInterface>(
         expandFolders,
         addFolder,
         onAddNewObject,
+        onExportAssets,
         onMovedObjectFolderOrObjectToAnotherFolderInSameContainer,
         onRenameObjectFolderOrObjectWithContextFinish,
         onDeleteObjects,
@@ -1375,8 +1387,8 @@ const ObjectsList = React.forwardRef<Props, ObjectsListInterface>(
                 },
                 { type: 'separator' },
                 {
-                  label: i18n._(t`Export as assets`),
-                  click: () => onExportAssets(),
+                  label: i18n._(t`Export all objects as assets`),
+                  click: () => onExportAssets(null),
                 },
                 {
                   label: i18n._(t`Import assets`),

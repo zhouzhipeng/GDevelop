@@ -113,6 +113,7 @@ gdjs.getPixiRuntimeGameWithAssets = (props = null) => {
           gridColor: 0,
           gridAlpha: 1,
           snap: false,
+        windowMask: false,
         },
       },
     ],

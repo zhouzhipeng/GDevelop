@@ -117,6 +117,7 @@ describe('gdjs.RuntimeScene integration tests', function () {
           gridColor: 0,
           gridAlpha: 1,
           snap: false,
+        windowMask: false,
         }
       }, usedExtensionsWithVariablesData: []});
 

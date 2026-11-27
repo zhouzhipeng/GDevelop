@@ -113,15 +113,22 @@ type SwitchToSceneEditionOptions = {|
   ...HotReloadSteps,
 |};
 
-export type EditorCameraState = {|
-  cameraMode: 'free' | 'orbit',
-  positionX: number,
-  positionY: number,
-  positionZ: number,
-  rotationAngle: number,
-  elevationAngle: number,
-  distance: number,
-|};
+export type EditorCameraState = {
+  camera2D: {
+    centerX: number,
+    centerY: number,
+    zoom: number,
+  },
+  camera3D: {
+    cameraMode: 'free' | 'orbit',
+    positionX: number,
+    positionY: number,
+    positionZ: number,
+    rotationAngle: number,
+    elevationAngle: number,
+    distance: number,
+  },
+};
 
 let onSetEmbededGameFramePreviewLocation:
   | null
@@ -253,10 +260,11 @@ type Props = {|
   onLaunchPreviewForInGameEdition: ({|
     ...PreviewInGameEditorTarget,
     ...HotReloadSteps,
-    editorCameraState3D: EditorCameraState | null,
+    editorCameraState: EditorCameraState | null,
   |}) => Promise<void>,
   // Shown at the bottom of the game, above it (like indicators).
   children?: React.Node,
+  editorMode: '3d-editor' | '2d-editor',
 |};
 
 const DropTarget = makeDropTarget<any>([
@@ -285,6 +293,7 @@ export const EmbeddedGameFrame = ({
   enabled,
   onEnable,
   children,
+  editorMode,
 }: Props): React.MixedElement => {
   const [
     previewIndexHtmlLocation,
@@ -555,7 +564,7 @@ export const EmbeddedGameFrame = ({
             shouldReloadResources,
             shouldHardReload,
             reasons,
-            editorCameraState3D: cameraStates.current.get(editorId) || null,
+            editorCameraState: cameraStates.current.get(editorId) || null,
           }).finally(() => {
             // A game that is (re)loading must tell the editor it started before
             // anything else is exported: an export erases the files it is still
@@ -1277,7 +1286,7 @@ export const EmbeddedGameFrame = ({
                       <Text color="inherit">
                         <Trans>Drop to add the 3D model to the scene</Trans>
                       </Text>
-                    ) : isDraggedItem3D ? (
+                    ) : isDraggedItem3D || editorMode === '2d-editor' ? (
                       <Text color="inherit">
                         <Trans>Drag here to add to the scene</Trans>
                       </Text>

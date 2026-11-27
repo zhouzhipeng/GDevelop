@@ -3300,7 +3300,7 @@ namespace gdjs {
             initialRuntimeGameStatus?.eventsBasedObjectType || '',
           eventsBasedObjectVariantName:
             initialRuntimeGameStatus?.eventsBasedObjectVariantName || '',
-          editorCamera3D: this._runtimegame.getInGameEditor()?.getCameraState(),
+          editorCamera: this._runtimegame.getInGameEditor()?.getCameraState(),
         };
 
         reloadUrl.searchParams.set(

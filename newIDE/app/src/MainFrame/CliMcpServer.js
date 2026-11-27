@@ -9,6 +9,10 @@ import {
   getPublicApi,
   type PublicApiFunction,
 } from '../EditorFunctions/PublicApi';
+import {
+  describeLocalFilesInsteadOfAttachments,
+  getScriptApiDefinitionWithLocalFiles,
+} from './McpServerTools/LocalFilesAsAttachments';
 import { NON_SCRIPTABLE_FUNCTION_NAMES } from '../EditorFunctions/ScriptExecution/NonScriptableFunctionNames';
 import {
   describeProject,
@@ -152,8 +156,8 @@ export const getMcpTools = ({
       description,
     ])
   );
-  const publicApiFunctions = getPublicApi().functions.filter(
-    publicApiFunction => {
+  const publicApiFunctions = getPublicApi()
+    .functions.filter(publicApiFunction => {
       const callableFunction = callableFunctions.get(publicApiFunction.name);
       if (!callableFunction) return false;
       // A read-only script can still run: it only calls read-only functions.
@@ -162,8 +166,8 @@ export const getMcpTools = ({
         !callableFunction.modifiesProject ||
         publicApiFunction.name === 'run_script'
       );
-    }
-  );
+    })
+    .map(describeLocalFilesInsteadOfAttachments);
   const otherTools = [
     ...(isReadOnly ? [] : [saveProjectTool]),
     ...serverTools.map(serverTool => serverTool.definition),
@@ -232,6 +236,7 @@ export const getMcpInstructions = ({
     'Explore before editing: `read_game_project_json` gives the scenes, objects, variables and events of the project; the `inspect_*` and `describe_instances` tools give details.',
     'Prefer `run_script` for several related steps: it runs JavaScript calling the functions as async functions. Read `read_script_api_definition` first for their exact signatures and outputs.',
     'Events (the game logic) are written with `generate_events`, giving an `event_script` for each batch: the "EventScript" syntax below. The script is compiled by the GDevelop backend; on compile errors nothing is applied and the errors are returned, fix the script and call again. Events cannot be written from a description.',
+    'Search before making an object, a mechanic, a HUD element or a level: `search` finds the ready-made objects, behaviors, extensions and effects, the assets of the asset store, the example projects with scenes to copy (`copy_from_example`) and the recipes (`read_recipe`), each result ending with the call to make.',
     'Never guess the actions, conditions and expressions of events: `read_full_docs` gives the reference of extensions (the behaviors and objects are documented in their extension), with the exact names and parameters. `search_docs` finds the extensions and the pages of the GDevelop wiki about a feature or a how-to. `read_javascript_reference` documents the game engine, for the code of JavaScript events.',
     'Resources (images, 3D models, sounds, musics, fonts) need no file: images and 3D models come with the objects created from the asset store (`create_or_replace_object`, with `search_terms`, or with the `shortId` of an asset found with `search_object_asset_store` as `asset_id`); a new sound or music is installed from the free library when events use a new audio file name, and a new font when the font property of an object is set to a new name. Find the exact names with `search_resource_store` rather than inventing them, so that the right file is installed.',
     'Gameplay tests (`run_gameplay_test`) play the game in a real preview, simulating the inputs of the player: read `read_gameplay_test_harness_guide` before writing one.',
@@ -269,7 +274,10 @@ const resources = [
 
 const readResource = (uri: string): ?{| mimeType: string, text: string |} => {
   if (uri === SCRIPT_API_DEFINITION_URI) {
-    return { mimeType: 'text/plain', text: getPublicApi().scriptApiDefinition };
+    return {
+      mimeType: 'text/plain',
+      text: getScriptApiDefinitionWithLocalFiles(),
+    };
   }
   if (uri === EVENT_SCRIPT_GUIDE_URI) {
     return { mimeType: 'text/markdown', text: getPublicApi().eventScriptGuide };

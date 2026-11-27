@@ -206,6 +206,45 @@ declare function create_or_replace_object(args: {
   two_dimensional_view_kind?: 'top-down' | 'side-view';
 }): Promise<FunctionResult>;
 
+/**
+ * Create a PNG image resource from SVG code, and optionally a 2D object using it: for a 2D visual the asset store does not have. The result gives the resource name, the image size, the object created and the SVG features that were removed (scripts, external references).
+ */
+declare function create_image_from_code(args: {
+  /** Where the object is created. Set `type` and the name field(s) of that type. */
+  scope: {
+    /** `scene`: a scene (`scene_name`). `custom_object_variant`: the child objects, instances and layers of a variant of a custom object (`extension_name` + `custom_object_name` + `variant_name`, `""` being the default variant that named variants inherit from). */
+    type: 'scene' | 'custom_object_variant';
+    /** The name of the scene (type `scene`). */
+    scene_name?: string;
+    /** The name of the extension (extension, custom_behavior, custom_object and custom_object_variant types). */
+    extension_name?: string;
+    /** The name of the custom object in the extension (custom_object and custom_object_variant types). */
+    custom_object_name?: string;
+    /** The name of the variant of the custom object (type `custom_object_variant`); "" is the default variant. */
+    variant_name?: string;
+  };
+  /** A standalone SVG. Its width and height, in pixels, are the size of the image (4096 at most). */
+  svg: string;
+  /** When given, an object using the image is created with this name. */
+  object_name?: string;
+  /** The type of the object created (default `Sprite`). A tiled sprite or a panel sprite is sized to the image. */
+  object_type?: 'Sprite' | 'TiledSpriteObject::TiledSprite' | 'PanelSpriteObject::PanelSprite';
+  /** Replace an existing object of the same name. Otherwise the existing object is kept unchanged and the call fails. */
+  replace_existing_object?: boolean;
+}): Promise<FunctionResult>;
+
+/**
+ * Copy a scene of an example project into the project as a new scene, with everything it needs: its objects and the global objects it uses, their resources, the extensions they and the events use, layers and effects, variables, instances, events and the external events and layouts linked from the scene. Never changes or removes what the project has: on a name conflict (a global variable, an extension), the project keeps its own and the result says so. The result gives the new scene name and what was copied.
+ */
+declare function copy_from_example(args: {
+  /** The slug of the example, exactly as given by `search`. */
+  example: string;
+  /** The name of the scene of the example to copy. */
+  scene: string;
+  /** The name of the new scene (default: the name of the scene of the example, made unique). */
+  new_scene_name?: string;
+}): Promise<FunctionResult>;
+
 type InspectObjectPropertiesEffectsResult = FunctionResult & {
   properties: Array<NamedProperty>;
   behaviors: Array<{
@@ -751,7 +790,7 @@ declare function inspect_scene_properties_layers_effects(args: {
 }): Promise<InspectScenePropertiesLayersEffectsResult>;
 
 /**
- * Change one or more properties of a scene (background color, rename the scene, etc...) or modify a layer (add, remove, change name, order or initial visibility) or an effect of a layer (add, remove, properties), or modify a group (add, remove, rename, add/remove objects in the group), or move instances to another scene or external layout (`move_instances`). On a variant of a custom object, `changed_properties` are the bounds of its area (`areaMinX`, `areaMinY`, `areaMinZ`, `areaMaxX`, `areaMaxY`, `areaMaxZ`), `delete_this_scene` is invalid (delete a variant with `change_custom_object`) and object groups can only be changed on the default variant (`variant_name` ""). For game-wide properties (resolution, game name...), use `change_project_properties_resources`. An effect of the asset store (a skybox or a fog preset for a 3D layer) is added on a layer with the `asset_id` of a `changed_layer_effects` item.
+ * Change one or more properties of a scene (background color, rename the scene, etc...) or modify a layer (add, remove, change name, order, initial visibility, rendering type or camera) or an effect of a layer (add, remove, properties), or modify a group (add, remove, rename, add/remove objects in the group), or move instances to another scene or external layout (`move_instances`). On a variant of a custom object, `changed_properties` are the bounds of its area (`areaMinX`, `areaMinY`, `areaMinZ`, `areaMaxX`, `areaMaxY`, `areaMaxZ`), `delete_this_scene` is invalid (delete a variant with `change_custom_object`) and object groups can only be changed on the default variant (`variant_name` ""). For game-wide properties (resolution, game name...), use `change_project_properties_resources`. An effect of the asset store (a skybox or a fog preset for a 3D layer) is added on a layer with the `asset_id` of a `changed_layer_effects` item.
  */
 declare function change_scene_properties_layers_effects_groups(args: {
   /** What to update: a scene, an external layout, or a variant of a custom object. Set `type` and the name field(s) of that type. */
@@ -786,6 +825,18 @@ declare function change_scene_properties_layers_effects_groups(args: {
     new_layer_position?: number;
     /** The visibility of the layer when the scene starts. Set to false to hide the layer (and everything on it) initially. Unchanged if not set. To show or hide a layer while the game is running, use the "Show layer" action in events instead. */
     new_visibility?: boolean;
+    /** What the layer displays: "" (2D and 3D objects, the default), "2d" (only 2D objects: a UI layer), "3d" (only 3D objects) or "2d+3d". Unchanged if not set. */
+    new_rendering_type?: '' | '2d' | '3d' | '2d+3d';
+    /** For a layer showing 3D objects: the 3D camera, "perspective" (the default) or "orthographic" (no perspective: isometric or top-down 3D games). Unchanged if not set. */
+    new_camera_type?: 'perspective' | 'orthographic';
+    /** What the camera of the layer does when the game resolution changes and events never moved it: "do-nothing" keeps it centered (best for game content), "top-left-anchored-if-never-moved" keeps the top-left corner fixed (best for content that can extend, like a UI). Unchanged if not set. */
+    new_default_camera_behavior?: 'do-nothing' | 'top-left-anchored-if-never-moved';
+    /** For a layer showing 3D objects: the distance from the 3D camera under which nothing is displayed (the "near plane"), in pixels. Must be greater than 0 and lower than the far plane distance. Unchanged if not set. */
+    new_camera_3d_near_plane_distance?: number;
+    /** For a layer showing 3D objects: the distance from the 3D camera beyond which nothing is displayed (the "far plane"), in pixels. Increase it for large 3D worlds where distant objects or terrain disappear. Unchanged if not set. */
+    new_camera_3d_far_plane_distance?: number;
+    /** For a layer showing 3D objects: the field of view of the 3D camera, in degrees (greater than 0, at most 180; 45 by default). Unchanged if not set. */
+    new_camera_3d_field_of_view?: number;
     /** If true, the layer with this name will be deleted. All instances on the layer will also be removed (if `move_instances_to_layer` is not set). */
     delete_this_layer?: boolean;
     /** If `delete_this_layer` is set to true, this can contain the name of the layer to move the instances to (use an empty string "" to move them to the base layer). If not set, the instances will be removed. */

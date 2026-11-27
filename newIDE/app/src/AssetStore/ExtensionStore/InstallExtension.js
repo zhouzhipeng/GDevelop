@@ -32,6 +32,10 @@ import InAppTutorialContext from '../../InAppTutorial/InAppTutorialContext';
 import PromisePool from '@supercharge/promise-pool';
 import { retryIfFailed } from '../../Utils/RetryIfFailed';
 import { preflightExtensionBatch } from './PreflightExtensionBatch';
+import { IMPORTED_FILE_ORIGIN_NAME } from '../../Utils/Extension/ExtensionOrigin';
+import ExtensionChangesToKeepContext, {
+  type ChooseExtensionChangesToKeep,
+} from './ExtensionChangesToKeep/ExtensionChangesToKeepContext';
 
 const gd: libGDevelop = global.gd;
 
@@ -360,6 +364,9 @@ export const useInstallExtension = (): (({
   const eventsFunctionsExtensionsState = React.useContext(
     EventsFunctionsExtensionsContext
   );
+  const { chooseExtensionChangesToKeep } = React.useContext(
+    ExtensionChangesToKeepContext
+  );
 
   return async ({
     project,
@@ -405,7 +412,7 @@ export const useInstallExtension = (): (({
     if (extensionUpdateAction === 'abort') {
       return false;
     }
-    await installRequiredExtensions({
+    return await installRequiredExtensions({
       preflightExtension,
       requiredExtensionInstallation,
       shouldUpdateExtension: extensionUpdateAction === 'update',
@@ -414,8 +421,8 @@ export const useInstallExtension = (): (({
       onWillInstallExtension,
       onExtensionInstalled,
       importedSerializedExtensions,
+      chooseExtensionChangesToKeep,
     });
-    return true;
   };
 };
 
@@ -444,8 +451,12 @@ export type InstallRequiredExtensionsArgs = {|
   onWillInstallExtension: (extensionNames: Array<string>) => void,
   onExtensionInstalled: (extensionNames: Array<string>) => void,
   importedSerializedExtensions: Array<SerializedExtension>,
+  chooseExtensionChangesToKeep?: ChooseExtensionChangesToKeep,
 |};
 
+/**
+ * @returns false if users cancelled the installation.
+ */
 export const installRequiredExtensions = async ({
   preflightExtension,
   requiredExtensionInstallation,
@@ -455,7 +466,8 @@ export const installRequiredExtensions = async ({
   onWillInstallExtension,
   onExtensionInstalled,
   importedSerializedExtensions,
-}: InstallRequiredExtensionsArgs): Promise<void> => {
+  chooseExtensionChangesToKeep,
+}: InstallRequiredExtensionsArgs): Promise<boolean> => {
   const {
     requiredExtensionShortHeaders,
     missingExtensionShortHeaders,
@@ -467,7 +479,7 @@ export const installRequiredExtensions = async ({
     outOfDateExtensionShortHeaders.length === 0 &&
     importedSerializedExtensions.length === 0
   ) {
-    return;
+    return true;
   }
 
   const neededExtensions = uniq(
@@ -487,10 +499,19 @@ export const installRequiredExtensions = async ({
     )
   );
 
-  const installedExtensions = [
+  const extensionsToInstall = [
     ...importedSerializedExtensions,
     ...downloadedSerializedExtensions,
   ];
+  const installedExtensions = chooseExtensionChangesToKeep
+    ? await chooseExtensionChangesToKeep({
+        project,
+        serializedExtensions: extensionsToInstall,
+      })
+    : extensionsToInstall;
+  if (!installedExtensions) {
+    return false;
+  }
   const installedExtensionNames = installedExtensions.map(
     extensions => extensions.name
   );
@@ -504,7 +525,14 @@ export const installRequiredExtensions = async ({
     eventsFunctionsExtensionsState,
     project,
     installedExtensions,
-    downloadedSerializedExtensions.map(extensions => extensions.name)
+    {
+      fromStoreExtensionNames: downloadedSerializedExtensions.map(
+        extension => extension.name
+      ),
+      fromFileExtensionNames: importedSerializedExtensions.map(
+        extension => extension.name
+      ),
+    }
   );
   onExtensionInstalled(installedExtensionNames);
 
@@ -518,6 +546,7 @@ export const installRequiredExtensions = async ({
         missingExtensionShortHeaders.map(extension => extension.name).join(', ')
     );
   }
+  return true;
 };
 
 /**
@@ -528,7 +557,13 @@ export const addSerializedExtensionsToProject = async (
   eventsFunctionsExtensionsState: EventsFunctionsExtensionsState,
   project: gdProject,
   serializedExtensions: Array<SerializedExtension>,
-  fromStoreExtensionNames: Array<string>
+  {
+    fromStoreExtensionNames,
+    fromFileExtensionNames,
+  }: {|
+    fromStoreExtensionNames: Array<string>,
+    fromFileExtensionNames: Array<string>,
+  |}
 ): Promise<void> => {
   serializedExtensions.forEach(serializedExtension => {
     const { name } = serializedExtension;
@@ -556,6 +591,22 @@ export const addSerializedExtensionsToProject = async (
       'gdevelop-extension-store',
       extensionName
     );
+  });
+  // Keep track of extensions imported from a file, unless the file tells
+  // where the extension comes from (for instance, the extension store).
+  fromFileExtensionNames.forEach(extensionName => {
+    if (!project.hasEventsFunctionsExtensionNamed(extensionName)) {
+      return;
+    }
+    const serializedExtension = serializedExtensions.find(
+      serializedExtension => serializedExtension.name === extensionName
+    );
+    if (serializedExtension && serializedExtension.origin) {
+      return;
+    }
+    project
+      .getEventsFunctionsExtension(extensionName)
+      .setOrigin(IMPORTED_FILE_ORIGIN_NAME, extensionName);
   });
 
   await eventsFunctionsExtensionsState.loadProjectEventsFunctionsExtensions(

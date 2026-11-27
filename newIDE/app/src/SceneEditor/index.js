@@ -80,6 +80,7 @@ import newNameGenerator from '../Utils/NewNameGenerator';
 import ObjectsRenderingService from '../ObjectsRendering/ObjectsRenderingService';
 import {
   getObjectFolderOrObjectUnifiedName,
+  getSelectionTopLevelNodes,
   type ObjectFolderOrObjectWithContext,
 } from '../ObjectsList/EnumerateObjectFolderOrObject';
 import uniq from 'lodash/uniq';
@@ -339,6 +340,7 @@ type Props = {|
   editorId: string,
   gameEditorMode: 'embedded-game' | 'instances-editor',
   setGameEditorMode: ('embedded-game' | 'instances-editor') => void,
+  setEditorMode: ('2d-editor' | '3d-editor') => void,
   onRestartInGameEditor: (reason: string) => void,
   showRestartInGameEditorAfterErrorButton: boolean,
   project: gdProject,
@@ -355,6 +357,8 @@ type Props = {|
   initialInstances: gdInitialInstancesContainer,
 
   getInitialInstancesEditorSettings: () => InstancesEditorSettings,
+  saveUiSettings: () => void,
+  shouldUseRealTime2DEditor: boolean,
 
   onOpenMoreSettings?: ?() => void,
   onOpenEvents: (sceneName: string) => void,
@@ -429,7 +433,11 @@ type State = {|
   layerRemoved: ?string,
   editedLayer: ?gdLayer,
   editedLayerInitialTab: 'properties' | 'effects',
-  isAssetExporterDialogOpen: boolean,
+  exportedObjects: ?{|
+    packName: string,
+    objectFolderOrObjects: Array<gdObjectFolderOrObject>,
+    shouldSkipObjectsUnsupportedByTheAssetStore: boolean,
+  |},
   isAssetImporterDialogOpen: boolean,
   editedObjectWithContext: ?ObjectWithContext,
   editedObjectInitialTab: ?ObjectEditorTab,
@@ -580,7 +588,7 @@ export default class SceneEditor extends React.Component<Props, State> {
       layerRemoved: null,
       editedLayer: null,
       editedLayerInitialTab: 'properties',
-      isAssetExporterDialogOpen: false,
+      exportedObjects: null,
       isAssetImporterDialogOpen: false,
       editedObjectWithContext: null,
       editedObjectInitialTab: 'properties',
@@ -630,6 +638,13 @@ export default class SceneEditor extends React.Component<Props, State> {
     this._syncCustomObjectDroppedInEmbeddedGameFrameCallback();
   }
 
+  _isGameEditorEmbedded(): boolean {
+    return (
+      this.props.shouldUseRealTime2DEditor ||
+      this.state.instancesEditorSettings.gameEditorMode === 'embedded-game'
+    );
+  }
+
   componentDidMount() {
     // Sync the saved gameEditorMode from instancesEditorSettings to MainFrame.
     if (
@@ -639,6 +654,9 @@ export default class SceneEditor extends React.Component<Props, State> {
       this.props.setGameEditorMode(
         this.state.instancesEditorSettings.gameEditorMode
       );
+    }
+    if (this.props.isActive && this.state.instancesEditorSettings.editorMode) {
+      this.props.setEditorMode(this.state.instancesEditorSettings.editorMode);
     }
 
     this.resourceExternallyChangedCallbackId = registerOnResourceExternallyChangedCallback(
@@ -669,7 +687,7 @@ export default class SceneEditor extends React.Component<Props, State> {
             }
 
             // The rest of the messages are only relevant when the embedded game editor is visible.
-            if (this.props.gameEditorMode !== 'embedded-game') {
+            if (!this._isGameEditorEmbedded()) {
               return;
             }
             if (parsedMessage.command === 'updateInstances') {
@@ -1250,8 +1268,8 @@ export default class SceneEditor extends React.Component<Props, State> {
           leadingToolbar={null}
           trailingToolbar={
             <MosaicEditorsDisplayToolbar
-              gameEditorMode={this.state.instancesEditorSettings.gameEditorMode}
-              setGameEditorMode={this.setGameEditorMode}
+              editorMode={this.state.instancesEditorSettings.editorMode}
+              setEditorMode={this.setEditorMode}
               onAddObject={this._openNewObjectDialog}
               canAddObject={canAddObject}
               selectedInstancesCount={
@@ -1290,10 +1308,10 @@ export default class SceneEditor extends React.Component<Props, State> {
     } else {
       this.props.setToolbar(
         <SwipeableDrawerEditorsDisplayToolbar
-          gameEditorMode={this.props.gameEditorMode}
-          setGameEditorMode={this.props.setGameEditorMode}
           onAddObject={this._openNewObjectDialog}
           canAddObject={canAddObject}
+          editorMode={this.state.instancesEditorSettings.editorMode}
+          setEditorMode={this.setEditorMode}
           selectedInstancesCount={
             this.instancesSelection.getSelectedInstances().length
           }
@@ -1344,6 +1362,9 @@ export default class SceneEditor extends React.Component<Props, State> {
         this.props.setGameEditorMode(
           this.state.instancesEditorSettings.gameEditorMode
         );
+      }
+      if (this.state.instancesEditorSettings.editorMode) {
+        this.props.setEditorMode(this.state.instancesEditorSettings.editorMode);
       }
 
       // When the scene is refocused, the selections are cleaned
@@ -1421,6 +1442,27 @@ export default class SceneEditor extends React.Component<Props, State> {
       grid: !this.state.instancesEditorSettings.grid,
       snap: !this.state.instancesEditorSettings.grid,
     });
+  };
+
+  setEditorMode = (newMode: '2d-editor' | '3d-editor') => {
+    if (this.props.shouldUseRealTime2DEditor) {
+      this.setInstancesEditorSettings({
+        ...this.state.instancesEditorSettings,
+        editorMode: newMode,
+      });
+    } else {
+      const gameEditorMode =
+        newMode === '3d-editor' ? 'embedded-game' : 'instances-editor';
+      this.setInstancesEditorSettings({
+        ...this.state.instancesEditorSettings,
+        gameEditorMode,
+        editorMode: newMode,
+      });
+
+      // Call the setGameEditorMode from mainframe so it can make some global changes. (ex: hot reload)
+      this.props.setGameEditorMode(gameEditorMode);
+    }
+    this.props.setEditorMode(newMode);
   };
 
   setGameEditorMode = (newMode: 'instances-editor' | 'embedded-game') => {
@@ -1510,10 +1552,49 @@ export default class SceneEditor extends React.Component<Props, State> {
     return !!this.state.editedObjectWithContext;
   };
 
-  openObjectExporterDialog = (open: boolean = true) => {
+  /**
+   * Open the dialog to export objects as an asset pack.
+   * @param objectFolderOrObjectsWithContext The objects and folders to export,
+   * or null to export all the objects of the scene.
+   */
+  openObjectExporterDialog = (
+    objectFolderOrObjectsWithContext: Array<ObjectFolderOrObjectWithContext> | null
+  ) => {
+    const { layout } = this.props;
+    if (!objectFolderOrObjectsWithContext) {
+      if (!layout) return;
+      const rootFolder = layout.getObjects().getRootFolder();
+      this.setState({
+        exportedObjects: {
+          packName: layout.getName(),
+          objectFolderOrObjects: mapFor(0, rootFolder.getChildrenCount(), i =>
+            rootFolder.getChildAt(i)
+          ),
+          shouldSkipObjectsUnsupportedByTheAssetStore: true,
+        },
+      });
+      return;
+    }
+    const objectFolderOrObjects = getSelectionTopLevelNodes(
+      objectFolderOrObjectsWithContext
+    ).map(({ objectFolderOrObject }) => objectFolderOrObject);
+    if (objectFolderOrObjects.length === 0) return;
     this.setState({
-      isAssetExporterDialogOpen: open,
+      exportedObjects: {
+        packName:
+          objectFolderOrObjects.length === 1
+            ? getObjectFolderOrObjectUnifiedName(objectFolderOrObjects[0])
+            : layout
+            ? layout.getName()
+            : 'Objects',
+        objectFolderOrObjects,
+        shouldSkipObjectsUnsupportedByTheAssetStore: false,
+      },
     });
+  };
+
+  closeObjectExporterDialog = () => {
+    this.setState({ exportedObjects: null });
   };
 
   openObjectImporterDialog = (open: boolean = true) => {
@@ -1623,6 +1704,8 @@ export default class SceneEditor extends React.Component<Props, State> {
       },
       () => {
         this.updateToolbar();
+        // When the editor scene is hot-reloaded, the settings need to be up to date.
+        this.props.saveUiSettings();
       }
     );
     const { previewDebuggerServer } = this.props;
@@ -2631,7 +2714,7 @@ export default class SceneEditor extends React.Component<Props, State> {
       viewControls.centerViewOnLastInstance(instances, offset);
     }
 
-    if (this.props.gameEditorMode === 'embedded-game') {
+    if (this._isGameEditorEmbedded()) {
       changeViewPosition('centerViewOnLastSelectedInstance');
     }
   };
@@ -3703,7 +3786,7 @@ export default class SceneEditor extends React.Component<Props, State> {
     }
     editorDisplay.viewControls.zoomToInitialPosition();
 
-    if (this.props.gameEditorMode === 'embedded-game') {
+    if (this._isGameEditorEmbedded()) {
       changeViewPosition('zoomToInitialPosition');
     }
   };
@@ -3715,7 +3798,7 @@ export default class SceneEditor extends React.Component<Props, State> {
     }
     editorDisplay.viewControls.zoomToFitContent();
 
-    if (this.props.gameEditorMode === 'embedded-game') {
+    if (this._isGameEditorEmbedded()) {
       changeViewPosition('zoomToFitContent');
     }
   };
@@ -3743,7 +3826,7 @@ export default class SceneEditor extends React.Component<Props, State> {
     }
     editorDisplay.viewControls.zoomToFitSelection();
 
-    if (this.props.gameEditorMode === 'embedded-game') {
+    if (this._isGameEditorEmbedded()) {
       changeViewPosition('zoomToFitSelection');
     }
   };
@@ -3763,7 +3846,7 @@ export default class SceneEditor extends React.Component<Props, State> {
     }
     editorDisplay.viewControls.centerViewOnLastInstance(selectedInstances);
 
-    if (this.props.gameEditorMode === 'embedded-game') {
+    if (this._isGameEditorEmbedded()) {
       changeViewPosition('centerViewOnLastSelectedInstance');
     }
   };
@@ -3928,7 +4011,7 @@ export default class SceneEditor extends React.Component<Props, State> {
   };
 
   _sendSetZoom(zoom: number): void {
-    if (this.props.gameEditorMode === 'embedded-game') {
+    if (this._isGameEditorEmbedded()) {
       const { previewDebuggerServer } = this.props;
       if (!previewDebuggerServer) return;
       previewDebuggerServer
@@ -3945,7 +4028,7 @@ export default class SceneEditor extends React.Component<Props, State> {
   }
 
   _sendZoomBy(zoomFactor: number): void {
-    if (this.props.gameEditorMode === 'embedded-game') {
+    if (this._isGameEditorEmbedded()) {
       const { previewDebuggerServer } = this.props;
       if (!previewDebuggerServer) return;
       previewDebuggerServer
@@ -4148,7 +4231,7 @@ export default class SceneEditor extends React.Component<Props, State> {
     let y = 0;
     let z = 0;
     const selectedInstances = this.instancesSelection.getSelectedInstances();
-    if (this.props.gameEditorMode === 'embedded-game') {
+    if (this._isGameEditorEmbedded()) {
       // The 2D instances editor is not mounted: use the instance positions.
       if (selectedInstances.length > 0) {
         const xs = selectedInstances.map(instance => instance.getX());
@@ -4266,7 +4349,7 @@ export default class SceneEditor extends React.Component<Props, State> {
         this.props.layersContainer.hasLayerNamed(layerName),
     });
 
-    if (this.props.gameEditorMode === 'embedded-game') {
+    if (this._isGameEditorEmbedded()) {
       const cursorScenePosition =
         embeddedGameCursorScenePosition !== undefined
           ? embeddedGameCursorScenePosition
@@ -4297,7 +4380,7 @@ export default class SceneEditor extends React.Component<Props, State> {
     });
 
     const { editorDisplay } = this;
-    if (editorDisplay && this.props.gameEditorMode !== 'embedded-game') {
+    if (editorDisplay && !this._isGameEditorEmbedded()) {
       const position = this._getScenePastePosition(useLastCursorPosition);
       for (const instance of newInstances) {
         instance.setX(instance.getX() + position[0]);
@@ -4437,7 +4520,7 @@ export default class SceneEditor extends React.Component<Props, State> {
     if (!onExtractAsEventBasedObject) return;
 
     let selectionAABB = new Rectangle();
-    if (this.props.gameEditorMode === 'embedded-game') {
+    if (this._isGameEditorEmbedded()) {
       const { previewDebuggerServer } = this.props;
       if (!previewDebuggerServer) return;
       try {
@@ -4700,7 +4783,11 @@ export default class SceneEditor extends React.Component<Props, State> {
                   />
                   <EditorsDisplay
                     ref={ref => (this.editorDisplay = ref)}
-                    gameEditorMode={this.props.gameEditorMode}
+                    gameEditorMode={
+                      this.props.shouldUseRealTime2DEditor
+                        ? 'embedded-game'
+                        : this.props.gameEditorMode
+                    }
                     onRestartInGameEditor={this.props.onRestartInGameEditor}
                     onSwitchToInstancesEditor={() =>
                       this.setGameEditorMode('instances-editor')
@@ -4980,11 +5067,18 @@ export default class SceneEditor extends React.Component<Props, State> {
                       />
                     )}
                   </React.Fragment>
-                  {this.state.isAssetExporterDialogOpen && layout && (
+                  {this.state.exportedObjects && (
                     <ObjectExporterDialog
                       project={project}
-                      layout={layout}
-                      onClose={() => this.openObjectExporterDialog(false)}
+                      packName={this.state.exportedObjects.packName}
+                      objectFolderOrObjects={
+                        this.state.exportedObjects.objectFolderOrObjects
+                      }
+                      shouldSkipObjectsUnsupportedByTheAssetStore={
+                        this.state.exportedObjects
+                          .shouldSkipObjectsUnsupportedByTheAssetStore
+                      }
+                      onClose={this.closeObjectExporterDialog}
                     />
                   )}
                   {this.state.isAssetImporterDialogOpen && layout && (

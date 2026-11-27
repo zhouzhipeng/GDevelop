@@ -23,10 +23,10 @@ import {
 } from '../../KeyboardShortcuts';
 
 type Props = {|
-  gameEditorMode: 'embedded-game' | 'instances-editor',
-  setGameEditorMode: ('embedded-game' | 'instances-editor') => void,
   onAddObject: () => void,
   canAddObject: boolean,
+  editorMode: '2d-editor' | '3d-editor',
+  setEditorMode: ('2d-editor' | '3d-editor') => void,
   toggleObjectsList: () => void,
   toggleObjectGroupsList: () => void,
   toggleProperties: () => void,
@@ -101,9 +101,9 @@ const Toolbar: React.ComponentType<Props> = React.memo<Props>(function Toolbar(
               tooltip: <Trans>Top-down, classic editor</Trans>,
               label: '2D',
               onClick: () => {
-                props.setGameEditorMode('instances-editor');
+                props.setEditorMode('2d-editor');
               },
-              isActive: props.gameEditorMode === 'instances-editor',
+              isActive: props.editorMode === '2d-editor',
             },
             {
               id: '3d-game-editor',
@@ -111,9 +111,9 @@ const Toolbar: React.ComponentType<Props> = React.memo<Props>(function Toolbar(
               tooltip: <Trans>3D, real-time editor (new)</Trans>,
               label: '3D',
               onClick: () => {
-                props.setGameEditorMode('embedded-game');
+                props.setEditorMode('3d-editor');
               },
-              isActive: props.gameEditorMode === 'embedded-game',
+              isActive: props.editorMode === '3d-editor',
             },
           ]}
         />

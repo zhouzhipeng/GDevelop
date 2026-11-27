@@ -492,7 +492,7 @@ namespace gdjs {
               newRuntimeGameStatus.injectedExternalLayoutName || null,
               newRuntimeGameStatus.eventsBasedObjectType || null,
               newRuntimeGameStatus.eventsBasedObjectVariantName || null,
-              newRuntimeGameStatus.editorCamera3D || null
+              newRuntimeGameStatus.editorCamera || null
             );
           }
         } else {

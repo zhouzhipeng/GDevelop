@@ -33,6 +33,7 @@ import optionalRequire from '../Utils/OptionalRequire';
 import { type FileMetadata } from '../ProjectsStorage';
 import { type ResourceManagementProps } from '../ResourcesList/ResourceSource';
 import { useEditorFunctionsServices } from '../AiGeneration/UseEditorFunctionsServices';
+import { withLocalFilesAsAttachments } from '../EditorFunctions/LocalFileAttachments';
 import { useMcpServers } from './McpServerTools/UseMcpServers';
 import {
   runAutomatedAiRequest,
@@ -927,6 +928,24 @@ export const useCliCommandRunner = ({
     onExtensionInstalled,
   });
 
+  // No user attaches files to a command or to an agent using the MCP server:
+  // they give paths of files of this computer instead.
+  const localProjectFilePath =
+    fileMetadata &&
+    resourceManagementProps.getStorageProvider().internalName === 'LocalFile'
+      ? fileMetadata.fileIdentifier
+      : null;
+  const editorFunctionsServicesWithLocalFiles = React.useMemo(
+    () => ({
+      ...editorFunctionsServices,
+      attachmentsForResources: withLocalFilesAsAttachments(
+        editorFunctionsServices.attachmentsForResources,
+        { getLocalProjectFilePath: () => localProjectFilePath }
+      ),
+    }),
+    [editorFunctionsServices, localProjectFilePath]
+  );
+
   // Not memoized by MainFrame: the latest ones are read when the calls run.
   const editorFunctionsEditorCallbacksRef = React.useRef(
     editorFunctionsEditorCallbacks
@@ -946,7 +965,7 @@ export const useCliCommandRunner = ({
         runScriptReadOnly,
         collaborators: {
           ...editorFunctionsEditorCallbacksRef.current,
-          services: editorFunctionsServices,
+          services: editorFunctionsServicesWithLocalFiles,
           eventsFunctionsExtensionsState,
           onWillInstallExtension,
           onExtensionInstalled,
@@ -957,7 +976,7 @@ export const useCliCommandRunner = ({
     [
       project,
       i18n,
-      editorFunctionsServices,
+      editorFunctionsServicesWithLocalFiles,
       eventsFunctionsExtensionsState,
       onWillInstallExtension,
       onExtensionInstalled,

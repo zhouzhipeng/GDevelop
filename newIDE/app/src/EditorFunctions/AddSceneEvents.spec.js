@@ -218,6 +218,24 @@ describe('add_scene_events', () => {
     });
   });
 
+  it('generates the events when `extension_names_list` is omitted', async () => {
+    const generateEvents = jest.fn<Array<any>, any>(async () => ({
+      generationCompleted: false,
+      errorMessage: 'Stopped by the test.',
+    }));
+
+    await editorFunctions.add_scene_events.launchFunction({
+      ...makeFakeLaunchFunctionOptionsWithProject(project),
+      generateEvents,
+      args: makeArgs({ extension_names_list: undefined }),
+    });
+
+    expect(generateEvents).toHaveBeenCalledTimes(1);
+    expect(generateEvents.mock.calls[0][0]).toMatchObject({
+      extensionNamesList: '',
+    });
+  });
+
   it('fails when no events description (and no event batches) is provided', async () => {
     // $FlowFixMe[underconstrained-implicit-instantiation]
     const generateEvents = jest.fn();
@@ -736,6 +754,54 @@ describe('add_scene_events', () => {
       ].join('\n')
     );
     expect(eventBatches[0].expectedEventSource).toBe('js(Player) """');
+  });
+
+  it('refuses an `expected_event_source` copied from a read where events were not displayed', async () => {
+    const groupEvent = gd.asGroupEvent(
+      project
+        .getLayout('TestScene')
+        .getEvents()
+        .insertNewEvent(project, 'BuiltinCommonInstructions::Group', 0)
+    );
+    groupEvent.setName('Race');
+    groupEvent
+      .getSubEvents()
+      .insertNewEvent(project, 'BuiltinCommonInstructions::Standard', 0)
+      .getSubEvents()
+      .insertNewEvent(project, 'BuiltinCommonInstructions::JsCode', 0);
+    // $FlowFixMe[underconstrained-implicit-instantiation]
+    const generateEvents = jest.fn();
+
+    const result: EditorFunctionGenericOutput = await editorFunctions.generate_events.launchFunction(
+      {
+        ...makeFakeLaunchFunctionOptionsWithProject(project),
+        generateEvents,
+        args: {
+          scope: { type: 'scene', scene_name: 'TestScene' },
+          extension_names_list: '',
+          objects_list: 'Player',
+          event_batches: [
+            {
+              event_script: 'group "Race":\n  always:\n    pass',
+              placement_relation: 'replace_entire_event_and_sub_events',
+              placement_target_event_id: 'Race',
+              // As a read of the whole events sheet shows the group.
+              expected_event_source: [
+                'group "Race":  # event-0',
+                '  always:  # event-0.0',
+                '    # ... 1 sub-event(s) (0 action(s)) not shown: read event_ids: ["event-0.0"] to see them.',
+              ].join('\n'),
+            },
+          ],
+        },
+      }
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain(
+      'The `expected_event_source` of the event "Race" is not its whole source: it has `# ...` lines standing for events that were not displayed by the read it was copied from. Read it with `read_events_source` and `event_ids: ["Race"]`'
+    );
+    expect(generateEvents).not.toHaveBeenCalled();
   });
 
   describe('edits', () => {
